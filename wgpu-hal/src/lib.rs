@@ -2636,6 +2636,24 @@ pub struct NagaShader {
     pub debug_source: Option<DebugSource>,
 }
 
+impl NagaShader {
+    /// Inline the calls that `target` cannot express. See [`naga::inline`].
+    #[cfg_attr(not(any(dx12, gles, metal, vulkan)), expect(dead_code))]
+    fn inline(self, target: naga::inline::InlineTarget) -> Result<Self, ShaderError> {
+        let strategy = naga::inline::InlineStrategy::OnlyNeeded(target);
+        if !naga::inline::needs_inline(&self.module, strategy) {
+            return Ok(self);
+        }
+        let (module, info) = naga::inline::process(&self.module, &self.info, strategy)
+            .map_err(|e| ShaderError::Compilation(format!("inlining failed: {e}")))?;
+        Ok(Self {
+            module: Cow::Owned(module.into_owned()),
+            info: info.into_owned(),
+            debug_source: self.debug_source,
+        })
+    }
+}
+
 // Custom implementation avoids the need to generate Debug impl code
 // for the whole Naga module and info.
 impl fmt::Debug for NagaShader {

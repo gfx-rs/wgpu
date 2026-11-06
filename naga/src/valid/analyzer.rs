@@ -880,6 +880,7 @@ impl FunctionInfo {
         &mut self,
         statements: &crate::Block,
         other_functions: &[FunctionInfo],
+        global_vars: &Arena<crate::GlobalVariable>,
         mut disruptor: Option<UniformityDisruptor>,
         expression_arena: &Arena<crate::Expression>,
         diagnostic_filter_arena: &Arena<DiagnosticFilterNode>,
@@ -974,6 +975,7 @@ impl FunctionInfo {
                 S::Block(ref b) => self.process_block(
                     b,
                     other_functions,
+                    global_vars,
                     disruptor,
                     expression_arena,
                     diagnostic_filter_arena,
@@ -989,6 +991,7 @@ impl FunctionInfo {
                     let accept_uniformity = self.process_block(
                         accept,
                         other_functions,
+                        global_vars,
                         branch_disruptor,
                         expression_arena,
                         diagnostic_filter_arena,
@@ -996,6 +999,7 @@ impl FunctionInfo {
                     let reject_uniformity = self.process_block(
                         reject,
                         other_functions,
+                        global_vars,
                         branch_disruptor,
                         expression_arena,
                         diagnostic_filter_arena,
@@ -1015,6 +1019,7 @@ impl FunctionInfo {
                         let case_uniformity = self.process_block(
                             &case.body,
                             other_functions,
+                            global_vars,
                             case_disruptor,
                             expression_arena,
                             diagnostic_filter_arena,
@@ -1036,6 +1041,7 @@ impl FunctionInfo {
                     let body_uniformity = self.process_block(
                         body,
                         other_functions,
+                        global_vars,
                         disruptor,
                         expression_arena,
                         diagnostic_filter_arena,
@@ -1044,6 +1050,7 @@ impl FunctionInfo {
                     let continuing_uniformity = self.process_block(
                         continuing,
                         other_functions,
+                        global_vars,
                         continuing_disruptor,
                         expression_arena,
                         diagnostic_filter_arena,
@@ -1092,7 +1099,29 @@ impl FunctionInfo {
                     result: _,
                 } => {
                     for &argument in arguments {
-                        let _ = self.add_ref(argument);
+                        // The callee may write through a pointer argument.
+                        let writable = self.expressions[argument.index()]
+                            .assignable_global
+                            .is_some_and(|global| match global_vars[global].space {
+                                crate::AddressSpace::Storage { access } => {
+                                    access.contains(crate::StorageAccess::STORE)
+                                }
+                                crate::AddressSpace::Uniform
+                                | crate::AddressSpace::Handle
+                                | crate::AddressSpace::Immediate
+                                | crate::AddressSpace::TaskPayload => false,
+                                crate::AddressSpace::Function
+                                | crate::AddressSpace::Private
+                                | crate::AddressSpace::WorkGroup
+                                | crate::AddressSpace::RayPayload
+                                | crate::AddressSpace::IncomingRayPayload => true,
+                            });
+                        let usage = if writable {
+                            GlobalUse::READ | GlobalUse::WRITE
+                        } else {
+                            GlobalUse::READ
+                        };
+                        let _ = self.add_ref_impl(argument, usage);
                     }
                     let info = &other_functions[function.index()];
                     //Note: the result is validated by the Validator, not here
@@ -1293,6 +1322,7 @@ impl ModuleInfo {
         let uniformity = info.process_block(
             &fun.body,
             &self.functions,
+            &module.global_variables,
             None,
             &fun.expressions,
             &module.diagnostic_filters,
@@ -1447,6 +1477,7 @@ fn uniform_control_flow() {
         info.process_block(
             &vec![stmt_emit1, stmt_if_uniform].into(),
             &[],
+            &global_var_arena,
             None,
             &expressions,
             &Arena::new(),
@@ -1479,6 +1510,7 @@ fn uniform_control_flow() {
         let block_info = info.process_block(
             &vec![stmt_emit2.clone(), stmt_if_non_uniform.clone()].into(),
             &[],
+            &global_var_arena,
             None,
             &expressions,
             &Arena::new(),
@@ -1520,6 +1552,7 @@ fn uniform_control_flow() {
             let block_info = info.process_block(
                 &vec![stmt_emit2, stmt_if_non_uniform].into(),
                 &[],
+                &global_var_arena,
                 None,
                 &expressions,
                 &diagnostic_filters,
@@ -1547,6 +1580,7 @@ fn uniform_control_flow() {
         info.process_block(
             &vec![stmt_emit3, stmt_return_non_uniform].into(),
             &[],
+            &global_var_arena,
             Some(UniformityDisruptor::Return),
             &expressions,
             &Arena::new(),
@@ -1575,6 +1609,7 @@ fn uniform_control_flow() {
         info.process_block(
             &vec![stmt_emit4, stmt_assign, stmt_kill, stmt_return_pointer].into(),
             &[],
+            &global_var_arena,
             Some(UniformityDisruptor::Discard),
             &expressions,
             &Arena::new(),

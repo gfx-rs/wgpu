@@ -440,6 +440,8 @@ pub enum Error {
     ImageMultipleSamplers,
     #[error("{0}")]
     Custom(String),
+    #[error("function `{0}` has pointer parameters or arguments that must be inlined by `naga::inline::process`")]
+    NeedsInline(String),
     #[error("overrides should not be present at this stage")]
     Override,
     /// [`crate::Sampling::First`] is unsupported.

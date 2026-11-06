@@ -4738,6 +4738,12 @@ impl<W: Write> Writer<W> {
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
+        if let Some(name) =
+            crate::inline::find_needs_inline(module, crate::inline::InlineTarget::Msl)
+        {
+            return Err(Error::NeedsInline(name));
+        }
+
         self.emit_int_div_checks = options.emit_int_div_checks;
         self.names.clear();
         self.namer.reset(

@@ -1564,7 +1564,9 @@ impl crate::Device for super::Device {
 
         Ok(super::ShaderModule {
             source: match shader {
-                crate::ShaderInput::Naga(naga) => super::ShaderModuleSource::Naga(naga),
+                crate::ShaderInput::Naga(naga) => {
+                    super::ShaderModuleSource::Naga(naga.inline(naga::inline::InlineTarget::Glsl)?)
+                }
                 // The backend doesn't yet expose this feature so it should be fine
                 crate::ShaderInput::Glsl { shader, .. } => super::ShaderModuleSource::Passthrough {
                     source: shader.to_owned(),

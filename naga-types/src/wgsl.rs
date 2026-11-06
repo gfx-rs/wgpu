@@ -29,9 +29,9 @@ pub mod language_extension {
                 Self::PACKED4X8_INTEGER_DOT_PRODUCT => {
                     Self::Implemented(ImplementedLanguageExtension::Packed4x8IntegerDotProduct)
                 }
-                Self::UNRESTRICTED_POINTER_PARAMETERS => Self::Unimplemented(
-                    UnimplementedLanguageExtension::UnrestrictedPointerParameters,
-                ),
+                Self::UNRESTRICTED_POINTER_PARAMETERS => {
+                    Self::Implemented(ImplementedLanguageExtension::UnrestrictedPointerParameters)
+                }
                 Self::POINTER_COMPOSITE_ACCESS => {
                     Self::Implemented(ImplementedLanguageExtension::PointerCompositeAccess)
                 }
@@ -46,11 +46,7 @@ pub mod language_extension {
         pub const fn to_ident(self) -> &'static str {
             match self {
                 Self::Implemented(kind) => kind.to_ident(),
-                Self::Unimplemented(kind) => match kind {
-                    UnimplementedLanguageExtension::UnrestrictedPointerParameters => {
-                        Self::UNRESTRICTED_POINTER_PARAMETERS
-                    }
-                },
+                Self::Unimplemented(kind) => match kind {},
             }
         }
     }
@@ -61,6 +57,7 @@ pub mod language_extension {
     pub enum ImplementedLanguageExtension {
         ReadOnlyAndReadWriteStorageTextures,
         Packed4x8IntegerDotProduct,
+        UnrestrictedPointerParameters,
         PointerCompositeAccess,
         ImmediateAddressSpace,
     }
@@ -70,6 +67,7 @@ pub mod language_extension {
         pub const VARIANTS: &'static [Self] = &[
             Self::ReadOnlyAndReadWriteStorageTextures,
             Self::Packed4x8IntegerDotProduct,
+            Self::UnrestrictedPointerParameters,
             Self::PointerCompositeAccess,
             Self::ImmediateAddressSpace,
         ];
@@ -88,6 +86,9 @@ pub mod language_extension {
                 ImplementedLanguageExtension::Packed4x8IntegerDotProduct => {
                     LanguageExtension::PACKED4X8_INTEGER_DOT_PRODUCT
                 }
+                ImplementedLanguageExtension::UnrestrictedPointerParameters => {
+                    LanguageExtension::UNRESTRICTED_POINTER_PARAMETERS
+                }
                 ImplementedLanguageExtension::PointerCompositeAccess => {
                     LanguageExtension::POINTER_COMPOSITE_ACCESS
                 }
@@ -100,15 +101,11 @@ pub mod language_extension {
 
     /// A variant of [`LanguageExtension::Unimplemented`].
     #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-    pub enum UnimplementedLanguageExtension {
-        UnrestrictedPointerParameters,
-    }
+    pub enum UnimplementedLanguageExtension {}
 
     impl UnimplementedLanguageExtension {
         pub const fn tracking_issue_num(self) -> u16 {
-            match self {
-                Self::UnrestrictedPointerParameters => 5158,
-            }
+            match self {}
         }
     }
 

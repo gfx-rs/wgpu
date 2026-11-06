@@ -332,6 +332,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> Result<super::ReflectionInfo, Error> {
         self.reset(module);
 
+        if let Some(name) =
+            crate::inline::find_needs_inline(module, crate::inline::InlineTarget::Hlsl)
+        {
+            return Err(Error::NeedsInline(name));
+        }
+
         if module.uses_mesh_shaders() && self.options.shader_model < ShaderModel::V6_5 {
             return Err(Error::ShaderModelTooLow(
                 "mesh shaders".to_string(),

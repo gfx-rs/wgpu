@@ -230,13 +230,14 @@ fn check_member_layout(
 const fn ptr_space_argument_flag(space: crate::AddressSpace) -> TypeFlags {
     use crate::AddressSpace as As;
     match space {
-        As::Function | As::Private | As::RayPayload | As::IncomingRayPayload => TypeFlags::ARGUMENT,
-        As::Uniform
+        As::Function
+        | As::Private
+        | As::RayPayload
+        | As::IncomingRayPayload
+        | As::Uniform
         | As::Storage { .. }
-        | As::Handle
-        | As::Immediate
-        | As::WorkGroup
-        | As::TaskPayload => TypeFlags::empty(),
+        | As::WorkGroup => TypeFlags::ARGUMENT,
+        As::Handle | As::Immediate | As::TaskPayload => TypeFlags::empty(),
     }
 }
 
@@ -540,10 +541,6 @@ impl super::Validator {
                     }
                 }
 
-                // `Validator::validate_function` actually checks the address
-                // space of pointer arguments explicitly before checking the
-                // `ARGUMENT` flag, to give better error messages. But it seems
-                // best to set `ARGUMENT` accurately anyway.
                 let argument_flag = ptr_space_argument_flag(space);
 
                 // Pointers cannot be stored in variables, structure members, or
@@ -570,10 +567,6 @@ impl super::Validator {
                 // `InvalidPointerBase` or `InvalidPointerToUnsized`.
                 let _ = self.check_width(scalar)?;
 
-                // `Validator::validate_function` actually checks the address
-                // space of pointer arguments explicitly before checking the
-                // `ARGUMENT` flag, to give better error messages. But it seems
-                // best to set `ARGUMENT` accurately anyway.
                 let argument_flag = ptr_space_argument_flag(space);
 
                 // Pointers cannot be stored in variables, structure members, or

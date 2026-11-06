@@ -1965,7 +1965,9 @@ impl crate::Device for super::Device {
             .and_then(|label| alloc::ffi::CString::new(label).ok());
         match shader {
             crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
-                source: super::ShaderModuleSource::Naga(naga),
+                source: super::ShaderModuleSource::Naga(
+                    naga.inline(naga::inline::InlineTarget::Hlsl)?,
+                ),
                 raw_name,
                 runtime_checks: desc.runtime_checks,
             }),

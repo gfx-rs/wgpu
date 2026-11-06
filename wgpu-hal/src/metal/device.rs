@@ -1388,7 +1388,7 @@ impl crate::Device for super::Device {
 
         match shader {
             crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
-                source: ShaderModuleSource::Naga(naga),
+                source: ShaderModuleSource::Naga(naga.inline(naga::inline::InlineTarget::Msl)?),
                 runtime_checks: desc.runtime_checks,
             }),
             crate::ShaderInput::MetalLib {

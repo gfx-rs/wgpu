@@ -3978,6 +3978,12 @@ impl Writer {
     ) -> Result<(), Error> {
         self.reset();
 
+        if let Some(name) =
+            crate::inline::find_needs_inline(ir_module, crate::inline::InlineTarget::Spirv)
+        {
+            return Err(Error::NeedsInline(name));
+        }
+
         // Try to find the entry point and corresponding index
         let ep_index = match pipeline_options {
             Some(po) => {

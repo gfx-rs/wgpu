@@ -323,8 +323,14 @@ fn write_output_spv(
 
     let options = params.to_options(shared_options, debug_info);
 
+    let (module, info) = naga::inline::process(
+        module,
+        info,
+        naga::inline::InlineStrategy::OnlyNeeded(naga::inline::InlineTarget::Spirv),
+    )
+    .expect("inlining failed");
     let (module, info) =
-        naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
+        naga::back::pipeline_constants::process_overrides(&module, &info, None, pipeline_constants)
             .expect("override evaluation failed");
 
     if params.separate_entry_points {
@@ -398,8 +404,14 @@ fn write_output_msl(
 
     println!("generating MSL");
 
+    let (module, info) = naga::inline::process(
+        module,
+        info,
+        naga::inline::InlineStrategy::OnlyNeeded(naga::inline::InlineTarget::Msl),
+    )
+    .expect("inlining failed");
     let (module, info) =
-        naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
+        naga::back::pipeline_constants::process_overrides(&module, &info, None, pipeline_constants)
             .expect("override evaluation failed");
 
     let mut options = options.clone();
@@ -441,8 +453,14 @@ fn write_output_glsl(
     };
 
     let mut buffer = String::new();
+    let (module, info) = naga::inline::process(
+        module,
+        info,
+        naga::inline::InlineStrategy::OnlyNeeded(naga::inline::InlineTarget::Glsl),
+    )
+    .expect("inlining failed");
     let (module, info) =
-        naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
+        naga::back::pipeline_constants::process_overrides(&module, &info, None, pipeline_constants)
             .expect("override evaluation failed");
     let mut writer = glsl::Writer::new(
         &mut buffer,
@@ -472,8 +490,14 @@ fn write_output_hlsl(
 
     println!("generating HLSL");
 
+    let (module, info) = naga::inline::process(
+        module,
+        info,
+        naga::inline::InlineStrategy::OnlyNeeded(naga::inline::InlineTarget::Hlsl),
+    )
+    .expect("inlining failed");
     let (module, info) =
-        naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
+        naga::back::pipeline_constants::process_overrides(&module, &info, None, pipeline_constants)
             .expect("override evaluation failed");
 
     let mut options = options.clone();
