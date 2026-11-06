@@ -1,10 +1,22 @@
 # None of our tests should take longer than 45s, and if they've gone 2x that,
 # terminate them to prevent infinite run-on.
+#
+# The period is 15s rather than 45s only so that the log gets a liveness
+# heartbeat every 15s; nextest prints a `SLOW` line once per period, and CI
+# hosts that stall are hard to distinguish from slow tests without one.
+# See <https://github.com/gfx-rs/wgpu/issues/9248>.
 [profile.default]
 default-filter = "!test(~oom_test)"
-slow-timeout = { period = "45s", terminate-after = 2 }
+slow-timeout = { period = "15s", terminate-after = 6 }
 fail-fast = false
 retries = 0
+
+# Per-test start times and durations, kept as a CI artifact so that
+# intermittent timeouts can be analyzed after the run logs expire (#9248).
+[profile.default.junit]
+path = "junit.xml"
+store-success-output = false
+store-failure-output = false
 
 # Use two threads for tests with "2 threads" in their name
 [[profile.default.overrides]]
@@ -50,7 +62,7 @@ filter = 'test(clear_texture) | test(clear_buffer_range_respected) | test(compil
 
 [profile.wasm]
 default-filter = "test([wasm])"
-slow-timeout = { period = "45s", terminate-after = 2 }
+slow-timeout = { period = "15s", terminate-after = 6 }
 fail-fast = false
 retries = 0
 

@@ -26,5 +26,9 @@ var texture_sampler: sampler;
 
 @fragment
 fn fs_main(vs: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(texture, texture_sampler, vs.tex_coords);
+    // Note: we want to copy the texture with the user's provided filter mode,
+    // similar to vkCmdBlitImage. We don't want anything to do with mipmapping
+    // or partial derivatives, so use `textureSampleLevel` to read from the
+    // base texture with the mag filter
+    return textureSampleLevel(texture, texture_sampler, vs.tex_coords, 0.0);
 }

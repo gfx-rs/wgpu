@@ -508,6 +508,17 @@ impl crate::TypeInner {
         }
     }
 
+    /// Return true if `self` is an external texture.
+    pub const fn is_external_image(&self) -> bool {
+        matches!(
+            self,
+            crate::TypeInner::Image {
+                class: crate::ImageClass::External,
+                ..
+            }
+        )
+    }
+
     /// Determine whether `self` automatically converts to `goal`.
     ///
     /// If Naga IR's automatic conversions will convert `self` to

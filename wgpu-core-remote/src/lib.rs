@@ -36,3 +36,18 @@ pub mod hub;
 pub mod id;
 pub mod registry;
 pub mod storage;
+
+pub fn map_buffer_access_error(
+    err: wgpu_core::resource::BufferAccessError,
+) -> wgpu_core_remote_types::BufferMapError {
+    match err {
+        e
+        @ wgpu_core::resource::BufferAccessError::Device(wgpu_core::device::DeviceError::Lost) => {
+            wgpu_core_remote_types::BufferMapError::Aborted(e.to_string())
+        }
+        e @ wgpu_core::resource::BufferAccessError::MapAborted => {
+            wgpu_core_remote_types::BufferMapError::Aborted(e.to_string())
+        }
+        e => wgpu_core_remote_types::BufferMapError::Operation(e.to_string()),
+    }
+}

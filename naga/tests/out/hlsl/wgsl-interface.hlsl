@@ -64,7 +64,7 @@ FragmentOutput ConstructFragmentOutput(float arg0, uint arg1, float arg2) {
 
 FragmentOutput fragment(FragmentInput_fragment fragmentinput_fragment)
 {
-    VertexOutput in_ = { fragmentinput_fragment.position_1, fragmentinput_fragment._varying_1 };
+    VertexOutput in_ = { float4(fragmentinput_fragment.position_1.xyz, 1.0 / fragmentinput_fragment.position_1.w), fragmentinput_fragment._varying_1 };
     bool front_facing = fragmentinput_fragment.front_facing_1;
     uint sample_index = fragmentinput_fragment.sample_index_1;
     uint sample_mask = fragmentinput_fragment.sample_mask_1;

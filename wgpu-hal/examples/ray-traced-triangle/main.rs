@@ -5,7 +5,7 @@ use hal::{
 };
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
-use glam::{Affine3A, Mat4, Vec3};
+use glam::{Affine3A, Vec3};
 use std::{
     borrow::{Borrow, Cow},
     iter, ptr,
@@ -619,8 +619,14 @@ impl<A: hal::Api> Example<A> {
         .unwrap();
 
         let uniforms = {
-            let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 2.5), Vec3::ZERO, Vec3::Y);
-            let proj = Mat4::perspective_rh(59.0_f32.to_radians(), 1.0, 0.001, 1000.0);
+            let view =
+                glam::camera::rh::view::look_at_mat4(Vec3::new(0.0, 0.0, 2.5), Vec3::ZERO, Vec3::Y);
+            let proj = glam::camera::rh::proj::directx::perspective(
+                59.0_f32.to_radians(),
+                1.0,
+                0.001,
+                1000.0,
+            );
 
             Uniforms {
                 view_inverse: view.inverse(),

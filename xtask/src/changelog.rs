@@ -1,5 +1,6 @@
 use std::sync::OnceLock;
 
+use anyhow::Context;
 use pico_args::Arguments;
 use regex_lite::Regex;
 use xshell::Shell;
@@ -16,10 +17,13 @@ pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Resu
 
     let from_commit = shell
         .cmd("git")
-        .args(["merge-base", "--fork-point", &from_branch])
-        .args(to_commit.as_ref())
+        .args([
+            "merge-base",
+            &from_branch,
+            to_commit.as_deref().unwrap_or("HEAD"),
+        ])
         .read()
-        .unwrap();
+        .context("could not find the common ancestor for the changelog comparison")?;
 
     let diff = shell
         .cmd("git")
@@ -303,6 +307,77 @@ impl<'haystack> Iterator for SplitPrefixInclusive<'haystack, '_> {
                 Some(&remaining[..length])
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test_check_changelog {
+    use pico_args::Arguments;
+    use xshell::Shell;
+
+    use super::check_changelog;
+
+    #[test]
+    fn base_branch_advanced_without_reflog_history() -> anyhow::Result<()> {
+        let shell = Shell::new()?;
+        let directory = shell.create_temp_dir()?;
+        shell.change_dir(directory.path());
+        shell.write_file("gitconfig", "")?;
+        shell.set_var("GIT_CONFIG_GLOBAL", directory.path().join("gitconfig"));
+        shell.set_var("GIT_CONFIG_NOSYSTEM", "1");
+        shell.set_var("GIT_AUTHOR_NAME", "Test");
+        shell.set_var("GIT_AUTHOR_EMAIL", "test@example.com");
+        shell.set_var("GIT_COMMITTER_NAME", "Test");
+        shell.set_var("GIT_COMMITTER_EMAIL", "test@example.com");
+        shell
+            .cmd("git")
+            .args(["init", "--initial-branch=trunk"])
+            .run()?;
+
+        let original = "# Changelog\n\n## Unreleased\n\n## 1.0.0\n\n- Released.\n";
+        shell.write_file("CHANGELOG.md", original)?;
+        shell.cmd("git").args(["add", "CHANGELOG.md"]).run()?;
+        shell
+            .cmd("git")
+            .args(["commit", "-m", "Initial changelog"])
+            .run()?;
+        shell.cmd("git").args(["checkout", "-b", "topic"]).run()?;
+        let updated = original.replace("## Unreleased\n", "## Unreleased\n\n- New entry.\n");
+        shell.write_file("CHANGELOG.md", &updated)?;
+        shell
+            .cmd("git")
+            .args(["commit", "-am", "Add entry"])
+            .run()?;
+
+        shell.cmd("git").args(["checkout", "trunk"]).run()?;
+        shell
+            .cmd("git")
+            .args(["commit", "--allow-empty", "-m", "Advance trunk"])
+            .run()?;
+        shell
+            .cmd("git")
+            .args(["update-ref", "refs/remotes/origin/trunk", "HEAD"])
+            .run()?;
+        shell.cmd("git").args(["checkout", "topic"]).run()?;
+
+        check_changelog(
+            shell.clone(),
+            Arguments::from_vec(vec!["origin/trunk".into()]),
+        )?;
+        shell.write_file(
+            "CHANGELOG.md",
+            updated.replace("Released.", "Changed release."),
+        )?;
+        assert!(check_changelog(
+            shell.clone(),
+            Arguments::from_vec(vec!["origin/trunk".into()])
+        )
+        .is_err());
+        check_changelog(
+            shell,
+            Arguments::from_vec(vec!["origin/trunk".into(), "topic".into()]),
+        )?;
+        Ok(())
     }
 }
 

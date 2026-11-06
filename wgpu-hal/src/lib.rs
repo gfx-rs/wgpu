@@ -338,7 +338,7 @@ pub type FenceValue = u64;
 pub type AtomicFenceValue = wgpu_sync::atomic::AtomicU64;
 
 /// A callback to signal that wgpu is no longer using a resource.
-#[cfg(all(any(gles, vulkan, metal), not(webgl)))]
+#[cfg(all(any(gles, vulkan, metal, dx12), not(webgl)))]
 pub type DropCallback = Box<dyn FnOnce() + Send + Sync + 'static>;
 
 /// A callback to signal that wgpu is no longer using a resource.
@@ -349,7 +349,7 @@ pub type DropCallback = Box<dyn FnOnce() + Send + Sync + 'static>;
 #[cfg(webgl)]
 pub type DropCallback = Box<dyn FnOnce() + 'static>;
 
-#[cfg(any(gles, vulkan, metal))]
+#[cfg(any(gles, vulkan, metal, dx12))]
 pub struct DropGuard {
     callback: Option<DropCallback>,
 }
@@ -363,7 +363,7 @@ unsafe impl Send for DropGuard {}
 #[cfg(all(webgl, send_sync))]
 unsafe impl Sync for DropGuard {}
 
-#[cfg(any(gles, vulkan, metal))]
+#[cfg(any(gles, vulkan, metal, dx12))]
 impl DropGuard {
     #[cfg(any(native, Emscripten))]
     fn from_option(callback: Option<DropCallback>) -> Option<Self> {
@@ -386,7 +386,7 @@ impl DropGuard {
     }
 }
 
-#[cfg(any(gles, vulkan, metal))]
+#[cfg(any(gles, vulkan, metal, dx12))]
 impl Drop for DropGuard {
     fn drop(&mut self) {
         if let Some(cb) = self.callback.take() {
@@ -395,7 +395,7 @@ impl Drop for DropGuard {
     }
 }
 
-#[cfg(any(gles, vulkan, metal))]
+#[cfg(any(gles, vulkan, metal, dx12))]
 impl fmt::Debug for DropGuard {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DropGuard").finish()
@@ -452,6 +452,7 @@ impl From<gpu_allocator::AllocationError> for DeviceError {
 // and remove this type.
 // https://github.com/Traverse-Research/gpu-allocator/issues/295
 #[cfg_attr(not(any(dx12, vulkan)), expect(dead_code))]
+#[derive(Clone, Copy)]
 pub(crate) struct AllocationSizes {
     pub(crate) min_device_memblock_size: u64,
     pub(crate) max_device_memblock_size: u64,
@@ -497,6 +498,17 @@ impl AllocationSizes {
                     max_host_memblock_size: host_size.end.clamp(4 * MB, 256 * MB),
                 }
             }
+        }
+    }
+
+    /// Sizes for the transient pool. Minimum block sizes are reduced because
+    /// gpu-allocator never frees the last block of a memory type.
+    #[allow(dead_code, reason = "only the vulkan backend has a transient pool")]
+    pub(crate) fn transient(self) -> Self {
+        Self {
+            min_device_memblock_size: self.min_device_memblock_size / 4,
+            min_host_memblock_size: self.min_host_memblock_size / 4,
+            ..self
         }
     }
 }
@@ -1107,6 +1119,12 @@ pub trait Device: WasmNotSendSync {
     ) -> Result<<Self::A as Api>::ShaderModule, ShaderError>;
     unsafe fn destroy_shader_module(&self, module: <Self::A as Api>::ShaderModule);
 
+    /// Create a render pipeline according to `desc`.
+    ///
+    /// The returned pipeline's lifetime is independent of that of
+    /// `desc.layout`, `desc.cache`, and all the shader modules in any
+    /// [`ProgrammableStage`] values in `desc`. The pipeline is safe to use even
+    /// after those resources have been destroyed.
     #[allow(clippy::type_complexity)]
     unsafe fn create_render_pipeline(
         &self,
@@ -1118,6 +1136,11 @@ pub trait Device: WasmNotSendSync {
     ) -> Result<<Self::A as Api>::RenderPipeline, PipelineError>;
     unsafe fn destroy_render_pipeline(&self, pipeline: <Self::A as Api>::RenderPipeline);
 
+    /// Create a compute pipeline according to `desc`.
+    ///
+    /// The returned pipeline's lifetime is independent of that of
+    /// `desc.layout`, `desc.stage.module`, and `desc.cache`. The pipeline is
+    /// safe to use even after those resources have been destroyed.
     #[allow(clippy::type_complexity)]
     unsafe fn create_compute_pipeline(
         &self,
@@ -1129,6 +1152,12 @@ pub trait Device: WasmNotSendSync {
     ) -> Result<<Self::A as Api>::ComputePipeline, PipelineError>;
     unsafe fn destroy_compute_pipeline(&self, pipeline: <Self::A as Api>::ComputePipeline);
 
+    /// Create a ray tracing pipeline according to `desc`.
+    ///
+    /// The returned pipeline's lifetime is independent of that of
+    /// `desc.layout`, `desc.cache`, and all the shader modules in any
+    /// [`ProgrammableStage`] values in `desc`. The pipeline is safe to use even
+    /// after those resources have been destroyed.
     #[allow(clippy::type_complexity)]
     unsafe fn create_ray_tracing_pipeline(
         &self,
@@ -1752,12 +1781,20 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         first_instance: u32,
         instance_count: u32,
     );
+    /// # Safety
+    ///
+    /// - If `draw_count > 1`, see the deferred-work obligation on
+    ///   [`encode_deferred_multi_draws`](CommandEncoder::encode_deferred_multi_draws).
     unsafe fn draw_indirect(
         &mut self,
         buffer: &<Self::A as Api>::Buffer,
         offset: wgt::BufferAddress,
         draw_count: u32,
     );
+    /// # Safety
+    ///
+    /// - If `draw_count > 1`, see the deferred-work obligation on
+    ///   [`encode_deferred_multi_draws`](CommandEncoder::encode_deferred_multi_draws).
     unsafe fn draw_indexed_indirect(
         &mut self,
         buffer: &<Self::A as Api>::Buffer,
@@ -1786,6 +1823,10 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         group_count_y: u32,
         group_count_z: u32,
     );
+    /// # Safety
+    ///
+    /// - If `draw_count > 1`, see the deferred-work obligation on
+    ///   [`encode_deferred_multi_draws`](CommandEncoder::encode_deferred_multi_draws).
     unsafe fn draw_mesh_tasks_indirect(
         &mut self,
         buffer: &<Self::A as Api>::Buffer,
@@ -1800,6 +1841,39 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     );
+
+    /// Record any deferred setup work for indirect multi-draws of the most
+    /// recently ended render pass into the current command buffer.
+    ///
+    /// Some backends lower [`draw_indirect`]-family calls with `draw_count > 1`
+    /// to GPU-generated command lists (e.g. Metal indirect command buffers).
+    /// The generation work must execute *before* the render pass that consumes
+    /// it, but the pass contents are only known once the pass has been
+    /// recorded, so such backends queue the generation work at draw-record time
+    /// and encode it when this method is called.
+    ///
+    /// The default implementation does nothing; backends that don't defer any
+    /// multi-draw work don't need to override it.
+    ///
+    /// # Safety
+    ///
+    /// - Must be called outside of a render, compute, or ray-tracing pass.
+    /// - Between the [`end_render_pass`] for a pass that recorded indirect
+    ///   multi-draws and the submission of that pass's command buffer, this
+    ///   method must be called on this [`CommandEncoder`], while recording a
+    ///   command buffer that the queue will execute *before* the pass's
+    ///   command buffer. One call covers every pass ended since the previous
+    ///   call.
+    /// - The command buffer recorded here must not be reset until the pass's
+    ///   command buffer has completed.
+    /// - Any indirect (or count) buffer passed to a [`draw_indirect`]-family
+    ///   call in that pass must not be written between that call and the
+    ///   execution of the command buffer recorded here, other than by wgpu's
+    ///   own indirect validation.
+    ///
+    /// [`draw_indirect`]: CommandEncoder::draw_indirect
+    /// [`end_render_pass`]: CommandEncoder::end_render_pass
+    unsafe fn encode_deferred_multi_draws(&mut self) {}
 
     // compute passes
 
@@ -2078,6 +2152,7 @@ impl From<wgt::TextureFormat> for FormatAspects {
 bitflags!(
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct MemoryFlags: u32 {
+        /// The resource is short-lived and may be placed in a separate memory pool.
         const TRANSIENT = 1 << 0;
         const PREFER_COHERENT = 1 << 1;
     }
@@ -3007,10 +3082,15 @@ pub struct RayTracingPassDescriptor<'a> {
     pub label: Label<'a>,
 }
 
-#[test]
-fn test_default_limits() {
-    let limits = wgt::Limits::default();
-    assert!(limits.max_bind_groups <= MAX_BIND_GROUPS as u32);
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_limits() {
+        let limits = wgt::Limits::default();
+        assert!(limits.max_bind_groups <= MAX_BIND_GROUPS as u32);
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -3018,6 +3098,8 @@ pub struct AccelerationStructureDescriptor<'a> {
     pub label: Label<'a>,
     pub size: wgt::BufferAddress,
     pub format: AccelerationStructureFormat,
+    /// Backends may allocate the structure as a short-lived resource, since it is
+    /// usually replaced by its compacted copy.
     pub allow_compaction: bool,
 }
 

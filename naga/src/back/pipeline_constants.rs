@@ -656,8 +656,13 @@ fn adjust_expr(new_pos: &HandleVec<Expression, Handle<Expression>>, expr: &mut E
         }
         Expression::As {
             ref mut expr,
-            kind: _,
-            convert: _,
+            target: _,
+        } => {
+            adjust(expr);
+        }
+        Expression::Bitcast {
+            ref mut expr,
+            ty: _,
         } => {
             adjust(expr);
         }
@@ -927,6 +932,14 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 adjust(payload);
             }
         },
+        Statement::DebugPrintf {
+            format: _,
+            ref mut arguments,
+        } => {
+            for argument in arguments.iter_mut() {
+                adjust(argument);
+            }
+        }
         Statement::Break
         | Statement::Continue
         | Statement::Kill

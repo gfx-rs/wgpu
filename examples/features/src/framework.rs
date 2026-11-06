@@ -76,6 +76,9 @@ fn init_logger() {
             // of these default filters.
             env_logger::builder()
                 .filter_level(log::LevelFilter::Info)
+                // Millisecond timestamps; see
+                // <https://github.com/gfx-rs/wgpu/issues/9248>.
+                .format_timestamp_millis()
                 .parse_default_env()
                 .init();
         }

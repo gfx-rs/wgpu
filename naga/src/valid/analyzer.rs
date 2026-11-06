@@ -804,7 +804,7 @@ impl FunctionInfo {
                     requirements: UniformityRequirements::empty(),
                 }
             }
-            E::As { expr, .. } => Uniformity {
+            E::As { expr, .. } | E::Bitcast { expr, .. } => Uniformity {
                 non_uniform_result: self.add_ref(expr),
                 requirements: UniformityRequirements::empty(),
             },
@@ -1207,6 +1207,23 @@ impl FunctionInfo {
                         }
                     }
                     FunctionUniformity::new()
+                }
+                S::DebugPrintf {
+                    format: _,
+                    ref arguments,
+                } => {
+                    let mut requirements = UniformityRequirements::empty();
+                    for &expr in arguments {
+                        let _ = self.add_ref(expr);
+                        requirements |= self.expressions[expr.index()].uniformity.requirements;
+                    }
+                    FunctionUniformity {
+                        result: Uniformity {
+                            non_uniform_result: None,
+                            requirements,
+                        },
+                        exit: ExitFlags::empty(),
+                    }
                 }
             };
 

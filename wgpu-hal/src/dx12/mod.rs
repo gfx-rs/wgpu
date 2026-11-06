@@ -579,6 +579,14 @@ impl PrivateCapabilities {
             D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT.into()
         }
     }
+
+    fn texture_data_pitch_alignment(&self) -> u32 {
+        if self.unrestricted_buffer_texture_copy_pitch_supported {
+            1
+        } else {
+            Direct3D12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT
+        }
+    }
 }
 
 #[derive(Default, Debug, Copy, Clone)]
@@ -926,6 +934,11 @@ pub struct Buffer {
     // things from the allocated buffer size is usually incorrect.
     allocated_size: wgt::BufferAddress,
     allocation: suballocation::Allocation,
+
+    // The `_drop_guard` field must be the last field of this struct so it is
+    // dropped last, after this buffer's reference to `resource` is released.
+    // Do not add new fields after it.
+    _drop_guard: Option<crate::DropGuard>,
 }
 
 impl Buffer {
@@ -960,6 +973,11 @@ pub struct Texture {
     /// importers wrapping one plane of a multi-plane DXGI resource as a
     /// single-plane wgpu texture.
     plane_slice_override: Option<u32>,
+
+    // The `_drop_guard` field must be the last field of this struct so it is
+    // dropped last, after this texture's reference to `resource` is released.
+    // Do not add new fields after it.
+    _drop_guard: Option<crate::DropGuard>,
 }
 
 impl Texture {
@@ -1647,6 +1665,7 @@ impl crate::Surface for Surface {
                 sc.format.theoretical_memory_footprint(sc.size),
             ),
             plane_slice_override: None,
+            _drop_guard: None,
         };
         Ok(crate::AcquiredSurfaceTexture {
             texture,

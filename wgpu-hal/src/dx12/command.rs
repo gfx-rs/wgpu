@@ -34,6 +34,7 @@ impl crate::BufferTextureCopy {
     fn to_subresource_footprint(
         &self,
         format: wgt::TextureFormat,
+        pitch_alignment: u32,
     ) -> Direct3D12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
         let (block_width, _) = format.block_dimensions();
         Direct3D12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
@@ -55,7 +56,7 @@ impl crate::BufferTextureCopy {
                             .unwrap();
                         (self.size.width / block_width) * block_size
                     });
-                    wgt::math::align_to(actual, Direct3D12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT)
+                    wgt::math::align_to(actual, pitch_alignment)
                 },
             },
         }
@@ -481,6 +482,7 @@ impl super::CommandEncoder {
                 resource,
                 allocated_size: size.get(),
                 allocation,
+                _drop_guard: None,
             }
         };
 
@@ -610,9 +612,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     },
                 };
                 self.temp.barriers.push(raw);
-            } else if barrier.usage.from == wgt::BufferUses::STORAGE_READ_WRITE
-                || barrier.usage.from == wgt::BufferUses::ACCELERATION_STRUCTURE_QUERY
-            {
+            } else if conv::buffer_usage_needs_uav(barrier.usage.from) {
                 let raw = Direct3D12::D3D12_RESOURCE_BARRIER {
                     Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
                     Flags: Direct3D12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -854,7 +854,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 pResource: unsafe { borrow_interface_temporarily(&src.resource) },
                 Type: Direct3D12::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
                 Anonymous: Direct3D12::D3D12_TEXTURE_COPY_LOCATION_0 {
-                    PlacedFootprint: final_copy_region.to_subresource_footprint(dst.format),
+                    PlacedFootprint: final_copy_region.to_subresource_footprint(
+                        dst.format,
+                        self.shared.private_caps.texture_data_pitch_alignment(),
+                    ),
                 },
             };
             let dst_location = Direct3D12::D3D12_TEXTURE_COPY_LOCATION {
@@ -906,7 +909,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 pResource: unsafe { borrow_interface_temporarily(&dst.resource) },
                 Type: Direct3D12::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
                 Anonymous: Direct3D12::D3D12_TEXTURE_COPY_LOCATION_0 {
-                    PlacedFootprint: r.to_subresource_footprint(src.format),
+                    PlacedFootprint: r.to_subresource_footprint(
+                        src.format,
+                        this.shared.private_caps.texture_data_pitch_alignment(),
+                    ),
                 },
             };
 

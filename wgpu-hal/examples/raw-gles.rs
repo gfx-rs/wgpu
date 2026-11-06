@@ -175,15 +175,13 @@ fn main() {
                         },
                     ..
                 } => event_loop.exit(),
-                WindowEvent::Resized(size) => {
-                    if size.width != 0 && size.height != 0 {
-                        // Some platforms like EGL require resizing GL surface to update the size.
-                        // Notable platforms here are Wayland and macOS, other don't require it
-                        // and the function is no-op, but it's wise to resize it for portability
-                        // reasons.
-                        if let Some((gl_context, gl_surface, window)) = &self.state {
-                            window.resize_surface(gl_surface, gl_context);
-                        }
+                WindowEvent::Resized(size) if size.width != 0 && size.height != 0 => {
+                    // Some platforms like EGL require resizing GL surface to update the size.
+                    // Notable platforms here are Wayland and macOS, other don't require it
+                    // and the function is no-op, but it's wise to resize it for portability
+                    // reasons.
+                    if let Some((gl_context, gl_surface, window)) = &self.state {
+                        window.resize_surface(gl_surface, gl_context);
                     }
                 }
                 WindowEvent::RedrawRequested => {

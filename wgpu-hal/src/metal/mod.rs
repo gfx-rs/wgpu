@@ -24,6 +24,8 @@ mod adapter;
 mod command;
 mod conv;
 mod device;
+mod icb;
+mod icb_probe;
 mod library_from_metallib;
 mod surface;
 mod time;
@@ -43,16 +45,15 @@ use objc2::{
     rc::{autoreleasepool, Retained},
     runtime::ProtocolObject,
 };
-use objc2_foundation::ns_string;
+use objc2_foundation::{ns_string, NSString};
 use objc2_metal::{
     MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLArgumentBuffersTier,
-    MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandQueue,
-    MTLComputeCommandEncoder, MTLComputePipelineState, MTLCounterSampleBuffer, MTLCullMode,
-    MTLDepthClipMode, MTLDepthStencilState, MTLDevice, MTLDrawable, MTLIndexType,
-    MTLLanguageVersion, MTLLibrary, MTLPrimitiveType, MTLReadWriteTextureTier,
-    MTLRenderCommandEncoder, MTLRenderPipelineState, MTLRenderStages, MTLResource,
-    MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize, MTLTexture, MTLTextureType,
-    MTLTriangleFillMode, MTLWinding,
+    MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandQueue, MTLComputeCommandEncoder,
+    MTLComputePipelineState, MTLCounterSampleBuffer, MTLCullMode, MTLDepthClipMode,
+    MTLDepthStencilState, MTLDevice, MTLDrawable, MTLIndexType, MTLLanguageVersion, MTLLibrary,
+    MTLPrimitiveType, MTLReadWriteTextureTier, MTLRenderCommandEncoder, MTLRenderPipelineState,
+    MTLRenderStages, MTLResource, MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize,
+    MTLTexture, MTLTextureType, MTLTriangleFillMode, MTLWinding,
 };
 use objc2_quartz_core::CAMetalLayer;
 use wgpu_sync::{atomic, Condvar, Mutex, OnceCell, RwLock};
@@ -319,7 +320,6 @@ struct CapabilitiesQuery {
     supports_cooperative_matrix: bool,
     int64: bool,
     int64_atomics_min_max: bool,
-    int64_atomics: bool,
     float_atomics: bool,
     mesh_shaders: bool,
     max_task_workgroup_count: u32,
@@ -331,6 +331,13 @@ struct CapabilitiesQuery {
     supports_raytracing: bool,
     shader_per_vertex: bool,
     supports_multisample_array: bool,
+    /// Static preconditions for lowering multi-draws to render ICBs; see
+    /// `PrivateCapabilities::indirect_command_buffers_rendering`.
+    indirect_command_buffers_rendering: bool,
+    indirect_command_buffers_mesh: bool,
+    /// Whether `optimizeIndirectCommandBuffer` is worth a blit pass on this GPU.
+    indirect_command_buffers_optimize: bool,
+    supports_debug_printf: bool,
     texture_component_swizzle: bool,
 }
 
@@ -343,6 +350,13 @@ struct PrivateCapabilities {
     timestamp_query_support: TimestampQuerySupport,
     supports_memoryless_storage: bool,
     mesh_shaders: bool,
+    /// Whether multi-draws may lower to render ICBs. False under
+    /// `InstanceFlags::STRICT_WEBGPU_COMPLIANCE`.
+    indirect_command_buffers_rendering: bool,
+    indirect_command_buffers_mesh: bool,
+    /// Whether `optimizeIndirectCommandBuffer` is worth a blit pass on this GPU.
+    indirect_command_buffers_optimize: bool,
+    supports_debug_printf: bool,
     texture_component_swizzle: bool,
 }
 
@@ -350,7 +364,7 @@ struct PrivateCapabilities {
 struct PrivateTextureFormatCapabilities {
     read_write_texture_tier: MTLReadWriteTextureTier,
     sample_count_mask: crate::TextureFormatCapabilities,
-    int64_atomics: bool,
+    int64_atomics_min_max: bool,
     msaa_desktop: bool,
     msaa_apple3: bool,
     msaa_apple7: bool,
@@ -401,6 +415,8 @@ struct AdapterShared {
     private_texture_format_caps: PrivateTextureFormatCapabilities,
     settings: Settings,
     presentation_timer: time::PresentationTimer,
+    instance_flags: wgt::InstanceFlags,
+    use_debug_printf: atomic::AtomicBool,
 }
 
 #[cfg(send_sync)]
@@ -410,8 +426,15 @@ impl AdapterShared {
     fn new(
         device: Retained<ProtocolObject<dyn MTLDevice>>,
         capabilities_query: &CapabilitiesQuery,
+        instance_flags: wgt::InstanceFlags,
     ) -> Self {
-        let private_caps = capabilities_query.private_capabilities();
+        let mut private_caps = capabilities_query.private_capabilities();
+        // Firefox and Deno set `STRICT_WEBGPU_COMPLIANCE`; for them the ICB
+        // lowering does no work at all, not even at device creation.
+        if instance_flags.contains(wgt::InstanceFlags::STRICT_WEBGPU_COMPLIANCE) {
+            private_caps.indirect_command_buffers_rendering = false;
+            private_caps.indirect_command_buffers_mesh = false;
+        }
         let private_texture_format_caps = capabilities_query.private_texture_format_capabilities();
         log::debug!("{private_caps:#?}");
         log::debug!("{private_texture_format_caps:#?}");
@@ -423,7 +446,20 @@ impl AdapterShared {
             device,
             settings: Settings::default(),
             presentation_timer: time::PresentationTimer::new(),
+            instance_flags,
+            use_debug_printf: atomic::AtomicBool::new(false),
         }
+    }
+
+    /// Label for a Metal object this backend creates on its own behalf.
+    /// wgpu-core already drops the labels it hands down under
+    /// [`wgt::InstanceFlags::DISCARD_HAL_LABELS`]; this applies the same flag
+    /// to the backend's own.
+    fn hal_label(&self, label: &str) -> Option<Retained<NSString>> {
+        (!self
+            .instance_flags
+            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS))
+        .then(|| NSString::from_str(label))
     }
 
     fn expose(
@@ -433,7 +469,7 @@ impl AdapterShared {
         autoreleasepool(|_| {
             let name = device.name().to_string();
             let capabilities_query = CapabilitiesQuery::new(&device);
-            let shared = AdapterShared::new(device, &capabilities_query);
+            let shared = AdapterShared::new(device, &capabilities_query, instance_flags);
             let features = capabilities_query.features();
             let capabilities = capabilities_query.capabilities(instance_flags);
             crate::ExposedAdapter {
@@ -468,6 +504,10 @@ static_assertions::assert_impl_all!(Adapter: Send, Sync);
 pub struct Queue {
     shared: Arc<QueueShared>,
     timestamp_period: f32,
+    /// The device's ICB lowering state, whose pool every submission trims;
+    /// see [`icb::IcbContext::release_idle`]. `None` for a queue wrapped from
+    /// a raw handle, whose device then only trims when an ICB comes back.
+    icb: Option<Arc<icb::IcbContext>>,
 }
 
 #[cfg(send_sync)]
@@ -487,6 +527,7 @@ impl Queue {
                 relay: OnceCell::new(),
             }),
             timestamp_period,
+            icb: None,
         }
     }
 
@@ -638,6 +679,9 @@ pub struct Device {
     features: wgt::Features,
     counters: Arc<wgt::HalCounters>,
     limits: wgt::Limits,
+    /// Set up when the device is opened; `None` when multi-draws keep the
+    /// per-draw loop. See [`icb::IcbContext::new`].
+    icb: Option<Arc<icb::IcbContext>>,
 }
 
 #[derive(Debug)]
@@ -645,6 +689,9 @@ pub struct Surface {
     render_layer: Mutex<Retained<CAMetalLayer>>,
     swapchain_format: RwLock<Option<wgt::TextureFormat>>,
     extent: RwLock<wgt::Extent3d>,
+    /// Whether the hosting window has been visible at some point, see `acquire_texture`.
+    #[cfg(target_os = "macos")]
+    has_been_visible: atomic::AtomicBool,
 }
 
 unsafe impl Send for Surface {}
@@ -685,6 +732,9 @@ impl crate::Queue for Queue {
         _surface_textures: &[&SurfaceTexture],
         (signal_fence, signal_value): (&Fence, crate::FenceValue),
     ) -> Result<(), crate::DeviceError> {
+        if let Some(ref icb) = self.icb {
+            icb.release_idle();
+        }
         autoreleasepool(|_| {
             // Drain caller-staged waits onto a dedicated command buffer
             // committed before the user CBs.
@@ -738,7 +788,9 @@ impl crate::Queue for Queue {
             let extra_command_buffer = {
                 let fence_sync = Arc::clone(&signal_fence.sync);
                 let block = block2::RcBlock::new(move |_cmd_buf| {
-                    *fence_sync.0.lock() = signal_value;
+                    let mut value = fence_sync.0.lock();
+                    *value = (*value).max(signal_value);
+                    drop(value);
                     fence_sync.1.notify_all();
                 });
 
@@ -755,12 +807,6 @@ impl crate::Queue for Queue {
                 };
                 raw.setLabel(Some(ns_string!("(wgpu internal) Signal")));
                 unsafe { raw.addCompletedHandler(block2::RcBlock::as_ptr(&block)) };
-
-                signal_fence.maintain();
-                signal_fence
-                    .pending_command_buffers
-                    .write()
-                    .push((signal_value, raw.clone()));
 
                 if let Some(shared_event) = &signal_fence.shared_event {
                     raw.encodeSignalEvent_value(shared_event.as_ref(), signal_value);
@@ -1144,8 +1190,8 @@ struct PipelineStageInfo {
     /// See `device::CompiledShader::sized_bindings` for more details.
     sized_bindings: Vec<(naga::ResourceBinding, u32)>,
 
-    /// Info on all bound vertex buffers.
-    vertex_buffer_mappings: Vec<naga::back::msl::VertexBufferMapping>,
+    /// Info on all bound vertex buffers, shared with the pipeline.
+    vertex_buffer_mappings: Arc<[naga::back::msl::VertexBufferMapping]>,
 
     /// The workgroup size for compute, task or mesh stages
     raw_wg_size: MTLSize,
@@ -1179,7 +1225,7 @@ impl PipelineStageInfo {
         self.immediates = None;
         self.sizes_slot = None;
         self.sized_bindings.clear();
-        self.vertex_buffer_mappings.clear();
+        self.vertex_buffer_mappings = Default::default();
         self.library = None;
         self.work_group_memory_sizes.clear();
         self.raw_wg_size = MTLSize {
@@ -1194,9 +1240,7 @@ impl PipelineStageInfo {
         self.sizes_slot = other.sizes_slot;
         self.sized_bindings.clear();
         self.sized_bindings.extend_from_slice(&other.sized_bindings);
-        self.vertex_buffer_mappings.clear();
-        self.vertex_buffer_mappings
-            .extend_from_slice(&other.vertex_buffer_mappings);
+        self.vertex_buffer_mappings = Arc::clone(&other.vertex_buffer_mappings);
         self.library = Some(other.library.as_ref().unwrap().clone());
         self.raw_wg_size = other.raw_wg_size;
         self.work_group_memory_sizes.clear();
@@ -1208,6 +1252,10 @@ impl PipelineStageInfo {
 #[derive(Debug)]
 pub struct RenderPipeline {
     raw: Retained<ProtocolObject<dyn MTLRenderPipelineState>>,
+    /// ICB-capable variant of `raw`, used only to execute multi-draws lowered
+    /// to ICBs; `None` when the device doesn't lower multi-draws or Metal
+    /// rejects the variant.
+    icb_raw: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
     vs_info: Option<PipelineStageInfo>,
     fs_info: Option<PipelineStageInfo>,
     ts_info: Option<PipelineStageInfo>,
@@ -1260,15 +1308,8 @@ unsafe impl Sync for QuerySet {}
 #[derive(Debug)]
 pub struct Fence {
     sync: Arc<(wgpu_sync::CondvarMutex<crate::FenceValue>, Condvar)>,
-    /// The pending fence values have to be ascending.
-    pending_command_buffers: RwLock<Vec<PendingCommandBuffer>>,
     shared_event: Option<Retained<ProtocolObject<dyn MTLSharedEvent>>>,
 }
-
-type PendingCommandBuffer = (
-    crate::FenceValue,
-    Retained<ProtocolObject<dyn MTLCommandBuffer>>,
-);
 
 impl crate::DynFence for Fence {}
 
@@ -1277,24 +1318,7 @@ unsafe impl Sync for Fence {}
 
 impl Fence {
     fn get_latest(&self) -> crate::FenceValue {
-        let mut max_value = *self.sync.0.lock();
-        let pending_command_buffers = self.pending_command_buffers.read();
-        for &(value, ref cmd_buf) in pending_command_buffers.iter() {
-            match cmd_buf.status() {
-                MTLCommandBufferStatus::Completed | MTLCommandBufferStatus::Error => {
-                    max_value = value;
-                }
-                _ => {}
-            }
-        }
-        max_value
-    }
-
-    fn maintain(&self) {
-        let latest = self.get_latest();
-        self.pending_command_buffers
-            .write()
-            .retain(|&(value, _)| value > latest);
+        *self.sync.0.lock()
     }
 
     pub fn raw_shared_event(&self) -> Option<&ProtocolObject<dyn MTLSharedEvent>> {
@@ -1312,6 +1336,7 @@ struct IndexState {
 #[derive(Default)]
 struct Temp {
     binding_sizes: Vec<u32>,
+    icb_argument_encoders: icb::IcbArgumentEncoderCache,
 }
 
 // Any state in this struct that may be dirty after an abandoned encoding must
@@ -1322,6 +1347,8 @@ struct CommandState {
         Option<Retained<ProtocolObject<dyn MTLAccelerationStructureCommandEncoder>>>,
     render: Option<Retained<ProtocolObject<dyn MTLRenderCommandEncoder>>>,
     compute: Option<Retained<ProtocolObject<dyn MTLComputeCommandEncoder>>>,
+    render_pipeline: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
+    render_pipeline_icb: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
     raw_primitive_type: MTLPrimitiveType,
     index: Option<IndexState>,
     stage_infos: MultiStageData<PipelineStageInfo>,
@@ -1367,6 +1394,18 @@ pub struct CommandEncoder {
     state: CommandState,
     temp: Temp,
     counters: Arc<wgt::HalCounters>,
+    /// Indirect-command-buffer generation work queued by multi-draw calls
+    /// during render-pass recording, encoded (into the command buffer wgpu-core
+    /// schedules before the pass) by
+    /// [`encode_deferred_multi_draws`](crate::CommandEncoder::encode_deferred_multi_draws).
+    deferred_multi_draws: Vec<icb::IcbGenerationRequest>,
+    /// Objects that must stay alive until the command buffers recorded by this
+    /// encoder finish executing; drained into the next finished
+    /// [`CommandBuffer`] so submission keep-alive doesn't depend on
+    /// [`Settings::retain_command_buffer_references`].
+    deferred_multi_draw_resources: Vec<icb::IcbExecutionResources>,
+    /// The device's ICB lowering state; see [`Device::icb`].
+    icb: Option<Arc<icb::IcbContext>>,
 }
 
 impl fmt::Debug for CommandEncoder {
@@ -1384,6 +1423,9 @@ unsafe impl Sync for CommandEncoder {}
 pub struct CommandBuffer {
     raw: Retained<ProtocolObject<dyn MTLCommandBuffer>>,
     queue_shared: Arc<QueueShared>,
+    /// Keeps ICBs and their argument buffers alive for the lifetime of this
+    /// command buffer even when Metal is not retaining encoded references.
+    _icb_resources: Vec<icb::IcbExecutionResources>,
 }
 
 impl crate::DynCommandBuffer for CommandBuffer {}

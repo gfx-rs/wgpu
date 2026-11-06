@@ -120,6 +120,10 @@ impl ScalarSet {
         .union(Self::U64);
 
     pub const NUMERIC: Self = Self::FLOAT.union(Self::INTEGER);
+    pub const SIGNED_NUMERIC: Self = Self::NUMERIC
+        .difference(Self::U16)
+        .difference(Self::U32)
+        .difference(Self::U64);
     pub const ABSTRACT: Self = Self::ABSTRACT_INT.union(Self::ABSTRACT_FLOAT);
     pub const CONCRETE: Self = Self::all().difference(Self::ABSTRACT);
     pub const CONCRETE_INTEGER: Self = Self::INTEGER.intersection(Self::CONCRETE);

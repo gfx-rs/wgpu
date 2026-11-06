@@ -200,6 +200,128 @@ fn bad_type_cast() {
 }
 
 #[test]
+fn bitcast_overloads() {
+    let bitcast = |source: &str, dest: &str| {
+        format!("enable f16; fn f(x: {source}) -> {dest} {{ return bitcast<{dest}>(x); }}")
+    };
+
+    for (source, dest) in [
+        ("i32", "u32"),
+        ("u32", "f32"),
+        ("vec3<f32>", "vec3<i32>"),
+        ("f16", "f16"),
+        ("vec2<f16>", "vec2<f16>"),
+        ("vec2<f16>", "i32"),
+        ("vec2<f16>", "u32"),
+        ("vec2<f16>", "f32"),
+        ("vec4<f16>", "vec2<i32>"),
+        ("vec4<f16>", "vec2<u32>"),
+        ("vec4<f16>", "vec2<f32>"),
+        ("vec2<i32>", "vec4<f16>"),
+        ("vec2<u32>", "vec4<f16>"),
+        ("vec2<f32>", "vec4<f16>"),
+        ("i32", "vec2<f16>"),
+        ("u32", "vec2<f16>"),
+        ("f32", "vec2<f16>"),
+    ] {
+        check_success(&bitcast(source, dest));
+    }
+
+    for (source, dest) in [
+        ("bool", "u32"),
+        ("u32", "bool"),
+        ("f16", "u32"),
+        ("u32", "f16"),
+        ("vec3<f16>", "vec3<u32>"),
+        ("vec2<f16>", "vec2<u32>"),
+        ("vec2<f16>", "vec4<f16>"),
+        ("vec4<f16>", "u32"),
+        ("vec2<u32>", "vec3<u32>"),
+        ("vec3<u32>", "vec4<f16>"),
+        ("f32", "vec2<f32>"),
+        ("array<u32, 2>", "u32"),
+        ("u32", "array<u32, 1>"),
+    ] {
+        check_error_matches(&bitcast(source, dest), "cannot cast");
+    }
+}
+
+#[test]
+fn bitcast_int16() {
+    let bitcast = |source: &str, dest: &str| {
+        format!(
+            "enable f16; enable wgpu_int16; \
+             fn f(x: {source}) -> {dest} {{ return bitcast<{dest}>(x); }}"
+        )
+    };
+
+    for (source, dest) in [
+        ("f16", "i16"),
+        ("f16", "u16"),
+        ("i16", "f16"),
+        ("u16", "f16"),
+        ("i16", "u16"),
+        ("vec2<f16>", "vec2<i16>"),
+        ("vec3<f16>", "vec3<u16>"),
+        ("vec4<i16>", "vec4<f16>"),
+        ("vec4<u16>", "vec4<f16>"),
+    ] {
+        no_validation_error(
+            &bitcast(source, dest),
+            Capabilities::SHADER_FLOAT16 | Capabilities::SHADER_INT16,
+        );
+    }
+
+    for (source, dest) in [
+        ("f16", "i32"),
+        ("i16", "f32"),
+        ("i16", "bool"),
+        ("vec2<f16>", "i16"),
+        ("vec2<i16>", "vec3<f16>"),
+        ("vec2<i16>", "vec4<f16>"),
+    ] {
+        check_error_matches(&bitcast(source, dest), "cannot cast");
+    }
+}
+
+#[test]
+fn bitcast_abstract_operand() {
+    for (value, dest) in [
+        ("4294967295", "u32"),
+        ("4294967295", "vec2<u32>"),
+        ("1", "i32"),
+        ("1", "f32"),
+        ("1.0", "f32"),
+        ("1.0", "i32"),
+        ("1.0", "u32"),
+    ] {
+        let dest_value = if dest.starts_with("vec") {
+            format!("{dest}({value})")
+        } else {
+            value.to_string()
+        };
+        check_success(&format!(
+            "fn f() -> {dest} {{ return bitcast<{dest}>({dest_value}); }}"
+        ));
+    }
+
+    check_success("enable f16; fn f() -> vec2<f16> { return bitcast<vec2<f16>>(1); }");
+    check_success("enable f16; fn f() -> vec2<f16> { return bitcast<vec2<f16>>(1.0); }");
+    check_success("enable f16; fn f() -> f16 { return bitcast<f16>(1.0); }");
+    check_success("enable f16; fn f() -> f16 { return bitcast<f16>(1); }");
+    check_success("fn f() -> vec2<u32> { return bitcast<vec2<u32>>(vec2(4294967295, 1)); }");
+    check_success("fn f() -> vec2<f32> { return bitcast<vec2<f32>>(vec2(1, 2)); }");
+    check_success("fn f() -> vec2<i32> { return bitcast<vec2<i32>>(vec2(1.0, 2.0)); }");
+    check_success("enable f16; fn f() -> vec2<f16> { return bitcast<vec2<f16>>(vec2(1, 2)); }");
+    check_success("enable f16; fn f() -> vec2<f16> { return bitcast<vec2<f16>>(vec2(1.0, 2.0)); }");
+    check_success("enable f16; fn f() -> vec4<f16> { return bitcast<vec4<f16>>(vec2(1, 2)); }");
+    check_error_matches(
+        "fn f() -> u32 { return bitcast<u32>(4294967296); }",
+        "cannot",
+    );
+}
+
+#[test]
 fn cross_vec2() {
     check(
         r#"
@@ -219,6 +341,61 @@ error: wrong type passed as argument #1 to `cross`
   = note: allowed type: vec3<f32>
   = note: allowed type: vec3<f16>
   = note: allowed type: vec3<f64>
+
+",
+    );
+}
+
+#[test]
+fn sign_unsigned() {
+    check(
+        r#"
+            @compute @workgroup_size(1)
+            fn main() {
+                var input = vec4<u32>(1u);
+                let value = sign(input);
+            }
+        "#,
+        "\
+error: wrong type passed as argument #1 to `sign`
+  ┌─ wgsl:5:29
+  │
+5 │                 let value = sign(input);
+  │                             ^^^^
+  │
+  = note: `sign` accepts the following types for argument #1:
+  = note: allowed type: {AbstractInt}
+  = note: allowed type: {AbstractFloat}
+  = note: allowed type: i32
+  = note: allowed type: i16
+  = note: allowed type: i64
+  = note: allowed type: f32
+  = note: allowed type: f16
+  = note: allowed type: f64
+  = note: allowed type: vec2<{AbstractInt}>
+  = note: allowed type: vec2<{AbstractFloat}>
+  = note: allowed type: vec2<i32>
+  = note: allowed type: vec2<i16>
+  = note: allowed type: vec2<i64>
+  = note: allowed type: vec2<f32>
+  = note: allowed type: vec2<f16>
+  = note: allowed type: vec2<f64>
+  = note: allowed type: vec3<{AbstractInt}>
+  = note: allowed type: vec3<{AbstractFloat}>
+  = note: allowed type: vec3<i32>
+  = note: allowed type: vec3<i16>
+  = note: allowed type: vec3<i64>
+  = note: allowed type: vec3<f32>
+  = note: allowed type: vec3<f16>
+  = note: allowed type: vec3<f64>
+  = note: allowed type: vec4<{AbstractInt}>
+  = note: allowed type: vec4<{AbstractFloat}>
+  = note: allowed type: vec4<i32>
+  = note: allowed type: vec4<i16>
+  = note: allowed type: vec4<i64>
+  = note: allowed type: vec4<f32>
+  = note: allowed type: vec4<f16>
+  = note: allowed type: vec4<f64>
 
 ",
     );
@@ -2034,7 +2211,7 @@ fn invalid_functions() {
         if function_name == "return_pointer"
     }
 
-    check_validation! {
+    check_error_matches(
         "
         struct Atom {
             a: atomic<u32>
@@ -2045,14 +2222,72 @@ fn invalid_functions() {
         fn return_atomic() -> Atom {
            return atom;
         }
-        ":
-        Err(naga::valid::ValidationError::Function {
-            name: function_name,
-            source: naga::valid::FunctionError::NonConstructibleReturnType,
-            ..
-        })
-        if function_name == "return_atomic"
-    }
+        ",
+        "direct access to atomic variable is not allowed",
+    );
+}
+
+/// Regression test for <https://github.com/gfx-rs/wgpu/issues/10046>.
+///
+/// Loading a value whose type contains an atomic, even nested inside a
+/// struct or array, must be rejected by the front end. It used to reach the
+/// backends, where the HLSL writer panicked.
+#[test]
+fn load_type_containing_atomic() {
+    check(
+        "
+        struct Inner { a: atomic<u32> }
+        struct Outer { inner: Inner }
+        @group(0) @binding(0) var<storage, read_write> s: Outer;
+        fn f() {
+            let x = s;
+        }
+        ",
+        r#"error: direct access to atomic variable is not allowed
+  ┌─ wgsl:6:21
+  │
+6 │             let x = s;
+  │                     ^ atomic variables cannot be accessed directly; use atomic built-in functions
+
+"#,
+    );
+
+    check_error_matches(
+        "
+        struct S { a: atomic<u32> }
+        @group(0) @binding(0) var<storage, read_write> s: S;
+        fn f() {
+            _ = s;
+        }
+        ",
+        "direct access to atomic variable is not allowed",
+    );
+
+    check_error_matches(
+        "
+        struct S { a: array<atomic<u32>, 2> }
+        @group(0) @binding(0) var<storage, read_write> s: S;
+        fn f() {
+            let x = s.a;
+        }
+        ",
+        "direct access to atomic variable is not allowed",
+    );
+
+    // Accessing the atomic through the built-in functions is still fine.
+    check_success(
+        "
+        struct Inner { a: atomic<u32> }
+        struct Outer { inner: Inner, arr: array<atomic<u32>, 2> }
+        @group(0) @binding(0) var<storage, read_write> s: Outer;
+        fn f() -> u32 {
+            atomicStore(&s.inner.a, 1u);
+            atomicAdd(&s.arr[1], 1u);
+            let p = &s.inner;
+            return atomicLoad(&(*p).a);
+        }
+        ",
+    );
 }
 
 #[test]
@@ -2783,6 +3018,80 @@ error: type mismatch for reject and accept values in `select` call
   │                        ^^^^  ^ accept value of type `{AbstractInt}`
   │                        │\x20\x20\x20\x20\x20\x20
   │                        reject value of type `bool`
+
+",
+        ),
+        (
+            "
+        const cond: array<u32, 4> = array<u32, 4>();
+        @compute @workgroup_size(1, 1)
+        fn main() {
+            // Bad: `cond` is an `array`, not a `bool` or a `vecN<bool>`.
+            _ = select(vec4(0u), vec4(1u), cond);
+        }
+        ",
+            "\
+error: Expected boolean vector for condition arg., got something else
+  ┌─ wgsl:6:17
+  │
+6 │             _ = select(vec4(0u), vec4(1u), cond);
+  │                 ^^^^^^ see msg
+
+",
+        ),
+        (
+            "
+        struct S { member: bool }
+        const cond: S = S(true);
+        @compute @workgroup_size(1, 1)
+        fn main() {
+            // Bad: `cond` is a `struct`, not a `bool` or a `vecN<bool>`.
+            _ = select(vec2(0u), vec2(1u), cond);
+        }
+        ",
+            "\
+error: Expected boolean vector for condition arg., got something else
+  ┌─ wgsl:7:17
+  │
+7 │             _ = select(vec2(0u), vec2(1u), cond);
+  │                 ^^^^^^ see msg
+
+",
+        ),
+        (
+            "
+        @compute @workgroup_size(1, 1)
+        fn main() {
+            // Bad: the condition is a matrix, not a `bool` or a `vecN<bool>`.
+            _ = select(vec2(0.0f), vec2(1.0f), mat2x2f(1, 1, 1, 1));
+        }
+        ",
+            "\
+error: Expected boolean vector for condition arg., got something else
+  ┌─ wgsl:5:17
+  │
+5 │             _ = select(vec2(0.0f), vec2(1.0f), mat2x2f(1, 1, 1, 1));
+  │                 ^^^^^^ see msg
+
+",
+        ),
+        (
+            "
+        const values: array<i32, 4> = array<i32, 4>(1, 2, 3, 4);
+        @compute @workgroup_size(1, 1)
+        fn main() {
+            // Bad: `array` reject and accept values, even as const-expressions.
+            _ = select(values, values, true);
+        }
+        ",
+            "\
+error: unexpected argument type for `select` call
+  ┌─ wgsl:6:24
+  │
+6 │             _ = select(values, values, true);
+  │                        ^^^^^^ this value of type `array<i32, 4>`
+  │
+  = note: expected a scalar or a `vecN` of scalars
 
 ",
         ),
@@ -4383,6 +4692,187 @@ fn const_eval_value_errors() {
     assert!(variant("f32(abs(-9223372036854775807 - 1))").is_ok());
 }
 
+/// Constant evaluation of `extractBits`.
+///
+/// <https://www.w3.org/TR/WGSL/#extractBits-signed-builtin>
+#[test]
+fn const_eval_extract_bits() {
+    check_success(
+        "
+        // Unsigned: the bits above the field are zero.
+        const_assert extractBits(0x12345678u, 8u, 8u) == 0x56u;
+        const_assert extractBits(0xf0000000u, 28u, 4u) == 0xfu;
+        const_assert extractBits(0x80000000u, 31u, 1u) == 1u;
+
+        // Signed: the bits above the field copy the top bit of the field.
+        const_assert extractBits(0x12345678i, 8u, 8u) == 0x56i;
+        const_assert extractBits(8i, 3u, 1u) == -1i;
+        const_assert extractBits(0x70000000i, 28u, 4u) == 7i;
+
+        // A `count` of zero yields zero, and covering the full width is the identity.
+        const_assert extractBits(0xffffffffu, 0u, 0u) == 0u;
+        const_assert extractBits(0xffffffffu, 32u, 0u) == 0u;
+        const_assert extractBits(0x12345678u, 0u, 32u) == 0x12345678u;
+        const_assert extractBits(-1i, 0u, 32u) == -1i;
+
+        // Component-wise on vectors.
+        const_assert all(extractBits(vec2(0x12345678u, 0xf0f0f0f0u), 4u, 8u) == vec2(0x67u, 0xfu));
+        const_assert all(extractBits(vec3(8i, 0i, -1i), 3u, 1u) == vec3(-1i, 0i, -1i));
+        ",
+    );
+}
+
+/// Constant evaluation of `insertBits`.
+///
+/// <https://www.w3.org/TR/WGSL/#insertBits-builtin>
+#[test]
+fn const_eval_insert_bits() {
+    check_success(
+        "
+        // Only bits `offset..offset + count` change, and only the low `count`
+        // bits of `newbits` are read.
+        const_assert insertBits(0x12345678u, 0xffu, 8u, 8u) == 0x1234ff78u;
+        const_assert insertBits(0x12345678u, 0xabcdu, 8u, 8u) == 0x1234cd78u;
+        const_assert insertBits(0u, 1u, 31u, 1u) == 0x80000000u;
+        const_assert insertBits(0i, -1i, 31u, 1u) == -2147483647i - 1i;
+        const_assert insertBits(-1i, 0i, 0u, 31u) == -2147483647i - 1i;
+
+        // A `count` of zero leaves `e` untouched, and covering the full width
+        // replaces it entirely.
+        const_assert insertBits(0x12345678u, 0xffffffffu, 0u, 0u) == 0x12345678u;
+        const_assert insertBits(0x12345678u, 0xffffffffu, 32u, 0u) == 0x12345678u;
+        const_assert insertBits(0x12345678u, 0xdeadbeefu, 0u, 32u) == 0xdeadbeefu;
+
+        // Component-wise on vectors.
+        const_assert all(insertBits(vec2(0u, 0u), vec2(0xfu, 0x3u), 4u, 4u) == vec2(0xf0u, 0x30u));
+        ",
+    );
+}
+
+/// Constant evaluation of `faceForward`, `reflect` and `refract`.
+///
+/// The values below are chosen so that every `f32` result doesn't round.
+#[test]
+fn const_eval_geometry() {
+    check_success(
+        "
+        // faceForward returns `e1` when `dot(e2, e3)` is negative and `-e1`
+        // otherwise, including when the dot product is exactly zero.
+        const_assert all(faceForward(vec2(1.0, 2.0), vec2(-1.0, 0.0), vec2(1.0, 0.0)) == vec2(1.0, 2.0));
+        const_assert all(faceForward(vec2(1.0, 2.0), vec2(1.0, 0.0), vec2(1.0, 0.0)) == vec2(-1.0, -2.0));
+        const_assert all(faceForward(vec2(1.0, 2.0), vec2(0.0, 1.0), vec2(1.0, 0.0)) == vec2(-1.0, -2.0));
+        const_assert all(faceForward(vec3(1.0, 2.0, 3.0), vec3(-1.0, 0.0, 0.0), vec3(1.0, 0.0, 0.0)) == vec3(1.0, 2.0, 3.0));
+
+        // reflect is `e1 - 2 * dot(e2, e1) * e2`. A surface parallel to the
+        // incident vector leaves it alone.
+        const_assert all(reflect(vec2(1.0, -1.0), vec2(0.0, 1.0)) == vec2(1.0, 1.0));
+        const_assert all(reflect(vec2(1.0, 0.0), vec2(1.0, 0.0)) == vec2(-1.0, 0.0));
+        const_assert all(reflect(vec2(1.0, 0.0), vec2(0.0, 1.0)) == vec2(1.0, 0.0));
+        const_assert all(reflect(vec3(1.0, -1.0, 0.0), vec3(0.0, 1.0, 0.0)) == vec3(1.0, 1.0, 0.0));
+
+        // refract transmits the vector when `k` is non-negative.
+        const_assert all(refract(vec2(0.0, -1.0), vec2(0.0, 1.0), 1.0) == vec2(0.0, -1.0));
+        const_assert all(refract(vec2(0.5, -0.5), vec2(0.0, 1.0), 1.0) == vec2(0.5, -0.5));
+        const_assert all(refract(vec2(0.5, -0.5), vec2(0.0, -1.0), 1.0) == vec2(0.5, 0.5));
+        const_assert all(refract(vec2(0.0, -1.0), vec2(0.0, 1.0), 0.5) == vec2(0.0, -1.0));
+
+        // Under total internal reflection it returns the zero vector instead.
+        const_assert all(refract(vec2(0.8, -0.6), vec2(0.0, 1.0), 2.0) == vec2(0.0, 0.0));
+        const_assert all(refract(vec3(0.8, -0.6, 0.0), vec3(0.0, 1.0, 0.0), 2.0) == vec3(0.0, 0.0, 0.0));
+        ",
+    );
+}
+
+/// A dot product that overflows will cause a shader creation error.
+/// No resulting to infinity.
+#[test]
+fn const_eval_geometry_overflow() {
+    for expr in [
+        "faceForward(vec2(1.0, 0.0), vec2(3.4e38, 0.0), vec2(3.4e38, 0.0))",
+        "reflect(vec2(1.0, 0.0), vec2(3.4e38, 0.0))",
+        "refract(vec2(1.0, 0.0), vec2(3.4e38, 0.0), 1.0)",
+    ] {
+        let input = format!("const x = {expr};");
+        let result = naga::front::wgsl::parse_str(&input);
+        assert!(
+            result.is_err(),
+            "expected `{expr}` to overflow, got {result:#?}"
+        );
+    }
+}
+
+/// offset + count  past the width of the operand is an error w shader creation
+/// when both are const expressions.
+#[test]
+fn bitfield_range_too_large() {
+    check_error_matches(
+        "const x = extractBits(0u, 30u, 8u);",
+        "`offset` + `count` must be at most 32",
+    );
+    check_error_matches(
+        "const x = extractBits(0u, 33u, 0u);",
+        "`offset` + `count` must be at most 32",
+    );
+    check_error_matches(
+        "const x = insertBits(0i, 0i, 1u, 32u);",
+        "`offset` + `count` must be at most 32",
+    );
+    check_error_matches(
+        "const x = insertBits(vec2(0u), vec2(0u), 4294967295u, 4294967295u);",
+        "`offset` + `count` must be at most 32",
+    );
+}
+
+/// Same as above
+/// offset + count  past the width of the operand is an error w shader creation
+/// when both are const expressions.
+/// Even if the operand is not.
+///
+/// <https://github.com/gfx-rs/wgpu/issues/9152>
+#[test]
+fn bitfield_range_too_large_partially_const() {
+    // The operand is a function parameter, so these calls never reach constant
+    // evaluation at all.
+    check_error_matches(
+        "fn f(e: u32) -> u32 { return extractBits(e, 30u, 8u); }",
+        "`offset` + `count` must be at most 32",
+    );
+    check_error_matches(
+        "fn f(e: i32) -> i32 { return extractBits(e, 30u, 8u); }",
+        "`offset` + `count` must be at most 32",
+    );
+    check_error_matches(
+        "fn f(e: vec2<u32>) -> vec2<u32> { return extractBits(e, 30u, 8u); }",
+        "`offset` + `count` must be at most 32",
+    );
+    check_error_matches(
+        "fn f(e: u32, n: u32) -> u32 { return insertBits(e, n, 30u, 8u); }",
+        "`offset` + `count` must be at most 32",
+    );
+
+    // `offset` and `count` are const expressions here too, just not literals.
+    check_error_matches(
+        "const OFFSET = 30u;
+         fn f(e: u32) -> u32 { return extractBits(e, OFFSET, 8u); }",
+        "`offset` + `count` must be at most 32",
+    );
+
+    // In range, so these are all fine.
+    check_success("fn f(e: u32) -> u32 { return extractBits(e, 8u, 8u); }");
+    check_success("fn f(e: u32) -> u32 { return extractBits(e, 0u, 32u); }");
+    check_success("fn f(e: u32) -> u32 { return extractBits(e, 32u, 0u); }");
+    check_success("fn f(e: u32, n: u32) -> u32 { return insertBits(e, n, 24u, 8u); }");
+
+    // Nothing to check when `offset` and `count` are not const expressions.
+    check_success("fn f(e: u32, o: u32, c: u32) -> u32 { return extractBits(e, o, c); }");
+
+    // An out-of-range override expression is a pipeline creation error.
+    check_success(
+        "override o: u32;
+         fn f(e: u32) -> u32 { return extractBits(e, o, 40u); }",
+    );
+}
+
 #[test]
 fn subgroup_capability() {
     // Some of these tests should be `check_extension_validation` tests that
@@ -5467,6 +5957,149 @@ fn fs_main(@location(0) @interpolate(per_vertex) v: array<f32, 3>) -> @location(
     );
 }
 
+#[test]
+fn debug_printf_enable_extension() {
+    check_extension_validation!(
+        Capabilities::DEBUG_PRINTF,
+        r#"@compute @workgroup_size(1)
+fn main() {
+    debugPrintf("debug value: %d", 1i);
+}
+
+        "#,
+        r#"error: the `wgpu_debug_printf` enable extension is not enabled
+  ┌─ wgsl:3:5
+  │
+3 │     debugPrintf("debug value: %d", 1i);
+  │     ^^^^^^^^^^^ the `wgpu_debug_printf` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_debug_printf;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::MissingCapability(Capabilities::DEBUG_PRINTF)
+            ),
+            ..
+        })
+    );
+}
+
+#[test]
+fn debug_printf_rejects_string_literal_outside_call() {
+    check_error_matches(
+        r#"enable wgpu_debug_printf;
+
+@compute @workgroup_size(1)
+fn main() {
+    let _value = "not a debugPrintf format";
+}
+"#,
+        "String literals are only supported in debugPrintf",
+    );
+}
+
+#[test]
+fn debug_printf_rejects_non_literal_format() {
+    check_error_matches(
+        r#"enable wgpu_debug_printf;
+
+@compute @workgroup_size(1)
+fn main() {
+    debugPrintf(1i);
+}
+"#,
+        "debugPrintf's first argument must be a string literal",
+    );
+}
+
+#[test]
+fn debug_printf_rejects_vector_argument() {
+    check_validation! {
+        r#"enable wgpu_debug_printf;
+
+@compute @workgroup_size(1)
+fn main() {
+    debugPrintf("debug value: %v2f", vec2f(1.0, 2.0));
+}
+"#: Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::InvalidDebugPrintfSpecifier(_)
+            ),
+            ..
+        }),
+        Capabilities::DEBUG_PRINTF
+    }
+}
+
+#[test]
+fn debug_printf_accepts_width_and_precision() {
+    no_validation_error(
+        r#"enable wgpu_debug_printf;
+
+@compute @workgroup_size(1)
+fn main() {
+    debugPrintf("values: %8d %.2f %1.f %1.2f %%", 1i, 2.0f, 3.0f, 4.0f);
+}
+"#,
+        Capabilities::DEBUG_PRINTF,
+    );
+}
+
+#[test]
+fn debug_printf_rejects_malformed_width_and_precision() {
+    for specifier in ["%", "%2", "%2.", "%2.3", "%#x", "%1..f"] {
+        check_one_validation!(
+            &format!(
+                "enable wgpu_debug_printf;
+@compute @workgroup_size(1)
+fn main() {{
+    debugPrintf(\"{specifier}\");
+}}"
+            ),
+            Err(naga::valid::ValidationError::EntryPoint {
+                source: naga::valid::EntryPointError::Function(
+                    naga::valid::FunctionError::InvalidDebugPrintfSpecifier(_)
+                ),
+                ..
+            }),
+            Capabilities::DEBUG_PRINTF
+        );
+    }
+}
+
+#[test]
+fn debug_printf_rejects_wrong_specifier_type() {
+    for (format, value, expected_actual) in [
+        ("%f", "1u", "u32"),
+        ("%.2g", "1u", "u32"),
+        ("%d", "2.4f", "f32"),
+        ("%lu", "1u", "u32"),
+        ("%x", "vec2u(1)", "vec2<u32>"),
+    ] {
+        check_one_validation!(
+            &format!(
+                "enable wgpu_debug_printf;
+@compute @workgroup_size(1)
+fn main() {{
+    debugPrintf(\"{format}\", {value});
+}}"
+            ),
+            Err(naga::valid::ValidationError::EntryPoint {
+                source: naga::valid::EntryPointError::Function(
+                    naga::valid::FunctionError::InvalidDebugPrintfArgument {
+                        specifier,
+                        actual,
+                        ..
+                    }
+                ),
+                ..
+            }) if specifier == &format[1..] && actual == expected_actual,
+            Capabilities::DEBUG_PRINTF
+        );
+    }
+}
+
 /// Checks that every ray tracing pipeline binding in naga is invalid in other stages.
 #[test]
 fn check_ray_tracing_pipeline_bindings() {
@@ -5900,4 +6533,24 @@ fn ray_query_let() {
         ",
         "Ray query with initialize",
     );
+}
+
+#[test]
+fn ray_query_as_binding() {
+    // ray queries cannot be in bindings
+    check_validation! {
+        r#"
+            enable wgpu_ray_query;
+
+            @group(0) @binding(0)
+            var rq: ray_query;
+
+            @compute @workgroup_size(1)
+            fn main() {
+                _=rq;
+            }
+        "#:
+        Err(naga::valid::ValidationError::GlobalVariable {  source: naga::valid::GlobalVariableError::InvalidBinding, ..}),
+        Capabilities::RAY_QUERY
+    }
 }

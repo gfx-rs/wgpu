@@ -84,7 +84,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use core::{convert::Infallible, mem, num::NonZeroU32, ops::Range};
+use core::{convert::Infallible, mem, num::NonZeroU32, ops::Range, str};
 
 use arrayvec::ArrayVec;
 use thiserror::Error;
@@ -97,9 +97,9 @@ use crate::{
     command::{
         bind::Binder,
         pass::{validate_immediates_alignment, ImmediateState},
-        pass_base, ArcReferences, BasePass, BindGroupStateChange, ColorAttachmentError, DrawError,
-        EncoderStateError, MapPassErr, PassErrorScope, PassStateError, RenderCommand,
-        RenderCommandError, StateChange,
+        pass_base, ArcReferences, BasePass, BindGroupStateChange, ColorAttachmentError,
+        DebugGroupError, DrawError, EncoderStateError, MapPassErr, PassErrorScope, PassStateError,
+        RenderCommand, RenderCommandError, StateChange,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
@@ -122,7 +122,10 @@ use crate::{
     Label, LabelHelpers,
 };
 
-use super::{pass, render_command::ArcRenderCommand, DrawCommandFamily, DrawKind};
+use super::{
+    draw::validate_mesh_draw_multiview, pass, render_command::ArcRenderCommand, DrawCommandFamily,
+    DrawKind,
+};
 
 /// Describes a [`RenderBundleEncoder`].
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -380,12 +383,15 @@ impl RenderBundleEncoder {
             next_dynamic_offset: 0,
             binder: Binder::new(),
             immediate_state: ImmediateState::default(),
+            multiview_mask: self.context.multiview_mask,
         };
 
         let indices = &state.device.tracker_indices;
         state.trackers.buffers.set_size(indices.buffers.size());
         state.trackers.textures.set_size(indices.textures.size());
 
+        let mut debug_scope_depth = 0usize;
+        let mut debug_string_bytes = 0usize;
         for command in self.base.commands.drain(..) {
             match command {
                 RenderCommand::SetBindGroup {
@@ -512,10 +518,28 @@ impl RenderBundleEncoder {
                 } => {
                     unreachable!("unexpected (multi-)draw indirect with count {count}, vertex_or_index_limits {vertex_or_index_limit:?}, instance_limit {instance_limit:?} found in a render bundle");
                 }
-                RenderCommand::MultiDrawIndirectCount { .. }
-                | RenderCommand::PushDebugGroup { color: _, len: _ }
-                | RenderCommand::InsertDebugMarker { color: _, len: _ }
-                | RenderCommand::PopDebugGroup => {
+                RenderCommand::PushDebugGroup { color, len } => {
+                    debug_scope_depth += 1;
+                    debug_string_bytes += len;
+                    state
+                        .commands
+                        .push(ArcRenderCommand::PushDebugGroup { color, len });
+                }
+                RenderCommand::InsertDebugMarker { color, len } => {
+                    debug_string_bytes += len;
+                    state
+                        .commands
+                        .push(ArcRenderCommand::InsertDebugMarker { color, len });
+                }
+                RenderCommand::PopDebugGroup => {
+                    if debug_scope_depth == 0 {
+                        return Err(DebugGroupError::InvalidPop)
+                            .map_pass_err(PassErrorScope::PopDebugGroup);
+                    }
+                    debug_scope_depth -= 1;
+                    state.commands.push(ArcRenderCommand::PopDebugGroup);
+                }
+                RenderCommand::MultiDrawIndirectCount { .. } => {
                     unimplemented!("not supported by a render bundle")
                 }
                 // Must check the TIMESTAMP_QUERY_INSIDE_PASSES feature
@@ -533,6 +557,11 @@ impl RenderBundleEncoder {
                 | RenderCommand::SetScissor(_) => unreachable!("not supported by a render bundle"),
             }
         }
+
+        if debug_scope_depth != 0 {
+            return Err(DebugGroupError::MissingPop).map_pass_err(PassErrorScope::Bundle);
+        }
+        debug_assert_eq!(debug_string_bytes, self.base.string_data.len());
 
         let State {
             trackers,
@@ -864,9 +893,13 @@ impl RenderBundleEncoder {
         }
     }
 
-    fn push_debug_group_inner(&mut self, _label: &str) -> Result<(), PassStateError> {
+    fn push_debug_group_inner(&mut self, label: &str) -> Result<(), PassStateError> {
         pass_base!(self, PassErrorScope::PushDebugGroup);
-        //TODO
+        self.base.string_data.extend_from_slice(label.as_bytes());
+        self.base.commands.push(RenderCommand::PushDebugGroup {
+            color: 0,
+            len: label.len(),
+        });
         Ok(())
     }
 
@@ -879,7 +912,7 @@ impl RenderBundleEncoder {
 
     fn pop_debug_group_inner(&mut self) -> Result<(), PassStateError> {
         pass_base!(self, PassErrorScope::PopDebugGroup);
-        //TODO
+        self.base.commands.push(RenderCommand::PopDebugGroup);
         Ok(())
     }
 
@@ -890,9 +923,13 @@ impl RenderBundleEncoder {
         }
     }
 
-    fn insert_debug_marker_inner(&mut self, _label: &str) -> Result<(), PassStateError> {
+    fn insert_debug_marker_inner(&mut self, label: &str) -> Result<(), PassStateError> {
         pass_base!(self, PassErrorScope::InsertDebugMarker);
-        //TODO
+        self.base.string_data.extend_from_slice(label.as_bytes());
+        self.base.commands.push(RenderCommand::InsertDebugMarker {
+            color: 0,
+            len: label.len(),
+        });
         Ok(())
     }
 
@@ -1201,6 +1238,7 @@ fn draw_mesh_tasks(
     group_count_z: u32,
 ) -> Result<(), RenderBundleErrorInner> {
     state.is_ready(DrawCommandFamily::DrawMeshTasks)?;
+    validate_mesh_draw_multiview(&state.device, state.multiview_mask)?;
 
     let limits = &state.device.limits;
     let (groups_size_limit, max_groups) = if state.pipeline.as_ref().unwrap().has_task_shader {
@@ -1248,6 +1286,10 @@ fn multi_draw_indirect(
     state
         .device
         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
+
+    if family == DrawCommandFamily::DrawMeshTasks {
+        validate_mesh_draw_multiview(&state.device, state.multiview_mask)?;
+    }
 
     buffer.check_is_valid()?;
     buffer.same_device(&state.device)?;
@@ -1349,7 +1391,7 @@ impl WebGpuError for CreateRenderBundleError {
     }
 }
 
-/// Error type returned from `RenderBundleEncoder::new` if the sample count is invalid.
+/// Error encountered while executing a finished render bundle.
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ExecutionError {
@@ -1359,8 +1401,6 @@ pub enum ExecutionError {
     DestroyedResource(#[from] DestroyedResourceError),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
-    #[error("Using {0} in a render bundle is not implemented")]
-    Unimplemented(&'static str),
 }
 
 impl From<InvalidOrDestroyedResourceError> for ExecutionError {
@@ -1467,7 +1507,8 @@ impl RenderBundle {
     ///
     /// Note that the function isn't expected to fail, generally.
     /// All the validation has already been done by this point.
-    /// The only failure condition is if some of the used buffers are destroyed.
+    /// Execution can still fail if a resource was destroyed or indirect draw validation
+    /// cannot allocate a buffer.
     pub(super) unsafe fn execute(
         &self,
         raw: &mut dyn hal::DynCommandEncoder,
@@ -1483,6 +1524,7 @@ impl RenderBundle {
             }
         }
 
+        let mut strings = self.base.string_data.as_slice();
         use ArcRenderCommand as Cmd;
         for command in self.base.commands.iter() {
             match command {
@@ -1529,15 +1571,12 @@ impl RenderBundle {
                     size,
                 } => {
                     let buffer = buffer.try_raw(snatch_guard)?;
+                    let size = size.expect(
+                        "Index buffer binding size should already be resolved when executing bundle",
+                    );
                     // SAFETY: The binding size was checked against the buffer size
                     // in `set_index_buffer` and again in `IndexState::flush`.
-                    let bb = hal::BufferBinding::new_unchecked(
-                        buffer,
-                        *offset,
-                        size.expect(
-                            "Index buffer binding size should already be resolved when executing bundle",
-                        ),
-                    );
+                    let bb = hal::BufferBinding::new_unchecked(buffer, *offset, size);
                     unsafe { raw.set_index_buffer(bb, *index_format) };
                 }
                 Cmd::SetVertexBuffer {
@@ -1547,15 +1586,12 @@ impl RenderBundle {
                     size,
                 } => {
                     let buffer = buffer.as_ref().unwrap().try_raw(snatch_guard)?;
+                    let size = size.expect(
+                        "Vertex buffer binding size should already be resolved when executing bundle",
+                    );
                     // SAFETY: The binding size was checked against the buffer size
                     // in `set_vertex_buffer` and again in `VertexState::flush`.
-                    let bb = hal::BufferBinding::new_unchecked(
-                        buffer,
-                        *offset,
-                        size.expect(
-                            "Vertex buffer binding size should already be resolved when executing bundle",
-                        ),
-                    );
+                    let bb = hal::BufferBinding::new_unchecked(buffer, *offset, size);
                     unsafe { raw.set_vertex_buffer(*slot, bb) };
                 }
                 Cmd::SetImmediate { offset, data } => {
@@ -1643,17 +1679,31 @@ impl RenderBundle {
                     }
                 }
                 Cmd::DrawIndirect { .. } | Cmd::MultiDrawIndirectCount { .. } => {
-                    return Err(ExecutionError::Unimplemented("multi-draw-indirect"))
+                    unreachable!("multi-draw commands are not supported in render bundles")
                 }
-                Cmd::PushDebugGroup { .. } | Cmd::InsertDebugMarker { .. } | Cmd::PopDebugGroup => {
-                    return Err(ExecutionError::Unimplemented("debug-markers"))
+                Cmd::PushDebugGroup { len, .. } | Cmd::InsertDebugMarker { len, .. } => {
+                    let (label, rest) = strings.split_at(*len);
+                    strings = rest;
+                    if !self.discard_hal_labels {
+                        let label = str::from_utf8(label).unwrap();
+                        if matches!(command, Cmd::PushDebugGroup { .. }) {
+                            unsafe { raw.begin_debug_marker(label) };
+                        } else {
+                            unsafe { raw.insert_debug_marker(label) };
+                        }
+                    }
+                }
+                Cmd::PopDebugGroup => {
+                    if !self.discard_hal_labels {
+                        unsafe { raw.end_debug_marker() };
+                    }
                 }
                 Cmd::WriteTimestamp { .. }
                 | Cmd::BeginOcclusionQuery { .. }
                 | Cmd::EndOcclusionQuery
                 | Cmd::BeginPipelineStatisticsQuery { .. }
                 | Cmd::EndPipelineStatisticsQuery => {
-                    return Err(ExecutionError::Unimplemented("queries"))
+                    unreachable!("query commands are not supported in render bundles")
                 }
                 Cmd::ExecuteBundle(_)
                 | Cmd::SetBlendConstant(_)
@@ -1663,10 +1713,10 @@ impl RenderBundle {
             }
         }
 
-        if !self.discard_hal_labels {
-            if let Some(_) = self.base.label {
-                unsafe { raw.end_debug_marker() };
-            }
+        debug_assert!(strings.is_empty());
+
+        if !self.discard_hal_labels && self.base.label.is_some() {
+            unsafe { raw.end_debug_marker() };
         }
 
         Ok(())
@@ -1777,6 +1827,7 @@ struct State {
 
     device: Arc<Device>,
     commands: Vec<ArcRenderCommand>,
+    multiview_mask: Option<NonZeroU32>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_init_actions: Vec<TextureInitTrackerAction>,
     next_dynamic_offset: usize,
@@ -1914,6 +1965,8 @@ impl State {
 #[derive(Clone, Debug, Error)]
 pub enum RenderBundleErrorInner {
     #[error(transparent)]
+    DebugGroup(#[from] DebugGroupError),
+    #[error(transparent)]
     Create(#[from] CreateRenderBundleError),
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -1950,6 +2003,7 @@ pub struct RenderBundleError {
 impl WebGpuError for RenderBundleError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self.inner.as_ref() {
+            RenderBundleErrorInner::DebugGroup(e) => e.webgpu_error_type(),
             RenderBundleErrorInner::Create(e) => e.webgpu_error_type(),
             RenderBundleErrorInner::Device(e) => e.webgpu_error_type(),
             RenderBundleErrorInner::RenderCommand(e) => e.webgpu_error_type(),
