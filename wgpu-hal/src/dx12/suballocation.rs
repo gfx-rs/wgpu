@@ -210,7 +210,7 @@ impl<'a> DeviceAllocationContext<'a> {
         let (resource, allocation) = if self.shared.private_caps.suballocation_supported {
             self.create_placed_texture(desc, raw_desc, allocation_info, location)?
         } else {
-            self.create_committed_texture(desc, raw_desc)?
+            self.create_committed_texture(raw_desc, allocation_info)?
         };
 
         if let Some(label) = desc.label {
@@ -455,8 +455,8 @@ impl<'a> DeviceAllocationContext<'a> {
 
     fn create_committed_texture(
         &self,
-        desc: &crate::TextureDescriptor,
         raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
+        allocation_info: Direct3D12::D3D12_RESOURCE_ALLOCATION_INFO,
     ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
         let heap_properties = Direct3D12::D3D12_HEAP_PROPERTIES {
             Type: Direct3D12::D3D12_HEAP_TYPE_CUSTOM,
@@ -488,10 +488,8 @@ impl<'a> DeviceAllocationContext<'a> {
         .into_device_result("Committed texture creation")?;
 
         let resource = resource.ok_or(crate::DeviceError::Unexpected)?;
-        let wrapped_allocation = Allocation::none(
-            AllocationType::Texture,
-            desc.format.theoretical_memory_footprint(desc.size),
-        );
+        let wrapped_allocation =
+            Allocation::none(AllocationType::Texture, allocation_info.SizeInBytes);
 
         Ok((resource, wrapped_allocation))
     }
