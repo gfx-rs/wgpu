@@ -239,6 +239,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Fix pending buffer mappings incorrectly succeeding when the device is lost before they are processed. By @jinleili in [#10301](https://github.com/gfx-rs/wgpu/pull/10301).
 - Fix initialization tracking for `external_texture` binding points, for both `ExternalTexture`s and `TextureView`s bound to them. By @ErichDonGubler in [#10276](https://github.com/gfx-rs/wgpu/pull/10276) and [#10366](https://github.com/gfx-rs/wgpu/pull/10366).
 - Make `TextureBlitter` respect the `sample_type` when performing downsampling. Previously, `FilterMode::Nearest` was always used when copying a larger texture to a smaller one. By @DouglasDwyer in [#10657](https://github.com/gfx-rs/wgpu/pull/10657)
+- API traces are now written with one action per line, so the player can replay a trace that was cut short (for example, because the traced program crashed) up to its last complete action, instead of failing on the missing closing `]`. Traces recorded in the old format can no longer be played. By @vatsanbalaji-ossagent in [#10831](https://github.com/gfx-rs/wgpu/pull/10831).
 
 #### naga
 

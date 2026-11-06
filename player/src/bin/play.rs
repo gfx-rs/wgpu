@@ -7,6 +7,7 @@ fn main() {
 
     use player::Player;
     use wgc::device::trace;
+    #[cfg(feature = "winit")]
     use wgpu_core::command::PointerReferences;
 
     use std::{
@@ -53,8 +54,8 @@ fn main() {
     };
 
     log::info!("Loading trace '{trace:?}'");
-    let file = fs::File::open(trace).unwrap();
-    let mut actions: Vec<trace::Action<PointerReferences>> = ron::de::from_reader(file).unwrap();
+    let content = fs::read_to_string(trace).unwrap();
+    let mut actions = player::parse_trace(&content);
     actions.reverse(); // allows us to pop from the top
     log::info!("Found {} actions", actions.len());
 

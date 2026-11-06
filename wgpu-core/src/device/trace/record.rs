@@ -50,23 +50,26 @@ pub trait Trace: Any + Send + Sync {
         for<'a> Action<'a, PointerReferences>: serde::Serialize;
 }
 
+/// Records a trace into a directory.
+///
+/// Each action is written to [`FILE_NAME`] on its own line, so a trace that
+/// is cut short (for example, because the traced program crashed) can still be
+/// replayed up to its last complete action. A comment is written as the last line
+/// when the trace is dropped, to show that the file was closed cleanly.
 #[derive(Debug)]
 pub struct DiskTrace {
     path: std::path::PathBuf,
     file: std::fs::File,
-    config: ron::ser::PrettyConfig,
     data_id: usize,
 }
 
 impl DiskTrace {
     pub fn new(path: std::path::PathBuf) -> Result<Self, std::io::Error> {
         log::debug!("Tracing into '{path:?}'");
-        let mut file = std::fs::File::create(path.join(FILE_NAME))?;
-        file.write_all(b"[\n")?;
+        let file = std::fs::File::create(path.join(FILE_NAME))?;
         Ok(Self {
             path,
             file,
-            config: ron::ser::PrettyConfig::default(),
             data_id: 0,
         })
     }
@@ -96,9 +99,10 @@ impl Trace for DiskTrace {
     where
         for<'a> Action<'a, PointerReferences>: serde::Serialize,
     {
-        match ron::ser::to_string_pretty(&action, self.config.clone()) {
+        // Compact RON never contains a newline, so each action is one line.
+        match ron::ser::to_string(&action) {
             Ok(string) => {
-                let _ = writeln!(self.file, "{string},");
+                let _ = writeln!(self.file, "{string}");
             }
             Err(e) => {
                 log::warn!("RON serialization failure: {e:?}");
@@ -109,7 +113,7 @@ impl Trace for DiskTrace {
 
 impl Drop for DiskTrace {
     fn drop(&mut self) {
-        let _ = self.file.write_all(b"]");
+        let _ = writeln!(self.file, "// End of trace");
     }
 }
 

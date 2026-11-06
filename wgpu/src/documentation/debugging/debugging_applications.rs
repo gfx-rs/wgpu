@@ -136,15 +136,11 @@ cd player
 cargo run --features winit -- <trace_folder_path>
 ```
 
-If the program crashed or was interrupted in the midst of recording, you may
-need to edit the trace folder's `trace.ron` file and add a closing `]`
-bracket to the end. When that bracket is missing, the player exits with a
-message like:
-
-```text
-thread 'main' panicked at 'called `Result::unwrap()` on an `Err` value:
-Error { code: Eof, position: Position { line: 96233, col: 1 } }', player/src/bin/play.rs:28:70
-```
+The trace is written with one action per line, so if the program crashed or
+was interrupted in the midst of recording, the player still replays the trace
+up to the last action that was completely written. A finished trace ends with
+an `// End of trace` comment. Lines starting with `//` are ignored by the player,
+so you can use them to annotate a trace.
 
 ### Running in Gecko
 
