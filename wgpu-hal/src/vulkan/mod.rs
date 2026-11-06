@@ -563,6 +563,20 @@ bitflags::bitflags!(
         /// As such, we need to make sure all calls to vkCmdFillBuffer are aligned to 16 bytes
         /// if they cover a range of 4096 bytes or more.
         const FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16 = 1 << 2;
+        /// Don't use timeline semaphores, even if the device supports them, and fall back
+        /// to binary fences ([`FencePool`]) for [`Fence`]s instead.
+        ///
+        /// Arm's proprietary Mali driver keeps memory for every value a timeline semaphore
+        /// has ever been signaled with, and only releases it when the semaphore is
+        /// destroyed. wgpu signals the device's timeline semaphore once per submission, so
+        /// the memory grows without bound until the kernel driver's limit is reached and the
+        /// device is lost. Observed with driver `v1.g18p0-01eac0` on a Mali-G610 (RK3588,
+        /// Android 12): 16 bytes per signal, device lost after ~4.2 million submissions,
+        /// i.e. ~35 minutes for a 960 FPS `Mailbox` loop or ~10 hours at 60 FPS.
+        ///
+        /// [`Fence`]: super::Fence
+        /// [`FencePool`]: super::FencePool
+        const DISABLE_TIMELINE_SEMAPHORES = 1 << 3;
     }
 );
 
