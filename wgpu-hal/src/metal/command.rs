@@ -1368,28 +1368,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 };
             }
         }
-        if let Some(ts_info) = &pipeline.ts_info {
-            // update the threadgroup memory sizes
-            while self.state.stage_infos.ms.work_group_memory_sizes.len()
-                < ts_info.work_group_memory_sizes.len()
-            {
-                self.state.stage_infos.ms.work_group_memory_sizes.push(0);
-            }
-            for (index, (cur_size, pipeline_size)) in self
-                .state
-                .stage_infos
-                .ms
-                .work_group_memory_sizes
-                .iter_mut()
-                .zip(ts_info.work_group_memory_sizes.iter())
-                .enumerate()
-            {
-                let size = pipeline_size.next_multiple_of(16);
-                if *cur_size != size {
-                    *cur_size = size;
-                    unsafe { encoder.setObjectThreadgroupMemoryLength_atIndex(size as _, index) };
-                }
-            }
+        if pipeline.ts_info.is_some() {
             if let Some((index, sizes)) = self
                 .state
                 .make_sizes_buffer_update(naga::ShaderStage::Task, &mut self.temp.binding_sizes)
@@ -1403,12 +1382,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 };
             }
         }
-        if let Some(_ms_info) = &pipeline.ms_info {
-            // So there isn't an equivalent to
-            // https://developer.apple.com/documentation/metal/mtlrendercommandencoder/setthreadgroupmemorylength(_:offset:index:)
-            // for mesh shaders. This is probably because the CPU has less control over the dispatch sizes and such. Interestingly
-            // it also affects mesh shaders without task/object shaders, even though none of compute, task or fragment shaders
-            // behave this way.
+        if pipeline.ms_info.is_some() {
             if let Some((index, sizes)) = self
                 .state
                 .make_sizes_buffer_update(naga::ShaderStage::Mesh, &mut self.temp.binding_sizes)
@@ -1821,8 +1795,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {
-        let previous_sizes =
-            core::mem::take(&mut self.state.stage_infos.cs.work_group_memory_sizes);
         self.state.stage_infos.cs.assign_from(&pipeline.cs_info);
 
         let encoder = self.state.compute.as_ref().unwrap();
@@ -1839,27 +1811,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     index as _,
                 )
             };
-        }
-
-        // update the threadgroup memory sizes
-        for (i, current_size) in self
-            .state
-            .stage_infos
-            .cs
-            .work_group_memory_sizes
-            .iter_mut()
-            .enumerate()
-        {
-            let prev_size = if i < previous_sizes.len() {
-                previous_sizes[i]
-            } else {
-                u32::MAX
-            };
-            let size: u32 = current_size.next_multiple_of(16);
-            *current_size = size;
-            if size != prev_size {
-                unsafe { encoder.setThreadgroupMemoryLength_atIndex(size as _, i) };
-            }
         }
     }
 

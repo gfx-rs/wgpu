@@ -80,10 +80,10 @@ kernel void cs_main(
 , device metal::atomic_uint& storage_atomic_scalar [[user(fake0)]]
 , device type_4& storage_atomic_arr [[user(fake0)]]
 , device Struct& storage_struct [[user(fake0)]]
-, threadgroup metal::atomic_uint& workgroup_atomic_scalar
-, threadgroup type_4& workgroup_atomic_arr
-, threadgroup Struct& workgroup_struct
 ) {
+    threadgroup metal::atomic_uint workgroup_atomic_scalar;
+    threadgroup type_4 workgroup_atomic_arr;
+    threadgroup Struct workgroup_struct;
     if (__local_invocation_index == 0u) {
         metal::atomic_store_explicit(&workgroup_atomic_scalar, 0, metal::memory_order_relaxed);
         for (int __i0 = 0; __i0 < 2; __i0++) {

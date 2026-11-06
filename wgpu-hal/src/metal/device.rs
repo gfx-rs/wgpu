@@ -41,7 +41,6 @@ struct CompiledShader {
     library: Retained<ProtocolObject<dyn MTLLibrary>>,
     function: Retained<ProtocolObject<dyn MTLFunction>>,
     wg_size: MTLSize,
-    wg_memory_sizes: Vec<u32>,
 
     /// Bindings of WGSL `storage` globals that contain variable-sized arrays,
     /// paired with a binding-array element index when applicable.
@@ -326,17 +325,12 @@ impl super::Device {
                         crate::PipelineError::EntryPoint(naga_stage)
                     })?;
 
-                // collect sizes indices, immutable buffers, and work group memory sizes
+                // collect sizes indices and immutable buffers
                 let ep_info = &module_info.get_entry_point(ep_index);
-                let mut wg_memory_sizes = Vec::new();
                 let mut sized_bindings = Vec::new();
                 let mut immutable_buffer_mask = 0;
                 for (var_handle, var) in module.global_variables.iter() {
                     match var.space {
-                        naga::AddressSpace::WorkGroup if !ep_info[var_handle].is_empty() => {
-                            let size = module.types[var.ty].inner.size(module.to_ctx());
-                            wg_memory_sizes.push(size);
-                        }
                         naga::AddressSpace::Uniform | naga::AddressSpace::Storage { .. } => {
                             let br = match var.binding {
                                 Some(br) => br,
@@ -386,7 +380,6 @@ impl super::Device {
                     library,
                     function,
                     wg_size,
-                    wg_memory_sizes,
                     sized_bindings,
                     immutable_buffer_mask,
                 })
@@ -404,7 +397,6 @@ impl super::Device {
                         height: size.1 as usize,
                         depth: size.2 as usize,
                     },
-                    wg_memory_sizes: vec![],
                     sized_bindings: vec![],
                     immutable_buffer_mask: 0,
                 })
@@ -1597,7 +1589,6 @@ impl crate::Device for super::Device {
                                 height: 0,
                                 depth: 0,
                             },
-                            work_group_memory_sizes: vec![],
                         });
                     }
 
@@ -1687,7 +1678,6 @@ impl crate::Device for super::Device {
                             vertex_buffer_mappings: Default::default(),
                             library: Some(ts.library),
                             raw_wg_size: ts.wg_size,
-                            work_group_memory_sizes: ts.wg_memory_sizes,
                         });
                     } else {
                         ts_info = None;
@@ -1716,7 +1706,6 @@ impl crate::Device for super::Device {
                             vertex_buffer_mappings: Default::default(),
                             library: Some(ms.library),
                             raw_wg_size: ms.wg_size,
-                            work_group_memory_sizes: ms.wg_memory_sizes,
                         });
                     }
 
@@ -1763,7 +1752,6 @@ impl crate::Device for super::Device {
                             height: 0,
                             depth: 0,
                         },
-                        work_group_memory_sizes: vec![],
                     })
                 }
                 None => {
@@ -1969,7 +1957,6 @@ impl crate::Device for super::Device {
                         height: size.1 as usize,
                         depth: size.2 as usize,
                     },
-                    wg_memory_sizes: vec![],
                     sized_bindings: vec![],
                     immutable_buffer_mask: 0,
                 }
@@ -1997,7 +1984,6 @@ impl crate::Device for super::Device {
                 sized_bindings: cs.sized_bindings,
                 vertex_buffer_mappings: Default::default(),
                 raw_wg_size: cs.wg_size,
-                work_group_memory_sizes: cs.wg_memory_sizes,
             };
 
             if let Some(name) = desc.label {
