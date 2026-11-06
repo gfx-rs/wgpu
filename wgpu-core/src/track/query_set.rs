@@ -36,6 +36,12 @@ impl QuerySetTracker {
         }
     }
 
+    /// Removes all query sets from the tracker, keeping the capacity of its storage.
+    pub fn clear(&mut self) {
+        self.metadata.clear();
+        self.size = 0;
+    }
+
     /// Sets the size of all the vectors inside the tracker.
     ///
     /// Must be called with the highest possible Texture ID before

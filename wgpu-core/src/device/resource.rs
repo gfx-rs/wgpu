@@ -57,7 +57,10 @@ use crate::{
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     timestamp_normalization::TIMESTAMP_NORMALIZATION_BUFFER_USES,
-    track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
+    track::{
+        BindGroupStates, DeviceTracker, TrackerIndexAllocators, TrackerPool, UsageScope,
+        UsageScopePool,
+    },
     validation::{self, check_color_attachment_count},
     weak_vec::WeakVec,
     FastHashMap, LabelHelpers,
@@ -303,6 +306,7 @@ pub struct Device {
     /// This closures were created in [`Buffer::drop`] where we do not run them to prevent locking problems.
     pub(crate) deferred_buffer_map_pending_closures: DeferredBufferMapPendingClosures,
     pub(crate) usage_scopes: UsageScopePool,
+    pub(crate) tracker_pool: TrackerPool,
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
     // Optional so that we can late-initialize this after the queue is created.
     pub(crate) timestamp_normalizer: OnceCell<crate::timestamp_normalization::TimestampNormalizer>,
@@ -361,6 +365,7 @@ const _: () = {
             deferred_destroy,
             deferred_buffer_map_pending_closures,
             usage_scopes,
+            tracker_pool,
             indirect_validation,
             timestamp_normalizer,
             default_external_texture_params_buffer,
@@ -394,6 +399,7 @@ const _: () = {
         _check_bound(deferred_destroy);
         _check_bound(deferred_buffer_map_pending_closures);
         _check_bound(usage_scopes);
+        _check_bound(tracker_pool);
         _check_bound(indirect_validation);
         _check_bound(timestamp_normalizer);
         _check_bound(default_external_texture_params_buffer);
@@ -727,6 +733,7 @@ impl Device {
                 instance_flags,
                 deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
                 usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
+                tracker_pool: TrackerPool::new(),
                 timestamp_normalizer: OnceCell::new(),
                 indirect_validation,
                 deferred_buffer_map_pending_closures: DeferredBufferMapPendingClosures::new(),

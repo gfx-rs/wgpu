@@ -357,6 +357,23 @@ pub(crate) struct EncoderInFlight {
     _pending_shader_binding_data: Vec<Arc<ray_tracing_pipeline::ShaderBindingData>>,
 }
 
+impl EncoderInFlight {
+    /// Drops the encoder and returns its tracker to the device's [`TrackerPool`].
+    ///
+    /// Call this once the GPU has finished the encoder's submission.
+    ///
+    /// [`TrackerPool`]: track::TrackerPool
+    pub(crate) fn release(mut self) {
+        let device = self.inner.device.clone();
+        let trackers = mem::replace(
+            &mut self.trackers,
+            Tracker::new(wgt::BufferUses::empty(), wgt::TextureUses::empty()),
+        );
+        drop(self);
+        device.tracker_pool.release(trackers);
+    }
+}
+
 /// A private command encoder for writes made directly on the device
 /// or queue.
 ///
@@ -635,7 +652,10 @@ impl PendingWrites {
                     api: crate::command::EncodingApi::InternalUse,
                     label: "(wgpu internal) PendingWrites command encoder".into(),
                 },
-                trackers: Tracker::new(device.ordered_buffer_usages, device.ordered_texture_usages),
+                // Taken from the pool because `EncoderInFlight::release` returns it there.
+                trackers: device
+                    .tracker_pool
+                    .acquire(device.ordered_buffer_usages, device.ordered_texture_usages),
                 temp_resources: mem::take(&mut self.temp_resources),
                 _indirect_draw_validation_resources: crate::indirect_validation::DrawResources::new(
                     device.clone(),
