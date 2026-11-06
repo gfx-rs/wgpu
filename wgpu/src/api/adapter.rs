@@ -225,6 +225,18 @@ impl Adapter {
     pub fn cooperative_matrix_properties(&self) -> Vec<CooperativeMatrixProperties> {
         self.inner.cooperative_matrix_properties()
     }
+
+    /// Returns whether this adapter actually reorders ray tracing invocations.
+    ///
+    /// `reorderThread` is valid on any adapter supporting
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER`], but on an adapter returning
+    /// [`RayTracingInvocationReorderMode::None`] it's a no-op.
+    ///
+    /// Returns [`RayTracingInvocationReorderMode::None`] if
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER`] is not supported.
+    pub fn ray_tracing_invocation_reorder_mode(&self) -> RayTracingInvocationReorderMode {
+        self.inner.ray_tracing_invocation_reorder_mode()
+    }
 }
 
 #[cfg(wgpu_core)]

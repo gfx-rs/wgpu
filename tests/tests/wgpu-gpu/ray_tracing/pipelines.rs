@@ -15,6 +15,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.push(PIPELINE_CREATE_USE);
     tests.push(RAY_TRACING_PASS_NO_FEATURE);
     tests.push(PIPELINE_OUTPUT);
+    tests.push(INVOCATION_REORDER_OUTPUT);
     tests.push(PIPELINE_SWAP);
     tests.push(MISMATCHED_INTERSECTION_TYPES);
     tests.push(EMPTY_PIPELINE_USE);
@@ -378,6 +379,186 @@ fn pipeline_output(ctx: TestingContext) {
     let range = readback.get_mapped_range(..).unwrap();
 
     assert_eq!(range[0], 1)
+}
+
+#[apply(gpu_test!)]
+static INVOCATION_REORDER_OUTPUT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(
+                Features::EXPERIMENTAL_RAY_TRACING_PIPELINES
+                    | Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER,
+            )
+            .limits(
+                Limits::defaults()
+                    .using_minimum_supported_acceleration_structure_values()
+                    .using_minimum_supported_ray_tracing_pipeline_values(),
+            ),
+    )
+    .run_sync(invocation_reorder_output);
+
+/// Trace a ray into a hit object, reorder on it, and run the shader it recorded.
+///
+/// The acceleration structure holds a single degenerate triangle, so the ray always misses and
+/// the miss shader is the one `hitObjectExecuteShader` runs.
+fn invocation_reorder_output(ctx: TestingContext) {
+    let as_ctx = super::AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::empty(),
+        AccelerationStructureFlags::empty(),
+    );
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default());
+    encoder.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas]);
+    ctx.queue.submit([encoder.finish()]);
+
+    let ray_gen_source = "
+        enable wgpu_ray_tracing_pipeline;
+        enable wgpu_ray_tracing_invocation_reorder;
+
+        var<ray_payload> payload: u32;
+
+        @group(0) @binding(0) var acc_struct: acceleration_structure;
+        @group(0) @binding(1) var<storage, read_write> out: u32;
+
+        @ray_generation
+        fn gen() {
+            var ho: hit_object;
+            payload = 0u;
+
+            hitObjectTraceRay(&ho, acc_struct, RayDesc(0u, 0xFFu, 0.001, 100.0, vec3f(0.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0)), &payload);
+            reorderThread(&ho);
+            hitObjectExecuteShader(&ho, &payload);
+
+            out = payload + select(0u, 2u, hitObjectIsMiss(&ho));
+        }
+    ";
+
+    let ray_closest_source = "
+        enable wgpu_ray_tracing_pipeline;
+
+        var<incoming_ray_payload> payload: u32;
+
+        @closest_hit
+        @incoming_payload(payload)
+        fn closest() {
+            payload = 8u;
+        }
+    ";
+
+    let ray_miss_source = "
+        enable wgpu_ray_tracing_pipeline;
+
+        var<incoming_ray_payload> payload: u32;
+
+        @miss
+        @incoming_payload(payload)
+        fn miss() {
+            payload = 1u;
+        }
+    ";
+
+    let ray_gen = ctx.device.create_shader_module(ShaderModuleDescriptor {
+        label: Some("ray generation shader"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(ray_gen_source)),
+    });
+
+    let ray_closest = ctx.device.create_shader_module(ShaderModuleDescriptor {
+        label: Some("ray closest hit shader"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(ray_closest_source)),
+    });
+
+    let ray_miss = ctx.device.create_shader_module(ShaderModuleDescriptor {
+        label: Some("ray miss shader"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(ray_miss_source)),
+    });
+
+    let pipeline = ctx
+        .device
+        .create_ray_tracing_pipeline(&RayTracingPipelineDescriptor {
+            label: None,
+            layout: None,
+            ray_generation: RayTracingStage {
+                module: &ray_gen,
+                entry_point: None,
+                compilation_options: Default::default(),
+            },
+            miss: RayTracingStage {
+                module: &ray_miss,
+                entry_point: None,
+                compilation_options: Default::default(),
+            },
+            intersections: &[RayTracingIntersectionDescriptor::Triangle {
+                closest_hit: RayTracingStage {
+                    module: &ray_closest,
+                    entry_point: None,
+                    compilation_options: Default::default(),
+                },
+                any_hit: None,
+            }],
+            max_recursion_depth: 1,
+            cache: None,
+        });
+
+    let out_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: size_of::<u32>() as _,
+        usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
+        mapped_at_creation: false,
+    });
+
+    let readback = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: size_of::<u32>() as _,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+        label: Some("ray tracing pipeline bind group"),
+        layout: &pipeline.get_bind_group_layout(0),
+        entries: &[
+            BindGroupEntry {
+                binding: 0,
+                resource: as_ctx.tlas.as_binding(),
+            },
+            BindGroupEntry {
+                binding: 1,
+                resource: out_buffer.as_entire_binding(),
+            },
+        ],
+    });
+
+    let mut encoder = ctx.device.create_command_encoder(&Default::default());
+
+    {
+        let mut pass = encoder.begin_ray_tracing_pass(&RayTracingPassDescriptor::default());
+        pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.trace_rays(1, 1, 1);
+    }
+
+    encoder.copy_buffer_to_buffer(&out_buffer, 0, &readback, 0, out_buffer.size());
+
+    ctx.queue.submit([encoder.finish()]);
+
+    let (send, recv) = mpsc::channel();
+    readback.map_async(wgpu::MapMode::Read, .., move |res| {
+        res.unwrap();
+        send.send(()).unwrap()
+    });
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
+
+    recv.recv().unwrap();
+
+    let range = readback.get_mapped_range(..).unwrap();
+
+    // 1 from the miss shader, 2 because the hit object recorded a miss.
+    assert_eq!(range[0], 3)
 }
 
 #[apply(gpu_test!)]

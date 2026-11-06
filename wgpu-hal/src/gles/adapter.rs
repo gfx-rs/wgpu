@@ -1000,6 +1000,7 @@ impl super::Adapter {
                     ray_tracing_pipeline_data_offset_alignment: 0,
                 },
                 cooperative_matrix_properties: Vec::new(),
+                ray_tracing_invocation_reorder_mode: wgt::RayTracingInvocationReorderMode::None,
             },
         })
     }
