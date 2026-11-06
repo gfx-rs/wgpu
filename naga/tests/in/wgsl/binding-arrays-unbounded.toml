@@ -1,0 +1,8 @@
+# HLSL only: this exercises the HLSL writer's unbounded `[]` declaration path.
+# SM 6.0 so CI validates with dxc; fxc (used for SM < 6) rejects unbounded
+# descriptor arrays without /enable_unbounded_descriptor_tables.
+targets = "HLSL"
+capabilities = "TEXTURE_AND_SAMPLER_BINDING_ARRAY | TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING"
+
+[hlsl]
+shader_model = "V6_0"
