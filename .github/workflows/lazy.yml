@@ -29,7 +29,7 @@ jobs:
       - run: mkdir naga/data
 
       - name: Download shaders
-        run: curl https://user.fm/files/v2-5573e18b9f03f42c6ae53c392083da35/dota2-shaders.zip -o naga/data/all.zip
+        run: curl --fail --show-error -L --retry 5 --retry-max-time 300 --connect-timeout 30 --max-time 120 https://user.fm/files/v2-5573e18b9f03f42c6ae53c392083da35/dota2-shaders.zip -o naga/data/all.zip
 
       - name: Unpack shaders
         run: |
