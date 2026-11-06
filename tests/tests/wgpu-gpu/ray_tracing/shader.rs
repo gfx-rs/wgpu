@@ -278,6 +278,7 @@ fn sparse_instances_index_correct(ctx: TestingContext) {
         [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
         0,
         0xFF,
+        0,
     ));
 
     let mut encoder = ctx
