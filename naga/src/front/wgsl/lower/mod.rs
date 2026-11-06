@@ -5272,6 +5272,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                 let rctx = ctx.runtime_expression_ctx(function_span)?;
                 rctx.block
+                    .extend(rctx.emitter.finish(&rctx.function.expressions));
+                rctx.emitter.start(&rctx.function.expressions);
+                rctx.block
                     .push(ir::Statement::HitObject { hit_object, fun }, function_span);
                 return Ok(None);
             }
