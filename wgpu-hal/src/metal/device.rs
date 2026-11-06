@@ -455,7 +455,8 @@ impl super::Device {
         let shared =
             super::AdapterShared::new(raw, &capabilities_query, wgt::InstanceFlags::empty());
         let counters = Arc::<wgt::HalCounters>::default();
-        let icb = super::icb::IcbContext::new(&shared, Arc::clone(&counters)).map(Arc::new);
+        let icb =
+            super::icb::IcbContext::new(&shared, features, Arc::clone(&counters)).map(Arc::new);
         super::Device {
             shared: Arc::new(shared),
             features,
@@ -1873,7 +1874,7 @@ impl crate::Device for super::Device {
             // untested.
             let request_icb_support = desc.multiview_mask.is_none()
                 && self.icb.as_ref().is_some_and(|icb| match descriptor {
-                    MetalGenericRenderPipelineDescriptor::Standard(_) => true,
+                    MetalGenericRenderPipelineDescriptor::Standard(_) => icb.executes_render_icbs(),
                     MetalGenericRenderPipelineDescriptor::Mesh(_) => icb.lowers_mesh_draws(),
                 });
             // Create the pipeline from descriptor

@@ -31,7 +31,7 @@ use smallvec::SmallVec;
 use wgpu_sync::atomic;
 
 // has to match `Temp::binding_sizes`
-const WORD_SIZE: usize = 4;
+pub(super) const WORD_SIZE: usize = 4;
 
 impl Default for super::CommandState {
     fn default() -> Self {
@@ -1707,34 +1707,178 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn draw_indirect_count(
         &mut self,
-        _buffer: &super::Buffer,
-        _offset: wgt::BufferAddress,
-        _count_buffer: &super::Buffer,
-        _count_offset: wgt::BufferAddress,
-        _max_count: u32,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+        count_buffer: &super::Buffer,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
     ) {
-        //TODO
+        if max_count == 0 {
+            return;
+        }
+        if unsafe {
+            self.defer_count_multi_draw_via_icb(
+                IcbDrawKind::Draw,
+                buffer,
+                offset,
+                count_buffer,
+                count_offset,
+                max_count,
+            )
+        } {
+            return;
+        }
+        let words_per_draw = (size_of::<wgt::DrawIndirectArgs>() / WORD_SIZE) as u32;
+        let Some(clamped) = (unsafe {
+            self.defer_clamped_count_args(
+                buffer,
+                offset,
+                count_buffer,
+                count_offset,
+                max_count,
+                words_per_draw,
+            )
+        }) else {
+            return;
+        };
+        let encoder = self.state.render.as_ref().unwrap();
+        let mut clamped_offset = 0;
+        for _ in 0..max_count {
+            unsafe {
+                encoder.drawPrimitives_indirectBuffer_indirectBufferOffset(
+                    self.state.raw_primitive_type,
+                    &clamped,
+                    clamped_offset,
+                )
+            };
+            clamped_offset += size_of::<wgt::DrawIndirectArgs>();
+        }
     }
     unsafe fn draw_indexed_indirect_count(
         &mut self,
-        _buffer: &super::Buffer,
-        _offset: wgt::BufferAddress,
-        _count_buffer: &super::Buffer,
-        _count_offset: wgt::BufferAddress,
-        _max_count: u32,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+        count_buffer: &super::Buffer,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
     ) {
-        //TODO
+        if max_count == 0 {
+            return;
+        }
+        let kind = {
+            let index = self.state.index.as_ref().unwrap();
+            IcbDrawKind::DrawIndexed {
+                index_buffer: unsafe { index.buffer_ptr.as_ref() }.retain(),
+                index_offset: index.offset,
+                raw_index_type: index.raw_type,
+            }
+        };
+        if unsafe {
+            self.defer_count_multi_draw_via_icb(
+                kind,
+                buffer,
+                offset,
+                count_buffer,
+                count_offset,
+                max_count,
+            )
+        } {
+            return;
+        }
+        let words_per_draw = (size_of::<wgt::DrawIndexedIndirectArgs>() / WORD_SIZE) as u32;
+        let Some(clamped) = (unsafe {
+            self.defer_clamped_count_args(
+                buffer,
+                offset,
+                count_buffer,
+                count_offset,
+                max_count,
+                words_per_draw,
+            )
+        }) else {
+            return;
+        };
+        let encoder = self.state.render.as_ref().unwrap();
+        let index = self.state.index.as_ref().unwrap();
+        let mut clamped_offset = 0;
+        for _ in 0..max_count {
+            unsafe {
+                encoder.drawIndexedPrimitives_indexType_indexBuffer_indexBufferOffset_indirectBuffer_indirectBufferOffset(
+                    self.state.raw_primitive_type,
+                    index.raw_type,
+                    index.buffer_ptr.as_ref(),
+                    index.offset as usize,
+                    &clamped,
+                    clamped_offset,
+                )
+            };
+            clamped_offset += size_of::<wgt::DrawIndexedIndirectArgs>();
+        }
     }
 
     unsafe fn draw_mesh_tasks_indirect_count(
         &mut self,
-        _buffer: &<Self::A as crate::Api>::Buffer,
-        _offset: wgt::BufferAddress,
-        _count_buffer: &<Self::A as crate::Api>::Buffer,
-        _count_offset: wgt::BufferAddress,
-        _max_count: u32,
+        buffer: &<Self::A as crate::Api>::Buffer,
+        offset: wgt::BufferAddress,
+        count_buffer: &<Self::A as crate::Api>::Buffer,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
     ) {
-        unreachable!()
+        if max_count == 0 {
+            return;
+        }
+        let kind = {
+            let ts = self.state.stage_infos.ts.raw_wg_size;
+            let ms = self.state.stage_infos.ms.raw_wg_size;
+            IcbDrawKind::DrawMeshTasks {
+                threadgroup_sizes: [
+                    ts.width as u32,
+                    ts.height as u32,
+                    ts.depth as u32,
+                    ms.width as u32,
+                    ms.height as u32,
+                    ms.depth as u32,
+                ],
+            }
+        };
+        if unsafe {
+            self.defer_count_multi_draw_via_icb(
+                kind,
+                buffer,
+                offset,
+                count_buffer,
+                count_offset,
+                max_count,
+            )
+        } {
+            return;
+        }
+        let words_per_draw = (size_of::<wgt::DispatchIndirectArgs>() / WORD_SIZE) as u32;
+        let Some(clamped) = (unsafe {
+            self.defer_clamped_count_args(
+                buffer,
+                offset,
+                count_buffer,
+                count_offset,
+                max_count,
+                words_per_draw,
+            )
+        }) else {
+            return;
+        };
+        let encoder = self.state.render.as_ref().unwrap();
+        let mut clamped_offset = 0;
+        for _ in 0..max_count {
+            unsafe {
+                encoder.drawMeshThreadgroupsWithIndirectBuffer_indirectBufferOffset_threadsPerObjectThreadgroup_threadsPerMeshThreadgroup(
+                    &clamped,
+                    clamped_offset,
+                    self.state.stage_infos.ts.raw_wg_size,
+                    self.state.stage_infos.ms.raw_wg_size,
+                )
+            };
+            clamped_offset += size_of::<wgt::DispatchIndirectArgs>();
+        }
     }
 
     unsafe fn encode_deferred_multi_draws(&mut self) {
