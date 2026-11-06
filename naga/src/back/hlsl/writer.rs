@@ -141,6 +141,15 @@ const fn is_subgroup_builtin_binding(binding: &Option<crate::Binding>) -> bool {
     )
 }
 
+/// The invocations that share the zero initialization of workgroup variables.
+#[derive(Clone, Copy)]
+struct WorkgroupInitInvocations<'a> {
+    /// Name of the local invocation index.
+    local_index: &'a str,
+    /// Number of invocations in the workgroup.
+    workgroup_size: u32,
+}
+
 /// Information for how to generate a `binding_array<sampler>` access.
 struct BindingArraySamplerInfo {
     /// Variable name of the sampler heap
@@ -2001,9 +2010,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         &mut self,
         module: &Module,
         ty: proc::TypeResolution,
-        (access, struct_array_element): (&str, bool),
+        access: &str,
+        struct_array_element: bool,
         dimensions: &mut Vec<(String, u32)>,
-        invocation: (&str, u32),
+        invocations: WorkgroupInitInvocations,
     ) -> BackendResult {
         match *ty.inner_with(&module.types) {
             TypeInner::Array { base, size, .. } => {
@@ -2016,9 +2026,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_compute_workgroup_init(
                     module,
                     proc::TypeResolution::Handle(base),
-                    (&element, struct_array_element),
+                    &element,
+                    struct_array_element,
                     dimensions,
-                    invocation,
+                    invocations,
                 )?;
                 dimensions.pop();
             }
@@ -2040,9 +2051,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                         size: crate::VectorSize::Bi,
                                         scalar,
                                     }),
-                                    (&format!("{field}_{column}"), false),
+                                    &format!("{field}_{column}"),
+                                    false,
                                     dimensions,
-                                    invocation,
+                                    invocations,
                                 )?;
                             }
                         }
@@ -2050,15 +2062,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             self.write_compute_workgroup_init(
                                 module,
                                 proc::TypeResolution::Handle(member.ty),
-                                (
-                                    &field,
-                                    matches!(
-                                        module.types[member.ty].inner,
-                                        TypeInner::Array { .. }
-                                    ),
-                                ),
+                                &field,
+                                matches!(module.types[member.ty].inner, TypeInner::Array { .. }),
                                 dimensions,
-                                invocation,
+                                invocations,
                             )?;
                         }
                     }
@@ -2067,7 +2074,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             ref inner => {
                 let level = back::Level(1);
                 let body = level.next();
-                let (local_index, workgroup_size) = invocation;
+                let WorkgroupInitInvocations {
+                    local_index,
+                    workgroup_size,
+                } = invocations;
                 if dimensions.is_empty() {
                     writeln!(self.out, "{level}if ({local_index} == 0) {{")?;
                 } else {
@@ -2139,9 +2149,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_compute_workgroup_init(
                     module,
                     proc::TypeResolution::Handle(var.ty),
-                    (&name, false),
+                    &name,
+                    false,
                     &mut Vec::new(),
-                    (local_invocation_index, workgroup_size),
+                    WorkgroupInitInvocations {
+                        local_index: local_invocation_index,
+                        workgroup_size,
+                    },
                 )?;
             }
         }
