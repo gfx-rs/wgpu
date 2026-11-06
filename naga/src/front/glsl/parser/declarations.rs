@@ -542,9 +542,12 @@ impl ParsingContext<'_> {
         let layout = match qualifiers.layout_qualifiers.remove(&QualifierKey::Layout) {
             Some((QualifierValue::Layout(l), _)) => l,
             None => {
-                if let StorageQualifier::AddressSpace(AddressSpace::Storage { .. }) =
-                    qualifiers.storage.0
-                {
+                if matches!(
+                    qualifiers.storage.0,
+                    StorageQualifier::AddressSpace(AddressSpace::Storage { .. })
+                        | StorageQualifier::Input
+                        | StorageQualifier::Output
+                ) {
                     StructLayout::Std430
                 } else {
                     StructLayout::Std140
