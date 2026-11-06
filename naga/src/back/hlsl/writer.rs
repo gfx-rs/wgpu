@@ -1994,11 +1994,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             })
     }
 
+    /// Writes code that zeroes `access`, of type `ty`, with the work spread over the workgroup.
+    ///
+    /// `struct_array_element` is true if `access` is an element of an array that is a struct member.
     fn write_compute_workgroup_init(
         &mut self,
         module: &Module,
         ty: proc::TypeResolution,
-        (access, in_struct): (&str, bool),
+        (access, struct_array_element): (&str, bool),
         dimensions: &mut Vec<(String, u32)>,
         invocation: (&str, u32),
     ) -> BackendResult {
@@ -2013,7 +2016,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_compute_workgroup_init(
                     module,
                     proc::TypeResolution::Handle(base),
-                    (&element, in_struct),
+                    (&element, struct_array_element),
                     dimensions,
                     invocation,
                 )?;
@@ -2037,7 +2040,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                         size: crate::VectorSize::Bi,
                                         scalar,
                                     }),
-                                    (&format!("{field}_{column}"), true),
+                                    (&format!("{field}_{column}"), false),
                                     dimensions,
                                     invocation,
                                 )?;
@@ -2049,11 +2052,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 proc::TypeResolution::Handle(member.ty),
                                 (
                                     &field,
-                                    member.binding.is_none()
-                                        || matches!(
-                                            module.types[member.ty].inner,
-                                            TypeInner::Array { .. }
-                                        ),
+                                    matches!(
+                                        module.types[member.ty].inner,
+                                        TypeInner::Array { .. }
+                                    ),
                                 ),
                                 dimensions,
                                 invocation,
@@ -2089,7 +2091,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                 }
                 write!(self.out, "{body}{access} = (")?;
-                if in_struct
+                if struct_array_element
                     && matches!(
                         inner,
                         TypeInner::Matrix {
