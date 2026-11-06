@@ -677,7 +677,7 @@ impl Buffer {
         }
     }
 
-    pub(crate) fn check_is_valid(&self) -> Result<(), InvalidResourceError> {
+    pub fn check_is_valid(&self) -> Result<(), InvalidResourceError> {
         self.state().map(|_| ())
     }
 
@@ -1885,7 +1885,7 @@ impl Texture {
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 
-    pub(crate) fn check_valid(&self) -> Result<(), InvalidResourceError> {
+    pub fn check_valid(&self) -> Result<(), InvalidResourceError> {
         self.state().map(|_| ())
     }
 
