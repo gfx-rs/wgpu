@@ -69,7 +69,11 @@ impl crate::DynBindGroup for Resource {}
 impl crate::DynBindGroupLayout for Resource {}
 impl crate::DynBuffer for Buffer {}
 impl crate::DynCommandBuffer for CommandBuffer {}
-impl crate::DynComputePipeline for Resource {}
+impl crate::ComputePipeline for Resource {
+    fn get_subgroup_size(&self) -> Option<u32> {
+        None
+    }
+}
 impl crate::DynFence for Fence {}
 impl crate::DynPipelineCache for Resource {}
 impl crate::DynPipelineLayout for Resource {}

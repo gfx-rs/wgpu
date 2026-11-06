@@ -1300,7 +1300,11 @@ pub struct ComputePipeline {
     layout: PipelineLayoutShared,
 }
 
-impl crate::DynComputePipeline for ComputePipeline {}
+impl crate::ComputePipeline for ComputePipeline {
+    fn get_subgroup_size(&self) -> Option<u32> {
+        None
+    }
+}
 
 unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
