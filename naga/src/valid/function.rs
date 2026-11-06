@@ -1,4 +1,7 @@
-use alloc::{format, string::String};
+use alloc::{
+    format,
+    string::{String, ToString as _},
+};
 
 use super::{
     analyzer::{UniformityDisruptor, UniformityRequirements},
@@ -240,8 +243,16 @@ pub enum FunctionError {
     MismatchedPayloadType(Handle<crate::Type>, Handle<crate::Type>),
     #[error("The payload passed to `traceRay` must be a pointer directly to a global variable")]
     PayloadPointerNotGlobal,
-    #[error("Argument {0:?} for `debugPrintf` must be a supported scalar type")]
-    InvalidDebugPrintfArgument(Handle<crate::Expression>),
+    #[error("Argument {argument:?} for `debugPrintf` has type {actual}, which does not match format specifier %{specifier}")]
+    InvalidDebugPrintfArgument {
+        argument: Handle<crate::Expression>,
+        specifier: String,
+        actual: String,
+    },
+    #[error("Invalid format specifier %{0} for `debugPrintf`")]
+    InvalidDebugPrintfSpecifier(String),
+    #[error("Number of `debugPrintf` arguments ({0}) does not match number of specifiers ({1})")]
+    WrongDebugPrintfArgumentCount(usize, usize),
     #[error("Tried to store to pointer {0:?} which is a ray query and so cannot be assigned to")]
     RayQueryStore(Handle<crate::Expression>),
     #[error("Tried to store to pointer {0:?} which is a hit object and so cannot be assigned to")]
@@ -283,6 +294,7 @@ struct BlockContext<'a> {
     prev_infos: &'a [FunctionInfo],
     return_type: Option<Handle<crate::Type>>,
     local_expr_kind: &'a crate::proc::ExpressionKindTracker,
+    gctx: crate::proc::GlobalCtx<'a>,
 }
 
 impl<'a> BlockContext<'a> {
@@ -305,6 +317,7 @@ impl<'a> BlockContext<'a> {
             prev_infos,
             return_type: fun.result.as_ref().map(|fr| fr.ty),
             local_expr_kind,
+            gctx: module.to_ctx(),
         }
     }
 
@@ -1797,11 +1810,8 @@ impl super::Validator {
                     }
                 }
 
-                // TODO: the format string itself is not validated, so a mismatch between the
-                // specifiers and the arguments is only caught by the backend's
-                // shader logging implementation.
                 S::DebugPrintf {
-                    format: _,
+                    ref format,
                     ref arguments,
                 } => {
                     if !self
@@ -1817,17 +1827,105 @@ impl super::Validator {
                         ));
                     }
 
-                    for &argument in arguments {
-                        let ty =
-                            context.resolve_type_inner(argument, &self.valid_expression_set)?;
-                        match *ty {
+                    let mut specifiers = alloc::vec::Vec::new();
+                    let mut chars = format.chars().peekable();
+                    while let Some(chr) = chars.next() {
+                        if chr != '%' {
+                            continue;
+                        }
+
+                        // %%
+                        if chars.next_if_eq(&'%').is_some() {
+                            continue;
+                        }
+
+                        let mut specifier = String::new();
+
+                        // Consume [width]
+                        while let Some(chr) = chars.next_if(char::is_ascii_digit) {
+                            specifier.push(chr);
+                        }
+
+                        // Consume [.precision]
+                        if let Some(dot) = chars.next_if_eq(&'.') {
+                            specifier.push(dot);
+                            while let Some(chr) = chars.next_if(char::is_ascii_digit) {
+                                specifier.push(chr);
+                            }
+                        }
+
+                        let Some(chr) = chars.next() else {
+                            return Err(FunctionError::InvalidDebugPrintfSpecifier(specifier)
+                                .with_span_static(span, "debugPrintf format string"));
+                        };
+                        specifier.push(chr);
+
+                        let expected_type = match chr {
+                            'd' | 'i' => crate::Scalar::I32,
+                            'o' | 'u' | 'x' | 'X' => crate::Scalar::U32,
+                            'e' | 'E' | 'f' | 'F' | 'g' | 'G' => crate::Scalar::F64, // Actually all floats
+                            'l' => {
+                                let next = chars.next();
+                                specifier.extend(next);
+                                match next {
+                                    Some('u' | 'x') => crate::Scalar::U64,
+                                    Some('d') => crate::Scalar::I64,
+                                    _ => {
+                                        return Err(FunctionError::InvalidDebugPrintfSpecifier(
+                                            specifier,
+                                        )
+                                        .with_span_static(span, "debugPrintf format string"));
+                                    }
+                                }
+                            }
+                            _ => {
+                                return Err(FunctionError::InvalidDebugPrintfSpecifier(specifier)
+                                    .with_span_static(span, "debugPrintf format string"));
+                            }
+                        };
+                        specifiers.push((specifier, expected_type));
+                    }
+
+                    if arguments.len() != specifiers.len() {
+                        return Err(FunctionError::WrongDebugPrintfArgumentCount(
+                            arguments.len(),
+                            specifiers.len(),
+                        )
+                        .with_span_static(span, "debugPrintf format string"));
+                    }
+
+                    for (&argument, (specifier, expected_type)) in arguments.iter().zip(specifiers)
+                    {
+                        let resolution =
+                            context.resolve_type(argument, &self.valid_expression_set)?;
+                        match (resolution.inner_with(context.types), expected_type) {
                             // Only scalar arguments are supported for now. Vector and
                             // matrix arguments could be supported in the future by
                             // splatting them into their components in the backends.
-                            Ti::Scalar(_) => {}
+                            (&Ti::Scalar(actual_type), expected_type)
+                                if actual_type == expected_type => {}
+                            // All floating point sizes are supported by e.g. %f.
+                            (
+                                &Ti::Scalar(crate::Scalar {
+                                    kind: crate::ScalarKind::Float,
+                                    ..
+                                }),
+                                crate::Scalar {
+                                    kind: crate::ScalarKind::Float,
+                                    ..
+                                },
+                            ) => {}
                             _ => {
-                                return Err(FunctionError::InvalidDebugPrintfArgument(argument)
-                                    .with_span_handle(argument, context.expressions));
+                                return Err(FunctionError::InvalidDebugPrintfArgument {
+                                    argument,
+                                    specifier,
+                                    actual: crate::common::DiagnosticDisplay((
+                                        resolution,
+                                        context.gctx,
+                                    ))
+                                    .to_string(),
+                                }
+                                .with_span_handle(argument, context.expressions));
                             }
                         }
                     }
