@@ -13,7 +13,7 @@ use std::num::NonZeroU64;
 
 use wgpu::util::DeviceExt as _;
 use wgpu_test::{
-    apply, gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    apply, gpu_test, valid, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
     TestingContext,
 };
 
@@ -50,7 +50,12 @@ fn fs_main() -> @location(0) vec4<f32> {
 
 #[apply(gpu_test!)]
 static RENDER_PASS_RESOURCE_OWNERSHIP: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().test_features_limits())
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            // https://github.com/gfx-rs/wgpu/issues/9187
+            .expect_fail(FailureCase::kosmic_krisp().panic("assertion failed: floats[0] >= 2.0")),
+    )
     .run_async(render_pass_resource_ownership);
 
 async fn render_pass_resource_ownership(ctx: TestingContext) {
