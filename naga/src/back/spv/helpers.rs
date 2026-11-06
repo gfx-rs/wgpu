@@ -128,6 +128,11 @@ pub fn global_needs_wrapper(
 ) -> bool {
     let (space, ty) = match what {
         ResolveGlobal::Variable => (var.space, var.ty),
+        ResolveGlobal::ExternalTexturePlane(_) => return false,
+        ResolveGlobal::ExternalTextureParams => (
+            crate::AddressSpace::Uniform,
+            ir_module.special_types.external_texture_params.unwrap(),
+        ),
     };
     match space {
         crate::AddressSpace::Uniform

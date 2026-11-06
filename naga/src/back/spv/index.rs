@@ -196,7 +196,7 @@ impl BlockContext<'_> {
 
         // SPIR-V allows runtime-sized arrays to appear only as the last member of a
         // struct. Determine this member's index.
-        let gvar = self.writer.global_variables[global_handle].clone();
+        let gvar = self.writer.global_variables[global_handle];
         let global = &self.ir_module.global_variables[global_handle];
         let needs_wrapper = global_needs_wrapper(self.ir_module, global, ResolveGlobal::Variable);
         let (last_member_index, gvar_id) = match (opt_last_member_index, needs_wrapper) {
