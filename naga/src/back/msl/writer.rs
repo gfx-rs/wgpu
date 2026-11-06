@@ -4876,6 +4876,7 @@ impl<W: Write> Writer<W> {
     fn write_type_defs(&mut self, module: &crate::Module) -> BackendResult {
         let mut generated_argument_buffer_wrapper = false;
         let mut generated_external_texture_wrapper = false;
+        let mut array_wrappers = FastHashMap::default();
         for (handle, ty) in module.types.iter() {
             match ty.inner {
                 crate::TypeInner::BindingArray { .. } if !generated_argument_buffer_wrapper => {
@@ -4947,6 +4948,12 @@ impl<W: Write> Writer<W> {
 
                     match size.resolve(module.to_ctx())? {
                         proc::IndexableLength::Known(size) => {
+                            // Equivalent arrays must share a wrapper to remain interchangeable.
+                            if let Some(existing_name) = array_wrappers.get(&ty.inner) {
+                                writeln!(self.out, "typedef {existing_name} {name};")?;
+                                continue;
+                            }
+                            array_wrappers.insert(&ty.inner, name);
                             writeln!(self.out, "struct {name} {{")?;
                             writeln!(
                                 self.out,
