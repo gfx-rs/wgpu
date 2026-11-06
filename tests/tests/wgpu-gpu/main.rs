@@ -36,6 +36,7 @@ mod dispatch_workgroups_indirect;
 mod draw_index;
 mod draw_indirect;
 mod dual_source_blending;
+mod dx12_device_from_raw;
 mod encoder;
 mod external_image_copy;
 mod external_texture;
@@ -73,6 +74,7 @@ mod shader_barycentric;
 mod shader_primitive_index;
 mod shader_view_format;
 mod subgroup_operations;
+mod surface_configure_web;
 mod texture_binding;
 mod texture_blit;
 mod texture_bounds;
@@ -114,6 +116,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     draw_index::all_tests(&mut tests);
     draw_indirect::all_tests(&mut tests);
     dual_source_blending::all_tests(&mut tests);
+    dx12_device_from_raw::all_tests(&mut tests);
     encoder::all_tests(&mut tests);
     external_texture::all_tests(&mut tests);
     float32_filterable::all_tests(&mut tests);
@@ -163,6 +166,8 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     shader_view_format::all_tests(&mut tests);
     shader::all_tests(&mut tests);
     subgroup_operations::all_tests(&mut tests);
+    #[cfg(wasm_test)]
+    surface_configure_web::all_tests(&mut tests);
     texture_binding::all_tests(&mut tests);
     texture_blit::all_tests(&mut tests);
     texture_bounds::all_tests(&mut tests);

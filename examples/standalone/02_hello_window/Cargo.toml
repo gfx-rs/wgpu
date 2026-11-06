@@ -4,6 +4,8 @@ edition = "2024"
 rust-version = "1.87"
 publish = false
 
+[lints]
+
 [dependencies]
 env_logger = "0.11"
 pollster = "1.0"

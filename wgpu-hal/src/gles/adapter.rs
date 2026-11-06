@@ -274,7 +274,7 @@ impl super::Adapter {
 
         let shading_language_version = {
             let sl_version = unsafe { gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION) };
-            log::debug!("SL version: {}", &sl_version);
+            log::debug!("SL version: {sl_version}");
             if full_ver.is_some() {
                 let (sl_major, sl_minor) = Self::parse_full_version(&sl_version).ok()?;
                 let mut value = sl_major as u16 * 100 + sl_minor as u16 * 10;
@@ -491,7 +491,8 @@ impl super::Adapter {
             | wgt::Features::DEPTH32FLOAT_STENCIL8
             | wgt::Features::IMMEDIATES
             | wgt::Features::PASSTHROUGH_SHADERS
-            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | wgt::Features::UNRESTRICTED_BYTES_PER_ROW;
         features.set(
             wgt::Features::TEXTURE_FORMAT_16BIT_NORM,
             supports_16bit_norm,
@@ -1098,6 +1099,11 @@ impl crate::Adapter for super::Adapter {
         let main_vao =
             unsafe { gl.create_vertex_array() }.map_err(|_| crate::DeviceError::OutOfMemory)?;
         unsafe { gl.bind_vertex_array(Some(main_vao)) };
+
+        // Desktop GL defaults to non-seamless cube sampling; ES 3.0+ and other backends are seamless by spec.
+        if !self.shared.es {
+            unsafe { gl.enable(glow::TEXTURE_CUBE_MAP_SEAMLESS) };
+        }
 
         let zero_buffer =
             unsafe { gl.create_buffer() }.map_err(|_| crate::DeviceError::OutOfMemory)?;

@@ -360,7 +360,7 @@ pub fn run_cts(
         // we run.
         let env = shell
             .cmd("cargo")
-            .args(&["llvm-cov", "--no-cfg-coverage", "show-env"])
+            .args(["llvm-cov", "--no-cfg-coverage", "show-env"])
             .read()
             .context("Failed to get `llvm-cov` environment variables")?
             .lines()

@@ -1,5 +1,5 @@
-mod expressions;
-mod functions;
+pub(crate) mod expressions;
+pub(crate) mod functions;
 mod handle_set_map;
 mod statements;
 mod types;
@@ -134,6 +134,11 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
 
             if let Some(task_payload) = e.task_payload {
                 module_tracer.global_variables_used.insert(task_payload);
+            }
+            if let Some(incoming_ray_payload) = e.incoming_ray_payload {
+                module_tracer
+                    .global_variables_used
+                    .insert(incoming_ray_payload);
             }
             if let Some(ref mesh_info) = e.mesh_info {
                 module_tracer
@@ -381,6 +386,9 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
         if let Some(ref mut task_payload) = entry.task_payload {
             module_map.globals.adjust(task_payload);
         }
+        if let Some(ref mut incoming_ray_payload) = entry.incoming_ray_payload {
+            module_map.globals.adjust(incoming_ray_payload);
+        }
         if let Some(ref mut mesh_info) = entry.mesh_info {
             module_map.globals.adjust(&mut mesh_info.output_variable);
             module_map.types.adjust(&mut mesh_info.vertex_output_type);
@@ -399,7 +407,7 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     }
 }
 
-struct ModuleTracer<'module> {
+pub(crate) struct ModuleTracer<'module> {
     module: &'module crate::Module,
 
     /// The subset of functions in `functions_used` that have not yet been
@@ -415,7 +423,7 @@ struct ModuleTracer<'module> {
 }
 
 impl<'module> ModuleTracer<'module> {
-    fn new(module: &'module crate::Module) -> Self {
+    pub(crate) fn new(module: &'module crate::Module) -> Self {
         Self {
             module,
             functions_pending: HandleSet::for_arena(&module.functions),
@@ -938,8 +946,7 @@ fn array_length_override_mutual() {
     let init = module.global_expressions.append(
         Ex::As {
             expr: sum,
-            kind: crate::ScalarKind::Uint,
-            convert: None,
+            target: crate::Scalar::U32,
         },
         nowhere,
     );
@@ -1273,8 +1280,7 @@ fn unnamed_override_type() {
     let named_init = module.global_expressions.append(
         crate::Expression::As {
             expr: unnamed_override_expr,
-            kind: crate::ScalarKind::Sint,
-            convert: None,
+            target: crate::Scalar::I32,
         },
         nowhere,
     );
