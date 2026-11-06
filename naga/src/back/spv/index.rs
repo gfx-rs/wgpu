@@ -5,7 +5,7 @@ Bounds-checking for SPIR-V output.
 use super::{
     helpers::{global_needs_wrapper, map_storage_class},
     selection::Selection,
-    Block, BlockContext, Error, IdGenerator, Instruction, Word,
+    Block, BlockContext, Error, IdGenerator, Instruction, ResolveGlobal, Word,
 };
 use crate::{
     arena::Handle,
@@ -198,7 +198,7 @@ impl BlockContext<'_> {
         // struct. Determine this member's index.
         let gvar = self.writer.global_variables[global_handle].clone();
         let global = &self.ir_module.global_variables[global_handle];
-        let needs_wrapper = global_needs_wrapper(self.ir_module, global);
+        let needs_wrapper = global_needs_wrapper(self.ir_module, global, ResolveGlobal::Variable);
         let (last_member_index, gvar_id) = match (opt_last_member_index, needs_wrapper) {
             (Some(index), false) => {
                 // At the Naga type level, the runtime-sized array appears as the
@@ -264,8 +264,11 @@ impl BlockContext<'_> {
         let crate::TypeInner::BindingArray { .. } = self.ir_module.types[global.ty].inner else {
             return None;
         };
-        let binding = global.binding?;
-        let bind_target = self.writer.resolve_resource_binding(&binding).ok()?;
+        let bind_target = self
+            .writer
+            .resolve_global(self.ir_module, global, ResolveGlobal::Variable)
+            .ok()
+            .and_then(|resolved| resolved.binding)?;
         bind_target.binding_array_size
     }
 
