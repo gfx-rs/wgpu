@@ -21,6 +21,12 @@ const mat2x2 cz5_ = mat2x2(0.0);
 const Foo cz6_[3] = Foo[3](Foo(vec4(0.0), 0), Foo(vec4(0.0), 0), Foo(vec4(0.0), 0));
 const Foo cz7_ = Foo(vec4(0.0), 0);
 const uvec2 cp1_ = uvec2(0u);
+const vec4 ccz0_ = vec4(vec2(0.0), 1.0, 1.0);
+const vec4 ccz1_ = vec4(vec2(1.0), 0.0, 1.0);
+const vec4 ccz2_ = vec4(vec2(1.0, 0.0), 0.0, 1.0);
+const mat2x2 ccm0_ = mat2x2(vec2(0.0), vec2(1.0, 2.0));
+const mat2x2 ccm1_ = mat2x2(vec2(1.0), vec2(0.0));
+const vec4 ccn0_ = vec4(vec3(vec2(0.0), 3.0), 4.0);
 
 
 void main() {
@@ -33,6 +39,12 @@ void main() {
     uvec2 cit0_ = uvec2(0u);
     mat2x2 cit1_ = mat2x2(vec2(0.0), vec2(0.0));
     int cit2_[4] = int[4](0, 1, 2, 3);
+    vec4 ccz3_ = vec4(vec2(0.0), 1.0, 1.0);
+    vec4 ccz4_ = vec4(vec2(1.0), 0.0, 1.0);
+    vec4 ccz5_ = vec4(vec2(1.0, 0.0), 0.0, 1.0);
+    mat2x2 ccm2_ = mat2x2(vec2(0.0), vec2(1.0, 2.0));
+    mat2x2 ccm3_ = mat2x2(vec2(1.0), vec2(0.0));
+    vec4 ccn1_ = vec4(vec3(vec2(0.0), 3.0), 4.0);
     uvec2 ic4_ = uvec2(0u, 0u);
     mat2x3 ic5_ = mat2x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0));
     return;

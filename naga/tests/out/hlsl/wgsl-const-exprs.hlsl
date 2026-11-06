@@ -156,6 +156,38 @@ void abstract_access(uint i)
     return;
 }
 
+void swizzle_of_compose_zero_value()
+{
+    int2 out_6 = int2(int(0), int(3));
+
+    return;
+}
+
+void index_of_compose_zero_value()
+{
+    int out_7 = int(0);
+
+    return;
+}
+
+void index_of_nested_compose_zero_value()
+{
+    int out_8 = int(0);
+
+    return;
+}
+
+int3 ZeroValueint3() {
+    return (int3)0;
+}
+
+void access_of_compose_zero_value()
+{
+    int3 out_9 = ZeroValueint3();
+
+    return;
+}
+
 [numthreads(2, 3, 1)]
 void main()
 {
@@ -173,5 +205,9 @@ void main()
     packed_dot_product();
     test_local_const();
     abstract_access(1u);
+    swizzle_of_compose_zero_value();
+    index_of_compose_zero_value();
+    index_of_nested_compose_zero_value();
+    access_of_compose_zero_value();
     return;
 }

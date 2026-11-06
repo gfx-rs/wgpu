@@ -7,7 +7,7 @@ using metal::uint;
 struct type_6 {
     float inner[2];
 };
-struct type_9 {
+struct type_10 {
     int inner[9];
 };
 constant uint TWO = 2u;
@@ -147,8 +147,32 @@ void abstract_access(
     uint b_1 = 1u;
     int c_1 = {};
     int d = {};
-    c_1 = type_9 {{1, 2, 3, 4, 5, 6, 7, 8, 9}}.inner[i];
+    c_1 = type_10 {{1, 2, 3, 4, 5, 6, 7, 8, 9}}.inner[i];
     d = metal::int4(1, 2, 3, 4)[i];
+    return;
+}
+
+void swizzle_of_compose_zero_value(
+) {
+    metal::int2 out_6 = metal::int2(0, 3);
+    return;
+}
+
+void index_of_compose_zero_value(
+) {
+    int out_7 = 0;
+    return;
+}
+
+void index_of_nested_compose_zero_value(
+) {
+    int out_8 = 0;
+    return;
+}
+
+void access_of_compose_zero_value(
+) {
+    metal::int3 out_9 = metal::int3 {};
     return;
 }
 
@@ -168,5 +192,9 @@ kernel void main_(
     packed_dot_product();
     test_local_const();
     abstract_access(1u);
+    swizzle_of_compose_zero_value();
+    index_of_compose_zero_value();
+    index_of_nested_compose_zero_value();
+    access_of_compose_zero_value();
     return;
 }
