@@ -31,12 +31,14 @@ impl<A: Api> From<ExposedAdapter<A>> for DynExposedAdapter {
 }
 
 pub trait DynInstance: DynResource {
+    /// Dynamic version of [Instance::create_surface]
     unsafe fn create_surface(
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Box<dyn DynSurface>, InstanceError>;
 
+    /// Dynamic version of [Instance::enumerate_adapters]
     unsafe fn enumerate_adapters(
         &self,
         surface_hint: Option<&dyn DynSurface>,

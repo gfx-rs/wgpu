@@ -22,6 +22,7 @@ impl<A: Api> From<OpenDevice<A>> for DynOpenDevice {
 }
 
 pub trait DynAdapter: DynResource {
+    /// Dynamic version of [Adapter::open]
     unsafe fn open(
         &self,
         features: wgt::Features,
@@ -29,22 +30,28 @@ pub trait DynAdapter: DynResource {
         memory_hints: &wgt::MemoryHints,
     ) -> Result<DynOpenDevice, DeviceError>;
 
+    /// Dynamic version of [Adapter::texture_format_capabilities]
     unsafe fn texture_format_capabilities(
         &self,
         format: wgt::TextureFormat,
     ) -> TextureFormatCapabilities;
 
+    /// Dynamic version of [Adapter::surface_capabilities]
     unsafe fn surface_capabilities(&self, surface: &dyn DynSurface) -> Option<SurfaceCapabilities>;
 
+    /// Dynamic version of [Adapter::surface_display_hdr_info]
     unsafe fn surface_display_hdr_info(
         &self,
         surface: &dyn DynSurface,
     ) -> Option<wgt::DisplayHdrInfo>;
 
+    /// Dynamic version of [Adapter::get_presentation_timestamp]
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
 
+    /// Dynamic version of [Adapter::get_ordered_buffer_usages]
     fn get_ordered_buffer_usages(&self) -> wgt::BufferUses;
 
+    /// Dynamic version of [Adapter::get_ordered_texture_usages]
     fn get_ordered_texture_usages(&self) -> wgt::TextureUses;
 }
 
