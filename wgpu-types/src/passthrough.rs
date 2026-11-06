@@ -214,6 +214,8 @@ pub struct PassthroughEntryPointInfo<'a> {
     ///
     /// Necessary for GLES backend passthrough.
     pub clip_distance_count: u32,
+    /// List of used combinations of textures and samplers.
+    pub texture_sampler_pairs: Cow<'a, [(nt::ResourceBinding, nt::ResourceBinding)]>,
 
     /// Information about the entry point interface, and validation information.
     pub interface: PassthroughEntryPointInterfaceInfo<'a>,
@@ -229,11 +231,6 @@ pub struct PassthroughEntryPointInterfaceInfo<'a> {
     pub outputs: Option<Cow<'a, [Varying]>>,
     /// Size in bytes of the immediate data
     pub immediate_data_size: u32,
-    /// Array length of the clip distances builtin. On GLES, these are needed for
-    /// clip distances to be usable.
-    pub clip_disances_array_length: u32,
-    /// List of used combinations of textures and samplers.
-    pub texture_sampler_pairs: Cow<'a, [(nt::ResourceBinding, nt::ResourceBinding)]>,
     /// Needed for derived pipeline layouts.
     pub bindings: Option<ResourceBindings>,
     /// Only relevant for mesh and task shaders. A size of zero means no payload.
