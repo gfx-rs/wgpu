@@ -342,7 +342,7 @@ impl LifetimeTracker {
                 // This involves actually decrementing the ref count of all command buffer
                 // resources, so can be _very_ expensive.
                 profiling::scope!("drop command buffer trackers");
-                drop(encoder);
+                encoder.release();
             }
             work_done_closures.extend(a.work_done_closures);
         }

@@ -670,10 +670,9 @@ pub(super) fn encode_compute_pass(
         },
         active_query: None,
 
-        intermediate_trackers: Tracker::new(
-            device.ordered_buffer_usages,
-            device.ordered_texture_usages,
-        ),
+        intermediate_trackers: device
+            .tracker_pool
+            .acquire(device.ordered_buffer_usages, device.ordered_texture_usages),
     };
 
     let indices = &device.tracker_indices;
@@ -902,6 +901,7 @@ pub(super) fn encode_compute_pass(
         &intermediate_trackers,
         parent_state.snatch_guard,
     );
+    device.tracker_pool.release(intermediate_trackers);
     // Close the command encoder, and swap it with the previous.
     parent_state
         .raw_encoder

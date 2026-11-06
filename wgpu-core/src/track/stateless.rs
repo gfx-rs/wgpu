@@ -16,6 +16,11 @@ impl<T> StatelessTracker<T> {
         }
     }
 
+    /// Removes all resources from the tracker, keeping the capacity of its vector.
+    pub fn clear(&mut self) {
+        self.resources.clear();
+    }
+
     /// Inserts a single resource into the resource tracker.
     ///
     /// Returns a reference to the newly inserted resource.

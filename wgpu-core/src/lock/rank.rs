@@ -150,6 +150,7 @@ define_lock_ranks! {
         BUFFER_POOL,
         DEVICE_LOST_CLOSURE,
         DEVICE_TRACE,
+        DEVICE_TRACKER_POOL,
         DEVICE_USAGE_SCOPES,
         QUERY_SET_INITIALIZED_SLOTS,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
@@ -170,6 +171,7 @@ define_lock_ranks! {
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         DEVICE_DEFERRED_DESTROY,
         DEVICE_TRACE,
+        DEVICE_TRACKER_POOL,
         QUERY_SET_INITIALIZED_SLOTS,
         RESOURCE_POOL_INNER,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
@@ -186,6 +188,7 @@ define_lock_ranks! {
         BLAS_COMPACTION_STATE,
         BUFFER_POOL,
         DEVICE_TRACE,
+        DEVICE_TRACKER_POOL,
         DEVICE_USAGE_SCOPES,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
@@ -194,6 +197,7 @@ define_lock_ranks! {
         DEVICE_TRACKERS,
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         BUFFER_INITIALIZATION_STATUS,
+        DEVICE_TRACKER_POOL,
         TEXTURE_INITIALIZATION_STATUS,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
@@ -214,6 +218,7 @@ define_lock_ranks! {
         BUFFER_POOL,
         DEVICE_DEFERRED_DESTROY,
         DEVICE_TRACE,
+        DEVICE_TRACKER_POOL,
         RESOURCE_POOL_INNER,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
         TEXTURE_CLEAR_MODE,
@@ -244,6 +249,7 @@ define_lock_ranks! {
     rank DEVICE_DEFERRED_DESTROY "Device::deferred_destroy" followed by { }
     rank DEVICE_LOST_CLOSURE "Device::device_lost_closure" followed by { }
     rank DEVICE_TRACE "Device::trace" followed by { }
+    rank DEVICE_TRACKER_POOL "Device::tracker_pool" followed by { }
     rank DEVICE_USAGE_SCOPES "Device::usage_scopes" followed by { }
     rank QUERY_SET_INITIALIZED_SLOTS "QuerySet::initialized_slots" followed by { }
     rank RESOURCE_POOL_INNER "ResourcePool::inner" followed by { }
