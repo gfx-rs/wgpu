@@ -378,7 +378,8 @@ impl BlockContext<'_> {
                 self.writer.global_variables[handle].handle_id
             }
             crate::Expression::FunctionArgument(i) => {
-                self.function.parameters[i as usize].handle_id
+                let offset = self.function.parameter_offsets[i as usize] as usize;
+                self.function.parameters[offset].handle_id
             }
             crate::Expression::Access { .. } | crate::Expression::AccessIndex { .. } => {
                 self.cached[expr_handle]
