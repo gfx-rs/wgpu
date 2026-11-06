@@ -2452,7 +2452,16 @@ impl<'a, W: Write> Writer<'a, W> {
             Expression::Access { base, index } => {
                 self.write_expr(base, ctx)?;
                 write!(self.out, "[")?;
-                self.write_expr(index, ctx)?;
+                match proc::index::known_out_of_bounds_replacement(
+                    base,
+                    index,
+                    self.module,
+                    ctx.expressions,
+                    ctx.info,
+                ) {
+                    Some(replacement) => write!(self.out, "{replacement}")?,
+                    None => self.write_expr(index, ctx)?,
+                }
                 write!(self.out, "]")?
             }
             // `AccessIndex` is the same as `Access` except that the index is a constant and it can

@@ -1,0 +1,5 @@
+targets = "SPIRV | METAL"
+
+[bounds_check_policies]
+index = "ReadZeroSkipWrite"
+buffer = "ReadZeroSkipWrite"

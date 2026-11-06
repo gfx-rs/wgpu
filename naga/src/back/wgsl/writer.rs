@@ -1554,7 +1554,16 @@ impl<W: Write> Writer<W> {
             Expression::Access { base, index } => {
                 self.write_expr_with_indirection(module, base, func_ctx, indirection)?;
                 write!(self.out, "[")?;
-                self.write_expr(module, index, func_ctx)?;
+                match proc::index::known_out_of_bounds_replacement(
+                    base,
+                    index,
+                    module,
+                    func_ctx.expressions,
+                    func_ctx.info,
+                ) {
+                    Some(replacement) => write!(self.out, "{replacement}u")?,
+                    None => self.write_expr(module, index, func_ctx)?,
+                }
                 write!(self.out, "]")?
             }
             Expression::AccessIndex { base, index } => {

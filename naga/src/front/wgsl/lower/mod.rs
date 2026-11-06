@@ -2536,9 +2536,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
                 }
 
-                lowered_base.try_map(|base| match ctx.get_const_val(index).ok() {
-                    Some(index) => Ok::<_, Box<Error>>(ir::Expression::AccessIndex { base, index }),
-                    None => {
+                lowered_base.try_map(|base| match ctx.get_const_val(index) {
+                    Ok(index) => Ok::<_, Box<Error>>(ir::Expression::AccessIndex { base, index }),
+                    // The validator accepts any `Access` index, so reject this here.
+                    Err(proc::ConstValueError::Negative) => Err(Box::new(
+                        Error::ExpectedNonNegative(ctx.get_expression_span(index)),
+                    )),
+                    Err(_) => {
                         // When an abstract array value e is indexed by an expression
                         // that is not a const-expression, then the array is concretized
                         // before the index is applied.

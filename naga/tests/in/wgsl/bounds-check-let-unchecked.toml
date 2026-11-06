@@ -1,0 +1,4 @@
+targets = "SPIRV | METAL | GLSL | HLSL | WGSL"
+
+[hlsl]
+restrict_indexing = false
