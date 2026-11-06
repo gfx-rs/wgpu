@@ -2066,7 +2066,7 @@ impl crate::Device for super::Device {
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> DeviceResult<super::QuerySet> {
-        autoreleasepool(|_| {
+        let query_set = autoreleasepool(|_| {
             match desc.ty {
                 wgt::QueryType::Occlusion => {
                     let size = desc.count as u64 * crate::QUERY_SIZE;
@@ -2122,8 +2122,6 @@ impl crate::Device for super::Device {
                             }
                         };
 
-                    self.counters.query_sets.add(1);
-
                     Ok(super::QuerySet {
                         raw_buffer: destination_buffer,
                         counter_sample_buffer: Some(counter_sample_buffer),
@@ -2134,7 +2132,11 @@ impl crate::Device for super::Device {
                     todo!()
                 }
             }
-        })
+        })?;
+
+        self.counters.query_sets.add(1);
+
+        Ok(query_set)
     }
 
     unsafe fn destroy_query_set(&self, _set: super::QuerySet) {
