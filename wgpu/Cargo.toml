@@ -41,6 +41,7 @@ default = [
     "vulkan",
     "wgsl",
     "webgpu",
+    "wayland-dlopen",
 ]
 
 #! ### Backends
@@ -145,6 +146,9 @@ trace = ["serde", "wgpu-core?/trace", "wgpu-types/trace"]
 ##
 ## [dxc]: https://github.com/Microsoft/DirectXShaderCompiler
 static-dxc = ["wgpu-core?/static-dxc"]
+
+## Enable using `dlopen` for `libwayland` instead of compile time linking.
+wayland-dlopen = ["wgpu-hal/wayland-dlopen"]
 
 #! ### Other
 # --------------------------------------------------------------------

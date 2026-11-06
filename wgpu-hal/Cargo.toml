@@ -176,6 +176,7 @@ fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
 portable-atomic = ["wgpu-sync/portable-atomic"]
+wayland-dlopen = ["wayland-sys?/dlopen"]
 
 ###################################
 ### Internal Debugging Features ###
@@ -256,7 +257,6 @@ libc = { workspace = true, optional = true }
 # backend: GLES
 wayland-sys = { version = "0.31.3", features = [
     "client",
-    "dlopen",
     "egl",
 ], optional = true }
 
