@@ -9,7 +9,7 @@ OpEntryPoint GLCompute %24 "main"
 OpExecutionMode %24 LocalSize 1 1 1
 %2 = OpTypeVoid
 %3 = OpTypeInt 32 1
-%5 = OpTypeFunction %3 %3 %3
+%7 = OpTypeFunction %3 %3 %3
 %9 = OpTypeBool
 %10 = OpConstant  %3  0
 %12 = OpConstant  %3  -2147483648
@@ -21,19 +21,19 @@ OpExecutionMode %24 LocalSize 1 1 1
 %28 = OpTypeInt 32 0
 %29 = OpConstant  %28  5
 %30 = OpConstant  %28  2
-%4 = OpFunction  %3  None %5
+%4 = OpFunction  %3  None %7
+%5 = OpFunctionParameter  %3
 %6 = OpFunctionParameter  %3
-%7 = OpFunctionParameter  %3
 %8 = OpLabel
-%11 = OpIEqual  %9  %7 %10
-%14 = OpIEqual  %9  %6 %12
-%15 = OpIEqual  %9  %7 %13
+%11 = OpIEqual  %9  %6 %10
+%14 = OpIEqual  %9  %5 %12
+%15 = OpIEqual  %9  %6 %13
 %16 = OpLogicalAnd  %9  %14 %15
 %17 = OpLogicalOr  %9  %11 %16
-%19 = OpSelect  %3  %17 %18 %7
-%20 = OpSDiv  %3  %6 %19
+%19 = OpSelect  %3  %17 %18 %6
+%20 = OpSDiv  %3  %5 %19
 %21 = OpIMul  %3  %20 %19
-%22 = OpISub  %3  %6 %21
+%22 = OpISub  %3  %5 %21
 OpReturnValue %22
 OpFunctionEnd
 %24 = OpFunction  %2  None %25

@@ -1,8 +1,12 @@
 use alloc::{vec, vec::Vec};
+use core::array;
 
 use arrayvec::ArrayVec;
 use spirv::Word;
 
+use super::{
+    Function, FunctionArgument, Instruction, LookupFunctionType, WrappedFunction, WriterFlags,
+};
 use crate::{Handle, UniqueArena};
 
 pub(super) fn bytes_to_words(bytes: &[u8]) -> Vec<Word> {
@@ -181,6 +185,77 @@ pub fn is_uniform_matcx2_struct_member_access(
     }
 
     false
+}
+
+impl super::Writer {
+    /// Write the signature for a [`WrappedFunction`].
+    ///
+    /// Same as [`Self::write_function_signature`], but additionally adds the function
+    /// to `self.wrapped_functions`.
+    pub(super) fn write_wrapped_function_signature<const N: usize>(
+        &mut self,
+        wrapped: WrappedFunction,
+        name: &str,
+        parameters: &[(Word, &'static str); N],
+        return_type_id: Word,
+    ) -> (Function, [Word; N]) {
+        let (f, id, args) = self.write_function_signature(name, parameters, return_type_id);
+        self.wrapped_functions.insert(wrapped, id);
+        (f, args)
+    }
+
+    /// Write the signature for an internal helper function.
+    ///
+    /// Writes the SPIR-V `OpFunction` and `OpFunctionParameter` operations.
+    ///
+    /// If [`WriterFlags::DEBUG`] is active, adds debugging information to
+    /// `self.debugs`.
+    ///
+    /// Does not otherwise emit any of the function prelude that
+    /// [`Self::write_function`] would generate. In particular, does not load
+    /// handle arguments or set `FunctionArgument::handle_id`.
+    pub(super) fn write_function_signature<const N: usize>(
+        &mut self,
+        name: &str,
+        parameters: &[(Word, &'static str); N],
+        return_type_id: Word,
+    ) -> (Function, Word, [Word; N]) {
+        let mut parameter_type_ids = Vec::with_capacity(N);
+
+        let function_id = self.id_gen.next();
+        if self.flags.contains(WriterFlags::DEBUG) {
+            self.debugs.push(Instruction::name(function_id, name));
+        }
+        let mut function = Function::default();
+
+        let param_ids = array::from_fn(|i| {
+            let (param_type_id, param_name) = parameters[i];
+            parameter_type_ids.push(param_type_id);
+
+            let param_id = self.id_gen.next();
+            function.parameters.push(FunctionArgument {
+                instruction: Instruction::function_parameter(param_type_id, param_id),
+                handle_id: 0,
+            });
+            if self.flags.contains(WriterFlags::DEBUG) {
+                self.debugs.push(Instruction::name(param_id, param_name));
+            }
+            param_id
+        });
+
+        let function_type_id = self.get_function_type(LookupFunctionType {
+            parameter_type_ids,
+            return_type_id,
+        });
+        function.signature = Some(Instruction::function(
+            return_type_id,
+            function_id,
+            spirv::FunctionControl::empty(),
+            function_type_id,
+        ));
+
+        (function, function_id, param_ids)
+    }
 }
 
 ///HACK: this is taken from std unstable, remove it when std's floor_char_boundary is stable

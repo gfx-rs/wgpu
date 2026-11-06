@@ -313,12 +313,18 @@ OpName %60 "baz"
 OpName %63 "qux"
 OpName %66 "nested_mat_cx2"
 OpName %69 "mat3x2<f32>_get_column"
+OpName %70 "matrix"
+OpName %71 "column_index"
 OpName %84 "test_matrix_within_struct_accesses"
 OpName %113 "idx"
 OpName %115 "t"
 OpName %186 "array<mat4x2<f32>, 2>_from_std140"
+OpName %187 "value"
 OpName %190 "mat4x2<f32>_from_std140"
+OpName %191 "value"
 OpName %204 "mat4x2<f32>_get_column"
+OpName %205 "matrix"
+OpName %206 "column_index"
 OpName %221 "test_matrix_within_array_within_struct_accesses"
 OpName %232 "idx"
 OpName %233 "t"
@@ -524,8 +530,8 @@ OpDecorate %483 Location 0
 %141 = OpTypePointer Uniform %9
 %172 = OpTypePointer Function %22
 %174 = OpTypePointer Function %13
-%187 = OpTypeFunction %26 %50
-%191 = OpTypeFunction %25 %49
+%188 = OpTypeFunction %26 %50
+%192 = OpTypeFunction %25 %49
 %207 = OpTypeFunction %13 %25 %4
 %222 = OpTypePointer Uniform %51
 %224 = OpTypePointer Uniform %27
@@ -754,22 +760,22 @@ OpLine %3 65 5
 OpStore %185 %112
 OpReturn
 OpFunctionEnd
-%190 = OpFunction  %25  None %191
-%192 = OpFunctionParameter  %49
+%190 = OpFunction  %25  None %192
+%191 = OpFunctionParameter  %49
 %193 = OpLabel
-%194 = OpCompositeExtract  %13  %192 0
-%195 = OpCompositeExtract  %13  %192 1
-%196 = OpCompositeExtract  %13  %192 2
-%197 = OpCompositeExtract  %13  %192 3
+%194 = OpCompositeExtract  %13  %191 0
+%195 = OpCompositeExtract  %13  %191 1
+%196 = OpCompositeExtract  %13  %191 2
+%197 = OpCompositeExtract  %13  %191 3
 %198 = OpCompositeConstruct  %25  %194 %195 %196 %197
 OpReturnValue %198
 OpFunctionEnd
-%186 = OpFunction  %26  None %187
-%188 = OpFunctionParameter  %50
+%186 = OpFunction  %26  None %188
+%187 = OpFunctionParameter  %50
 %189 = OpLabel
-%199 = OpCompositeExtract  %49  %188 0
+%199 = OpCompositeExtract  %49  %187 0
 %200 = OpFunctionCall  %25  %190 %199
-%201 = OpCompositeExtract  %49  %188 1
+%201 = OpCompositeExtract  %49  %187 1
 %202 = OpFunctionCall  %25  %190 %201
 %203 = OpCompositeConstruct  %26  %200 %202
 OpReturnValue %203
