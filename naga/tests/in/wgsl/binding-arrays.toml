@@ -15,7 +15,7 @@ image_load = "ReadZeroSkipWrite"
 fake_missing_bindings = true
 lang_version = [3, 0]
 spirv_cross_compatibility = false
-zero_initialize_workgroup_memory = true
+zero_initialize_workgroup_memory = "Polyfill"
 
 [msl.per_entry_point_map.main]
 resources = [
@@ -25,7 +25,7 @@ resources = [
 [hlsl]
 fake_missing_bindings = true
 restrict_indexing = true
-zero_initialize_workgroup_memory = true
+zero_initialize_workgroup_memory = "Polyfill"
 
 [[hlsl.binding_map]]
 bind_target = { binding_array_size = 10, register = 0, space = 0 }

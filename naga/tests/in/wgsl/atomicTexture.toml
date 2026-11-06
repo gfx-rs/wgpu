@@ -4,18 +4,18 @@ capabilities = "TEXTURE_ATOMIC"
 fake_missing_bindings = true
 lang_version = [3, 1]
 spirv_cross_compatibility = false
-zero_initialize_workgroup_memory = true
+zero_initialize_workgroup_memory = "Polyfill"
 
 [hlsl]
 fake_missing_bindings = true
 immediates_target = { register = 0, space = 0 }
 restrict_indexing = true
 special_constants_binding = { register = 0, space = 1 }
-zero_initialize_workgroup_memory = true
+zero_initialize_workgroup_memory = "Polyfill"
 
 [glsl]
 version.Desktop = 420
-zero_initialize_workgroup_memory = true
+zero_initialize_workgroup_memory = "Polyfill"
 
 [spv]
 version = [1, 0]

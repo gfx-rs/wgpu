@@ -92,8 +92,8 @@ impl Writer {
             flags: options.flags,
             bounds_check_policies: options.bounds_check_policies,
             zero_initialize_workgroup_memory: options.zero_initialize_workgroup_memory,
-            force_loop_bounding: options.force_loop_bounding,
-            ray_query_initialization_tracking: options.ray_query_initialization_tracking,
+            force_loop_bounding: options.common.force_loop_bounding,
+            ray_query_initialization_tracking: options.common.ray_query_initialization_tracking,
             trace_ray_argument_validation: options.trace_ray_argument_validation,
             use_storage_input_output_16: options.use_storage_input_output_16,
             emit_int_div_checks: options.emit_int_div_checks,
@@ -107,7 +107,7 @@ impl Writer {
             cached_constants: crate::FastHashMap::default(),
             global_variables: HandleVec::new(),
             std140_compat_uniform_types: crate::FastHashMap::default(),
-            fake_missing_bindings: options.fake_missing_bindings,
+            fake_missing_bindings: options.common.fake_missing_bindings,
             binding_map: options.binding_map.clone(),
             saved_cached: CachedExpressions::default(),
             gl450_ext_inst_id,
@@ -119,8 +119,8 @@ impl Writer {
                 options.use_storage_input_output_16,
             ),
             debug_printf: None,
-            task_dispatch_limits: options.task_dispatch_limits,
-            mesh_shader_primitive_indices_clamp: options.mesh_shader_primitive_indices_clamp,
+            task_dispatch_limits: options.common.task_dispatch_limits,
+            mesh_shader_primitive_indices_clamp: options.common.mesh_shader_primitive_indices_clamp,
         })
     }
 
@@ -134,13 +134,14 @@ impl Writer {
         self.flags = options.flags;
         self.bounds_check_policies = options.bounds_check_policies;
         self.zero_initialize_workgroup_memory = options.zero_initialize_workgroup_memory;
-        self.force_loop_bounding = options.force_loop_bounding;
+        self.force_loop_bounding = options.common.force_loop_bounding;
         self.use_storage_input_output_16 = options.use_storage_input_output_16;
         self.binding_map = options.binding_map.clone();
         self.io_f16_polyfills =
             super::f16_polyfill::F16IoPolyfill::new(options.use_storage_input_output_16);
-        self.task_dispatch_limits = options.task_dispatch_limits;
-        self.mesh_shader_primitive_indices_clamp = options.mesh_shader_primitive_indices_clamp;
+        self.task_dispatch_limits = options.common.task_dispatch_limits;
+        self.mesh_shader_primitive_indices_clamp =
+            options.common.mesh_shader_primitive_indices_clamp;
         Ok(())
     }
 

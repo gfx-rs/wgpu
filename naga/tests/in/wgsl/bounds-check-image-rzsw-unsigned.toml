@@ -5,4 +5,4 @@ image_load = "ReadZeroSkipWrite"
 
 [glsl]
 version.Desktop = 430
-zero_initialize_workgroup_memory = true
+zero_initialize_workgroup_memory = "Polyfill"

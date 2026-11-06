@@ -7,7 +7,7 @@ fake_missing_bindings = true
 immediates_target = { register = 0, space = 0 }
 restrict_indexing = true
 special_constants_binding = { register = 0, space = 1 }
-zero_initialize_workgroup_memory = true
+zero_initialize_workgroup_memory = "Polyfill"
 
 [spv]
 version = [1, 0]
