@@ -3,7 +3,7 @@ use alloc::{vec, vec::Vec};
 use arrayvec::ArrayVec;
 use spirv::Word;
 
-use crate::{Handle, UniqueArena};
+use crate::{back::spv::ResolveGlobal, Handle, UniqueArena};
 
 pub(super) fn bytes_to_words(bytes: &[u8]) -> Vec<Word> {
     bytes
@@ -116,15 +116,26 @@ impl crate::AddressSpace {
 ///
 /// See [`back::spv::GlobalVariable`] for details.
 ///
+/// If lowering of external textures is implemented as an IR pass in the future,
+/// `what` can be removed and this collapses to just the logic for the
+/// `ResolveGlobal::Variable` case.
+///
 /// [`back::spv::GlobalVariable`]: super::GlobalVariable
-pub fn global_needs_wrapper(ir_module: &crate::Module, var: &crate::GlobalVariable) -> bool {
-    match var.space {
+pub fn global_needs_wrapper(
+    ir_module: &crate::Module,
+    var: &crate::GlobalVariable,
+    what: ResolveGlobal,
+) -> bool {
+    let (space, ty) = match what {
+        ResolveGlobal::Variable => (var.space, var.ty),
+    };
+    match space {
         crate::AddressSpace::Uniform
         | crate::AddressSpace::Storage { .. }
         | crate::AddressSpace::Immediate => {}
         _ => return false,
     };
-    match ir_module.types[var.ty].inner {
+    match ir_module.types[ty].inner {
         crate::TypeInner::Struct {
             ref members,
             span: _,

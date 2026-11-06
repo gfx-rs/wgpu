@@ -10,8 +10,8 @@ use super::{
     Block, BlockContext, CachedConstant, CachedExpressions, CooperativeType, DebugInfo,
     EntryPointContext, Error, Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction,
     LocalImageType, LocalType, LocalVariable, LogicalLayout, LookupFunctionType, LookupType,
-    NumericType, Options, PhysicalLayout, PipelineOptions, ResultMember, Writer, WriterFlags,
-    BITS_PER_BYTE,
+    NumericType, Options, PhysicalLayout, PipelineOptions, ResolveGlobal, ResolvedGlobal,
+    ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
 };
 use crate::{
     arena::{Handle, HandleVec, UniqueArena},
@@ -519,25 +519,75 @@ impl Writer {
         })
     }
 
-    /// Resolve the [`BindingInfo`] for a [`crate::ResourceBinding`] from the
-    /// provided [`Writer::binding_map`].
+    /// Resolves information about a global variable.
     ///
-    /// If the specified resource is not present in the binding map this will
-    /// return an error, unless [`Writer::fake_missing_bindings`] is set.
-    pub(super) fn resolve_resource_binding(
+    /// Resolves the following:
+    /// - the [`BindingInfo`] for `global`'s [`crate::ResourceBinding`],
+    ///   from the provided [`Writer::binding_map`].
+    /// - the type of the variable, which in the case of binding arrays
+    ///   can be overridden by a size in the binding map.
+    ///
+    /// This function returns the original type of the global, even if the
+    /// actual variable is replaced with a std140-compat type.
+    ///
+    /// The [`ResolvedGlobal`] can contain [`LookupType::Local`] only when it
+    /// is one of the following:
+    /// - an external texture plane
+    /// - a binding array with overridden size
+    ///
+    /// # Errors
+    ///
+    /// When [`Writer::fake_missing_bindings`] is not set and `global` has a binding but is
+    /// not present in the binding map, returns an error.
+    pub(super) fn resolve_global(
         &self,
-        res_binding: &crate::ResourceBinding,
-    ) -> Result<BindingInfo, Error> {
-        match self.binding_map.get(res_binding) {
-            Some(target) => Ok(*target),
-            None if self.fake_missing_bindings => Ok(BindingInfo {
-                descriptor_set: res_binding.group,
-                binding: res_binding.binding,
-                binding_array_size: None,
-                external_texture: false,
-            }),
-            None => Err(Error::MissingBinding(*res_binding)),
-        }
+        ir_module: &crate::Module,
+        global: &crate::GlobalVariable,
+        mode: ResolveGlobal,
+    ) -> Result<ResolvedGlobal, Error> {
+        let binding = match global.binding {
+            None => None,
+            Some(res_binding) => match self.binding_map.get(&res_binding) {
+                Some(target) => Some(*target),
+                None if self.fake_missing_bindings => Some(BindingInfo {
+                    descriptor_set: res_binding.group,
+                    binding: res_binding.binding,
+                    binding_array_size: None,
+                    external_texture: ir_module.types[global.ty].inner.is_external_image(),
+                }),
+                None => {
+                    return Err(Error::MissingBinding(res_binding));
+                }
+            },
+        };
+
+        let (space, ty) = match mode {
+            ResolveGlobal::Variable => {
+                // Apply binding array size overrides from the binding map.
+                //
+                // Note: we should be able to substitute `binding_array<Foo, 0>`,
+                // but there is still code that tries to register the pre-substituted type,
+                // and it is failing on 0.
+                let (space, mut ty) = (global.space, LookupType::Handle(global.ty));
+
+                if let Some(bind_target) = binding {
+                    if let Some(remapped_binding_array_size) = bind_target.binding_array_size {
+                        if let crate::TypeInner::BindingArray { base, .. } =
+                            ir_module.types[global.ty].inner
+                        {
+                            ty = LookupType::Local(LocalType::BindingArray {
+                                base,
+                                size: remapped_binding_array_size,
+                            });
+                        }
+                    }
+                }
+
+                (space, ty)
+            }
+        };
+
+        Ok(ResolvedGlobal { space, ty, binding })
     }
 
     /// Emits code for any wrapper functions required by the expressions in ir_function.
@@ -1258,6 +1308,62 @@ impl Writer {
         Ok(())
     }
 
+    /// Emit code in `prelude` to set up `gv` for use in the current function,
+    /// and return `gv` with its `access_id` and `handle_id` filled in.
+    ///
+    /// `gv` is the SPIR-V global indicated by `what` for `var`.
+    fn write_function_prelude_global_load(
+        &mut self,
+        ir_module: &crate::Module,
+        var: &crate::GlobalVariable,
+        what: ResolveGlobal,
+        mut gv: GlobalVariable,
+        prelude: &mut Block,
+    ) -> Result<GlobalVariable, Error> {
+        let resolved = self.resolve_global(ir_module, var, what)?;
+        let is_binding_array = resolved.binding_array_base(&ir_module.types).is_some();
+        let ResolvedGlobal { space, ty, .. } = resolved;
+
+        if is_binding_array {
+            // An entire binding array can't be loaded. Individual elements can
+            // be loaded via indexing.
+            gv.access_id = gv.var_id;
+        } else {
+            if space == crate::AddressSpace::Handle {
+                // Handle globals are pre-emitted and should be loaded automatically.
+                let var_type_id = self.get_type_id(ty);
+                let id = self.id_gen.next();
+                prelude
+                    .body
+                    .push(Instruction::load(var_type_id, id, gv.var_id, None));
+                gv.access_id = gv.var_id;
+                gv.handle_id = id;
+            } else if global_needs_wrapper(ir_module, var, ResolveGlobal::Variable) {
+                let class = map_storage_class(var.space);
+                let pointer_type_id = match self.std140_compat_uniform_types.get(&var.ty) {
+                    Some(std140_type_info) if var.space == crate::AddressSpace::Uniform => {
+                        self.get_pointer_type_id(std140_type_info.type_id, class)
+                    }
+                    _ => self.get_handle_pointer_type_id(var.ty, class),
+                };
+                let index_id = self.get_index_constant(0);
+                let id = self.id_gen.next();
+                prelude.body.push(Instruction::access_chain(
+                    pointer_type_id,
+                    id,
+                    gv.var_id,
+                    &[index_id],
+                ));
+                gv.access_id = id;
+            } else {
+                // by default, the variable ID is accessed as is
+                gv.access_id = gv.var_id;
+            }
+        }
+
+        Ok(gv)
+    }
+
     fn write_function(
         &mut self,
         ir_function: &crate::Function,
@@ -1556,7 +1662,8 @@ impl Writer {
                 continue;
             }
 
-            let mut gv = self.global_variables[handle].clone();
+            let gv = self.global_variables[handle].clone();
+
             if let Some(ref mut iface) = interface {
                 // Have to include global variables in the interface
                 if self.physical_layout.version >= 0x10400 && iface.task_payload != Some(handle) {
@@ -1564,47 +1671,13 @@ impl Writer {
                 }
             }
 
-            match ir_module.types[var.ty].inner {
-                // Any that are binding arrays we skip as we cannot load the array, we must load the result after indexing.
-                crate::TypeInner::BindingArray { .. } => {
-                    gv.access_id = gv.var_id;
-                }
-                _ => {
-                    // Handle globals are pre-emitted and should be loaded automatically.
-                    if var.space == crate::AddressSpace::Handle {
-                        let var_type_id = self.get_handle_type_id(var.ty);
-                        let id = self.id_gen.next();
-                        prelude
-                            .body
-                            .push(Instruction::load(var_type_id, id, gv.var_id, None));
-                        gv.access_id = gv.var_id;
-                        gv.handle_id = id;
-                    } else if global_needs_wrapper(ir_module, var) {
-                        let class = map_storage_class(var.space);
-                        let pointer_type_id = match self.std140_compat_uniform_types.get(&var.ty) {
-                            Some(std140_type_info) if var.space == crate::AddressSpace::Uniform => {
-                                self.get_pointer_type_id(std140_type_info.type_id, class)
-                            }
-                            _ => self.get_handle_pointer_type_id(var.ty, class),
-                        };
-                        let index_id = self.get_index_constant(0);
-                        let id = self.id_gen.next();
-                        prelude.body.push(Instruction::access_chain(
-                            pointer_type_id,
-                            id,
-                            gv.var_id,
-                            &[index_id],
-                        ));
-                        gv.access_id = id;
-                    } else {
-                        // by default, the variable ID is accessed as is
-                        gv.access_id = gv.var_id;
-                    };
-                }
-            }
-
-            // work around borrow checking in the presence of `self.xxx()` calls
-            self.global_variables[handle] = gv;
+            self.global_variables[handle] = self.write_function_prelude_global_load(
+                ir_module,
+                var,
+                ResolveGlobal::Variable,
+                gv,
+                &mut prelude,
+            )?;
         }
 
         // Create a `BlockContext` for generating SPIR-V for the function's
@@ -3473,50 +3546,66 @@ impl Writer {
         }
     }
 
+    /// Write the SPIR-V global indicated by `what` for `global_variable`.
+    ///
+    /// If lowering of external textures is implemented as an IR pass in the future,
+    /// `what` can be removed and this collapses to just the logic for the
+    /// `ResolveGlobal::Variable` case.
     fn write_global_variable(
         &mut self,
         ir_module: &crate::Module,
         global_variable: &crate::GlobalVariable,
+        what: ResolveGlobal,
     ) -> Result<Word, Error> {
         use spirv::Decoration;
 
-        let id = self.id_gen.next();
-        let class = map_storage_class(global_variable.space);
+        let resolved = self.resolve_global(ir_module, global_variable, what)?;
+        let binding_array_base = resolved.binding_array_base(&ir_module.types);
+        let ResolvedGlobal { space, ty, binding } = resolved;
 
-        if let crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload =
-            global_variable.space
-        {
+        let (name, init, memory_decorations) = match what {
+            ResolveGlobal::Variable => (
+                global_variable.name.as_deref(),
+                global_variable.init,
+                global_variable.memory_decorations,
+            ),
+        };
+
+        let id = self.id_gen.next();
+        let class = map_storage_class(space);
+
+        // See [`resolve_global`] for when `ty_handle` may be `None`.
+        let ty_handle = match ty {
+            LookupType::Handle(handle) => Some(handle),
+            LookupType::Local(_) => None,
+        };
+
+        if let crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload = space {
             self.require_any("ray tracing pipelines", &[spirv::Capability::RayTracingKHR])?;
         }
 
         //self.check(class.required_capabilities())?;
 
-        if global_variable
-            .memory_decorations
-            .contains(crate::MemoryDecorations::COHERENT)
-        {
+        if memory_decorations.contains(crate::MemoryDecorations::COHERENT) {
             self.decorate(id, Decoration::Coherent, &[]);
         }
-        if global_variable
-            .memory_decorations
-            .contains(crate::MemoryDecorations::VOLATILE)
-        {
+        if memory_decorations.contains(crate::MemoryDecorations::VOLATILE) {
             self.decorate(id, Decoration::Volatile, &[]);
         }
 
         if self.flags.contains(WriterFlags::DEBUG) {
-            if let Some(ref name) = global_variable.name {
+            if let Some(name) = name {
                 self.debugs.push(Instruction::name(id, name));
             }
         }
 
-        let storage_access = match global_variable.space {
+        let storage_access = match space {
             crate::AddressSpace::Storage { access } => Some(access),
-            _ => match ir_module.types[global_variable.ty].inner {
-                crate::TypeInner::Image {
+            _ => match ty_handle.map(|ty| &ir_module.types[ty].inner) {
+                Some(&crate::TypeInner::Image {
                     class: crate::ImageClass::Storage { access, .. },
                     ..
-                } => Some(access),
+                }) => Some(access),
                 _ => None,
             },
         };
@@ -3529,47 +3618,23 @@ impl Writer {
             }
         }
 
-        // Note: we should be able to substitute `binding_array<Foo, 0>`,
-        // but there is still code that tries to register the pre-substituted type,
-        // and it is failing on 0.
-        let mut substitute_inner_type_lookup = None;
-        if let Some(ref res_binding) = global_variable.binding {
-            let bind_target = self.resolve_resource_binding(res_binding)?;
+        if let Some(bind_target) = binding {
             self.decorate(id, Decoration::DescriptorSet, &[bind_target.descriptor_set]);
             self.decorate(id, Decoration::Binding, &[bind_target.binding]);
-
-            if let Some(remapped_binding_array_size) = bind_target.binding_array_size {
-                if let crate::TypeInner::BindingArray { base, .. } =
-                    ir_module.types[global_variable.ty].inner
-                {
-                    let binding_array_type_id =
-                        self.get_type_id(LookupType::Local(LocalType::BindingArray {
-                            base,
-                            size: remapped_binding_array_size,
-                        }));
-                    substitute_inner_type_lookup = Some(LookupType::Local(LocalType::Pointer {
-                        base: binding_array_type_id,
-                        class,
-                    }));
-                }
-            }
         };
 
-        let init_word = global_variable
-            .init
-            .map(|constant| self.constant_ids[constant]);
-        let inner_type_id = self.get_type_id(
-            substitute_inner_type_lookup.unwrap_or(LookupType::Handle(global_variable.ty)),
-        );
+        let init_word = init.map(|constant| self.constant_ids[constant]);
+        let inner_type_id = self.get_type_id(ty);
 
         // generate the wrapping structure if needed
-        let pointer_type_id = if global_needs_wrapper(ir_module, global_variable) {
+        let pointer_type_id = if global_needs_wrapper(ir_module, global_variable, what) {
             let wrapper_type_id = self.id_gen.next();
 
             self.decorate(wrapper_type_id, Decoration::Block, &[]);
 
-            match self.std140_compat_uniform_types.get(&global_variable.ty) {
-                Some(std140_type_info) if global_variable.space == crate::AddressSpace::Uniform => {
+            let ty = ty_handle.expect("needs-wrap type should be present in the module");
+            match self.std140_compat_uniform_types.get(&ty) {
+                Some(std140_type_info) if space == crate::AddressSpace::Uniform => {
                     self.annotations.push(Instruction::member_decorate(
                         wrapper_type_id,
                         0,
@@ -3582,7 +3647,7 @@ impl Writer {
                 _ => {
                     let member = crate::StructMember {
                         name: None,
-                        ty: global_variable.ty,
+                        ty,
                         binding: None,
                         offset: 0,
                     };
@@ -3604,42 +3669,35 @@ impl Writer {
             // a runtime-sized or binding array.
             // Runtime-sized arrays were decorated when iterating through struct content.
             // Now binding arrays require Block decorating.
-            if let crate::AddressSpace::Storage { .. } = global_variable.space {
-                match ir_module.types[global_variable.ty].inner {
-                    crate::TypeInner::BindingArray { base, .. } => {
-                        let ty = &ir_module.types[base];
-                        let mut should_decorate = true;
-                        // Check if the type has a runtime array.
-                        // A normal runtime array gets validated out,
-                        // so only structs can be with runtime arrays
-                        if let crate::TypeInner::Struct { ref members, .. } = ty.inner {
-                            // only the last member in a struct can be dynamically sized
-                            if let Some(last_member) = members.last() {
-                                if let &crate::TypeInner::Array {
-                                    size: crate::ArraySize::Dynamic,
-                                    ..
-                                } = &ir_module.types[last_member.ty].inner
-                                {
-                                    should_decorate = false;
-                                }
+            if let crate::AddressSpace::Storage { .. } = space {
+                if let Some(base) = binding_array_base {
+                    let ty = &ir_module.types[base];
+                    let mut should_decorate = true;
+                    // Check if the type has a runtime array.
+                    // A normal runtime array gets validated out,
+                    // so only structs can be with runtime arrays
+                    if let crate::TypeInner::Struct { ref members, .. } = ty.inner {
+                        // only the last member in a struct can be dynamically sized
+                        if let Some(last_member) = members.last() {
+                            if let &crate::TypeInner::Array {
+                                size: crate::ArraySize::Dynamic,
+                                ..
+                            } = &ir_module.types[last_member.ty].inner
+                            {
+                                should_decorate = false;
                             }
                         }
-                        if should_decorate {
-                            let decorated_id = self.get_handle_type_id(base);
-                            self.decorate(decorated_id, Decoration::Block, &[]);
-                        }
                     }
-                    _ => (),
-                };
+                    if should_decorate {
+                        let decorated_id = self.get_handle_type_id(base);
+                        self.decorate(decorated_id, Decoration::Block, &[]);
+                    }
+                }
             }
-            if substitute_inner_type_lookup.is_some() {
-                inner_type_id
-            } else {
-                self.get_handle_pointer_type_id(global_variable.ty, class)
-            }
+            self.get_pointer_type_id(inner_type_id, class)
         };
 
-        let init_word = match (global_variable.space, self.zero_initialize_workgroup_memory) {
+        let init_word = match (space, self.zero_initialize_workgroup_memory) {
             (crate::AddressSpace::Private, _)
             | (crate::AddressSpace::WorkGroup, super::ZeroInitializeWorkgroupMemoryMode::Native) => {
                 init_word.or_else(|| Some(self.get_constant_null(inner_type_id)))
@@ -3876,7 +3934,7 @@ impl Writer {
                     GlobalVariable::dummy()
                 }
                 _ => {
-                    let id = self.write_global_variable(ir_module, var)?;
+                    let id = self.write_global_variable(ir_module, var, ResolveGlobal::Variable)?;
                     GlobalVariable::new(id)
                 }
             };

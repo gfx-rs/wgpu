@@ -779,6 +779,44 @@ impl GlobalVariable {
     }
 }
 
+/// A resolution type for [`Writer::resolve_global`].
+///
+/// Most Naga globals map to a single SPIR-V global, but an external texture maps
+/// to several. See [`ExternalTexture`].
+///
+/// If lowering of external textures is implemented as an IR pass in the future,
+/// this enum and code for handling cases other than `ResolveGlobal::Variable` can
+/// be removed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ResolveGlobal {
+    /// Resolve an ordinary global variable
+    Variable,
+}
+
+/// Returned by [`Writer::resolve_global`].
+struct ResolvedGlobal {
+    space: crate::AddressSpace,
+    ty: LookupType,
+    binding: Option<BindingInfo>,
+}
+
+impl ResolvedGlobal {
+    /// If the resolved type is a binding array, return its element type.
+    fn binding_array_base(
+        &self,
+        types: &crate::UniqueArena<crate::Type>,
+    ) -> Option<Handle<crate::Type>> {
+        match self.ty {
+            LookupType::Handle(handle) => match types[handle].inner {
+                crate::TypeInner::BindingArray { base, .. } => Some(base),
+                _ => None,
+            },
+            LookupType::Local(LocalType::BindingArray { base, .. }) => Some(base),
+            LookupType::Local(_) => None,
+        }
+    }
+}
+
 struct FunctionArgument {
     /// Actual instruction of the argument.
     instruction: Instruction,
