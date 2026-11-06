@@ -8,6 +8,7 @@ mod computepass;
 mod renderpass;
 mod resource_creation;
 mod shader;
+mod transfer;
 
 struct DeviceState {
     adapter_info: wgpu::AdapterInfo,
@@ -96,6 +97,10 @@ fn main() {
         Benchmark {
             name: "Computepass Encoding",
             func: computepass::run_bench,
+        },
+        Benchmark {
+            name: "Texture Copy Encoding",
+            func: transfer::run_bench,
         },
     ];
 
