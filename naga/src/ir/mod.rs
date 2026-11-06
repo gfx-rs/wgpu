@@ -1948,14 +1948,15 @@ pub enum Expression {
 
     /// Query the state recorded in a [`HitObject`].
     ///
-    /// The `hit_object` operand must be a pointer to a local variable of type
-    /// [`TypeInner::HitObject`], exactly like the operand of a
-    /// [`Statement::HitObject`] statement.
+    /// The `hit_object` operand must be a pointer in the [`Function`] address
+    /// space to a [`TypeInner::HitObject`]. Unlike the operand of a
+    /// [`Statement::HitObject`] statement, it can be a function argument.
     ///
     /// Like [`RayQueryGetIntersection`], this is an ordinary expression that is
     /// evaluated by the [`Emit`] statement that covers it.
     ///
     /// [`HitObject`]: TypeInner::HitObject
+    /// [`Function`]: AddressSpace::Function
     /// [`RayQueryGetIntersection`]: Expression::RayQueryGetIntersection
     /// [`Emit`]: Statement::Emit
     HitObjectQuery {
@@ -2940,14 +2941,17 @@ pub enum HitObjectFunction {
     /// instance's shader binding table record offset. For a triangle hit, the
     /// hit kind and barycentric attributes come from the ray query. Ray queries
     /// carry no hit kind or attributes for procedural (AABB) hits, so those are
-    /// recorded with zeroed attributes and an implementation-chosen hit kind.
+    /// recorded with zeroed attributes and an unspecified hit kind. As a
+    /// result, a [`HitObjectQuery::Intersection`] of such a hit can report it
+    /// as a triangle hit, with an incorrect `front_face` and barycentrics.
     ///
     /// If the ray query has no committed intersection, the hit object records
     /// a miss along the ray the query was initialized with, with a miss index
     /// of zero, exactly as a [`TraceRay`] that missed would have.
     ///
     /// If the ray query has not finished traversal, the hit object is recorded
-    /// as empty instead.
+    /// as empty instead. A [`RayQueryFunction::Terminate`] does not finish
+    /// traversal.
     ///
     /// [`TraceRay`]: HitObjectFunction::TraceRay
     RecordFromQuery {
@@ -3030,7 +3034,9 @@ pub enum HitObjectQuery {
     #[allow(rustdoc::private_intra_doc_links)]
     /// The intersection recorded in the hit object.
     ///
-    /// Returns a [`SpecialTypes::ray_intersection`] struct.
+    /// Returns a [`SpecialTypes::ray_intersection`] struct. For a miss or an
+    /// empty hit object, all members are zero, so `kind` is
+    /// [`RayQueryIntersection::None`].
     Intersection,
 }
 

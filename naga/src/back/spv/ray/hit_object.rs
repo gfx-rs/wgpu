@@ -191,6 +191,8 @@ impl Writer {
         let label_id = self.id_gen.next();
         let mut block = Block::new(label_id);
 
+        // Vulkan has no runtime requirements on the ray operands of
+        // `OpHitObjectRecordMissEXT`, so the ray is not validated.
         let super::ExtractedRayDesc {
             ray_flags_id,
             cull_mask_id: _,
@@ -681,6 +683,9 @@ impl Writer {
         let instance_custom_data_id =
             simple_getter(self, spirv::Op::HitObjectGetInstanceCustomIndexEXT);
         let instance_index_id = simple_getter(self, spirv::Op::HitObjectGetInstanceIdEXT);
+        // Ray queries report the instance's shader binding table record
+        // offset. The record index is equal to it only because naga always
+        // traces with a shader binding table offset and stride of zero.
         let sbt_record_offset_id = simple_getter(
             self,
             spirv::Op::HitObjectGetShaderBindingTableRecordIndexEXT,
