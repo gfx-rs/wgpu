@@ -368,6 +368,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 - Advertise `TEXTURE_INT64_ATOMIC` and R64Uint storage atomics on Apple8+Mac2 devices with MSL 3.1, restoring support for 64-bit texture atomic min/max on M2 Macs. By @urothis.
 - Cap `max_storage_buffer_binding_size` to `u32::MAX - 4` again. By @nuri-yoo in [#10306](https://github.com/gfx-rs/wgpu/pull/10306).
+- Count occlusion query sets in `HalCounters::query_sets`. Only timestamp query sets were counted, while destroying either kind decremented the counter. By @VitaminCpp in [#10862](https://github.com/gfx-rs/wgpu/pull/10862).
 - Fix bind group resources for the task, mesh, fragment, and compute shader stages being bound from the wrong offsets whenever a bind group contained resources visible to the task or mesh stages, which could bind the wrong buffer, texture, or sampler to a shader slot. By @teoxoy in [#10043](https://github.com/gfx-rs/wgpu/issues/10043).
 - Report an error instead of panicking when Metal declines to create a texture view, which can occur for some views of textures with `TRANSIENT_ATTACHMENT` usage. By @matthargett in [#10145](https://github.com/gfx-rs/wgpu/pull/10145).
 - BREAKING: Advertise `CompositeAlphaMode::PreMultiplied` instead of `PostMultiplied`, matching the premultiplied alpha compositing that Core Animation actually performs for a non-opaque `CAMetalLayer`. By @nicoburns in [#9922](https://github.com/gfx-rs/wgpu/pull/9922).
