@@ -123,7 +123,7 @@ impl Writer {
         if self.flags.contains(WriterFlags::PRINT_ON_TRACE_RAYS_FAIL) {
             self.write_debug_printf(
                 &mut invalid_block,
-                "Naga ignored invalid arguments to hitObjectTraceRay with flags: %u t_min: %f t_max: %f origin: %v4f dir: %v4f",
+                "Naga ignored invalid arguments to hitObjectTraceRay with flags: %u t_min: %f t_max: %f origin: %v3f dir: %v3f",
                 &[
                     ray_flags_id,
                     tmin_id,
