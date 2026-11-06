@@ -42,6 +42,7 @@ pub fn ensure_block_returns(block: &mut crate::Block) {
             | S::SubgroupBallot { .. }
             | S::SubgroupCollectiveOperation { .. }
             | S::SubgroupGather { .. }
+            | S::SubgroupBallotFindBit { .. }
             | S::ControlBarrier(_)
             | S::MemoryBarrier(_)
             | S::CooperativeStore { .. }

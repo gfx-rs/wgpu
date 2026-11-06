@@ -1622,6 +1622,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | S::SubgroupBallot { .. }
                 | S::SubgroupCollectiveOperation { .. }
                 | S::SubgroupGather { .. }
+                | S::SubgroupBallotFindBit { .. }
                 | S::RayPipelineFunction(..) => {}
                 S::Call {
                     function: ref mut callee,
