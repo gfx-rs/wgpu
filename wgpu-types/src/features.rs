@@ -1019,16 +1019,18 @@ features! {
         /// Shader code isn't parsed or interpreted in any way. It is the user's
         /// responsibility to ensure the code and reflection (if passed) are correct.
         ///
+        /// More in-depth documentation is available at [`documentation::extensions::passthrough_precompiled_shaders`].
+        ///
         /// Supported platforms
         /// - Vulkan
         /// - DX12
         /// - Metal
+        /// - GLES
         /// - WebGPU
         ///
-        /// Ideally, in the future, all platforms will be supported. For more info, see
-        /// [this comment](https://github.com/gfx-rs/wgpu/issues/3103#issuecomment-2833058367).
         ///
         #[doc = link_to_wgpu_docs!(["`Device::create_shader_module_passthrough`"]: "struct.Device.html#method.create_shader_module_passthrough")]
+        #[doc = link_to_wgpu_docs!(["`documentation::extensions::passthrough_precompiled_shaders`"]: "documentation/extensions/passthrough_precompiled_shaders/index.html")]
         #[name("wgpu-passthrough-shaders", "passthrough-shaders")]
         const PASSTHROUGH_SHADERS = 1 << 52;
 
