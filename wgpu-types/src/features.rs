@@ -586,7 +586,14 @@ features! {
         #[name("wgpu-multi-draw-indirect-count", "multi-draw-indirect-count")]
         const MULTI_DRAW_INDIRECT_COUNT = 1 << 15;
 
-        // Bit 16 is available.
+        /// Allows submitting static HDR metadata to a configured surface.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with `VK_EXT_hdr_metadata`, using a native swapchain)
+        ///
+        /// This is a native only feature.
+        #[name("wgpu-surface-hdr-metadata")]
+        const SURFACE_HDR_METADATA = 1 << 16;
 
         /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
         /// of [`SamplerBorderColor::Zero`].

@@ -484,3 +484,20 @@ impl crate::Device for Context {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod hdr_metadata_tests {
+    use super::*;
+
+    #[test]
+    fn unsupported_backend_rejects_metadata() {
+        let context = Context {
+            options: Arc::new(wgt::NoopBackendOptions::enabled()),
+        };
+        assert!(!crate::Surface::supports_hdr_metadata(&context, &context));
+        assert!(!crate::Surface::set_hdr_metadata(
+            &context,
+            &wgt::HdrMetadata::default(),
+        ));
+    }
+}
