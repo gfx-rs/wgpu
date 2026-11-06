@@ -243,7 +243,6 @@ pub(crate) fn build_acceleration_structures(
 
         let mut instance_count = 0;
 
-        
         let mut max_intersection_idx = None;
 
         let null_handle = state
@@ -273,7 +272,11 @@ pub(crate) fn build_acceleration_structures(
         // is one `None` instance. Conversion of a single `None` instance is completely invisible
         // and the small upload cost is not worth the added complexity of checking if there are
         // absolutely no instances
-        for (instance_idx, instance) in instances.into_iter().take(final_some_instance + 1).enumerate() {
+        for (instance_idx, instance) in instances
+            .into_iter()
+            .take(final_some_instance + 1)
+            .enumerate()
+        {
             instance_count += 1;
 
             match instance {
@@ -299,7 +302,8 @@ pub(crate) fn build_acceleration_structures(
 
                     let max_intersection_idx = max_intersection_idx.get_or_insert(0);
 
-                    *max_intersection_idx = (*max_intersection_idx).max(instance.intersection_index);
+                    *max_intersection_idx =
+                        (*max_intersection_idx).max(instance.intersection_index);
 
                     let blas = instance.blas;
                     let is_new_dependency = seen_dependencies.insert(blas.tracker_index());
@@ -357,9 +361,9 @@ pub(crate) fn build_acceleration_structures(
                             }
                         },
                     };
-                
+
                     let new_intersection_ty = seen_intersection_types.insert(intersection_ty);
-                
+
                     if new_intersection_ty {
                         required_intersection_types.push(intersection_ty);
                     }
