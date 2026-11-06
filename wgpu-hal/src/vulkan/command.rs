@@ -39,6 +39,19 @@ impl super::Texture {
 }
 
 impl super::CommandEncoder {
+    /// Unlike `write_timestamp`, this uses `TOP_OF_PIPE`: a `BOTTOM_OF_PIPE` stamp is not
+    /// ordered before the pass's work, so it can be latched after the work has run.
+    fn write_pass_begin_timestamp(&mut self, set: &super::QuerySet, index: u32) {
+        unsafe {
+            self.device.raw.cmd_write_timestamp(
+                self.active,
+                vk::PipelineStageFlags::TOP_OF_PIPE,
+                set.raw,
+                index,
+            );
+        }
+    }
+
     fn write_pass_end_timestamp_if_requested(&mut self) {
         if let Some((query_set, index)) = self.end_of_pass_timer_query.take() {
             unsafe {
@@ -929,9 +942,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         // Start timestamp if any (before all other commands but after debug marker)
         if let Some(timestamp_writes) = desc.timestamp_writes.as_ref() {
             if let Some(index) = timestamp_writes.beginning_of_pass_write_index {
-                unsafe {
-                    self.write_timestamp(timestamp_writes.query_set, index);
-                }
+                self.write_pass_begin_timestamp(timestamp_writes.query_set, index);
             }
             self.end_of_pass_timer_query = timestamp_writes
                 .end_of_pass_write_index
@@ -1359,9 +1370,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         if let Some(timestamp_writes) = desc.timestamp_writes.as_ref() {
             if let Some(index) = timestamp_writes.beginning_of_pass_write_index {
-                unsafe {
-                    self.write_timestamp(timestamp_writes.query_set, index);
-                }
+                self.write_pass_begin_timestamp(timestamp_writes.query_set, index);
             }
             self.end_of_pass_timer_query = timestamp_writes
                 .end_of_pass_write_index
