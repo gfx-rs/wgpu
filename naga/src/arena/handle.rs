@@ -101,11 +101,15 @@ impl<T> Handle<T> {
     }
 
     /// Convert a `usize` index into a `Handle<T>`.
-    pub(super) fn from_usize(index: usize) -> Self {
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` does not fit in `u32` or equals [`u32::MAX`].
+    pub fn from_usize(index: usize) -> Self {
         let handle_index = u32::try_from(index)
             .ok()
             .and_then(Index::new)
-            .expect("Failed to insert into arena. Handle overflows");
+            .expect("Handle index overflows");
         Handle::new(handle_index)
     }
 
@@ -117,5 +121,35 @@ impl<T> Handle<T> {
     ) -> fmt::Result {
         formatter.write_str(prefix)?;
         <usize as fmt::Display>::fmt(&self.index(), formatter)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_usize_roundtrip() {
+        let handle = Handle::<()>::from_usize(0);
+        assert_eq!(handle.index(), 0);
+
+        let handle = Handle::<()>::from_usize(42);
+        assert_eq!(handle.index(), 42);
+
+        let max_valid = (u32::MAX - 1) as usize;
+        let handle = Handle::<()>::from_usize(max_valid);
+        assert_eq!(handle.index(), max_valid);
+    }
+
+    #[test]
+    #[should_panic(expected = "Handle index overflows")]
+    fn from_usize_overflow_u32_max() {
+        let _ = Handle::<()>::from_usize(u32::MAX as usize);
+    }
+
+    #[test]
+    #[should_panic(expected = "Handle index overflows")]
+    fn from_usize_overflow_usize_max() {
+        let _ = Handle::<()>::from_usize(usize::MAX);
     }
 }
