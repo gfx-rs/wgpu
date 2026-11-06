@@ -88,6 +88,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         VERTEX_BUFFER_TAIL_INIT_MAP_WRITE_MAPPED_AT_CREATION,
         COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_ROW_PADDING_INIT,
         COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_IMAGE_PADDING_INIT,
+        MARK_UNINITIALIZED_ZEROES_TEXTURE,
         MARK_EXTERNALLY_INITIALIZED_SKIPS_LAZY_CLEAR,
         ZERO_SIZE_VERTEX_BINDING_AT_END,
         ZERO_SIZE_VERTEX_BINDING_AT_BEGINNING,
@@ -2918,6 +2919,87 @@ static MARK_EXTERNALLY_INITIALIZED_SKIPS_LAZY_CLEAR: GpuTestConfiguration =
                 ),
             }
         });
+
+/// Initializes a texture with sentinel data (0xAB)
+/// and then marks it as uninitialized and asserts zero-initialization behavior.
+#[apply(gpu_test!)]
+static MARK_UNINITIALIZED_ZEROES_TEXTURE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().skip(FailureCase::backend(Backends::BROWSER_WEBGPU)))
+    .run_async(|ctx| async move {
+        let size = Extent3d {
+            width: 16,
+            height: 16,
+            depth_or_array_layers: 2,
+        };
+        let texture = ctx.device.create_texture(&TextureDescriptor {
+            label: Some("mark_uninitialized target"),
+            size,
+            mip_level_count: 2,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Rgba8Unorm,
+            usage: TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+
+        for mip_level in 0..2 {
+            let mip_size = Extent3d {
+                width: size.width >> mip_level,
+                height: size.height >> mip_level,
+                depth_or_array_layers: size.depth_or_array_layers,
+            };
+            let bytes_per_row = mip_size.width * 4;
+            let data = vec![
+                0xAB;
+                (bytes_per_row * mip_size.height * mip_size.depth_or_array_layers)
+                    as usize
+            ];
+            ctx.queue.write_texture(
+                TexelCopyTextureInfo {
+                    texture: &texture,
+                    mip_level,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                &data,
+                TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(bytes_per_row),
+                    rows_per_image: Some(mip_size.height),
+                },
+                mip_size,
+            );
+        }
+        ctx.queue.submit([]);
+
+        let readback = ReadbackBuffers::new(&ctx.device, &texture);
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor { label: None });
+        readback.copy_from(&ctx.device, &mut encoder, &texture);
+        ctx.queue.submit([encoder.finish()]);
+        let initial_data = readback.retrieve(&ctx, TextureAspect::All).await;
+        assert!(
+            initial_data.all().iter().all(|&byte| byte == 0xAB),
+            "texture setup did not write the expected sentinel data",
+        );
+
+        texture
+            .as_core()
+            .expect("test requires the wgpu-core backend")
+            .mark_uninitialized();
+
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor { label: None });
+        readback.copy_from(&ctx.device, &mut encoder, &texture);
+        ctx.queue.submit([encoder.finish()]);
+
+        assert!(
+            readback.are_zero(&ctx).await,
+            "texture marked uninitialized was not lazily zero-initialized before being read",
+        );
+    });
 
 #[cfg(any(
     target_os = "windows",
