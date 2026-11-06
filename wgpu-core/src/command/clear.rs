@@ -337,7 +337,7 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
     snatch_guard: &SnatchGuard<'_>,
     instance_flags: wgt::InstanceFlags,
 ) -> Result<(), ClearError> {
-    let dst_raw = dst_texture.try_inner(snatch_guard)?.raw();
+    let dst_raw = dst_texture.try_raw_with_invalid(snatch_guard)?;
 
     // Issue the right barrier.
     let clear_usage = match *dst_texture.clear_mode.read() {

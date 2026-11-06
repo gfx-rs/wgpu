@@ -59,6 +59,178 @@ fn destroyed_texture() {
     queue.submit([encoder.finish()]);
 }
 
+#[test]
+fn child_texture_descriptor_validation() {
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let parent = device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: 4,
+            height: 4,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    let core_parent = parent.as_core().unwrap();
+
+    let error = core_parent.create_child_texture(&wgpu::wgc::resource::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: 4,
+            height: 4,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: Vec::new(),
+    });
+    assert!(matches!(
+        error,
+        Err(
+            wgpu::wgc::resource::CreateChildTextureError::TextureDescriptorMustBeSubset {
+                field: "Usage",
+                ..
+            }
+        )
+    ));
+
+    let error = core_parent.create_child_texture(&wgpu::wgc::resource::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: 8,
+            height: 4,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::COPY_SRC,
+        view_formats: Vec::new(),
+    });
+    assert!(matches!(
+        error,
+        Err(
+            wgpu::wgc::resource::CreateChildTextureError::TextureDescriptorMustBeEqual {
+                field: "Size",
+                ..
+            }
+        )
+    ));
+
+    let child = wgpu::Texture::from_core(
+        core_parent
+            .create_child_texture(&wgpu::wgc::resource::TextureDescriptor {
+                label: Some("child".into()),
+                size: wgpu::Extent3d {
+                    width: 4,
+                    height: 4,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::COPY_SRC,
+                view_formats: Vec::new(),
+            })
+            .unwrap(),
+    );
+    assert_eq!(child.usage(), wgpu::TextureUsages::COPY_SRC);
+
+    let another_child = wgpu::Texture::from_core(
+        core_parent
+            .create_child_texture(&wgpu::wgc::resource::TextureDescriptor {
+                label: Some("another_child".into()),
+                size: wgpu::Extent3d {
+                    width: 4,
+                    height: 4,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::COPY_SRC,
+                view_formats: Vec::new(),
+            })
+            .unwrap(),
+    );
+
+    child.destroy();
+    fail(
+        &device,
+        || child.create_view(&wgpu::TextureViewDescriptor::default()),
+        Some("Texture with 'child' label has been destroyed"),
+    );
+    valid(&device, || {
+        let _parent_view = parent.create_view(&wgpu::TextureViewDescriptor::default());
+        let _another_child_view =
+            another_child.create_view(&wgpu::TextureViewDescriptor::default());
+    });
+    another_child.destroy();
+}
+
+#[test]
+fn child_texture_usage_validation() {
+    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let size = wgpu::Extent3d {
+        width: 4,
+        height: 4,
+        depth_or_array_layers: 1,
+    };
+    let parent = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("parent"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    let child = wgpu::Texture::from_core(
+        parent
+            .as_core()
+            .unwrap()
+            .create_child_texture(&wgpu::wgc::resource::TextureDescriptor {
+                label: Some("child".into()),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::COPY_SRC,
+                view_formats: Vec::new(),
+            })
+            .unwrap(),
+    );
+    let data_layout = wgpu::TexelCopyBufferLayout {
+        offset: 0,
+        bytes_per_row: Some(4 * 4),
+        rows_per_image: Some(4),
+    };
+
+    fail(
+        &device,
+        || {
+            queue.write_texture(child.as_image_copy(), &[0; 4 * 4 * 4], data_layout, size);
+        },
+        Some("required usage flags TextureUsages(COPY_DST)"),
+    );
+    valid(&device, || {
+        queue.write_texture(parent.as_image_copy(), &[0; 4 * 4 * 4], data_layout, size);
+    });
+}
+
 /// Ensures that creating a texture view from a specific plane of a planar
 /// texture works as expected.
 #[test]
