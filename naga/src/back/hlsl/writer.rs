@@ -1823,31 +1823,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         writeln!(self.out, "{{")?;
 
         if need_workgroup_variables_initialization && !nested {
-            let back::FunctionType::EntryPoint(index) = func_ctx.ty else {
-                unreachable!();
-            };
-            let workgroup_size = module.entry_points[index as usize]
-                .workgroup_size
-                .iter()
-                .try_fold(1u32, |total, &size| total.checked_mul(size))
-                .ok_or_else(|| Error::Custom("Workgroup invocation count overflow".into()))?;
-            for (handle, var) in module.global_variables.iter() {
-                if !func_ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
-                {
-                    let name = self.names[&NameKey::GlobalVariable(handle)].clone();
-                    self.write_compute_workgroup_init(
-                        module,
-                        proc::TypeResolution::Handle(var.ty),
-                        (&name, false),
-                        &mut Vec::new(),
-                        (
-                            local_invocation_index_name.as_ref().unwrap(),
-                            workgroup_size,
-                        ),
-                    )?;
-                }
-            }
-            self.write_control_barrier(crate::Barrier::WORK_GROUP, back::Level(1))?;
+            // need_workgroup_variables_initialization forces this to be written
+            // if the user doesn't specify it (so this must be Some())
+            self.write_workgroup_variables_initialization(
+                func_ctx,
+                module,
+                local_invocation_index_name.as_ref().unwrap(),
+            )?;
         }
 
         if let back::FunctionType::EntryPoint(index) = func_ctx.ty {
@@ -2127,27 +2109,41 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         Ok(())
     }
 
+    /// Writes the zero initialization of the workgroup variables that the entry point uses,
+    /// followed by a workgroup barrier.
     pub(super) fn write_workgroup_variables_initialization(
         &mut self,
         func_ctx: &back::FunctionCtx,
         module: &Module,
-        stage: ShaderStage,
+        local_invocation_index: &str,
     ) -> BackendResult {
-        let vars = module.global_variables.iter().filter(|&(handle, var)| {
-            // Read-only in mesh shaders
-            let task_needs_zero =
-                (var.space == crate::AddressSpace::TaskPayload) && stage == ShaderStage::Task;
-            !func_ctx.info[handle].is_empty()
+        let back::FunctionType::EntryPoint(ep_index) = func_ctx.ty else {
+            unreachable!();
+        };
+        let entry_point = &module.entry_points[ep_index as usize];
+        let workgroup_size = entry_point
+            .workgroup_size
+            .iter()
+            .try_fold(1u32, |total, &size| total.checked_mul(size))
+            .ok_or_else(|| Error::Custom("Workgroup invocation count overflow".into()))?;
+        for (handle, var) in module.global_variables.iter() {
+            // The task payload is read-only in mesh shaders.
+            let task_needs_zero = var.space == crate::AddressSpace::TaskPayload
+                && entry_point.stage == ShaderStage::Task;
+            if !func_ctx.info[handle].is_empty()
                 && (var.space == crate::AddressSpace::WorkGroup || task_needs_zero)
-        });
-
-        for (handle, var) in vars {
-            let name = &self.names[&NameKey::GlobalVariable(handle)];
-            write!(self.out, "{}{} = ", back::Level(2), name)?;
-            self.write_default_init(module, var.ty)?;
-            writeln!(self.out, ";")?;
+            {
+                let name = self.names[&NameKey::GlobalVariable(handle)].clone();
+                self.write_compute_workgroup_init(
+                    module,
+                    proc::TypeResolution::Handle(var.ty),
+                    (&name, false),
+                    &mut Vec::new(),
+                    (local_invocation_index, workgroup_size),
+                )?;
+            }
         }
-        Ok(())
+        self.write_control_barrier(crate::Barrier::WORK_GROUP, back::Level(1))
     }
 
     /// Helper method used to write switches
