@@ -51,6 +51,7 @@ mod naga_capabilities;
 mod occlusion_query;
 mod oob_indexing;
 mod oom;
+mod pass_coalescing;
 mod pass_ops;
 mod passthrough;
 mod per_vertex;
@@ -118,6 +119,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     dual_source_blending::all_tests(&mut tests);
     dx12_device_from_raw::all_tests(&mut tests);
     encoder::all_tests(&mut tests);
+    pass_coalescing::all_tests(&mut tests);
     external_texture::all_tests(&mut tests);
     float32_filterable::all_tests(&mut tests);
     image_atomics::all_tests(&mut tests);

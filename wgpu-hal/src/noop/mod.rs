@@ -170,6 +170,7 @@ pub fn adapter_info() -> wgt::AdapterInfo {
 /// of the noop backend without actually initializing wgpu.
 pub const CAPABILITIES: crate::Capabilities = {
     crate::Capabilities {
+        pass_barriers_are_noop: true,
         limits: wgt::Limits::unlimited(),
         alignments: crate::Alignments {
             // All maximally permissive
