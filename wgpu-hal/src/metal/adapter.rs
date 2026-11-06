@@ -29,6 +29,21 @@ fn device_class_responds_to(device: &ProtocolObject<dyn MTLDevice>, sel: Sel) ->
     AnyObject::class(device.as_ref()).responds_to(sel)
 }
 
+#[cfg(any(target_os = "watchos", test))]
+fn watchos_msl_version(major: isize) -> MTLLanguageVersion {
+    match major {
+        26.. => MTLLanguageVersion::Version4_0,
+        11.. => MTLLanguageVersion::Version3_2,
+        10 => MTLLanguageVersion::Version3_1,
+        9 => MTLLanguageVersion::Version3_0,
+        8 => MTLLanguageVersion::Version2_4,
+        7 => MTLLanguageVersion::Version2_3,
+        6 => MTLLanguageVersion::Version2_2,
+        5 => MTLLanguageVersion::Version2_1,
+        _ => MTLLanguageVersion::Version1_0,
+    }
+}
+
 /// Maximum number of command buffers for `MTLCommandQueue`s that we create.
 ///
 /// If a [new command buffer] is requested when Metal has run out of command
@@ -769,6 +784,9 @@ impl super::CapabilitiesQuery {
         let argument_buffers = available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0)
             .then(|| device.argumentBuffersSupport());
 
+        #[cfg(target_os = "watchos")]
+        let msl_version = watchos_msl_version(version.majorVersion);
+        #[cfg(not(target_os = "watchos"))]
         let msl_version = if available!(macos = 26.0, ios = 26.0, tvos = 26.0, visionos = 26.0) {
             MTLLanguageVersion::Version4_0
         } else if available!(macos = 15.0, ios = 18.0, tvos = 18.0, visionos = 2.0) {
@@ -818,9 +836,9 @@ impl super::CapabilitiesQuery {
         // only means they keep taking the per-draw indirect loop. The probe
         // chooses a lowering, never a capability.
         //
-        // Apple's paravirtual device is excluded up front because its driver
-        // aborts the process instead of failing the probe.
+        // Paravirtual devices and 32-bit watchOS abort instead of failing the probe.
         let indirect_command_buffers_rendering = !is_virtual
+            && !cfg!(all(target_os = "watchos", target_pointer_width = "32"))
             && available!(
                 macos = 10.15,
                 ios = 13.0,
@@ -1961,6 +1979,29 @@ impl super::OsType {
             Self::Tvos
         } else {
             Self::Ios
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{watchos_msl_version, MTLLanguageVersion};
+
+    #[test]
+    fn watchos_metal_language_versions() {
+        for (release, expected) in [
+            (5, MTLLanguageVersion::Version2_1),
+            (6, MTLLanguageVersion::Version2_2),
+            (7, MTLLanguageVersion::Version2_3),
+            (8, MTLLanguageVersion::Version2_4),
+            (9, MTLLanguageVersion::Version3_0),
+            (10, MTLLanguageVersion::Version3_1),
+            (11, MTLLanguageVersion::Version3_2),
+            (25, MTLLanguageVersion::Version3_2),
+            (26, MTLLanguageVersion::Version4_0),
+            (27, MTLLanguageVersion::Version4_0),
+        ] {
+            assert_eq!(watchos_msl_version(release), expected, "watchOS {release}");
         }
     }
 }
