@@ -79,7 +79,7 @@ void compute(uint3 global_id : SV_DispatchThreadID, uint3 local_id : SV_GroupThr
 {
     [loop]
     for (uint zero_flat_index = local_index; zero_flat_index < 1u; zero_flat_index += 1u) {
-        uint zero_index = (zero_flat_index / 1u) % 1u;
+        uint zero_index = zero_flat_index;
         output[zero_index] = (uint)0;
     }
     GroupMemoryBarrierWithGroupSync();

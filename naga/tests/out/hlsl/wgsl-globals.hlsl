@@ -114,7 +114,7 @@ void main(uint local_invocation_index : SV_GroupIndex)
 {
     [loop]
     for (uint zero_flat_index = local_invocation_index; zero_flat_index < 10u; zero_flat_index += 1u) {
-        uint zero_index = (zero_flat_index / 1u) % 10u;
+        uint zero_index = zero_flat_index;
         wg[zero_index] = (float)0;
     }
     if (local_invocation_index == 0) {

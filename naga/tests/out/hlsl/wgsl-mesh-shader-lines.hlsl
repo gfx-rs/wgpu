@@ -60,12 +60,12 @@ void _ms_main(in TaskPayload taskPayload, uint local_invocation_index_1 : SV_Gro
 void ms_main(uint local_invocation_index_1 : SV_GroupIndex, out indices uint2 lineIndices[1], out vertices MeshVertexOutput_ms_main vertices_[2], out primitives MeshPrimitiveOutput_ms_main primitives_[1], in payload TaskPayload taskPayload) {
     [loop]
     for (uint zero_flat_index = local_invocation_index_1; zero_flat_index < 2u; zero_flat_index += 64u) {
-        uint zero_index = (zero_flat_index / 1u) % 2u;
+        uint zero_index = zero_flat_index;
         mesh_output.vertices_[zero_index].position = (float4)0;
     }
     [loop]
     for (uint zero_flat_index_1 = local_invocation_index_1; zero_flat_index_1 < 1u; zero_flat_index_1 += 64u) {
-        uint zero_index_1 = (zero_flat_index_1 / 1u) % 1u;
+        uint zero_index_1 = zero_flat_index_1;
         mesh_output.primitives_[zero_index_1].indices_ = (uint2)0;
     }
     if (local_invocation_index_1 == 0) {

@@ -77,46 +77,46 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
 {
     [loop]
     for (uint zero_flat_index_1 = zero_flat_index; zero_flat_index_1 < 45u; zero_flat_index_1 += 16u) {
-        uint zero_index = (zero_flat_index_1 / 15u) % 3u;
+        uint zero_index = zero_flat_index_1 / 15u;
         uint zero_index_1 = (zero_flat_index_1 / 3u) % 5u;
-        uint zero_index_2 = (zero_flat_index_1 / 1u) % 3u;
+        uint zero_index_2 = zero_flat_index_1 % 3u;
         data[zero_index].values[zero_index_1][zero_index_2] = (float4)0;
     }
     [loop]
     for (uint zero_flat_index_2 = zero_flat_index; zero_flat_index_2 < 57u; zero_flat_index_2 += 16u) {
-        uint zero_index = (zero_flat_index_2 / 19u) % 3u;
-        uint zero_index_3 = (zero_flat_index_2 / 1u) % 19u;
+        uint zero_index = zero_flat_index_2 / 19u;
+        uint zero_index_3 = zero_flat_index_2 % 19u;
         data[zero_index].atoms[zero_index_3] = (uint)0;
     }
     [loop]
     for (uint zero_flat_index_3 = zero_flat_index; zero_flat_index_3 < 3u; zero_flat_index_3 += 16u) {
-        uint zero_index = (zero_flat_index_3 / 1u) % 3u;
+        uint zero_index = zero_flat_index_3;
         data[zero_index].matrix__0 = (float2)0;
     }
     [loop]
     for (uint zero_flat_index_4 = zero_flat_index; zero_flat_index_4 < 3u; zero_flat_index_4 += 16u) {
-        uint zero_index = (zero_flat_index_4 / 1u) % 3u;
+        uint zero_index = zero_flat_index_4;
         data[zero_index].matrix__1 = (float2)0;
     }
     [loop]
     for (uint zero_flat_index_5 = zero_flat_index; zero_flat_index_5 < 3u; zero_flat_index_5 += 16u) {
-        uint zero_index = (zero_flat_index_5 / 1u) % 3u;
+        uint zero_index = zero_flat_index_5;
         data[zero_index].matrix__2 = (float2)0;
     }
     [loop]
     for (uint zero_flat_index_6 = zero_flat_index; zero_flat_index_6 < 9u; zero_flat_index_6 += 16u) {
-        uint zero_index = (zero_flat_index_6 / 3u) % 3u;
-        uint zero_index_4 = (zero_flat_index_6 / 1u) % 3u;
+        uint zero_index = zero_flat_index_6 / 3u;
+        uint zero_index_4 = zero_flat_index_6 % 3u;
         data[zero_index].matrices[zero_index_4] = (__mat2x2_f32)0;
     }
     [loop]
     for (uint zero_flat_index_7 = zero_flat_index; zero_flat_index_7 < 37u; zero_flat_index_7 += 16u) {
-        uint zero_index_5 = (zero_flat_index_7 / 1u) % 37u;
+        uint zero_index_5 = zero_flat_index_7;
         dynamic[zero_index_5] = (uint)0;
     }
     [loop]
     for (uint zero_flat_index_8 = zero_flat_index; zero_flat_index_8 < 37u; zero_flat_index_8 += 16u) {
-        uint zero_index_6 = (zero_flat_index_8 / 1u) % 37u;
+        uint zero_index_6 = zero_flat_index_8;
         floats[zero_index_6] = (float)0;
     }
     if (zero_flat_index == 0) {

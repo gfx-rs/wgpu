@@ -21,7 +21,7 @@ void test_atomic_workgroup_uniform_load(uint3 workgroup_id : SV_GroupID, uint3 l
     }
     [loop]
     for (uint zero_flat_index = local_invocation_index; zero_flat_index < 2u; zero_flat_index += 64u) {
-        uint zero_index = (zero_flat_index / 1u) % 2u;
+        uint zero_index = zero_flat_index;
         wg_struct.atomic_arr[zero_index] = (int)0;
     }
     GroupMemoryBarrierWithGroupSync();

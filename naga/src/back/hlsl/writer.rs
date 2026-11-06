@@ -2092,12 +2092,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     writeln!(self.out, "{level}[loop]")?;
                     writeln!(self.out, "{level}for (uint {index} = {local_index}; {index} < {count}u; {index} += {workgroup_size}u) {{")?;
                     let mut stride = count;
-                    for &(ref dimension, size) in dimensions.iter() {
+                    for (i, &(ref dimension, size)) in dimensions.iter().enumerate() {
                         stride /= size;
-                        writeln!(
-                            self.out,
-                            "{body}uint {dimension} = ({index} / {stride}u) % {size}u;"
-                        )?;
+                        let mut value = index.clone();
+                        if stride != 1 {
+                            value = format!("{value} / {stride}u");
+                        }
+                        // The loop bound keeps the outermost index in range.
+                        if i != 0 {
+                            if stride != 1 {
+                                value = format!("({value})");
+                            }
+                            value = format!("{value} % {size}u");
+                        }
+                        writeln!(self.out, "{body}uint {dimension} = {value};")?;
                     }
                 }
                 write!(self.out, "{body}{access} = (")?;

@@ -175,27 +175,27 @@ void ms_main(uint local_invocation_index_2 : SV_GroupIndex, out indices uint3 tr
     }
     [loop]
     for (uint zero_flat_index = local_invocation_index_2; zero_flat_index < 3u; zero_flat_index += 1u) {
-        uint zero_index = (zero_flat_index / 1u) % 3u;
+        uint zero_index = zero_flat_index;
         mesh_output.vertices_[zero_index].position = (float4)0;
     }
     [loop]
     for (uint zero_flat_index_1 = local_invocation_index_2; zero_flat_index_1 < 3u; zero_flat_index_1 += 1u) {
-        uint zero_index = (zero_flat_index_1 / 1u) % 3u;
+        uint zero_index = zero_flat_index_1;
         mesh_output.vertices_[zero_index].color = (float4)0;
     }
     [loop]
     for (uint zero_flat_index_2 = local_invocation_index_2; zero_flat_index_2 < 1u; zero_flat_index_2 += 1u) {
-        uint zero_index_1 = (zero_flat_index_2 / 1u) % 1u;
+        uint zero_index_1 = zero_flat_index_2;
         mesh_output.primitives_[zero_index_1].indices_ = (uint3)0;
     }
     [loop]
     for (uint zero_flat_index_3 = local_invocation_index_2; zero_flat_index_3 < 1u; zero_flat_index_3 += 1u) {
-        uint zero_index_1 = (zero_flat_index_3 / 1u) % 1u;
+        uint zero_index_1 = zero_flat_index_3;
         mesh_output.primitives_[zero_index_1].cull = (bool)0;
     }
     [loop]
     for (uint zero_flat_index_4 = local_invocation_index_2; zero_flat_index_4 < 1u; zero_flat_index_4 += 1u) {
-        uint zero_index_1 = (zero_flat_index_4 / 1u) % 1u;
+        uint zero_index_1 = zero_flat_index_4;
         mesh_output.primitives_[zero_index_1].colorMask = (float4)0;
     }
     if (local_invocation_index_2 == 0) {
@@ -243,27 +243,27 @@ void ms_no_ts(uint local_invocation_index_3 : SV_GroupIndex, out indices uint3 t
     }
     [loop]
     for (uint zero_flat_index_5 = local_invocation_index_3; zero_flat_index_5 < 3u; zero_flat_index_5 += 1u) {
-        uint zero_index_2 = (zero_flat_index_5 / 1u) % 3u;
+        uint zero_index_2 = zero_flat_index_5;
         mesh_output.vertices_[zero_index_2].position = (float4)0;
     }
     [loop]
     for (uint zero_flat_index_6 = local_invocation_index_3; zero_flat_index_6 < 3u; zero_flat_index_6 += 1u) {
-        uint zero_index_2 = (zero_flat_index_6 / 1u) % 3u;
+        uint zero_index_2 = zero_flat_index_6;
         mesh_output.vertices_[zero_index_2].color = (float4)0;
     }
     [loop]
     for (uint zero_flat_index_7 = local_invocation_index_3; zero_flat_index_7 < 1u; zero_flat_index_7 += 1u) {
-        uint zero_index_3 = (zero_flat_index_7 / 1u) % 1u;
+        uint zero_index_3 = zero_flat_index_7;
         mesh_output.primitives_[zero_index_3].indices_ = (uint3)0;
     }
     [loop]
     for (uint zero_flat_index_8 = local_invocation_index_3; zero_flat_index_8 < 1u; zero_flat_index_8 += 1u) {
-        uint zero_index_3 = (zero_flat_index_8 / 1u) % 1u;
+        uint zero_index_3 = zero_flat_index_8;
         mesh_output.primitives_[zero_index_3].cull = (bool)0;
     }
     [loop]
     for (uint zero_flat_index_9 = local_invocation_index_3; zero_flat_index_9 < 1u; zero_flat_index_9 += 1u) {
-        uint zero_index_3 = (zero_flat_index_9 / 1u) % 1u;
+        uint zero_index_3 = zero_flat_index_9;
         mesh_output.primitives_[zero_index_3].colorMask = (float4)0;
     }
     if (local_invocation_index_3 == 0) {
@@ -315,27 +315,27 @@ void ms_divergent(uint3 thread_id_1 : SV_GroupThreadID, uint local_invocation_in
     }
     [loop]
     for (uint zero_flat_index_10 = local_invocation_index_4; zero_flat_index_10 < 3u; zero_flat_index_10 += 2u) {
-        uint zero_index_4 = (zero_flat_index_10 / 1u) % 3u;
+        uint zero_index_4 = zero_flat_index_10;
         mesh_output.vertices_[zero_index_4].position = (float4)0;
     }
     [loop]
     for (uint zero_flat_index_11 = local_invocation_index_4; zero_flat_index_11 < 3u; zero_flat_index_11 += 2u) {
-        uint zero_index_4 = (zero_flat_index_11 / 1u) % 3u;
+        uint zero_index_4 = zero_flat_index_11;
         mesh_output.vertices_[zero_index_4].color = (float4)0;
     }
     [loop]
     for (uint zero_flat_index_12 = local_invocation_index_4; zero_flat_index_12 < 1u; zero_flat_index_12 += 2u) {
-        uint zero_index_5 = (zero_flat_index_12 / 1u) % 1u;
+        uint zero_index_5 = zero_flat_index_12;
         mesh_output.primitives_[zero_index_5].indices_ = (uint3)0;
     }
     [loop]
     for (uint zero_flat_index_13 = local_invocation_index_4; zero_flat_index_13 < 1u; zero_flat_index_13 += 2u) {
-        uint zero_index_5 = (zero_flat_index_13 / 1u) % 1u;
+        uint zero_index_5 = zero_flat_index_13;
         mesh_output.primitives_[zero_index_5].cull = (bool)0;
     }
     [loop]
     for (uint zero_flat_index_14 = local_invocation_index_4; zero_flat_index_14 < 1u; zero_flat_index_14 += 2u) {
-        uint zero_index_5 = (zero_flat_index_14 / 1u) % 1u;
+        uint zero_index_5 = zero_flat_index_14;
         mesh_output.primitives_[zero_index_5].colorMask = (float4)0;
     }
     if (local_invocation_index_4 == 0) {

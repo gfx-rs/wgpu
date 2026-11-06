@@ -7,7 +7,7 @@ void test_workgroupUniformLoad(uint3 workgroup_id : SV_GroupID, uint local_invoc
 {
     [loop]
     for (uint zero_flat_index = local_invocation_index; zero_flat_index < 128u; zero_flat_index += 4u) {
-        uint zero_index = (zero_flat_index / 1u) % 128u;
+        uint zero_index = zero_flat_index;
         arr_i32_[zero_index] = (int)0;
     }
     GroupMemoryBarrierWithGroupSync();

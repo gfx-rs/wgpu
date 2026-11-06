@@ -28,7 +28,7 @@ void cs_main(uint3 id : SV_GroupThreadID, uint local_invocation_index : SV_Group
     }
     [loop]
     for (uint zero_flat_index = local_invocation_index; zero_flat_index < 2u; zero_flat_index += 2u) {
-        uint zero_index = (zero_flat_index / 1u) % 2u;
+        uint zero_index = zero_flat_index;
         workgroup_atomic_arr[zero_index] = (int)0;
     }
     if (local_invocation_index == 0) {
@@ -36,7 +36,7 @@ void cs_main(uint3 id : SV_GroupThreadID, uint local_invocation_index : SV_Group
     }
     [loop]
     for (uint zero_flat_index_1 = local_invocation_index; zero_flat_index_1 < 2u; zero_flat_index_1 += 2u) {
-        uint zero_index_1 = (zero_flat_index_1 / 1u) % 2u;
+        uint zero_index_1 = zero_flat_index_1;
         workgroup_struct.atomic_arr[zero_index_1] = (int)0;
     }
     GroupMemoryBarrierWithGroupSync();
