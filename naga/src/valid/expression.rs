@@ -560,7 +560,8 @@ impl super::Validator {
                     Ti::Pointer { base, .. }
                         if self.types[base.index()]
                             .flags
-                            .contains(TypeFlags::SIZED | TypeFlags::DATA) => {}
+                            .contains(TypeFlags::SIZED | TypeFlags::DATA)
+                            && !matches!(module.types[base].inner, Ti::HitObject) => {}
                     Ti::ValuePointer { .. } => {}
                     ref other => {
                         log::debug!("Loading {other:?}");

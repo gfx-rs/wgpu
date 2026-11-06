@@ -6701,9 +6701,10 @@ fn check_ray_tracing_invocation_reorder_zero_value() {
     }
 }
 
-/// Hit objects cannot be stored to, even though they are declared with `var`.
+/// Hit objects cannot be loaded, even though they are declared with `var`. This
+/// also prevents copying one hit object to another.
 #[test]
-fn check_ray_tracing_invocation_reorder_store() {
+fn check_ray_tracing_invocation_reorder_load() {
     check_validation! {
         r#"
             enable wgpu_ray_tracing_pipeline;
@@ -6715,12 +6716,118 @@ fn check_ray_tracing_invocation_reorder_store() {
                 var ho_2: hit_object;
                 ho = ho_2;
             }
+        "#,
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            @ray_generation
+            fn main() {
+                var ho: hit_object;
+                _ = ho;
+            }
         "#:
         Err(naga::valid::ValidationError::EntryPoint {
             stage: naga::ShaderStage::RayGeneration,
             source: naga::valid::EntryPointError::Function(
-                naga::valid::FunctionError::HitObjectStore(_)
+                naga::valid::FunctionError::Expression {
+                    source: naga::valid::ExpressionError::InvalidPointerType(_),
+                    ..
+                },
             ),
+            ..
+        }),
+        Capabilities::RAY_TRACING_PIPELINE | Capabilities::RAY_TRACING_INVOCATION_REORDER
+    }
+}
+
+/// Functions cannot return hit objects.
+#[test]
+fn check_ray_tracing_invocation_reorder_return() {
+    check_validation! {
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            fn make() -> hit_object {
+                var ho: hit_object;
+                return ho;
+            }
+
+            @ray_generation
+            fn main() {
+                _ = make();
+            }
+        "#:
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::NonConstructibleReturnType,
+            ..
+        }),
+        Capabilities::RAY_TRACING_PIPELINE | Capabilities::RAY_TRACING_INVOCATION_REORDER
+    }
+}
+
+/// Hit objects cannot be array elements or struct members, in any address
+/// space or stage.
+#[test]
+fn check_ray_tracing_invocation_reorder_composite() {
+    check_validation! {
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            @ray_generation
+            fn main() {
+                var a: array<hit_object, 2>;
+                _ = hitObjectIsHit(&a[0]);
+            }
+        "#,
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            struct S {
+                ho: hit_object,
+            }
+
+            @ray_generation
+            fn main() {
+                var s: S;
+            }
+        "#,
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            var<private> a: array<hit_object, 2>;
+
+            @ray_generation
+            fn main() {}
+        "#,
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            struct S {
+                ho: hit_object,
+            }
+
+            var<workgroup> s: S;
+
+            @ray_generation
+            fn main() {}
+        "#,
+        r#"
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            @compute @workgroup_size(1)
+            fn main() {
+                let a = array<hit_object, 1>();
+            }
+        "#:
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::InvalidArrayBaseType(_)
+                | naga::valid::TypeError::InvalidData(_),
             ..
         }),
         Capabilities::RAY_TRACING_PIPELINE | Capabilities::RAY_TRACING_INVOCATION_REORDER

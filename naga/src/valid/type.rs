@@ -591,6 +591,7 @@ impl super::Validator {
                 if !base_info
                     .flags
                     .contains(TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::CREATION_RESOLVED)
+                    || matches!(gctx.types[base].inner, Ti::HitObject)
                 {
                     return Err(TypeError::InvalidArrayBaseType(base));
                 }
@@ -694,6 +695,7 @@ impl super::Validator {
                     if !base_info
                         .flags
                         .contains(TypeFlags::DATA | TypeFlags::CREATION_RESOLVED)
+                        || matches!(gctx.types[member.ty].inner, Ti::HitObject)
                     {
                         return Err(TypeError::InvalidData(member.ty));
                     }

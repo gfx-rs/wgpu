@@ -2100,6 +2100,7 @@ impl super::Validator {
             if !self.types[result.ty.index()]
                 .flags
                 .contains(super::TypeFlags::CONSTRUCTIBLE)
+                || matches!(module.types[result.ty].inner, crate::TypeInner::HitObject)
             {
                 return Err(FunctionError::NonConstructibleReturnType
                     .with_span_handle(result.ty, &module.types));
