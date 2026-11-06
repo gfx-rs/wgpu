@@ -15,6 +15,8 @@ use wgpu_types::CreateShaderModuleDescriptorPassthrough;
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.push(METAL_PASSTHROUGH_SHADER);
+    tests.push(METAL_PASSTHROUGH_SHARED_MEMORY);
+    tests.push(METALLIB_PASSTHROUGH_SHARED_MEMORY);
     tests.push(METALLIB_PASSTHROUGH_SHADER);
     tests.push(HLSL_PASSTHROUGH_SHADER);
     tests.push(DXIL_PASSTHROUGH_SHADER);
@@ -74,6 +76,120 @@ fn metal_source() -> Cow<'static, str> {
     Cow::Borrowed(include_str!("shader.metal"))
 }
 
+#[apply(gpu_test!)]
+static METAL_PASSTHROUGH_SHARED_MEMORY: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(Features::PASSTHROUGH_SHADERS)
+            .skip(FailureCase::backend(!Backends::METAL)),
+    )
+    .run_async(|ctx| shared_memory_test(ctx, None));
+
+#[apply(gpu_test!)]
+static METALLIB_PASSTHROUGH_SHARED_MEMORY: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(Features::PASSTHROUGH_SHADERS)
+            .skip(FailureCase::backend(!Backends::METAL)),
+    )
+    .run_async(|ctx| {
+        let source = metallib_source(test_hash(&ctx, "shared_memory"), "shared_memory");
+        shared_memory_test(ctx, Some(source))
+    });
+
+async fn shared_memory_test(ctx: TestingContext, metallib: Option<Cow<'static, [u8]>>) {
+    let module = unsafe {
+        ctx.device
+            .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
+                entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
+                    name: Cow::Borrowed("shared_memory"),
+                    workgroup_size: (64, 1, 1),
+                    workgroup_memory_sizes: Cow::Borrowed(&[256, 256]),
+                }]),
+                msl: metallib
+                    .is_none()
+                    .then_some(Cow::Borrowed(include_str!("shared_memory.metal"))),
+                metallib,
+                ..Default::default()
+            })
+    };
+    let bind_group_layout = ctx
+        .device
+        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+    let layout = ctx
+        .device
+        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[Some(&bind_group_layout)],
+            immediate_size: 0,
+        });
+    let pipeline = ctx
+        .device
+        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&layout),
+            module: &module,
+            entry_point: Some("shared_memory"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
+    let output = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 256,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+    let readback = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 256,
+        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let bindings = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: output.as_entire_binding(),
+        }],
+    });
+    let mut encoder = ctx.device.create_command_encoder(&Default::default());
+    {
+        let mut pass = encoder.begin_compute_pass(&Default::default());
+        pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bindings, &[]);
+        pass.dispatch_workgroups(1, 1, 1);
+    }
+    encoder.copy_buffer_to_buffer(&output, 0, &readback, 0, 256);
+    ctx.queue.submit([encoder.finish()]);
+    readback
+        .slice(..)
+        .map_async(wgpu::MapMode::Read, Result::unwrap);
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
+    let mapped = readback.slice(..).get_mapped_range().unwrap();
+    let values: &[u32] = bytemuck::cast_slice(&mapped);
+    assert_eq!(
+        values,
+        &(0..64).rev().map(|lane| lane * 3).collect::<Vec<u32>>()
+    );
+}
+
 fn metal_test(ctx: TestingContext) {
     let module = unsafe {
         ctx.device
@@ -83,10 +199,12 @@ fn metal_test(ctx: TestingContext) {
                     wgpu::PassthroughShaderEntryPoint {
                         name: "vs_main".into(),
                         workgroup_size: (0, 0, 0),
+                        workgroup_memory_sizes: Cow::Borrowed(&[]),
                     },
                     wgpu::PassthroughShaderEntryPoint {
                         name: "fs_main".into(),
                         workgroup_size: (0, 0, 0),
+                        workgroup_memory_sizes: Cow::Borrowed(&[]),
                     },
                 ]),
                 msl: Some(metal_source()),
@@ -105,7 +223,7 @@ static METAL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::ne
     )
     .run_sync(metal_test);
 
-fn metallib_source(test_hash: u64) -> Cow<'static, [u8]> {
+fn metallib_source(test_hash: u64, shader: &str) -> Cow<'static, [u8]> {
     struct FileDropGuard<'a> {
         file_name: &'a str,
     }
@@ -129,11 +247,11 @@ fn metallib_source(test_hash: u64) -> Cow<'static, [u8]> {
         panic!("Metal compiler or metallib linker not present. Most users can safely ignore this.");
     }
     let air_name = format!(
-        "{}/tests/wgpu-gpu/passthrough/shader{test_hash}.air",
+        "{}/tests/wgpu-gpu/passthrough/{shader}{test_hash}.air",
         env!("CARGO_MANIFEST_DIR")
     );
     let output_name = format!(
-        "{}/tests/wgpu-gpu/passthrough/shader{test_hash}.metallib",
+        "{}/tests/wgpu-gpu/passthrough/{shader}{test_hash}.metallib",
         env!("CARGO_MANIFEST_DIR")
     );
 
@@ -147,7 +265,7 @@ fn metallib_source(test_hash: u64) -> Cow<'static, [u8]> {
                 "metal",
                 "-c",
                 &format!(
-                    "{}/tests/wgpu-gpu/passthrough/shader.metal",
+                    "{}/tests/wgpu-gpu/passthrough/{shader}.metal",
                     env!("CARGO_MANIFEST_DIR")
                 ),
                 "-o",
@@ -185,7 +303,7 @@ fn metallib_source(test_hash: u64) -> Cow<'static, [u8]> {
 
 fn metallib_test(ctx: TestingContext) {
     let test_hash = test_hash(&ctx, "metallib_test");
-    let source = metallib_source(test_hash);
+    let source = metallib_source(test_hash, "shader");
     let module = unsafe {
         ctx.device
             .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
@@ -194,10 +312,12 @@ fn metallib_test(ctx: TestingContext) {
                     wgpu::PassthroughShaderEntryPoint {
                         name: "vs_main".into(),
                         workgroup_size: (0, 0, 0),
+                        workgroup_memory_sizes: Cow::Borrowed(&[]),
                     },
                     wgpu::PassthroughShaderEntryPoint {
                         name: "fs_main".into(),
                         workgroup_size: (0, 0, 0),
+                        workgroup_memory_sizes: Cow::Borrowed(&[]),
                     },
                 ]),
                 metallib: Some(std::borrow::Cow::Borrowed(&source)),
@@ -228,10 +348,12 @@ fn hlsl_test(ctx: TestingContext) {
                     wgpu::PassthroughShaderEntryPoint {
                         name: "vs_main".into(),
                         workgroup_size: (0, 0, 0),
+                        workgroup_memory_sizes: Cow::Borrowed(&[]),
                     },
                     wgpu::PassthroughShaderEntryPoint {
                         name: "fs_main".into(),
                         workgroup_size: (0, 0, 0),
+                        workgroup_memory_sizes: Cow::Borrowed(&[]),
                     },
                 ]),
                 hlsl: Some(hlsl_source()),
@@ -308,6 +430,7 @@ fn dxil_test(ctx: TestingContext) {
                 entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
                     name: "vs_main".into(),
                     workgroup_size: (0, 0, 0),
+                    workgroup_memory_sizes: Cow::Borrowed(&[]),
                 }]),
                 dxil: Some(vertex_source),
                 ..Default::default()
@@ -321,6 +444,7 @@ fn dxil_test(ctx: TestingContext) {
                 entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
                     name: "fs_main".into(),
                     workgroup_size: (0, 0, 0),
+                    workgroup_memory_sizes: Cow::Borrowed(&[]),
                 }]),
                 dxil: Some(fragment_source),
                 ..Default::default()
@@ -383,10 +507,12 @@ fn spirv_test(ctx: TestingContext) {
                     wgpu::PassthroughShaderEntryPoint {
                         name: "vs_main".into(),
                         workgroup_size: (0, 0, 0),
+                        workgroup_memory_sizes: Cow::Borrowed(&[]),
                     },
                     wgpu::PassthroughShaderEntryPoint {
                         name: "fs_main".into(),
                         workgroup_size: (0, 0, 0),
+                        workgroup_memory_sizes: Cow::Borrowed(&[]),
                     },
                 ]),
                 spirv: Some(spirv_source(test_hash)),
@@ -440,6 +566,7 @@ fn glsl_test(ctx: TestingContext) {
                 entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
                     name: "vs_main".into(),
                     workgroup_size: (0, 0, 0),
+                    workgroup_memory_sizes: Cow::Borrowed(&[]),
                 }]),
                 glsl: Some(glsl_vertex_source(&ctx)),
                 ..Default::default()
@@ -451,6 +578,7 @@ fn glsl_test(ctx: TestingContext) {
                 entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
                     name: "fs_main".into(),
                     workgroup_size: (0, 0, 0),
+                    workgroup_memory_sizes: Cow::Borrowed(&[]),
                 }]),
                 glsl: Some(glsl_fragment_source(&ctx)),
                 ..Default::default()
@@ -499,13 +627,14 @@ fn all_passthrough_shaders_binary(ctx: TestingContext) {
         entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
             name: "vs_main".into(),
             workgroup_size: (0, 0, 0),
+            workgroup_memory_sizes: Cow::Borrowed(&[]),
         }]),
         #[cfg(not(target_arch = "wasm32"))]
         spirv: Some(spirv_source(test_hash)),
         #[cfg(not(target_arch = "wasm32"))]
         dxil: Some(dxil_vertex_source(test_hash)),
         #[cfg(not(target_arch = "wasm32"))]
-        metallib: Some(metallib_source(test_hash)),
+        metallib: Some(metallib_source(test_hash, "shader")),
         glsl: Some(glsl_vertex_source(&ctx)),
         wgsl: Some(wgsl_source()),
         ..Default::default()
@@ -515,6 +644,7 @@ fn all_passthrough_shaders_binary(ctx: TestingContext) {
         entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
             name: "fs_main".into(),
             workgroup_size: (0, 0, 0),
+            workgroup_memory_sizes: Cow::Borrowed(&[]),
         }]),
         #[cfg(not(target_arch = "wasm32"))]
         dxil: Some(dxil_fragment_source(test_hash)),
@@ -537,6 +667,7 @@ fn all_passthrough_shader_source(ctx: TestingContext) {
         entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
             name: "vs_main".into(),
             workgroup_size: (0, 0, 0),
+            workgroup_memory_sizes: Cow::Borrowed(&[]),
         }]),
         #[cfg(not(target_arch = "wasm32"))]
         spirv: Some(spirv_source(test_hash)),
@@ -551,6 +682,7 @@ fn all_passthrough_shader_source(ctx: TestingContext) {
         entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
             name: "fs_main".into(),
             workgroup_size: (0, 0, 0),
+            workgroup_memory_sizes: Cow::Borrowed(&[]),
         }]),
         glsl: Some(glsl_fragment_source(&ctx)),
         ..desc
@@ -571,6 +703,7 @@ fn explicit_layout_validation(ctx: TestingContext) {
         entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
             name: "vs_main".into(),
             workgroup_size: (0, 0, 0),
+            workgroup_memory_sizes: Cow::Borrowed(&[]),
         }]),
         #[cfg(not(target_arch = "wasm32"))]
         spirv: Some(spirv_source(test_hash)),
@@ -585,6 +718,7 @@ fn explicit_layout_validation(ctx: TestingContext) {
         entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
             name: "fs_main".into(),
             workgroup_size: (0, 0, 0),
+            workgroup_memory_sizes: Cow::Borrowed(&[]),
         }]),
         glsl: Some(glsl_fragment_source(&ctx)),
         ..desc

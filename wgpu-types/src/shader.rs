@@ -111,6 +111,10 @@ pub struct PassthroughShaderEntryPoint<'a> {
     /// Number of workgroups in each dimension x, y and z. Only used for metal with
     /// compute-like shader stages.
     pub workgroup_size: (u32, u32, u32),
+    /// Bytes of dynamic threadgroup memory at each Metal threadgroup argument index.
+    /// Use zero for unused indices and an empty slice when no memory is required.
+    /// Each allocation must be a multiple of 16 bytes. Ignored by other backends.
+    pub workgroup_memory_sizes: Cow<'a, [u32]>,
 }
 
 /// Descriptor for a shader module given by any of several sources.
