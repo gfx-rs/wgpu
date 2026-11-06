@@ -1,25 +1,27 @@
+alias T = f32;
+
 override width = 8u;
 override height = 2u;
 override count = 37u;
 
 struct Inner {
-    values: array<array<vec4<f32>, 3>, 5>,
+    values: array<array<vec4<T>, 3>, 5>,
     atoms: array<atomic<u32>, 19>,
-    matrix: mat3x2<f32>,
-    matrices: array<mat2x2<f32>, 3>,
+    matrix: mat3x2<T>,
+    matrices: array<mat2x2<T>, 3>,
 }
 
 struct Tagged {
-    @location(0) matrix: mat2x2<f32>,
+    @location(0) matrix: mat2x2<T>,
 }
 
 var<workgroup> data: array<Inner, 3>;
 var<workgroup> dynamic: array<u32, count>;
-var<workgroup> floats: array<f32, count>;
+var<workgroup> floats: array<T, count>;
 var<workgroup> tagged: Tagged;
 var<workgroup> scalar: u32;
 var<workgroup> vector: vec3<u32>;
-var<workgroup> matrix: mat2x3<f32>;
+var<workgroup> matrix: mat2x3<T>;
 var<workgroup> unused: array<u32, 1024>;
 
 @group(0) @binding(0) var<storage, read_write> output: array<u32>;

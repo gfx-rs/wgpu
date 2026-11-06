@@ -21,7 +21,13 @@ static ZERO_INIT_WORKGROUP_MEMORY_PARALLEL: GpuTestConfiguration = GpuTestConfig
     .parameters(
         TestParameters::default()
             .limits(Limits::default())
-            .skip(wgpu_test::FailureCase::backend(!wgpu::Backends::DX12)),
+            // https://github.com/gfx-rs/wgpu/issues/9184
+            .expect_fail(
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("Shader library compile failed")
+                    .validation_error("could not be compiled into pipeline")
+                    .unexpected_error("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
+            ),
     )
     .run_async(parallel_zero_init);
 
@@ -31,14 +37,23 @@ static ZERO_INIT_WORKGROUP_MEMORY_PARALLEL_F16: GpuTestConfiguration = GpuTestCo
         TestParameters::default()
             .limits(Limits::default())
             .features(wgpu::Features::SHADER_F16)
-            .skip(wgpu_test::FailureCase::backend(!wgpu::Backends::DX12)),
+            // https://github.com/gfx-rs/wgpu/issues/9184
+            .expect_fail(
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("Shader library compile failed")
+                    .validation_error("could not be compiled into pipeline")
+                    .unexpected_error("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
+            ),
     )
     .run_async(parallel_zero_init);
 
 async fn parallel_zero_init(ctx: wgpu_test::TestingContext) {
     let source = include_str!("../../../../naga/tests/in/wgsl/workgroup-init-compute.wgsl");
     let source = if ctx.device.features().contains(wgpu::Features::SHADER_F16) {
-        std::borrow::Cow::Owned(format!("enable f16;\n{}", source.replace("f32", "f16")))
+        let rest = source
+            .strip_prefix("alias T = f32;")
+            .expect("shader must start with `alias T = f32;`");
+        std::borrow::Cow::Owned(format!("enable f16;\nalias T = f16;{rest}"))
     } else {
         std::borrow::Cow::Borrowed(source)
     };
