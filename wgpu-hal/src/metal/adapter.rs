@@ -835,9 +835,9 @@ impl super::CapabilitiesQuery {
         // only means they keep taking the per-draw indirect loop. The probe
         // chooses a lowering, never a capability.
         //
-        // Apple's paravirtual device is excluded up front because its driver
-        // aborts the process instead of failing the probe.
+        // Paravirtual devices and 32-bit watchOS abort instead of failing the probe.
         let indirect_command_buffers_rendering = !is_virtual
+            && !cfg!(all(target_os = "watchos", target_pointer_width = "32"))
             && available!(
                 macos = 10.15,
                 ios = 13.0,
