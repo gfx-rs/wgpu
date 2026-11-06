@@ -19,6 +19,110 @@ const INDEXING_FEATURES: wgt::Features = wgt::Features::TEXTURE_BINDING_ARRAY
     .union(wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING)
     .union(wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS)
     .union(wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY);
+
+/// Features that need `VK_KHR_ray_tracing_pipeline`, either directly or as a dependency.
+const RAY_TRACING_PIPELINE_FEATURES: wgt::Features =
+    wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES
+        .union(wgt::Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER);
+
+/// `VK_EXT_ray_tracing_invocation_reorder`, which provides `SPV_EXT_shader_invocation_reorder`.
+///
+/// `ash` has no bindings for this, so we create bindings ad-hoc as needed. See also:
+///
+/// - <https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_ray_tracing_invocation_reorder.html>
+mod ray_tracing_invocation_reorder {
+    use ash::vk;
+    use core::{
+        ffi::{c_void, CStr},
+        ptr,
+    };
+
+    pub const NAME: &CStr = c"VK_EXT_ray_tracing_invocation_reorder";
+
+    /// `VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_EXT`, derived
+    /// from the extension's registered number, 582: `1000000000 + (582 - 1) * 1000 + 0`.
+    const FEATURES_STRUCTURE_TYPE: vk::StructureType = vk::StructureType::from_raw(1_000_581_000);
+
+    /// `VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_PROPERTIES_EXT`, derived
+    /// the same way with an offset of 1.
+    const PROPERTIES_STRUCTURE_TYPE: vk::StructureType = vk::StructureType::from_raw(1_000_581_001);
+
+    /// `VK_RAY_TRACING_INVOCATION_REORDER_MODE_REORDER_EXT`.
+    const MODE_REORDER: i32 = 1;
+
+    /// <https://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDeviceRayTracingInvocationReorderFeaturesEXT.html>
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug)]
+    pub struct FeaturesEXT {
+        pub s_type: vk::StructureType,
+        pub p_next: *mut c_void,
+        pub ray_tracing_invocation_reorder: vk::Bool32,
+    }
+
+    impl Default for FeaturesEXT {
+        fn default() -> Self {
+            Self {
+                s_type: FEATURES_STRUCTURE_TYPE,
+                p_next: ptr::null_mut(),
+                ray_tracing_invocation_reorder: vk::FALSE,
+            }
+        }
+    }
+
+    // SAFETY: `vk.xml` lists `VkPhysicalDeviceFeatures2` and `VkDeviceCreateInfo` as the
+    // `structextends` of this struct, and it is laid out like `vk::BaseOutStructure` with a
+    // `s_type` that always matches the struct, as `ash` requires for `p_next` chaining.
+    unsafe impl vk::ExtendsDeviceCreateInfo for FeaturesEXT {}
+    // SAFETY: as above.
+    unsafe impl vk::ExtendsPhysicalDeviceFeatures2 for FeaturesEXT {}
+
+    // SAFETY: `p_next` is only ever used as a chain pointer, as for every `ash` feature struct.
+    unsafe impl Send for FeaturesEXT {}
+    // SAFETY: as above.
+    unsafe impl Sync for FeaturesEXT {}
+
+    /// <https://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDeviceRayTracingInvocationReorderPropertiesEXT.html>
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug)]
+    pub struct PropertiesEXT {
+        pub s_type: vk::StructureType,
+        pub p_next: *mut c_void,
+        /// A `VkRayTracingInvocationReorderModeEXT`, saying whether reordering does anything.
+        pub ray_tracing_invocation_reorder_reordering_hint: i32,
+        /// Unused: naga exposes no way to set a hit object's shader binding table record index.
+        pub max_shader_binding_table_record_index: u32,
+    }
+
+    impl Default for PropertiesEXT {
+        fn default() -> Self {
+            Self {
+                s_type: PROPERTIES_STRUCTURE_TYPE,
+                p_next: ptr::null_mut(),
+                ray_tracing_invocation_reorder_reordering_hint: 0,
+                max_shader_binding_table_record_index: 0,
+            }
+        }
+    }
+
+    impl PropertiesEXT {
+        pub fn mode(&self) -> wgt::RayTracingInvocationReorderMode {
+            if self.ray_tracing_invocation_reorder_reordering_hint == MODE_REORDER {
+                wgt::RayTracingInvocationReorderMode::Reorder
+            } else {
+                wgt::RayTracingInvocationReorderMode::None
+            }
+        }
+    }
+
+    // SAFETY: `vk.xml` lists `VkPhysicalDeviceProperties2` as the `structextends` of this struct,
+    // and it is laid out like `vk::BaseOutStructure`, as `ash` requires for `p_next` chaining.
+    unsafe impl vk::ExtendsPhysicalDeviceProperties2 for PropertiesEXT {}
+
+    // SAFETY: `p_next` is only ever used as a chain pointer, as for every `ash` property struct.
+    unsafe impl Send for PropertiesEXT {}
+    // SAFETY: as above.
+    unsafe impl Sync for PropertiesEXT {}
+}
 #[expect(rustdoc::private_intra_doc_links)]
 /// Features supported by a [`vk::PhysicalDevice`] and its extensions.
 ///
@@ -102,6 +206,9 @@ pub struct PhysicalDeviceFeatures {
 
     /// Features provided by `VK_KHR_ray_tracing_pipeline`.
     ray_tracing_pipeline: Option<vk::PhysicalDeviceRayTracingPipelineFeaturesKHR<'static>>,
+
+    /// Features provided by `VK_EXT_ray_tracing_invocation_reorder`.
+    ray_tracing_invocation_reorder: Option<ray_tracing_invocation_reorder::FeaturesEXT>,
 
     /// Features provided by `VK_KHR_zero_initialize_workgroup_memory`, promoted
     /// to Vulkan 1.3.
@@ -196,6 +303,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.ray_tracing_pipeline {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.ray_tracing_invocation_reorder {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.shader_atomic_int64 {
@@ -488,6 +598,16 @@ impl PhysicalDeviceFeatures {
                     vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::default()
                         .ray_tracing_pipeline(true),
                 )
+            } else {
+                None
+            },
+            ray_tracing_invocation_reorder: if enabled_extensions
+                .contains(&ray_tracing_invocation_reorder::NAME)
+            {
+                Some(ray_tracing_invocation_reorder::FeaturesEXT {
+                    ray_tracing_invocation_reorder: vk::TRUE,
+                    ..Default::default()
+                })
             } else {
                 None
             },
@@ -1003,6 +1123,15 @@ impl PhysicalDeviceFeatures {
                         // Same reason as for ray queries.
                         | F::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
             );
+
+            // Hit objects only exist in ray tracing pipeline stages, so this is of no use
+            // without `EXPERIMENTAL_RAY_TRACING_PIPELINES`.
+            if let Some(ref reorder) = self.ray_tracing_invocation_reorder {
+                features.set(
+                    F::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER,
+                    reorder.ray_tracing_invocation_reorder != 0,
+                );
+            }
         }
 
         let rg11b10ufloat_renderable = supports_format(
@@ -1174,6 +1303,10 @@ pub struct PhysicalDeviceProperties {
     ray_tracing_pipeline: Option<vk::PhysicalDeviceRayTracingPipelinePropertiesKHR<'static>>,
 
     /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_EXT_ray_tracing_invocation_reorder` extension.
+    ray_tracing_invocation_reorder: Option<ray_tracing_invocation_reorder::PropertiesEXT>,
+
+    /// Additional `vk::PhysicalDevice` properties from the
     /// `VK_KHR_driver_properties` extension, promoted to Vulkan 1.2.
     driver: Option<vk::PhysicalDeviceDriverPropertiesKHR<'static>>,
 
@@ -1309,11 +1442,11 @@ impl PhysicalDeviceProperties {
                 extensions.push(khr::shader_float16_int8::NAME);
             }
 
-            // `SPV_EXT_mesh_shader` and `SPV_KHR_ray_tracing` both require SPIR-V 1.4.
-            if requested_features.intersects(
-                wgt::Features::EXPERIMENTAL_MESH_SHADER
-                    | wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES,
-            ) {
+            // `SPV_EXT_mesh_shader`, `SPV_KHR_ray_tracing` and
+            // `SPV_EXT_shader_invocation_reorder` all require SPIR-V 1.4.
+            if requested_features
+                .intersects(wgt::Features::EXPERIMENTAL_MESH_SHADER | RAY_TRACING_PIPELINE_FEATURES)
+            {
                 extensions.push(khr::spirv_1_4::NAME);
             }
 
@@ -1426,10 +1559,9 @@ impl PhysicalDeviceProperties {
         }
 
         // Require `VK_KHR_deferred_host_operations`, `VK_KHR_acceleration_structure` `VK_KHR_buffer_device_address` (for acceleration structures) if either `EXPERIMENTAL_RAY_QUERY` or `EXPERIMENTAL_RAY_TRACING_PIPELINES` were requested.
-        if requested_features.intersects(
-            wgt::Features::EXPERIMENTAL_RAY_QUERY
-                | wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES,
-        ) {
+        if requested_features
+            .intersects(wgt::Features::EXPERIMENTAL_RAY_QUERY | RAY_TRACING_PIPELINE_FEATURES)
+        {
             extensions.push(khr::deferred_host_operations::NAME);
             extensions.push(khr::acceleration_structure::NAME);
             extensions.push(khr::buffer_device_address::NAME);
@@ -1440,9 +1572,16 @@ impl PhysicalDeviceProperties {
             extensions.push(khr::ray_query::NAME);
         }
 
-        // Require `VK_KHR_ray_tracing_pipeline` if `EXPERIMENTAL_RAY_TRACING_PIPELINES` was requested
-        if requested_features.contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES) {
+        // Require `VK_KHR_ray_tracing_pipeline` if `EXPERIMENTAL_RAY_TRACING_PIPELINES` was
+        // requested, or `EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER`, which depends on it.
+        if requested_features.intersects(RAY_TRACING_PIPELINE_FEATURES) {
             extensions.push(khr::ray_tracing_pipeline::NAME);
+        }
+
+        // Require `VK_EXT_ray_tracing_invocation_reorder` if
+        // `EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER` was requested.
+        if requested_features.contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER) {
+            extensions.push(ray_tracing_invocation_reorder::NAME);
         }
 
         if requested_features.contains(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN) {
@@ -1945,6 +2084,9 @@ impl super::InstanceShared {
                 let supports_ray_tracing_pipeline =
                     capabilities.supports_extension(khr::ray_tracing_pipeline::NAME);
 
+                let supports_ray_tracing_invocation_reorder =
+                    capabilities.supports_extension(ray_tracing_invocation_reorder::NAME);
+
                 let supports_mesh_shader = capabilities.supports_extension(ext::mesh_shader::NAME);
 
                 let mut properties2 = vk::PhysicalDeviceProperties2KHR::default();
@@ -1987,6 +2129,13 @@ impl super::InstanceShared {
                     let next = capabilities
                         .ray_tracing_pipeline
                         .insert(vk::PhysicalDeviceRayTracingPipelinePropertiesKHR::default());
+                    properties2 = properties2.push_next(next);
+                }
+
+                if supports_ray_tracing_invocation_reorder {
+                    let next = capabilities
+                        .ray_tracing_invocation_reorder
+                        .insert(ray_tracing_invocation_reorder::PropertiesEXT::default());
                     properties2 = properties2.push_next(next);
                 }
 
@@ -2182,6 +2331,13 @@ impl super::InstanceShared {
                 let next = features
                     .position_fetch
                     .insert(vk::PhysicalDeviceRayTracingPositionFetchFeaturesKHR::default());
+                features2 = features2.push_next(next);
+            }
+
+            if capabilities.supports_extension(ray_tracing_invocation_reorder::NAME) {
+                let next = features
+                    .ray_tracing_invocation_reorder
+                    .insert(ray_tracing_invocation_reorder::FeaturesEXT::default());
                 features2 = features2.push_next(next);
             }
 
@@ -2548,6 +2704,17 @@ impl super::Instance {
                 shader_model: wgt::ShaderModel::Sm5, //TODO?
             },
             cooperative_matrix_properties: phd_capabilities.cooperative_matrix_properties.clone(),
+            ray_tracing_invocation_reorder_mode: match phd_capabilities
+                .ray_tracing_invocation_reorder
+            {
+                Some(properties)
+                    if available_features
+                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER) =>
+                {
+                    properties.mode()
+                }
+                _ => wgt::RayTracingInvocationReorderMode::None,
+            },
         };
 
         let adapter = super::Adapter {
@@ -2888,6 +3055,9 @@ impl super::Adapter {
             }
             if features.contains(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN) {
                 capabilities.push(spv::Capability::RayQueryPositionFetchKHR)
+            }
+            if features.contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER) {
+                capabilities.push(spv::Capability::ShaderInvocationReorderEXT);
             }
             if features.contains(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
                 capabilities.push(spv::Capability::MeshShadingEXT);

@@ -184,6 +184,10 @@ pub fn features_to_naga_capabilities(
         features.intersects(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES),
     );
     caps.set(
+        Caps::RAY_TRACING_INVOCATION_REORDER,
+        features.intersects(wgt::Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER),
+    );
+    caps.set(
         Caps::LINEAR_INTERPOLATION,
         downlevel.contains(wgt::DownlevelFlags::LINEAR_INTERPOLATION),
     );

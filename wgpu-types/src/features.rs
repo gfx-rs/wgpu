@@ -684,7 +684,30 @@ features! {
         #[name("wgpu-ray-tracing-pipelines")]
         const EXPERIMENTAL_RAY_TRACING_PIPELINES = 1 << 24;
 
-        // Bit 25 is available.
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
+        /// major bugs in it and are expected to be subject to breaking changes, suggestions
+        /// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040)
+        ///
+        /// Allows ray tracing pipeline shaders to use the `hit_object` type, the `hitObject*`
+        /// built-in functions, and `reorderThread`. Reordering lets the hardware group
+        /// invocations by the shader they are about to run, which improves coherence.
+        ///
+        /// Requires [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`], and
+        /// `enable wgpu_ray_tracing_invocation_reorder;` in WGSL shaders.
+        ///
+        /// `reorderThread` may be a no-op. Check what
+        /// [`Adapter::ray_tracing_invocation_reorder_mode`] reports
+        /// [`RayTracingInvocationReorderMode::Reorder`] to see if invocations will be reordered.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with [VK_EXT_ray_tracing_invocation_reorder](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_ray_tracing_invocation_reorder.html))
+        ///
+        /// This is a native only feature.
+        ///
+        #[doc = link_to_wgpu_docs!(["`Adapter::ray_tracing_invocation_reorder_mode`"]: "struct.Adapter.html#method.ray_tracing_invocation_reorder_mode")]
+        /// [`RayTracingInvocationReorderMode::Reorder`]: crate::RayTracingInvocationReorderMode::Reorder
+        #[name("wgpu-ray-tracing-invocation-reorder")]
+        const EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER = 1 << 25;
 
         /// Enables multiview render passes and `builtin(view_index)` in vertex/mesh shaders.
         ///
@@ -1582,7 +1605,8 @@ impl Features {
                     | FeaturesWGPU::EXPERIMENTAL_RAY_QUERY.bits()
                     | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
                     | FeaturesWGPU::EXPERIMENTAL_COOPERATIVE_MATRIX.bits()
-                    | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_PIPELINES.bits(),
+                    | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_PIPELINES.bits()
+                    | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER.bits(),
             ),
             FeaturesWebGPU::empty(),
         )

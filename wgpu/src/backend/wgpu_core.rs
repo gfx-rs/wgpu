@@ -966,6 +966,10 @@ impl dispatch::AdapterInterface for CoreAdapter {
     fn cooperative_matrix_properties(&self) -> Vec<crate::wgt::CooperativeMatrixProperties> {
         self.wgpu_adapter.cooperative_matrix_properties()
     }
+
+    fn ray_tracing_invocation_reorder_mode(&self) -> crate::wgt::RayTracingInvocationReorderMode {
+        self.wgpu_adapter.ray_tracing_invocation_reorder_mode()
+    }
 }
 
 impl Drop for CoreAdapter {

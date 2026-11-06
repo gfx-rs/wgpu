@@ -362,3 +362,25 @@ pub struct CooperativeMatrixProperties {
     /// When true, the multiply-add operation clamps the result to prevent overflow.
     pub saturating_accumulation: bool,
 }
+
+/// Whether an adapter actually reorders ray tracing invocations.
+///
+/// Reordering is a performance hint, not a capability: `reorderThread` is valid on any adapter
+/// supporting [`Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER`], but only does anything
+/// on an adapter reporting [`Reorder`].
+///
+/// [`Reorder`]: RayTracingInvocationReorderMode::Reorder
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+pub enum RayTracingInvocationReorderMode {
+    /// Invocation reordering is not supported, so `reorderThread` is a no-op.
+    ///
+    /// This is also what an adapter without
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER`] reports.
+    #[default]
+    None,
+    /// Invocations are reordered.
+    Reorder,
+}
