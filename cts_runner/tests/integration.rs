@@ -150,7 +150,87 @@ mod tests {
         "#,
         )?;
 
+        // Metal does not support `MULTI_DRAW_INDIRECT_COUNT` yet.
+        if !cfg!(target_vendor = "apple") {
+            exec_js(
+                r#"
+                const adapter = await navigator.gpu.requestAdapter();
+
+                if (!adapter.features.has("chromium-experimental-multi-draw-indirect")) {
+                    throw new TypeError("Adapter should report support for chromium-experimental-multi-draw-indirect feature");
+                }
+                if (adapter.features.has("wgpu-multi-draw-indirect-count")) {
+                    throw new TypeError("Adapter should not report the wgpu name of the multi-draw-indirect feature");
+                }
+
+                const device = await adapter.requestDevice({
+                    requiredFeatures: ["chromium-experimental-multi-draw-indirect"],
+                });
+                if (!device.features.has("chromium-experimental-multi-draw-indirect")) {
+                    throw new TypeError("Device should report the chromium-experimental-multi-draw-indirect feature");
+                }
+            "#,
+            )?;
+        }
+
         Ok(())
+    }
+
+    #[test]
+    fn multi_draw_indirect_requires_feature() -> Result<(), Error> {
+        exec_js(
+            r#"
+            const adapter = await navigator.gpu.requestAdapter();
+            const device = await adapter.requestDevice();
+
+            const indirectBuffer = device.createBuffer({
+                size: 256,
+                usage: GPUBufferUsage.INDIRECT,
+            });
+            const drawCountBuffer = device.createBuffer({
+                size: 4,
+                usage: GPUBufferUsage.INDIRECT,
+            });
+            const texture = device.createTexture({
+                size: [1, 1],
+                format: "rgba8unorm",
+                usage: GPUTextureUsage.RENDER_ATTACHMENT,
+            });
+
+            const calls = {
+                multiDrawIndirect: (pass) => pass.multiDrawIndirect(indirectBuffer, 0, 1),
+                multiDrawIndirectCount: (pass) =>
+                    pass.multiDrawIndirect(indirectBuffer, 0, 1, drawCountBuffer, 0),
+                multiDrawIndexedIndirect: (pass) => pass.multiDrawIndexedIndirect(indirectBuffer, 0, 1),
+                multiDrawIndexedIndirectCount: (pass) =>
+                    pass.multiDrawIndexedIndirect(indirectBuffer, 0, 1, drawCountBuffer, 0),
+            };
+
+            for (const [name, call] of Object.entries(calls)) {
+                const encoder = device.createCommandEncoder();
+                const pass = encoder.beginRenderPass({
+                    colorAttachments: [{
+                        view: texture.createView(),
+                        loadOp: "clear",
+                        storeOp: "store",
+                    }],
+                });
+
+                device.pushErrorScope("validation");
+                call(pass);
+                pass.end();
+                encoder.finish();
+                const error = await device.popErrorScope();
+
+                if (!(error instanceof GPUValidationError)) {
+                    throw new TypeError(`${name} should fail without chromium-experimental-multi-draw-indirect`);
+                }
+                if (!error.message.includes("MULTI_DRAW_INDIRECT_COUNT")) {
+                    throw new TypeError(`${name} failed for an unexpected reason: ${error.message}`);
+                }
+            }
+        "#,
+        )
     }
 
     #[test]
