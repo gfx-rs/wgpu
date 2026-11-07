@@ -3674,6 +3674,9 @@ impl Blas {
             }
             _ => panic!("No pending mapping."),
         };
+        if let Err(error) = self.device.check_is_valid() {
+            return Some((pending_compact.op, Err(error.into())));
+        }
         let status = {
             let compaction_buffer = self.compaction_buffer.as_ref().unwrap().as_ref();
             unsafe {
