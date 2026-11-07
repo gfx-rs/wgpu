@@ -261,6 +261,28 @@ impl Queue {
             queue_empty,
         )
     }
+
+    /// Completes the user-visible work of a device the hal reported lost.
+    ///
+    /// Returns every pending `on_submitted_work_done` closure, and the
+    /// callbacks of every pending map and BLAS compaction request, which
+    /// receive a device loss error. In-flight submissions are left tracked, so
+    /// their resources outlive any execution the hal has not confirmed
+    /// finished. The device must already be marked lost.
+    pub(crate) fn complete_work_of_lost_device(
+        &self,
+        snatch_guard: &SnatchGuard,
+    ) -> (
+        SmallVec<[SubmittedWorkDoneClosure; 1]>,
+        Vec<super::BufferMapPendingClosure>,
+        Vec<BlasCompactReadyPendingClosure>,
+    ) {
+        let mut life_tracker = self.lock_life();
+        let submission_closures = life_tracker.take_pending_work_of_lost_device();
+        let mapping_closures = life_tracker.handle_mapping(snatch_guard);
+        let blas_closures = life_tracker.handle_compact_read_back();
+        (submission_closures, mapping_closures, blas_closures)
+    }
 }
 
 crate::impl_resource_type!(Queue);

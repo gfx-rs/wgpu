@@ -387,6 +387,31 @@ impl LifetimeTracker {
         }
     }
 
+    /// Hand over all pending user-visible work of a lost device.
+    ///
+    /// Moves every pending map and compaction request to `self.ready_to_map`
+    /// and `self.ready_to_compact`, so the next [`handle_mapping`] and
+    /// [`handle_compact_read_back`] resolve them with a device loss error
+    /// (the device is invalid), and returns every pending
+    /// [`SubmittedWorkDoneClosure`].
+    ///
+    /// The [`ActiveSubmission`]s themselves stay in place: the hardware
+    /// abstraction layer has not confirmed that they finished executing, so
+    /// the resources they hold are released only when the fence reaches them.
+    ///
+    /// [`handle_mapping`]: LifetimeTracker::handle_mapping
+    /// [`handle_compact_read_back`]: LifetimeTracker::handle_compact_read_back
+    #[must_use]
+    pub fn take_pending_work_of_lost_device(&mut self) -> SmallVec<[SubmittedWorkDoneClosure; 1]> {
+        let mut work_done_closures: SmallVec<_> = self.work_done_closures.drain(..).collect();
+        for a in &mut self.active {
+            self.ready_to_map.append(&mut a.mapped);
+            self.ready_to_compact.append(&mut a.compact_read_back);
+            work_done_closures.extend(a.work_done_closures.drain(..));
+        }
+        work_done_closures
+    }
+
     /// Map the buffers in `self.ready_to_map`.
     ///
     /// Return a list of mapping notifications to send.

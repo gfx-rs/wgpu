@@ -1,9 +1,13 @@
-use std::{num::NonZeroU64, time::Duration};
+use std::{
+    num::NonZeroU64,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use wgpu::{
     Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
     BindingResource, BindingType, BufferBindingType, BufferDescriptor, BufferUsages, CommandBuffer,
-    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor, MapMode,
     PipelineLayoutDescriptor, PollType, ShaderModuleDescriptor, ShaderSource, ShaderStages,
 };
 
@@ -27,6 +31,13 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         WAIT_AFTER_BAD_SUBMISSION,
         WAIT_ON_FAILED_SUBMISSION,
     ]);
+}
+
+#[derive(Debug)]
+enum Event {
+    DeviceLost(String),
+    WorkDone,
+    Mapped(bool),
 }
 
 fn generate_dummy_work(ctx: &TestingContext) -> CommandBuffer {
@@ -94,10 +105,10 @@ static WAIT: GpuTestConfiguration = GpuTestConfiguration::new()
 /// previously hang waiting for `MTLCommandBufferStatus::Completed`, when the actual status
 /// was the terminal `MTLCommandBufferStatus::Error`.
 ///
-/// At present this test expects no hang. <https://github.com/gfx-rs/wgpu/issues/9545>
-/// proposes propagating the failure by losing the device. If that is implemented, this test
-/// should be updated accordingly. Care may be needed to avoid flakiness in cases where no
-/// termination occurs.
+/// Also covers <https://github.com/gfx-rs/wgpu/issues/9545>: when the command buffer is
+/// terminated, the device must be lost before the queue's work-done callback fires, and a
+/// pending `map_async` must fail. The watchdog does not always terminate the command
+/// buffer, so if the device is not lost, the map must succeed instead.
 #[apply(gpu_test!)]
 static WAIT_INDEFINITELY_LONG_RUNNING: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
@@ -130,8 +141,19 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         let buffer = ctx.device.create_buffer(&BufferDescriptor {
             label: None,
             size: (N_THREADS as u64) * 4,
-            usage: BufferUsages::STORAGE,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
             mapped_at_creation: false,
+        });
+        let readback = ctx.device.create_buffer(&BufferDescriptor {
+            label: None,
+            size: 16,
+            usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let events = Arc::new(Mutex::new(Vec::new()));
+        ctx.device.set_device_lost_callback({
+            let events = Arc::clone(&events);
+            move |_reason, message| events.lock().unwrap().push(Event::DeviceLost(message))
         });
         let bind_group_layout = ctx
             .device
@@ -182,14 +204,49 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             cpass.set_bind_group(0, &bind_group, &[]);
             cpass.dispatch_workgroups(N_THREADS / 64, 1, 1);
         }
+        encoder.copy_buffer_to_buffer(&buffer, 0, &readback, 0, 16);
         ctx.queue.submit(Some(encoder.finish()));
 
-        // TODO(https://github.com/gfx-rs/wgpu/issues/9545): `wgpu` should raise an error
-        // for the terminated command buffer (e.g. lose the device), and this test should
-        // check for the expected error. Care may be needed to avoid flakiness in cases
-        // where no termination occurs.
+        let events_for_map = Arc::clone(&events);
+        readback.map_async(MapMode::Read, .., move |result| {
+            events_for_map
+                .lock()
+                .unwrap()
+                .push(Event::Mapped(result.is_ok()));
+        });
+        let events_for_work_done = Arc::clone(&events);
+        ctx.queue.on_submitted_work_done(move || {
+            events_for_work_done.lock().unwrap().push(Event::WorkDone);
+        });
 
         ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
+
+        let events = events.lock().unwrap();
+        let lost = events
+            .iter()
+            .position(|e| matches!(e, Event::DeviceLost(_)));
+        let work_done = events
+            .iter()
+            .position(|e| matches!(e, Event::WorkDone))
+            .expect("on_submitted_work_done did not fire");
+        let mapped = events
+            .iter()
+            .find_map(|e| match e {
+                Event::Mapped(ok) => Some(*ok),
+                _ => None,
+            })
+            .expect("map_async callback did not fire");
+        match lost {
+            Some(lost) => {
+                let Event::DeviceLost(message) = &events[lost] else {
+                    unreachable!();
+                };
+                assert!(!message.is_empty(), "events: {events:?}");
+                assert!(lost < work_done, "events: {events:?}");
+                assert!(!mapped, "events: {events:?}");
+            }
+            None => assert!(mapped, "events: {events:?}"),
+        }
     });
 
 #[apply(gpu_test!)]

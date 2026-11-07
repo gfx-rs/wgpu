@@ -1082,8 +1082,12 @@ impl Device {
             match wait_result {
                 Ok(succeeded) => Some(succeeded),
                 Err(e) => {
-                    let hal_error: WaitIdleError = self.handle_hal_error(e).into();
-                    return (user_closures, Err(hal_error));
+                    self.handle_hal_error(e);
+                    return self.complete_work_of_lost_device(
+                        user_closures,
+                        wait_submission_index.is_some(),
+                        snatch_guard,
+                    );
                 }
             }
         } else {
@@ -1096,8 +1100,12 @@ impl Device {
         let current_finished_submission = match fence_value_result {
             Ok(fence_value) => fence_value,
             Err(e) => {
-                let hal_error: WaitIdleError = self.handle_hal_error(e).into();
-                return (user_closures, Err(hal_error));
+                self.handle_hal_error(e);
+                return self.complete_work_of_lost_device(
+                    user_closures,
+                    wait_submission_index.is_some(),
+                    snatch_guard,
+                );
             }
         };
 
@@ -1230,6 +1238,41 @@ impl Device {
         }
 
         (user_closures, result)
+    }
+
+    /// Finishes a [`Self::maintain`] whose hal fence query failed, which has
+    /// lost the device.
+    ///
+    /// Per "lose the device", outstanding `map_async` and
+    /// `on_submitted_work_done` operations complete, the former with an error.
+    /// The hal can no longer tell which submissions finished, so they stay
+    /// tracked and their resources are released only by `Queue::drop`.
+    /// Operations on a lost device appear to succeed, so this reports
+    /// success, never an empty queue.
+    fn complete_work_of_lost_device(
+        &self,
+        mut user_closures: UserClosures,
+        waited: bool,
+        snatch_guard: SnatchGuard,
+    ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
+        if let Some(queue) = self.get_queue() {
+            let (submissions, mappings, blas_compact_ready) =
+                queue.complete_work_of_lost_device(&snatch_guard);
+            user_closures.submissions.extend(submissions);
+            user_closures.mappings.extend(mappings);
+            user_closures.blas_compact_ready.extend(blas_compact_ready);
+            // See the deadlock note in `Self::maintain`.
+            drop(snatch_guard);
+        } else {
+            drop(snatch_guard);
+        }
+
+        let status = if waited {
+            wgt::PollStatus::WaitSucceeded
+        } else {
+            wgt::PollStatus::Poll
+        };
+        (user_closures, Ok(status))
     }
 
     pub fn create_buffer_inner(
@@ -5627,7 +5670,10 @@ impl Device {
         // These parts are passively accomplished by setting valid to false,
         // since that will prevent any new work from being added to the queues.
         // Future calls to poll_devices will continue to check the work queues
-        // until they are cleared, and then drop the device.
+        // until they are cleared, and then drop the device. When the hal
+        // itself reports the loss while polling, `maintain` completes them
+        // directly with `complete_work_of_lost_device`, as the queues may
+        // never clear.
     }
 
     fn release_gpu_resources(&self) {
