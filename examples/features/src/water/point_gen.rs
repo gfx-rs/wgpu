@@ -88,7 +88,7 @@ fn surrounding_point_values_iter<T>(
     points
         .windows(2)
         .map(|x| (hashmap.get(&x[0]), hashmap.get(&x[1])))
-        .flat_map(|(a, b)| a.and_then(|x| b.map(|y| (x, y))))
+        .flat_map(|(a, b)| a.zip(b))
         .for_each(for_each);
 }
 

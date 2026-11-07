@@ -1,0 +1,5 @@
+capabilities = "EARLY_DEPTH_TEST"
+targets = "METAL"
+
+[msl]
+lang_version = [1, 2]

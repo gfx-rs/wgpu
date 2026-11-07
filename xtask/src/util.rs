@@ -149,61 +149,66 @@ pub(crate) fn parse_binary_from_cargo_json(jsonl: &str) -> Option<String> {
         })
 }
 
-#[test]
-fn test_git_version_parsing() {
-    macro_rules! test_ok {
-        ($input:expr, $expected:expr) => {
-            assert_eq!(parse_git_version_output($input).unwrap(), $expected);
-        };
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_git_version_parsing() {
+        macro_rules! test_ok {
+            ($input:expr, $expected:expr) => {
+                assert_eq!(parse_git_version_output($input).unwrap(), $expected);
+            };
+        }
+        test_ok!("git version 2.3.0", [2, 3, 0]);
+        test_ok!("git version 0.255.0", [0, 255, 0]);
+        test_ok!("git version 4.5.6", [4, 5, 6]);
+        test_ok!("git version 2.3.0.windows.1", [2, 3, 0]);
+        test_ok!("git version 2.50.1 (Apple Git-155)", [2, 50, 1]);
+
+        macro_rules! test_err {
+            ($input:expr, $msg:expr) => {
+                assert_eq!(
+                    parse_git_version_output($input).unwrap_err().to_string(),
+                    $msg
+                )
+            };
+        }
+        test_err!("2.3.0", "missing `git version ` prefix");
+        test_err!("", "missing `git version ` prefix");
+
+        test_err!(
+            "git version 1.2",
+            "less than 3 version numbers found: [1, 2]"
+        );
+
+        test_err!(
+            "git version 9001",
+            "failed to parse version number 0 (\"9001\") as `u8`"
+        );
+        test_err!(
+            "git version ",
+            "failed to parse version number 0 (\"\") as `u8`"
+        );
+        test_err!(
+            "git version asdf",
+            "failed to parse version number 0 (\"asdf\") as `u8`"
+        );
+        test_err!(
+            "git version 23.beta",
+            "failed to parse version number 1 (\"beta\") as `u8`"
+        );
+        test_err!(
+            "git version 1.2.wat",
+            "failed to parse version number 2 (\"wat\") as `u8`"
+        );
+        test_err!(
+            "git version 1.2.3.",
+            "failed to parse version number 2 (\"3.\") as `u8`"
+        );
+        test_err!(
+            "git version 1.2.3.4",
+            "failed to parse version number 2 (\"3.4\") as `u8`"
+        );
     }
-    test_ok!("git version 2.3.0", [2, 3, 0]);
-    test_ok!("git version 0.255.0", [0, 255, 0]);
-    test_ok!("git version 4.5.6", [4, 5, 6]);
-    test_ok!("git version 2.3.0.windows.1", [2, 3, 0]);
-    test_ok!("git version 2.50.1 (Apple Git-155)", [2, 50, 1]);
-
-    macro_rules! test_err {
-        ($input:expr, $msg:expr) => {
-            assert_eq!(
-                parse_git_version_output($input).unwrap_err().to_string(),
-                $msg
-            )
-        };
-    }
-    test_err!("2.3.0", "missing `git version ` prefix");
-    test_err!("", "missing `git version ` prefix");
-
-    test_err!(
-        "git version 1.2",
-        "less than 3 version numbers found: [1, 2]"
-    );
-
-    test_err!(
-        "git version 9001",
-        "failed to parse version number 0 (\"9001\") as `u8`"
-    );
-    test_err!(
-        "git version ",
-        "failed to parse version number 0 (\"\") as `u8`"
-    );
-    test_err!(
-        "git version asdf",
-        "failed to parse version number 0 (\"asdf\") as `u8`"
-    );
-    test_err!(
-        "git version 23.beta",
-        "failed to parse version number 1 (\"beta\") as `u8`"
-    );
-    test_err!(
-        "git version 1.2.wat",
-        "failed to parse version number 2 (\"wat\") as `u8`"
-    );
-    test_err!(
-        "git version 1.2.3.",
-        "failed to parse version number 2 (\"3.\") as `u8`"
-    );
-    test_err!(
-        "git version 1.2.3.4",
-        "failed to parse version number 2 (\"3.4\") as `u8`"
-    );
 }

@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(doc)]
 use crate::{Features, TextureFormat};
 
+use crate::link_to_wgpu_item;
+
 /// Invoke a macro for each of the limits.
 ///
 /// The supplied macro should take two arguments. The first is a limit name, as
@@ -360,14 +362,10 @@ pub struct Limits {
     /// The maximum total number (`x*y*z`) of rays able to be dispatched by a trace rays call in a ray
     /// tracing pass. Requesting more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`]
     /// is enabled.
-    ///
-    /// Currently only affects wgpu-hal
     pub max_ray_dispatch_count: u32,
     /// The maximum number that one can pass into a ray tracing pipeline creation to be the maximum ray
     /// recursion depth. (the maximum of the max ray recursion depth) Requesting more than 0 during device
     /// creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`] is enabled.
-    ///
-    /// Currently only affects wgpu-hal
     pub max_ray_recursion_depth: u32,
 }
 
@@ -1304,13 +1302,27 @@ bitflags::bitflags! {
 }
 
 impl DownlevelFlags {
-    /// All flags that indicate if the backend is WebGPU compliant
+    /// Returns the set of flags required for an adapter to be considered WebGPU compliant.
+    ///
+    /// The only downlevel flags that are not required on a compliant adapter are:
+    /// - [`Self::ANISOTROPIC_FILTERING`], because the filtering behavior is
+    ///   implementation-defined, so performing no filtering at all is allowed.
+    /// - [`Self::SURFACE_VIEW_FORMATS`], because [`Surface`] does not exactly
+    ///   correspond to a WebGPU canvas, and most users of `wgpu` desiring
+    ///   strict WebGPU compliance implement canvas view formats by means
+    ///   other than [`Surface`].
+    ///
+    #[doc = link_to_wgpu_item!(struct Surface)]
     #[must_use]
     pub const fn compliant() -> Self {
         // We use manual bit twiddling to make this a const fn as `Sub` and `.remove` aren't const
 
         // WebGPU doesn't actually require aniso
-        Self::from_bits_truncate(Self::all().bits() & !Self::ANISOTROPIC_FILTERING.bits())
+        // or surface view formats, which only apply to `wgpu::Surface`
+        Self::from_bits_truncate(
+            Self::all().bits()
+                & !(Self::ANISOTROPIC_FILTERING.bits() | Self::SURFACE_VIEW_FORMATS.bits()),
+        )
     }
 }
 

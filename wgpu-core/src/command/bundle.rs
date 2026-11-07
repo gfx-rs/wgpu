@@ -122,7 +122,10 @@ use crate::{
     Label, LabelHelpers,
 };
 
-use super::{pass, render_command::ArcRenderCommand, DrawCommandFamily, DrawKind};
+use super::{
+    draw::validate_mesh_draw_multiview, pass, render_command::ArcRenderCommand, DrawCommandFamily,
+    DrawKind,
+};
 
 /// Describes a [`RenderBundleEncoder`].
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -380,6 +383,7 @@ impl RenderBundleEncoder {
             next_dynamic_offset: 0,
             binder: Binder::new(),
             immediate_state: ImmediateState::default(),
+            multiview_mask: self.context.multiview_mask,
         };
 
         let indices = &state.device.tracker_indices;
@@ -1234,6 +1238,7 @@ fn draw_mesh_tasks(
     group_count_z: u32,
 ) -> Result<(), RenderBundleErrorInner> {
     state.is_ready(DrawCommandFamily::DrawMeshTasks)?;
+    validate_mesh_draw_multiview(&state.device, state.multiview_mask)?;
 
     let limits = &state.device.limits;
     let (groups_size_limit, max_groups) = if state.pipeline.as_ref().unwrap().has_task_shader {
@@ -1281,6 +1286,10 @@ fn multi_draw_indirect(
     state
         .device
         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
+
+    if family == DrawCommandFamily::DrawMeshTasks {
+        validate_mesh_draw_multiview(&state.device, state.multiview_mask)?;
+    }
 
     buffer.check_is_valid()?;
     buffer.same_device(&state.device)?;
@@ -1818,6 +1827,7 @@ struct State {
 
     device: Arc<Device>,
     commands: Vec<ArcRenderCommand>,
+    multiview_mask: Option<NonZeroU32>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_init_actions: Vec<TextureInitTrackerAction>,
     next_dynamic_offset: usize,

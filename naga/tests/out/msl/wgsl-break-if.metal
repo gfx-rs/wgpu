@@ -37,7 +37,7 @@ void breakIfEmptyBody(
             bool _e2 = b;
             c = a != _e2;
             bool _e5 = c;
-            if (a == c) {
+            if (a == _e5) {
                 break;
             }
         }
@@ -58,7 +58,7 @@ void breakIf(
         loop_bound_2 -= uint2(loop_bound_2.y == 0u, 1u);
         if (!loop_init_2) {
             bool _e5 = e;
-            if (a_1 == e) {
+            if (a_1 == _e5) {
                 break;
             }
         }
@@ -80,7 +80,7 @@ void breakIfSeparateVariable(
         loop_bound_3 -= uint2(loop_bound_3.y == 0u, 1u);
         if (!loop_init_3) {
             uint _e5 = counter;
-            if (counter == 5u) {
+            if (_e5 == 5u) {
                 break;
             }
         }

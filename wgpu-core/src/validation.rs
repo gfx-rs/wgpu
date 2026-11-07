@@ -4,10 +4,10 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use core::fmt;
+use core::{fmt, num::NonZeroU32};
 
 use arrayvec::ArrayVec;
-use hashbrown::{hash_map::Entry, HashSet};
+use hashbrown::hash_map::Entry;
 use shader_io_deductions::{display_deductions_as_optional_list, MaxVertexShaderOutputDeduction};
 use thiserror::Error;
 use wgt::{
@@ -343,6 +343,13 @@ struct EntryPoint {
     /// [compute-like]: naga::ShaderStage::compute_like
     workgroup_size: [u32; 3],
 
+    /// Number of bytes needed for this entry point's `workgroup` globals.
+    ///
+    /// Since `Limits::max_compute_workgroup_storage_size` could, in principle,
+    /// be as high as `u32::MAX`, this is a `u64` to represent values beyond
+    /// that.
+    workgroup_storage_size: u64,
+
     /// Indicates that the entry point uses dual source blending.
     dual_source_blending: bool,
 
@@ -355,6 +362,9 @@ struct EntryPoint {
 
     /// Size of the immediate data, and which slots this entry point uses.
     immediate_usage: naga::valid::ImmediateUsage,
+
+    /// The payload for ray tracing, if this is a ray tracing stage.
+    ray_tracing_payload: Option<RayTracingPayloadType>,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -366,6 +376,91 @@ struct EntryPointKeyRef<'a>(naga::ShaderStage, &'a str);
 impl hashbrown::Equivalent<EntryPointKey> for EntryPointKeyRef<'_> {
     fn equivalent(&self, key: &EntryPointKey) -> bool {
         self.0 == key.0 && self.1 == key.1
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+/// An enum containing the types allowed in a ray tracing payload, to be
+/// stored in the interface so various shaders can be checked that they
+/// all have the same types. Roughly equal to naga's type inner, but without names,
+pub enum RayTracingPayloadType {
+    /// A single numeric type.
+    Numeric(NumericType),
+    /// A struct containing other payload types
+    Struct {
+        /// The members of the struct and their offset
+        members: Vec<RayTracingPayloadMember>,
+        /// The span of the struct
+        span: u32,
+    },
+    /// An array containing other payload types
+    Array {
+        /// The type the array contains within itself
+        inner: Box<RayTracingPayloadType>,
+        /// The size of the array, (non-override, non-dynamic).
+        size: NonZeroU32,
+        /// The stride of each element in the array.
+        stride: u32,
+    },
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct RayTracingPayloadMember {
+    offset: u32,
+    ty: Box<RayTracingPayloadType>,
+}
+
+impl RayTracingPayloadType {
+    pub fn from_naga(ty: &naga::TypeInner, module: &naga::Module) -> Option<Self> {
+        Some(match ty {
+            naga::TypeInner::Scalar(scalar) => Self::Numeric(NumericType {
+                dim: NumericDimension::Scalar,
+                scalar: *scalar,
+            }),
+            naga::TypeInner::Vector { size, scalar } => Self::Numeric(NumericType {
+                dim: NumericDimension::Vector(*size),
+                scalar: *scalar,
+            }),
+            naga::TypeInner::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => Self::Numeric(NumericType {
+                dim: NumericDimension::Matrix(*columns, *rows),
+                scalar: *scalar,
+            }),
+            naga::TypeInner::Struct { members, span } => {
+                let mut struct_members = Vec::with_capacity(members.len());
+
+                for member in members {
+                    let ty = &module.types[member.ty].inner;
+
+                    struct_members.push(RayTracingPayloadMember {
+                        offset: member.offset,
+                        ty: Box::new(Self::from_naga(ty, module)?),
+                    });
+                }
+
+                Self::Struct {
+                    members: struct_members,
+                    span: *span,
+                }
+            }
+            naga::TypeInner::Array {
+                base,
+                size: naga::ArraySize::Constant(size),
+                stride,
+            } => {
+                let ty = &module.types[*base].inner;
+
+                Self::Array {
+                    inner: Box::new(Self::from_naga(ty, module)?),
+                    size: *size,
+                    stride: *stride,
+                }
+            }
+            _ => return None,
+        })
     }
 }
 
@@ -399,29 +494,6 @@ pub struct Interface {
     /// allowed to contain multiple entry points with the same name, as long as
     /// they are for different shader stages.
     entry_points: FastHashMap<EntryPointKey, EntryPoint>,
-}
-
-#[derive(Debug)]
-pub struct PassthroughInterface {
-    pub entry_point_names: HashSet<String>,
-}
-
-// Most shaders will use a standard interface which is very large.
-// Passthrough shaders have a much smaller interface. No reason to
-// box the standard interface though.
-#[expect(clippy::large_enum_variant)]
-#[derive(Debug)]
-pub enum ShaderMetaData {
-    Interface(Interface),
-    Passthrough(PassthroughInterface),
-}
-impl ShaderMetaData {
-    pub fn interface(&self) -> Option<&Interface> {
-        match self {
-            Self::Interface(i) => Some(i),
-            Self::Passthrough(_) => None,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -515,10 +587,38 @@ impl WebGpuError for InputError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum StageError {
+    #[error("Unable to find entry point {0:?}")]
+    NoEntryPointWithName(String),
+    #[error("Unable to find entry point `{name}` for stage `{stage:?}`")]
+    NoEntryPointWithNameForStage {
+        name: String,
+        stage: naga::ShaderStage,
+    },
+    #[error(
+        "Unable to select an entry point: no entry points found in the provided shader module"
+    )]
+    NoEntryPoints,
+    #[error("No entry point found for stage `{0:?}`")]
+    NoEntryPointForStage(naga::ShaderStage),
+    #[error(
+        "Unable to select an entry point: \
+        multiple entry points were found in the provided shader module, \
+        but no entry point was specified"
+    )]
+    AmbiguousEntryPoint,
+    #[error("More than one entry point present in module for stage `{0:?}`, entry point name must be provided")]
+    AmbiguousEntryPointForStage(naga::ShaderStage),
+    #[error(
+        "Workgroup storage size {used} must be less than or equal to \
+        `Limits::{limit_desc}` ({limit})"
+    )]
+    WorkgroupStorageSizeLimitExceeded {
+        used: u64,
+        limit: u32,
+        limit_desc: &'static str,
+    },
     #[error(transparent)]
     InvalidWorkgroupSize(#[from] InvalidWorkgroupSizeError),
-    #[error("Unable to find entry point '{0}'")]
-    MissingEntryPoint(String),
     #[error("Shader global {0:?} is not available in the pipeline layout")]
     Binding(naga::ResourceBinding, #[source] BindingError),
     #[error("Unable to filter the texture ({texture:?}) by the sampler ({sampler:?})")]
@@ -535,16 +635,6 @@ pub enum StageError {
         #[source]
         error: InputError,
     },
-    #[error(
-        "Unable to select an entry point: no entry point was found in the provided shader module"
-    )]
-    NoEntryPointFound,
-    #[error(
-        "Unable to select an entry point: \
-        multiple entry points were found in the provided shader module, \
-        but no entry point was specified"
-    )]
-    MultipleEntryPointsFound,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(
@@ -631,6 +721,8 @@ pub enum StageError {
     MeshTopologyMismatch,
     #[error("Pipeline layout immediate size ({layout}) must be >= the required immediate size ({required}) of the shader entry point")]
     LayoutImmediateSize { layout: u32, required: u32 },
+    #[error("Ray tracing payloads do not match.")]
+    RayTracingPayloadMismatch,
 }
 
 impl WebGpuError for StageError {
@@ -648,10 +740,14 @@ impl WebGpuError for StageError {
                 var: _,
                 error,
             } => error.webgpu_error_type(),
-            Self::InvalidWorkgroupSize { .. }
-            | Self::MissingEntryPoint(..)
-            | Self::NoEntryPointFound
-            | Self::MultipleEntryPointsFound
+            Self::WorkgroupStorageSizeLimitExceeded { .. }
+            | Self::NoEntryPointWithName { .. }
+            | Self::NoEntryPointWithNameForStage { .. }
+            | Self::NoEntryPoints
+            | Self::NoEntryPointForStage(_)
+            | Self::AmbiguousEntryPoint
+            | Self::AmbiguousEntryPointForStage(_)
+            | Self::InvalidWorkgroupSize { .. }
             | Self::VertexOutputLocationTooLarge { .. }
             | Self::TooManyUserDefinedVertexOutputs { .. }
             | Self::FragmentInputLocationTooLarge { .. }
@@ -668,7 +764,8 @@ impl WebGpuError for StageError {
             | Self::MissingFragDepthAttachment
             | Self::PerVertexNotTriangles
             | Self::MeshTopologyMismatch
-            | Self::LayoutImmediateSize { .. } => ErrorType::Validation,
+            | Self::LayoutImmediateSize { .. }
+            | Self::RayTracingPayloadMismatch => ErrorType::Validation,
         }
     }
 }
@@ -1175,6 +1272,23 @@ impl BindingLayoutSource {
     }
 }
 
+/// Resource usage accumulated across all of a pipeline's stages.
+pub struct PipelineResources {
+    pub layout: BindingLayoutSource,
+    pub minimum_binding_sizes: FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
+    pub immediates: naga::valid::ImmediateUsage,
+}
+
+impl PipelineResources {
+    pub fn new(layout: BindingLayoutSource) -> Self {
+        Self {
+            layout,
+            minimum_binding_sizes: FastHashMap::default(),
+            immediates: Default::default(),
+        }
+    }
+}
+
 /// Summary of one shader stage's outputs, presented as inputs to the next stage.
 ///
 /// Each stage in a pipeline produces one of these values, to be validated
@@ -1197,9 +1311,7 @@ pub struct StageIo {
     ///
     /// This is `None` if the prior stage was not a mesh shader.
     pub primitive_index: Option<bool>,
-
-    /// The set of immediate data slots the prior stage used.
-    pub immediates: naga::valid::ImmediateUsage,
+    pub ray_tracing_payload: Option<RayTracingPayloadType>,
 }
 
 impl Interface {
@@ -1363,10 +1475,8 @@ impl Interface {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
-            let bind = match var.binding {
-                Some(br) => br,
-                _ => continue,
-            };
+            let Some(bind) = var.binding else { continue };
+
             let naga_ty = &module.types[var.ty].inner;
 
             let inner_ty = match *naga_ty {
@@ -1422,12 +1532,21 @@ impl Interface {
                 );
             }
 
+            let mut workgroup_storage_size = 0u64;
             for (var_handle, var) in module.global_variables.iter() {
                 let usage = func_info[var_handle];
-                if !usage.is_empty() && var.binding.is_some() {
-                    ep.resources.push(resource_mapping[&var_handle]);
+                if !usage.is_empty() {
+                    if var.binding.is_some() {
+                        ep.resources.push(resource_mapping[&var_handle]);
+                    }
+                    if var.space == naga::AddressSpace::WorkGroup {
+                        let size = module.types[var.ty].inner.size(module.to_ctx());
+                        workgroup_storage_size = workgroup_storage_size
+                            .saturating_add(u64::from(size).next_multiple_of(16));
+                    }
                 }
             }
+            ep.workgroup_storage_size = workgroup_storage_size;
 
             for key in func_info.sampling_set.iter() {
                 ep.sampling_pairs
@@ -1487,6 +1606,34 @@ impl Interface {
                 );
             }
 
+            // Set the payload if there is an incoming payload set and it is a shader that should have one.
+            if matches!(
+                entry_point.stage,
+                naga::ShaderStage::ClosestHit | naga::ShaderStage::AnyHit | naga::ShaderStage::Miss
+            ) {
+                let ray_payload = entry_point
+                    .incoming_ray_payload
+                    .expect("these stages must have an incoming payload");
+                let ty = module.global_variables[ray_payload].ty;
+
+                ep.ray_tracing_payload = Some(
+                    RayTracingPayloadType::from_naga(&module.types[ty].inner, module)
+                        .expect("naga should already validate invalid payloads out!"),
+                );
+            }
+            // Or if a payload global variable is used and it is a ray gen shader which doesn't have incoming
+            // payloads. This may not have a payload if it dispatches no trace rays which should be fine
+            else if matches!(entry_point.stage, naga::ShaderStage::RayGeneration) {
+                for (handle, gv) in module.global_variables.iter() {
+                    if !func_info[handle].is_empty() && gv.space == naga::AddressSpace::RayPayload {
+                        ep.ray_tracing_payload = Some(
+                            RayTracingPayloadType::from_naga(&module.types[gv.ty].inner, module)
+                                .expect("naga should already validate invalid payloads out!"),
+                        );
+                    }
+                }
+            }
+
             entry_points.insert(
                 EntryPointKey(entry_point.stage, entry_point.name.clone()),
                 ep,
@@ -1509,34 +1656,6 @@ impl Interface {
             .get(&EntryPointKeyRef(stage, entry_point_name))
             .map(|ep| ep.immediate_usage)
             .unwrap_or_default()
-    }
-
-    /// Select an entry point name, given an optional name and a shader stage.
-    ///
-    /// See [`ShaderModule::finalize_entry_point_name`] for details.
-    ///
-    /// [`ShaderModule::finalize_entry_point_name`]: crate::pipeline::ShaderModule::finalize_entry_point_name
-    pub fn finalize_entry_point_name(
-        &self,
-        stage: naga::ShaderStage,
-        entry_point_name: Option<&str>,
-    ) -> Result<String, StageError> {
-        entry_point_name
-            .map(|ep| ep.to_string())
-            .map(Ok)
-            .unwrap_or_else(|| {
-                let mut entry_points =
-                    self.entry_points
-                        .keys()
-                        .filter_map(|EntryPointKey(ep_stage, name)| {
-                            (ep_stage == &stage).then_some(name)
-                        });
-                let first = entry_points.next().ok_or(StageError::NoEntryPointFound)?;
-                if entry_points.next().is_some() {
-                    return Err(StageError::MultipleEntryPointsFound);
-                }
-                Ok(first.clone())
-            })
     }
 
     /// Analyze and validate an entry point for use as a given shader stage.
@@ -1562,8 +1681,7 @@ impl Interface {
     /// [validating inter-stage interfaces]: https://www.w3.org/TR/webgpu/#abstract-opdef-validating-inter-stage-interfaces
     pub fn check_stage(
         &self,
-        layouts: &mut BindingLayoutSource,
-        minimum_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
+        resources: &mut PipelineResources,
         entry_point_name: &str,
         shader_stage: ShaderStageForValidation,
         inputs: StageIo,
@@ -1574,17 +1692,27 @@ impl Interface {
         let pair = EntryPointKeyRef(shader_stage.to_naga(), entry_point_name);
         let entry_point = match self.entry_points.get(&pair) {
             Some(some) => some,
-            None => return Err(StageError::MissingEntryPoint(pair.1.to_string())),
+            None => {
+                return Err(StageError::NoEntryPointWithNameForStage {
+                    name: pair.1.to_string(),
+                    stage: shader_stage.to_naga(),
+                })
+            }
         };
         let EntryPointKeyRef(_, entry_point_name) = pair;
 
         let stage_bit = shader_stage.to_wgt_bit();
+        let PipelineResources {
+            ref mut layout,
+            ref mut minimum_binding_sizes,
+            ref mut immediates,
+        } = *resources;
 
         // check resources visibility
         for &handle in entry_point.resources.iter() {
             let res = &self.resources[handle];
             let result = 'err: {
-                match layouts {
+                match layout {
                     BindingLayoutSource::Provided(pipeline_layout) => {
                         // update the required binding size for this buffer
                         if let ResourceType::Buffer {
@@ -1657,7 +1785,7 @@ impl Interface {
         //
         // We only need to do this if the binding layout is provided by the user, as derived
         // layouts will inherently be correctly tagged.
-        if let BindingLayoutSource::Provided(pipeline_layout) = layouts {
+        if let BindingLayoutSource::Provided(pipeline_layout) = layout {
             for &(texture_handle, sampler_handle) in entry_point.sampling_pairs.iter() {
                 let texture_bind = &self.resources[texture_handle].bind;
                 let sampler_bind = &self.resources[sampler_handle].bind;
@@ -1734,6 +1862,17 @@ impl Interface {
                 },
                 _ => unreachable!(),
             };
+
+            if entry_point.workgroup_storage_size
+                > u64::from(self.limits.max_compute_workgroup_storage_size)
+            {
+                return Err(StageError::WorkgroupStorageSizeLimitExceeded {
+                    used: entry_point.workgroup_storage_size,
+                    limit: self.limits.max_compute_workgroup_storage_size,
+                    limit_desc: "max_compute_workgroup_storage_size",
+                });
+            }
+
             let total = workgroup_size_check.check_and_compute_total_invocations()?;
             if total == 0 {
                 return Err(StageError::InvalidWorkgroupSize(
@@ -2079,16 +2218,37 @@ impl Interface {
 
         let immediate_usage = self
             .immediate_usage(shader_stage.to_naga(), entry_point_name)
-            .merge(&inputs.immediates);
+            .merge(immediates);
 
         // Check pipeline layout immediate size
-        if let BindingLayoutSource::Provided(pipeline_layout) = layouts {
+        if let BindingLayoutSource::Provided(pipeline_layout) = layout {
             if pipeline_layout.immediate_size < immediate_usage.size() {
                 return Err(StageError::LayoutImmediateSize {
                     layout: pipeline_layout.immediate_size,
                     required: immediate_usage.size(),
                 });
             }
+        }
+
+        *immediates = immediate_usage;
+
+        let mut ray_tracing_payload = inputs.ray_tracing_payload;
+
+        let current_ray_payload = entry_point.ray_tracing_payload.clone();
+
+        if let (Some(ray_tracing_payload), Some(current_ray_payload)) =
+            (ray_tracing_payload.as_ref(), current_ray_payload.as_ref())
+        {
+            if ray_tracing_payload != current_ray_payload {
+                return Err(StageError::RayTracingPayloadMismatch);
+            }
+        }
+
+        // We've just checked that if there was previously a payload, it is the same as
+        // the current payload (if any), so the two must be the same if both `Some`, so
+        // this doesn't go over any validation.
+        if let Some(current_ray_payload) = current_ray_payload {
+            ray_tracing_payload = Some(current_ray_payload)
         }
 
         Ok(StageIo {
@@ -2099,7 +2259,7 @@ impl Interface {
             } else {
                 None
             },
-            immediates: immediate_usage,
+            ray_tracing_payload,
         })
     }
 }
@@ -2232,6 +2392,14 @@ pub enum ShaderStageForValidation {
     },
     Compute,
     Task,
+    RayGeneration,
+    Miss,
+    ClosestHit {
+        triangle: bool,
+    },
+    AnyHit {
+        triangle: bool,
+    },
 }
 
 impl ShaderStageForValidation {
@@ -2242,6 +2410,10 @@ impl ShaderStageForValidation {
             Self::Fragment { .. } => naga::ShaderStage::Fragment,
             Self::Compute => naga::ShaderStage::Compute,
             Self::Task => naga::ShaderStage::Task,
+            Self::RayGeneration => naga::ShaderStage::RayGeneration,
+            Self::Miss => naga::ShaderStage::Miss,
+            Self::AnyHit { .. } => naga::ShaderStage::AnyHit,
+            Self::ClosestHit { .. } => naga::ShaderStage::ClosestHit,
         }
     }
 
@@ -2252,6 +2424,10 @@ impl ShaderStageForValidation {
             Self::Fragment { .. } => wgt::ShaderStages::FRAGMENT,
             Self::Compute => wgt::ShaderStages::COMPUTE,
             Self::Task => wgt::ShaderStages::TASK,
+            Self::RayGeneration => wgt::ShaderStages::RAY_GENERATION,
+            Self::Miss => wgt::ShaderStages::MISS,
+            Self::AnyHit { .. } => wgt::ShaderStages::ANY_HIT,
+            Self::ClosestHit { .. } => wgt::ShaderStages::CLOSEST_HIT,
         }
     }
 }

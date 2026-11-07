@@ -1,10 +1,9 @@
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::ops::Deref;
-use core::ptr::NonNull;
 use wgpu_core_remote_types::{
     encoders::{RenderBundleDescriptor, RenderBundleEncoderDescriptor},
     pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
-    BufferDescriptor, ExternalTextureDescriptor, PipelineError, PipelineLayoutDescriptor,
+    BufferDescriptor, ExternalTextureDescriptor, MapMode, PipelineError, PipelineLayoutDescriptor,
     QuerySetDescriptor, SamplerDescriptor, ShaderModuleDescriptor, TextureDescriptor,
     TextureViewDescriptor,
 };
@@ -18,7 +17,7 @@ use wgpu_core::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
         ResolvedGeneralRenderPipelineDescriptor,
     },
-    resource::{self, BufferAccessError, BufferMapOperation, CreateBufferError},
+    resource::{self, BufferAccessError, BufferMapCallback, BufferMapping, CreateBufferError},
     Label, LabelHelpers, SubmissionIndex,
 };
 
@@ -164,14 +163,14 @@ impl Global {
         device_id: DeviceId,
         id_in: id::TextureId,
         desc: &TextureDescriptor,
-    ) -> id::TextureId {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             textures, devices, ..
         } = &mut *hub;
         let device = devices.get(device_id);
         let texture = device.create_texture_error(desc);
-        textures.assign(id_in, texture)
+        textures.assign(id_in, texture);
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -994,7 +993,7 @@ impl Global {
     /// Returns an error if the pipeline creation fails instead of handling error in device.
     ///
     /// Id is assigned to the pipeline only if the creation succeeds.
-    pub fn create_render_pipeline_or_error(
+    pub fn device_create_render_pipeline_or_error(
         &self,
         device_id: DeviceId,
         desc: &RenderPipelineDescriptor,
@@ -1274,15 +1273,21 @@ impl Global {
     pub fn buffer_map_async(
         &self,
         buffer_id: id::BufferId,
+        mode: MapMode,
         offset: BufferAddress,
         size: Option<BufferAddress>,
-        op: BufferMapOperation,
+        callback: Option<BufferMapCallback>,
     ) -> Option<SubmissionIndex> {
         let hub = self.hub.borrow();
 
         let buffer = hub.buffers.get(buffer_id);
 
-        buffer.map_async(offset, size, op)
+        buffer.map_async(
+            resource::MapModeFlags::from_bits_retain(mode.bits()),
+            offset,
+            size,
+            callback,
+        )
     }
 
     pub fn buffer_get_mapped_range(
@@ -1290,7 +1295,7 @@ impl Global {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         size: Option<BufferAddress>,
-    ) -> Result<(NonNull<u8>, u64), BufferAccessError> {
+    ) -> Result<BufferMapping, BufferAccessError> {
         let hub = self.hub.borrow();
 
         let buffer = hub.buffers.get(buffer_id);

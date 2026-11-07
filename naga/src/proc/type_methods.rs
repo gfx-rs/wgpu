@@ -274,6 +274,7 @@ impl crate::TypeInner {
             | Self::Sampler { .. }
             | Self::AccelerationStructure { .. }
             | Self::RayQuery { .. }
+            | Self::HitObject
             | Self::BindingArray { .. } => Some(0),
         }
     }
@@ -429,6 +430,7 @@ impl crate::TypeInner {
             | Ti::Vector { .. }
             | Ti::Matrix { .. }
             | Ti::RayQuery { .. }
+            | Ti::HitObject
             | Ti::CooperativeMatrix { .. } => true,
         }
     }
@@ -481,6 +483,7 @@ impl crate::TypeInner {
             | crate::TypeInner::Sampler { .. }
             | crate::TypeInner::AccelerationStructure { .. }
             | crate::TypeInner::RayQuery { .. }
+            | crate::TypeInner::HitObject
             | crate::TypeInner::BindingArray { .. } => None,
         }
     }
@@ -504,8 +507,20 @@ impl crate::TypeInner {
             | crate::TypeInner::Sampler { .. }
             | crate::TypeInner::AccelerationStructure { .. }
             | crate::TypeInner::RayQuery { .. }
+            | crate::TypeInner::HitObject
             | crate::TypeInner::BindingArray { .. } => false,
         }
+    }
+
+    /// Return true if `self` is an external texture.
+    pub const fn is_external_image(&self) -> bool {
+        matches!(
+            self,
+            crate::TypeInner::Image {
+                class: crate::ImageClass::External,
+                ..
+            }
+        )
     }
 
     /// Determine whether `self` automatically converts to `goal`.
