@@ -2710,6 +2710,14 @@ impl super::Adapter {
         } else {
             None
         };
+        let maintenance1_fn = if self.phd_capabilities.device_api_version < vk::API_VERSION_1_1 {
+            Some(khr::maintenance1::Device::new(
+                &self.instance.raw,
+                &raw_device,
+            ))
+        } else {
+            None
+        };
         let timeline_semaphore_fn = if enabled_extensions.contains(&khr::timeline_semaphore::NAME) {
             Some(super::ExtensionFn::Extension(
                 khr::timeline_semaphore::Device::new(&self.instance.raw, &raw_device),
@@ -3018,6 +3026,7 @@ impl super::Adapter {
             physical_device: self.raw,
             enabled_extensions: enabled_extensions.into(),
             extension_fns: super::DeviceExtensionFunctions {
+                maintenance1: maintenance1_fn,
                 debug_utils: debug_utils_fn,
                 draw_indirect_count: indirect_count_fn,
                 timeline_semaphore: timeline_semaphore_fn,

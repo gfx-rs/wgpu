@@ -416,6 +416,9 @@ struct DeviceExtensionFunctions {
     mesh_shading: Option<ext::mesh_shader::Device>,
     #[cfg_attr(not(unix), allow(dead_code))]
     external_memory_fd: Option<khr::external_memory_fd::Device>,
+    /// `Some` on devices below Vulkan 1.1, where `vkTrimCommandPool` comes
+    /// from `VK_KHR_maintenance1` (which the adapter requires there).
+    maintenance1: Option<khr::maintenance1::Device>,
 }
 
 struct RayTracingDeviceExtensionFunctions {
@@ -639,6 +642,20 @@ struct DeviceShared {
     // The `drop_guard` field must be the last field of this struct so it is dropped last.
     // Do not add new fields after it.
     drop_guard: Option<crate::DropGuard>,
+}
+
+impl DeviceShared {
+    /// Return the memory of a command pool's unused command buffers to the
+    /// driver (`vkTrimCommandPool`, core in 1.1, `VK_KHR_maintenance1` before).
+    unsafe fn trim_command_pool(&self, pool: vk::CommandPool) {
+        match &self.extension_fns.maintenance1 {
+            Some(ext) => unsafe { ext.trim_command_pool(pool, vk::CommandPoolTrimFlags::empty()) },
+            None => unsafe {
+                self.raw
+                    .trim_command_pool(pool, vk::CommandPoolTrimFlags::empty())
+            },
+        }
+    }
 }
 
 impl Drop for DeviceShared {
