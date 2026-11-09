@@ -307,7 +307,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 #### Metal
 
-- Select the Metal Shading Language version on watchOS from the OS release instead of always falling back to MSL 1.0: watchOS 10 gets 3.1, watchOS 11 gets 3.2, and watchOS 26 gets 4.0. By @matthargett in [#10860](https://github.com/gfx-rs/wgpu/pull/10860).
+- Add watchOS to the Metal capability checks. watchOS 10 and later select MSL 3.1, 3.2, or 4.0 by release instead of always falling back to MSL 1.0, and query GPU family, argument buffer, read-write texture, and counter sampling support. Indirect drawing is enabled on Apple5 and later watch GPUs running watchOS 11 and later. By @matthargett in [#10860](https://github.com/gfx-rs/wgpu/pull/10860).
 - Advertise `TEXTURE_INT64_ATOMIC` and R64Uint storage atomics on Apple8+Mac2 devices with MSL 3.1, restoring support for 64-bit texture atomic min/max on M2 Macs. By @urothis.
 - Cap `max_storage_buffer_binding_size` to `u32::MAX - 4` again. By @nuri-yoo in [#10306](https://github.com/gfx-rs/wgpu/pull/10306).
 - Fix a crash/hang when configuring a surface with the `Bt2100Pq`, `Bt2100Hlg`, or `ExtendedDisplayP3` color space: the dynamically resolved CoreGraphics color-space constants were read with one level of indirection missing. By @stuartparmenter in [#10175](https://github.com/gfx-rs/wgpu/pull/10175).
