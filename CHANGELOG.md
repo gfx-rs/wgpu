@@ -145,6 +145,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 #### Naga
 
 - Add `@builtin(hit_barycentrics)`, a `vec2<f32>` readable in `@any_hit` and `@closest_hit` ray tracing pipeline shaders, holding two of the barycentric coordinates of the hit point on the triangle (the third is `1.0 - x - y`). Currently only supported with the SPIR-V backend. By @JMS55 in [#10193](https://github.com/gfx-rs/wgpu/pull/10193).
+- Add the `wgpu_ray_tracing_invocation_reorder` WGSL enable-extension and the matching `Capabilities::RAY_TRACING_INVOCATION_REORDER`, exposing hit objects and shader invocation reordering. It provides the `hit_object` type, which records the result of a ray traversal without running any hit or miss shader, various `hitObject*` built-in functions, and `reorderThread`, which reorders invocations of a `@ray_generation` shader to improve coherence. Currently only supported with the SPIR-V backend. By @JMS55 in [#10311](https://github.com/gfx-rs/wgpu/pull/10311).
 - Support WGSL `bitcast` between `vec2<f16>` and 32-bit scalars, between `vec4<f16>` and `vec2` of 32-bit scalars, between `f16` and `i16`/`u16` (with `wgpu_int16`), and the corresponding SPIR-V `OpBitcast`s. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
 
 #### Hal
@@ -292,6 +293,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 #### Vulkan
 
+- On Windows, only wait for the swapchain acquire fence in `Fifo` and `FifoRelaxed` present modes. It added acquire latency in `Immediate` and `Mailbox`. By @HashimTheArab in [#10714](https://github.com/gfx-rs/wgpu/pull/10714).
 - Fix `HalCounters::textures` drifting negative: `create_texture` never incremented it while `destroy_texture` always decremented it. By @dustyleary in [#10022](https://github.com/gfx-rs/wgpu/pull/10022).
 - Fix `VUID-VkImageViewCreateInfo-image-04441` validation errors when creating a view of a texture whose only usages are `COPY_SRC` and/or `COPY_DST`. By @MannXo in [#10200](https://github.com/gfx-rs/wgpu/issues/10200).
 - Add OpenHarmony surface support via `VK_OHOS_surface`. Previously the Vulkan backend could not create a surface on OpenHarmony, leaving GLES as the only usable backend. By @ozongzi in [#9908](https://github.com/gfx-rs/wgpu/pull/9908).
@@ -305,6 +307,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 #### Metal
 
+- Advertise `TEXTURE_INT64_ATOMIC` and R64Uint storage atomics on Apple8+Mac2 devices with MSL 3.1, restoring support for 64-bit texture atomic min/max on M2 Macs. By @urothis.
 - Cap `max_storage_buffer_binding_size` to `u32::MAX - 4` again. By @nuri-yoo in [#10306](https://github.com/gfx-rs/wgpu/pull/10306).
 - Fix a crash/hang when configuring a surface with the `Bt2100Pq`, `Bt2100Hlg`, or `ExtendedDisplayP3` color space: the dynamically resolved CoreGraphics color-space constants were read with one level of indirection missing. By @stuartparmenter in [#10175](https://github.com/gfx-rs/wgpu/pull/10175).
 - Fix bind group resources for the task, mesh, fragment, and compute shader stages being bound from the wrong offsets whenever a bind group contained resources visible to the task or mesh stages, which could bind the wrong buffer, texture, or sampler to a shader slot. By @teoxoy in [#10043](https://github.com/gfx-rs/wgpu/issues/10043).
@@ -346,6 +349,10 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 #### Metal
 
 - A render pipeline switch no longer allocates once per vertex buffer. By @samoylenkodmitry in [#10630](https://github.com/gfx-rs/wgpu/pull/10630).
+
+#### Naga
+
+- Reduce HLSL compute shader compilation time for large workgroup arrays by initializing their elements with loops distributed across workgroup invocations. By @DonutShinobu in [#10314](https://github.com/gfx-rs/wgpu/pull/10314).
 
 ### Documentation
 
