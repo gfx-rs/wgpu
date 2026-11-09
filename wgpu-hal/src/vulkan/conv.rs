@@ -705,6 +705,10 @@ pub fn map_buffer_usage_to_barrier(
         stages |= vk::PipelineStageFlags::TRANSFER;
         access |= vk::AccessFlags::TRANSFER_WRITE;
     }
+    if usage.contains(wgt::BufferUses::RAY_TRACING_PIPELINE_SHADER_DATA) {
+        stages |= vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR;
+        access |= vk::AccessFlags::SHADER_READ;
+    }
 
     (stages, access)
 }
