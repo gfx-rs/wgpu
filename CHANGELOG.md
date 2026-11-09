@@ -173,6 +173,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - The format string of `debugPrintf` is now checked for correctness. By @evilpie in [#9641](https://github.com/gfx-rs/wgpu/pull/9641).
 - Added `wgt::Features::CORE_FEATURES_AND_LIMITS`, which is reported only when the adapter supports WebGPU default limits and its downlevel capabilities are WebGPU-compliant. By @sagudev in [#10293](https://github.com/gfx-rs/wgpu/pull/10293).
 - Added `TextureDescriptor::default_view_dimension` to get the view dimension a texture's views default to. By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
+- Added `Queue` getter on `Device`. By @sagudev in [#10895](https://github.com/gfx-rs/wgpu/pull/10895).
 
 #### Naga
 
