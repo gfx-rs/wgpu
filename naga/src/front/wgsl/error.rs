@@ -356,6 +356,7 @@ pub(crate) enum Error<'a> {
     InvalidBreakIf(Span),
     InvalidGatherComponent(Span),
     InvalidConstructorComponentType(Span, i32),
+    ArrayConstructorTooManyElements(Span),
     InvalidIdentifierUnderscore(Span),
     ReservedIdentifierPrefix(Span),
     UnknownAddressSpace(Span),
@@ -734,6 +735,7 @@ impl<'a> Error<'a> {
                 | Error::PipelineConstantIDValue(span)
                 | Error::NotBool(span)
                 | Error::ConstAssertFailed(span)
+                | Error::ArrayConstructorTooManyElements(span)
                 | Error::ExpectedGlobalVariable { name_span: span }
                 | Error::UnexpectedExprForEnumerant(span)
                 | Error::UnexpectedTemplate(span)
@@ -774,6 +776,10 @@ impl<'a> Error<'a> {
                     Error::TypeNotInferable(_) => (
                         "type can't be inferred",
                         "type can't be inferred"
+                    ),
+                    Error::ArrayConstructorTooManyElements(_) => (
+                        "array constructor exceeds the maximum of 2047 elements",
+                        "exceeded array constructor maximum of 2047 elements"
                     ),
                     Error::InvalidAddrOfOperand(_) => (
                         "cannot take the address of a vector component",
