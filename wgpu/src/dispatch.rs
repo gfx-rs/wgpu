@@ -143,6 +143,7 @@ pub trait DeviceInterface: CommonTraits {
     fn features(&self) -> crate::Features;
     fn limits(&self) -> crate::Limits;
     fn adapter_info(&self) -> crate::AdapterInfo;
+    fn queue(&self) -> DispatchQueue;
 
     fn create_shader_module(
         &self,
