@@ -3679,7 +3679,7 @@ mod hdr_metadata_tests {
                             .iter_mut()
                             .zip(name.to_bytes_with_nul())
                         {
-                            *dst = src as _;
+                            *dst = bytemuck::cast(src);
                         }
                         properties
                     })
