@@ -124,6 +124,20 @@ impl crate::Adapter for super::Adapter {
                 }
             }
 
+            let counters = Arc::<wgt::HalCounters>::default();
+            let icb = super::icb::IcbContext::new(&self.shared, features, Arc::clone(&counters))
+                .map(Arc::new);
+            // Count draws have no lowering without the multi-draw support
+            // kernels (see `icb::DeferredMultiDraw::ClampedArgs`), so fail
+            // device creation rather than a later draw call.
+            if features.contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT) && icb.is_none() {
+                log::error!(
+                    "Metal multi-draw support kernels failed to compile, so the device \
+                     can't provide MULTI_DRAW_INDIRECT_COUNT"
+                );
+                return Err(crate::DeviceError::Unexpected);
+            }
+
             let queue = device.newCommandQueueWithDescriptor(&cq_desc).unwrap();
 
             // Acquiring the meaning of timestamp ticks is hard with Metal!
@@ -151,10 +165,6 @@ impl crate::Adapter for super::Adapter {
                 // Known for Apple Silicon (at least M1 & M2, iPad Pro 2018) and AMD GPUs.
                 1.0
             };
-
-            let counters = Arc::<wgt::HalCounters>::default();
-            let icb =
-                super::icb::IcbContext::new(&self.shared, Arc::clone(&counters)).map(Arc::new);
 
             Ok(crate::OpenDevice {
                 device: super::Device {
@@ -1466,6 +1476,10 @@ impl super::CapabilitiesQuery {
         features.set(
             F::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
             self.supported_vertex_amplification_factor > 1 && self.mesh_shaders,
+        );
+        features.set(
+            F::MULTI_DRAW_INDIRECT_COUNT,
+            self.indirect_command_buffers_rendering,
         );
 
         // Cooperative matrix (simdgroup matrix) requires MSL 2.3+

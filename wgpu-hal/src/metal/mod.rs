@@ -470,7 +470,12 @@ impl AdapterShared {
             let name = device.name().to_string();
             let capabilities_query = CapabilitiesQuery::new(&device);
             let shared = AdapterShared::new(device, &capabilities_query, instance_flags);
-            let features = capabilities_query.features();
+            let mut features = capabilities_query.features();
+            // The count lowering is part of the ICB lowering, so it goes with
+            // it, including under `STRICT_WEBGPU_COMPLIANCE`.
+            if !shared.private_caps.indirect_command_buffers_rendering {
+                features.remove(wgt::Features::MULTI_DRAW_INDIRECT_COUNT);
+            }
             let capabilities = capabilities_query.capabilities(instance_flags);
             crate::ExposedAdapter {
                 info: wgt::AdapterInfo {
@@ -1422,7 +1427,7 @@ pub struct CommandEncoder {
     /// during render-pass recording, encoded (into the command buffer wgpu-core
     /// schedules before the pass) by
     /// [`encode_deferred_multi_draws`](crate::CommandEncoder::encode_deferred_multi_draws).
-    deferred_multi_draws: Vec<icb::IcbGenerationRequest>,
+    deferred_multi_draws: Vec<icb::DeferredMultiDraw>,
     /// Objects that must stay alive until the command buffers recorded by this
     /// encoder finish executing; drained into the next finished
     /// [`CommandBuffer`] so submission keep-alive doesn't depend on

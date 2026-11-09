@@ -355,8 +355,10 @@ fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
     // Metal, so they run without shader validation, as the ray-tracing tests
     // already do.
     let params = match draw_type {
-        DrawType::MultiIndirect => params.disable_mtl_shader_validation(),
-        DrawType::Standard | DrawType::Indirect | DrawType::MultiIndirectCount => params,
+        DrawType::MultiIndirect | DrawType::MultiIndirectCount => {
+            params.disable_mtl_shader_validation()
+        }
+        DrawType::Standard | DrawType::Indirect => params,
     };
     GpuTestConfiguration::new().parameters(
         params
