@@ -1115,10 +1115,7 @@ impl PhysicalDeviceFeatures {
                 || caps.supports_extension(khr::shader_non_semantic_info::NAME),
         );
 
-        features.set(
-            F::SURFACE_HDR_METADATA,
-            caps.supports_extension(ext::hdr_metadata::NAME),
-        );
+        features.set(F::SURFACE_HDR_METADATA, caps.supports_hdr_metadata());
 
         (features, dl_flags)
     }
@@ -1226,6 +1223,11 @@ impl PhysicalDeviceProperties {
         self.supported_extensions
             .iter()
             .any(|ep| ep.extension_name_as_c_str() == Ok(extension))
+    }
+
+    pub(super) fn supports_hdr_metadata(&self) -> bool {
+        self.supports_extension(ext::hdr_metadata::NAME)
+            && self.supports_extension(khr::swapchain::NAME)
     }
 
     pub fn is_driver(&self, id: vk::DriverId) -> bool {
@@ -3657,6 +3659,36 @@ fn query_cooperative_matrix_properties(
 #[cfg(test)]
 mod hdr_metadata_tests {
     use super::*;
+
+    #[test]
+    fn metadata_support_requires_swapchain_and_metadata_extensions() {
+        let cases: &[(&[&CStr], bool)] = &[
+            (&[], false),
+            (&[khr::swapchain::NAME], false),
+            (&[ext::hdr_metadata::NAME], false),
+            (&[khr::swapchain::NAME, ext::hdr_metadata::NAME], true),
+        ];
+        for &(extensions, expected) in cases {
+            let caps = PhysicalDeviceProperties {
+                supported_extensions: extensions
+                    .iter()
+                    .map(|name| {
+                        let mut properties = vk::ExtensionProperties::default();
+                        for (dst, &src) in properties
+                            .extension_name
+                            .iter_mut()
+                            .zip(name.to_bytes_with_nul())
+                        {
+                            *dst = src as _;
+                        }
+                        properties
+                    })
+                    .collect(),
+                ..Default::default()
+            };
+            assert_eq!(caps.supports_hdr_metadata(), expected, "{extensions:?}");
+        }
+    }
 
     #[test]
     fn metadata_extension_is_opt_in() {

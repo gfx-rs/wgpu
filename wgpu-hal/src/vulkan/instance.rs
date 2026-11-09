@@ -1219,9 +1219,7 @@ impl crate::Surface for super::Surface {
 
     fn supports_hdr_metadata(&self, adapter: &super::Adapter) -> bool {
         self.inner.as_any().is::<super::swapchain::NativeSurface>()
-            && adapter
-                .phd_capabilities
-                .supports_extension(ext::hdr_metadata::NAME)
+            && adapter.phd_capabilities.supports_hdr_metadata()
     }
 
     fn set_hdr_metadata(&self, metadata: &wgt::HdrMetadata) -> bool {
