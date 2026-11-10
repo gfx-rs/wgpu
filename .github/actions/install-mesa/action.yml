@@ -7,7 +7,7 @@ inputs:
     default: "26.2.6"
   # Corresponds to https://github.com/gfx-rs/ci-build/releases
   ci-binary-build:
-    default: "build30"
+    default: "build31"
   target-dir:
     description: "The directory into which to install the Mesa libraries."
     default: "target/llvm-cov-target/debug"

@@ -141,6 +141,15 @@ const fn is_subgroup_builtin_binding(binding: &Option<crate::Binding>) -> bool {
     )
 }
 
+/// The invocations that share the zero initialization of workgroup variables.
+#[derive(Clone, Copy)]
+struct WorkgroupInitInvocations<'a> {
+    /// Name of the local invocation index.
+    local_index: &'a str,
+    /// Number of invocations in the workgroup.
+    workgroup_size: u32,
+}
+
 /// Information for how to generate a `binding_array<sampler>` access.
 struct BindingArraySamplerInfo {
     /// Variable name of the sampler heap
@@ -1872,25 +1881,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         writeln!(self.out, "{{")?;
 
         if need_workgroup_variables_initialization && !nested {
-            let back::FunctionType::EntryPoint(index) = func_ctx.ty else {
-                unreachable!();
-            };
-            writeln!(
-                self.out,
-                "{}if ({} == 0) {{",
-                back::INDENT,
-                // need_workgroup_variables_initialization forces this to be written
-                // if the user doesn't specify it (so this must be Some())
-                local_invocation_index_name.as_ref().unwrap(),
-            )?;
+            // need_workgroup_variables_initialization forces this to be written
+            // if the user doesn't specify it (so this must be Some())
             self.write_workgroup_variables_initialization(
                 func_ctx,
                 module,
-                module.entry_points[index as usize].stage,
+                local_invocation_index_name.as_ref().unwrap(),
             )?;
-
-            writeln!(self.out, "{}}}", back::INDENT)?;
-            self.write_control_barrier(crate::Barrier::WORK_GROUP, back::Level(1))?;
         }
 
         if let back::FunctionType::EntryPoint(index) = func_ctx.ty {
@@ -2055,27 +2052,171 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             })
     }
 
+    /// Writes code that zeroes `access`, of type `ty`, with the work spread over the workgroup.
+    ///
+    /// `struct_array_element` is true if `access` is an element of an array that is a struct member.
+    fn write_compute_workgroup_init(
+        &mut self,
+        module: &Module,
+        ty: proc::TypeResolution,
+        access: &str,
+        struct_array_element: bool,
+        dimensions: &mut Vec<(String, u32)>,
+        invocations: WorkgroupInitInvocations,
+    ) -> BackendResult {
+        match *ty.inner_with(&module.types) {
+            TypeInner::Array { base, size, .. } => {
+                let proc::IndexableLength::Known(count) = size.resolve(module.to_ctx())? else {
+                    unreachable!();
+                };
+                let index = self.namer.call("zero_index");
+                let element = format!("{access}[{index}]");
+                dimensions.push((index, count));
+                self.write_compute_workgroup_init(
+                    module,
+                    proc::TypeResolution::Handle(base),
+                    &element,
+                    struct_array_element,
+                    dimensions,
+                    invocations,
+                )?;
+                dimensions.pop();
+            }
+            TypeInner::Struct { ref members, .. } => {
+                for (index, member) in members.iter().enumerate() {
+                    let name =
+                        &self.names[&NameKey::StructMember(ty.handle().unwrap(), index as u32)];
+                    let field = format!("{access}.{name}");
+                    match module.types[member.ty].inner {
+                        TypeInner::Matrix {
+                            columns,
+                            rows: crate::VectorSize::Bi,
+                            scalar,
+                        } if member.binding.is_none() => {
+                            for column in 0..columns as u8 {
+                                self.write_compute_workgroup_init(
+                                    module,
+                                    proc::TypeResolution::Value(TypeInner::Vector {
+                                        size: crate::VectorSize::Bi,
+                                        scalar,
+                                    }),
+                                    &format!("{field}_{column}"),
+                                    false,
+                                    dimensions,
+                                    invocations,
+                                )?;
+                            }
+                        }
+                        _ => {
+                            self.write_compute_workgroup_init(
+                                module,
+                                proc::TypeResolution::Handle(member.ty),
+                                &field,
+                                matches!(module.types[member.ty].inner, TypeInner::Array { .. }),
+                                dimensions,
+                                invocations,
+                            )?;
+                        }
+                    }
+                }
+            }
+            ref inner => {
+                let level = back::Level(1);
+                let body = level.next();
+                let WorkgroupInitInvocations {
+                    local_index,
+                    workgroup_size,
+                } = invocations;
+                if dimensions.is_empty() {
+                    writeln!(self.out, "{level}if ({local_index} == 0) {{")?;
+                } else {
+                    let count = dimensions
+                        .iter()
+                        .try_fold(1u32, |total, &(_, size)| total.checked_mul(size))
+                        .ok_or_else(|| {
+                            Error::Custom("Workgroup array element count overflow".into())
+                        })?;
+                    let index = self.namer.call("zero_flat_index");
+                    // Keep DXC from expanding large aggregate initializers during optimization.
+                    writeln!(self.out, "{level}[loop]")?;
+                    writeln!(self.out, "{level}for (uint {index} = {local_index}; {index} < {count}u; {index} += {workgroup_size}u) {{")?;
+                    let mut stride = count;
+                    for (i, &(ref dimension, size)) in dimensions.iter().enumerate() {
+                        stride /= size;
+                        let mut value = index.clone();
+                        if stride != 1 {
+                            value = format!("{value} / {stride}u");
+                        }
+                        // The loop bound keeps the outermost index in range.
+                        if i != 0 {
+                            if stride != 1 {
+                                value = format!("({value})");
+                            }
+                            value = format!("{value} % {size}u");
+                        }
+                        writeln!(self.out, "{body}uint {dimension} = {value};")?;
+                    }
+                }
+                write!(self.out, "{body}{access} = (")?;
+                if struct_array_element
+                    && matches!(
+                        inner,
+                        TypeInner::Matrix {
+                            rows: crate::VectorSize::Bi,
+                            ..
+                        }
+                    )
+                {
+                    self.write_global_type(module, ty.handle().unwrap())?;
+                } else {
+                    self.write_value_type(module, inner)?;
+                }
+                writeln!(self.out, ")0;")?;
+                writeln!(self.out, "{level}}}")?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Writes the zero initialization of the workgroup variables that the entry point uses,
+    /// followed by a workgroup barrier.
     pub(super) fn write_workgroup_variables_initialization(
         &mut self,
         func_ctx: &back::FunctionCtx,
         module: &Module,
-        stage: ShaderStage,
+        local_invocation_index: &str,
     ) -> BackendResult {
-        let vars = module.global_variables.iter().filter(|&(handle, var)| {
-            // Read-only in mesh shaders
-            let task_needs_zero =
-                (var.space == crate::AddressSpace::TaskPayload) && stage == ShaderStage::Task;
-            !func_ctx.info[handle].is_empty()
+        let back::FunctionType::EntryPoint(ep_index) = func_ctx.ty else {
+            unreachable!();
+        };
+        let entry_point = &module.entry_points[ep_index as usize];
+        let workgroup_size = entry_point
+            .workgroup_size
+            .iter()
+            .try_fold(1u32, |total, &size| total.checked_mul(size))
+            .ok_or_else(|| Error::Custom("Workgroup invocation count overflow".into()))?;
+        for (handle, var) in module.global_variables.iter() {
+            // The task payload is read-only in mesh shaders.
+            let task_needs_zero = var.space == crate::AddressSpace::TaskPayload
+                && entry_point.stage == ShaderStage::Task;
+            if !func_ctx.info[handle].is_empty()
                 && (var.space == crate::AddressSpace::WorkGroup || task_needs_zero)
-        });
-
-        for (handle, var) in vars {
-            let name = &self.names[&NameKey::GlobalVariable(handle)];
-            write!(self.out, "{}{} = ", back::Level(2), name)?;
-            self.write_default_init(module, var.ty)?;
-            writeln!(self.out, ";")?;
+            {
+                let name = self.names[&NameKey::GlobalVariable(handle)].clone();
+                self.write_compute_workgroup_init(
+                    module,
+                    proc::TypeResolution::Handle(var.ty),
+                    &name,
+                    false,
+                    &mut Vec::new(),
+                    WorkgroupInitInvocations {
+                        local_index: local_invocation_index,
+                        workgroup_size,
+                    },
+                )?;
+            }
         }
-        Ok(())
+        self.write_control_barrier(crate::Barrier::WORK_GROUP, back::Level(1))
     }
 
     /// Helper method used to write switches
@@ -3119,7 +3260,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 writeln!(self.out, ");")?;
             }
             Statement::CooperativeStore { .. } => unimplemented!(),
-            Statement::RayPipelineFunction(_) => unreachable!(),
+            Statement::RayPipelineFunction(_) | Statement::HitObject { .. } => unreachable!(),
             Statement::DebugPrintf { .. } => unimplemented!(),
         }
 
@@ -4718,6 +4859,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
             // Not supported yet
             Expression::RayQueryVertexPositions { .. }
+            | Expression::HitObjectQuery { .. }
             | Expression::CooperativeLoad { .. }
             | Expression::CooperativeMultiplyAdd { .. } => {
                 unreachable!()

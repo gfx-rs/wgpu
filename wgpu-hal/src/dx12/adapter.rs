@@ -970,6 +970,183 @@ impl super::Adapter {
             0
         };
 
+        let capabilities = crate::Capabilities {
+            limits: auxil::adjust_raw_limits(wgt::Limits {
+                //
+                // WebGPU LIMITS:
+                // Based on https://gpuweb.github.io/gpuweb/correspondence/#limits
+                //
+                // 16384
+                max_texture_dimension_1d: Direct3D12::D3D12_REQ_TEXTURE1D_U_DIMENSION,
+                // 16384
+                max_texture_dimension_2d: Direct3D12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION
+                    .min(Direct3D12::D3D12_REQ_TEXTURECUBE_DIMENSION),
+                // 2048
+                max_texture_dimension_3d: Direct3D12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
+                // 2048
+                max_texture_array_layers: Direct3D12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION,
+                // No limit.
+                max_bind_groups_plus_vertex_buffers: u32::MAX,
+                // No limit.
+                max_bindings_per_bind_group: u32::MAX,
+                max_sampled_textures_per_shader_stage,
+                max_samplers_per_shader_stage,
+                max_storage_buffers_per_shader_stage,
+                max_storage_buffers_in_vertex_stage: 0,
+                max_storage_buffers_in_fragment_stage: 0,
+                max_storage_textures_per_shader_stage,
+                max_storage_textures_in_vertex_stage: 0,
+                max_storage_textures_in_fragment_stage: 0,
+                max_uniform_buffers_per_shader_stage,
+                // See `InputSlot` param docs: https://learn.microsoft.com/en-ca/windows/win32/api/d3d12/ns-d3d12-d3d12_input_element_desc
+                max_vertex_buffers: 16,
+                // Dx12 does not expose a maximum buffer size in the API.
+                // This limit is chosen to avoid potential issues with drivers should they internally
+                // store buffer sizes using 32 bit ints (a situation we have already encountered with vulkan).
+                max_buffer_size: i32::MAX as u64,
+                max_storage_buffer_binding_size: auxil::MAX_I32_BINDING_SIZE as u64,
+                // 65536
+                max_uniform_buffer_binding_size: Direct3D12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT
+                    as u64
+                    * 16,
+                // 256
+                min_uniform_buffer_offset_alignment:
+                    Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
+                // 16
+                min_storage_buffer_offset_alignment: Direct3D12::D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT,
+                // 30
+                max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT - 2, // -2 for `SV_VertexID` and `SV_InstanceID`
+                // 2048
+                max_vertex_buffer_array_stride: Direct3D12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
+                // 31
+                max_inter_stage_shader_variables: Direct3D12::D3D12_VS_OUTPUT_REGISTER_COUNT
+                    .min(Direct3D12::D3D12_PS_INPUT_REGISTER_COUNT)
+                    - 1, // - 1 for position
+                max_immediate_size,
+                max_bind_groups,
+                max_dynamic_uniform_buffers_per_pipeline_layout,
+                max_dynamic_storage_buffers_per_pipeline_layout,
+                // 8
+                max_color_attachments: Direct3D12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT,
+                // 128 (No documented limit)
+                max_color_attachment_bytes_per_sample:
+                    Direct3D12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT
+                        * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST,
+                // From: https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.6%20Inter-Thread%20Data%20Sharing
+                max_compute_workgroup_storage_size: 32768,
+                // 1024
+                max_compute_invocations_per_workgroup:
+                    Direct3D12::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP,
+                // 1024
+                max_compute_workgroup_size_x: Direct3D12::D3D12_CS_THREAD_GROUP_MAX_X,
+                // 1024
+                max_compute_workgroup_size_y: Direct3D12::D3D12_CS_THREAD_GROUP_MAX_Y,
+                // 64
+                max_compute_workgroup_size_z: Direct3D12::D3D12_CS_THREAD_GROUP_MAX_Z,
+                // 65535
+                max_compute_workgroups_per_dimension:
+                    Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                //
+                // NATIVE (Non-WebGPU) LIMITS:
+                //
+                max_non_sampler_bindings: 1_000_000,
+                max_binding_array_elements_per_shader_stage: full_heap_count,
+                max_binding_array_sampler_elements_per_shader_stage:
+                    Direct3D12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
+
+                max_task_workgroup_total_count: max_task_mesh_workgroup_total_count,
+                max_task_workgroups_per_dimension: max_task_mesh_workgroups_per_dimension,
+                max_mesh_workgroup_total_count: max_task_mesh_workgroup_total_count,
+                max_mesh_workgroups_per_dimension: max_task_mesh_workgroups_per_dimension,
+
+                // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#dispatchmesh-api
+                // Assume this inherits from compute shaders
+                max_task_invocations_per_workgroup: if mesh_shader_supported {
+                    Direct3D12::D3D12_CS_4_X_THREAD_GROUP_MAX_THREADS_PER_GROUP
+                } else {
+                    0
+                },
+                max_task_invocations_per_dimension: if mesh_shader_supported {
+                    Direct3D12::D3D12_CS_THREAD_GROUP_MAX_Z
+                } else {
+                    0
+                },
+                // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#amplification-shader-and-mesh-shader
+                max_mesh_invocations_per_workgroup: if mesh_shader_supported { 128 } else { 0 },
+                max_mesh_invocations_per_dimension: if mesh_shader_supported { 128 } else { 0 },
+
+                max_task_payload_size: if mesh_shader_supported { 16384 } else { 0 },
+                max_mesh_output_vertices: if mesh_shader_supported { 256 } else { 0 },
+                max_mesh_output_primitives: if mesh_shader_supported { 256 } else { 0 },
+                // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#sv_rendertargetarrayindex-limitations-based-on-queryable-capability
+                max_mesh_output_layers: if mesh_shader_supported { 8 } else { 0 },
+                max_mesh_multiview_view_count: if mesh_shader_supported {
+                    max_multiview_view_count
+                } else {
+                    0
+                },
+
+                max_blas_primitive_count: if supports_ray_tracing {
+                    1 << 29 // 2^29
+                } else {
+                    0
+                },
+                max_blas_geometry_count: if supports_ray_tracing {
+                    1 << 24 // 2^24
+                } else {
+                    0
+                },
+                max_tlas_instance_count: if supports_ray_tracing {
+                    1 << 24 // 2^24
+                } else {
+                    0
+                },
+                max_acceleration_structures_per_shader_stage,
+                max_buffers_and_acceleration_structures_per_shader_stage: u32::MAX,
+                max_binding_array_acceleration_structure_elements_per_shader_stage:
+                    max_acceleration_structures_per_shader_stage,
+                max_multiview_view_count,
+
+                // not yet implemented
+                max_ray_dispatch_count: 0,
+                max_ray_recursion_depth: 0,
+            }),
+            alignments: crate::Alignments {
+                buffer_copy_offset: wgt::BufferSize::new(
+                    Direct3D12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64,
+                )
+                .unwrap(),
+                buffer_copy_pitch: wgt::BufferSize::new(
+                    Direct3D12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u64,
+                )
+                .unwrap(),
+                // Direct3D correctly bounds-checks all array accesses:
+                // https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.8.2%20Device%20Memory%20Reads
+                uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
+                raw_tlas_instance_size: u32::try_from(size_of::<
+                    Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC,
+                >())
+                .unwrap(),
+                ray_tracing_scratch_buffer_alignment:
+                    Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT,
+                    // According to https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#inactive-primitives-and-instances
+                    // "Instances with NULL bottom level acceleration structure pointers are also considered legal but inactive."
+                    // However, warp fails on this when a blas build and a tlas build are sharing a scratch buffer.
+                    null_acceleration_structure_allowed: !is_warp,
+                // Not yet implemented
+                ray_tracing_pipeline_group_data_size: 0,
+                ray_tracing_pipeline_group_data_alignment: 0,
+                ray_tracing_pipeline_data_offset_alignment: 0,
+            },
+            downlevel,
+            cooperative_matrix_properties: Vec::new(),
+        };
+
+        features.set(
+            wgt::Features::CORE_FEATURES_AND_LIMITS,
+            auxil::supports_core_features_and_limits(&capabilities.limits, &capabilities.downlevel),
+        );
+
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
                 raw: adapter,
@@ -984,178 +1161,7 @@ impl super::Adapter {
             },
             info,
             features,
-            capabilities: crate::Capabilities {
-                limits: auxil::adjust_raw_limits(wgt::Limits {
-                    //
-                    // WebGPU LIMITS:
-                    // Based on https://gpuweb.github.io/gpuweb/correspondence/#limits
-                    //
-                    // 16384
-                    max_texture_dimension_1d: Direct3D12::D3D12_REQ_TEXTURE1D_U_DIMENSION,
-                    // 16384
-                    max_texture_dimension_2d: Direct3D12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION
-                        .min(Direct3D12::D3D12_REQ_TEXTURECUBE_DIMENSION),
-                    // 2048
-                    max_texture_dimension_3d: Direct3D12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
-                    // 2048
-                    max_texture_array_layers: Direct3D12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION,
-                    // No limit.
-                    max_bind_groups_plus_vertex_buffers: u32::MAX,
-                    // No limit.
-                    max_bindings_per_bind_group: u32::MAX,
-                    max_sampled_textures_per_shader_stage,
-                    max_samplers_per_shader_stage,
-                    max_storage_buffers_per_shader_stage,
-                    max_storage_buffers_in_vertex_stage: 0,
-                    max_storage_buffers_in_fragment_stage: 0,
-                    max_storage_textures_per_shader_stage,
-                    max_storage_textures_in_vertex_stage: 0,
-                    max_storage_textures_in_fragment_stage: 0,
-                    max_uniform_buffers_per_shader_stage,
-                    // See `InputSlot` param docs: https://learn.microsoft.com/en-ca/windows/win32/api/d3d12/ns-d3d12-d3d12_input_element_desc
-                    max_vertex_buffers: 16,
-                    // Dx12 does not expose a maximum buffer size in the API.
-                    // This limit is chosen to avoid potential issues with drivers should they internally
-                    // store buffer sizes using 32 bit ints (a situation we have already encountered with vulkan).
-                    max_buffer_size: i32::MAX as u64,
-                    max_storage_buffer_binding_size: auxil::MAX_I32_BINDING_SIZE as u64,
-                    // 65536
-                    max_uniform_buffer_binding_size:
-                        Direct3D12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT as u64 * 16,
-                    // 256
-                    min_uniform_buffer_offset_alignment:
-                        Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
-                    // 16
-                    min_storage_buffer_offset_alignment:
-                        Direct3D12::D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT,
-                    // 30
-                    max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT
-                        - 2, // -2 for `SV_VertexID` and `SV_InstanceID`
-                    // 2048
-                    max_vertex_buffer_array_stride: Direct3D12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
-                    // 31
-                    max_inter_stage_shader_variables: Direct3D12::D3D12_VS_OUTPUT_REGISTER_COUNT
-                        .min(Direct3D12::D3D12_PS_INPUT_REGISTER_COUNT)
-                        - 1, // - 1 for position
-                    max_immediate_size,
-                    max_bind_groups,
-                    max_dynamic_uniform_buffers_per_pipeline_layout,
-                    max_dynamic_storage_buffers_per_pipeline_layout,
-                    // 8
-                    max_color_attachments: Direct3D12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT,
-                    // 128 (No documented limit)
-                    max_color_attachment_bytes_per_sample:
-                        Direct3D12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT
-                            * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST,
-                    // From: https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.6%20Inter-Thread%20Data%20Sharing
-                    max_compute_workgroup_storage_size: 32768,
-                    // 1024
-                    max_compute_invocations_per_workgroup:
-                        Direct3D12::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP,
-                    // 1024
-                    max_compute_workgroup_size_x: Direct3D12::D3D12_CS_THREAD_GROUP_MAX_X,
-                    // 1024
-                    max_compute_workgroup_size_y: Direct3D12::D3D12_CS_THREAD_GROUP_MAX_Y,
-                    // 64
-                    max_compute_workgroup_size_z: Direct3D12::D3D12_CS_THREAD_GROUP_MAX_Z,
-                    // 65535
-                    max_compute_workgroups_per_dimension:
-                        Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
-                    //
-                    // NATIVE (Non-WebGPU) LIMITS:
-                    //
-                    max_non_sampler_bindings: 1_000_000,
-                    max_binding_array_elements_per_shader_stage: full_heap_count,
-                    max_binding_array_sampler_elements_per_shader_stage:
-                        Direct3D12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
-
-                    max_task_workgroup_total_count: max_task_mesh_workgroup_total_count,
-                    max_task_workgroups_per_dimension: max_task_mesh_workgroups_per_dimension,
-                    max_mesh_workgroup_total_count: max_task_mesh_workgroup_total_count,
-                    max_mesh_workgroups_per_dimension: max_task_mesh_workgroups_per_dimension,
-
-                    // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#dispatchmesh-api
-                    // Assume this inherits from compute shaders
-                    max_task_invocations_per_workgroup: if mesh_shader_supported {
-                        Direct3D12::D3D12_CS_4_X_THREAD_GROUP_MAX_THREADS_PER_GROUP
-                    } else {
-                        0
-                    },
-                    max_task_invocations_per_dimension: if mesh_shader_supported {
-                        Direct3D12::D3D12_CS_THREAD_GROUP_MAX_Z
-                    } else {
-                        0
-                    },
-                    // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#amplification-shader-and-mesh-shader
-                    max_mesh_invocations_per_workgroup: if mesh_shader_supported { 128 } else { 0 },
-                    max_mesh_invocations_per_dimension: if mesh_shader_supported { 128 } else { 0 },
-
-                    max_task_payload_size: if mesh_shader_supported { 16384 } else { 0 },
-                    max_mesh_output_vertices: if mesh_shader_supported { 256 } else { 0 },
-                    max_mesh_output_primitives: if mesh_shader_supported { 256 } else { 0 },
-                    // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#sv_rendertargetarrayindex-limitations-based-on-queryable-capability
-                    max_mesh_output_layers: if mesh_shader_supported { 8 } else { 0 },
-                    max_mesh_multiview_view_count: if mesh_shader_supported {
-                        max_multiview_view_count
-                    } else {
-                        0
-                    },
-
-                    max_blas_primitive_count: if supports_ray_tracing {
-                        1 << 29 // 2^29
-                    } else {
-                        0
-                    },
-                    max_blas_geometry_count: if supports_ray_tracing {
-                        1 << 24 // 2^24
-                    } else {
-                        0
-                    },
-                    max_tlas_instance_count: if supports_ray_tracing {
-                        1 << 24 // 2^24
-                    } else {
-                        0
-                    },
-                    max_acceleration_structures_per_shader_stage,
-                    max_buffers_and_acceleration_structures_per_shader_stage: u32::MAX,
-                    max_binding_array_acceleration_structure_elements_per_shader_stage:
-                        max_acceleration_structures_per_shader_stage,
-                    max_multiview_view_count,
-
-                    // not yet implemented
-                    max_ray_dispatch_count: 0,
-                    max_ray_recursion_depth: 0,
-                }),
-                alignments: crate::Alignments {
-                    buffer_copy_offset: wgt::BufferSize::new(
-                        Direct3D12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64,
-                    )
-                    .unwrap(),
-                    buffer_copy_pitch: wgt::BufferSize::new(
-                        Direct3D12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u64,
-                    )
-                    .unwrap(),
-                    // Direct3D correctly bounds-checks all array accesses:
-                    // https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.8.2%20Device%20Memory%20Reads
-                    uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
-                    raw_tlas_instance_size: u32::try_from(size_of::<
-                        Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC,
-                    >())
-                    .unwrap(),
-                    ray_tracing_scratch_buffer_alignment:
-                        Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT,
-                    // According to https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#inactive-primitives-and-instances
-                    // "Instances with NULL bottom level acceleration structure pointers are also considered legal but inactive."
-                    // However, warp fails on this when a blas build and a tlas build are sharing a scratch buffer.
-                    null_acceleration_structure_allowed: !is_warp,
-                    // Not yet implemented
-                    ray_tracing_pipeline_group_data_size: 0,
-                    ray_tracing_pipeline_group_data_alignment: 0,
-                    ray_tracing_pipeline_data_offset_alignment: 0,
-                },
-                downlevel,
-                cooperative_matrix_properties: Vec::new(),
-            },
+            capabilities,
         })
     }
 }

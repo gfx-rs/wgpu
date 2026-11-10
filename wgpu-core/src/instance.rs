@@ -413,7 +413,7 @@ impl Instance {
             self.flags,
             &raw.info,
             &raw.capabilities.limits,
-            &raw.capabilities.downlevel,
+            raw.features,
         )
     }
 
@@ -1399,7 +1399,7 @@ fn adapter_allowed(
     flags: InstanceFlags,
     info: &impl fmt::Debug,
     limits: &wgt::Limits,
-    downlevel: &wgt::DownlevelCapabilities,
+    features: wgt::Features,
 ) -> bool {
     // Check "All alignment-class limits must be powers of 2."
     //
@@ -1430,25 +1430,11 @@ fn adapter_allowed(
         return true;
     }
 
-    // Check "All supported limits must be either the default value or better."
-    let mut min_limits = wgt::Limits::defaults();
-    min_limits.zero_native_only();
-    let failed_limits = check_limits(&min_limits, limits);
-    if !failed_limits.is_empty() {
+    if !features.contains(wgt::Features::CORE_FEATURES_AND_LIMITS) {
         log::debug!(
-            "Adapter {:?} is not WebGPU compliant due to limits: {:?}",
-            info,
-            failed_limits
-        );
-        return false;
-    }
-
-    if !downlevel.is_webgpu_compliant() {
-        let missing_flags = wgt::DownlevelFlags::compliant() - downlevel.flags;
-        log::debug!(
-            "Adapter {:?} is not WebGPU compliant due to missing downlevel flags: {:?}",
-            info,
-            missing_flags
+            "Adapter {:?} is not WebGPU compliant because it does not support \
+            CORE_FEATURES_AND_LIMITS",
+            info
         );
         return false;
     }
@@ -1518,13 +1504,6 @@ fn normalize_max_resource_per_shader_stage_limits(limits: &mut wgt::Limits) {
 mod tests {
     use super::*;
 
-    fn compliant_downlevel() -> wgt::DownlevelCapabilities {
-        wgt::DownlevelCapabilities {
-            flags: wgt::DownlevelFlags::compliant(),
-            ..Default::default()
-        }
-    }
-
     #[test]
     fn non_power_of_two_uniform_alignment_always_rejected() {
         let limits = wgt::Limits {
@@ -1535,13 +1514,13 @@ mod tests {
             InstanceFlags::empty(),
             &"",
             &limits,
-            &compliant_downlevel()
+            wgt::Features::CORE_FEATURES_AND_LIMITS
         ));
         assert!(!adapter_allowed(
             InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
             &"",
             &limits,
-            &compliant_downlevel()
+            wgt::Features::CORE_FEATURES_AND_LIMITS
         ));
     }
 
@@ -1555,13 +1534,13 @@ mod tests {
             InstanceFlags::empty(),
             &"",
             &limits,
-            &compliant_downlevel()
+            wgt::Features::CORE_FEATURES_AND_LIMITS
         ));
         assert!(!adapter_allowed(
             InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
             &"",
             &limits,
-            &compliant_downlevel()
+            wgt::Features::CORE_FEATURES_AND_LIMITS
         ));
     }
 
@@ -1575,7 +1554,7 @@ mod tests {
             InstanceFlags::empty(),
             &"",
             &limits,
-            &wgt::DownlevelCapabilities::default()
+            wgt::Features::empty()
         ));
     }
 
@@ -1589,35 +1568,17 @@ mod tests {
             InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
             &"",
             &limits,
-            &compliant_downlevel()
+            wgt::Features::empty()
         ));
     }
 
     #[test]
-    fn missing_downlevel_flags_rejected_with_strict_compliance() {
-        let downlevel = wgt::DownlevelCapabilities {
-            flags: wgt::DownlevelFlags::empty(),
-            ..Default::default()
-        };
+    fn missing_core_features_and_limits_rejected_with_strict_compliance() {
         assert!(!adapter_allowed(
             InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
             &"",
             &wgt::Limits::defaults(),
-            &downlevel
-        ));
-    }
-
-    #[test]
-    fn missing_surface_view_formats_allowed_with_strict_compliance() {
-        let downlevel = wgt::DownlevelCapabilities {
-            flags: wgt::DownlevelFlags::all() - wgt::DownlevelFlags::SURFACE_VIEW_FORMATS,
-            ..Default::default()
-        };
-        assert!(adapter_allowed(
-            InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
-            &"",
-            &wgt::Limits::defaults(),
-            &downlevel
+            wgt::Features::empty()
         ));
     }
 
@@ -1627,7 +1588,7 @@ mod tests {
             InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
             &"",
             &wgt::Limits::defaults(),
-            &compliant_downlevel()
+            wgt::Features::CORE_FEATURES_AND_LIMITS
         ));
     }
 
