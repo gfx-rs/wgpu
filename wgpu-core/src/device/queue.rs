@@ -1172,7 +1172,7 @@ impl Queue {
 
         let snatch_guard = self.device.snatchable_lock.read();
 
-        let dst_raw = dst.try_inner(&snatch_guard)?.raw();
+        let dst_raw = dst.try_raw_with_invalid(&snatch_guard)?;
 
         // This must happen after parameter validation (so that errors are reported
         // as required by the spec), but before any side effects.
@@ -1997,7 +1997,7 @@ impl Queue {
         let mut used_surface_textures = track::TextureUsageScope::default();
         used_surface_textures.set_size(self.device.tracker_indices.textures.size());
         for texture in pending_writes.dst_textures.values() {
-            match texture.try_inner(&snatch_guard) {
+            match texture.try_inner_nested(&snatch_guard) {
                 Ok(TextureInner::Native { .. }) => {}
                 Ok(TextureInner::Surface { .. }) => {
                     // Compare the Arcs by pointer as Textures don't implement Eq
@@ -2008,6 +2008,10 @@ impl Queue {
                             .merge_single(texture, None, wgt::TextureUses::PRESENT)
                             .unwrap()
                     };
+                }
+                //
+                Ok(TextureInner::Child { .. }) => {
+                    unreachable!("Child textures should have been unwrapped by try_inner_nested.")
                 }
                 // The texture must not have been destroyed when its usage here was
                 // encoded. If it was destroyed after that, then it was transferred
@@ -2276,13 +2280,18 @@ fn validate_command_buffer(
         {
             profiling::scope!("textures");
             for texture in cmd_buf_data.trackers.textures.used_resources() {
-                let should_extend = match texture.try_inner(snatch_guard)? {
+                let should_extend = match texture.try_inner_nested(snatch_guard)? {
                     TextureInner::Native { .. } => false,
                     TextureInner::Surface { .. } => {
                         // Compare the Arcs by pointer as Textures don't implement Eq.
                         surface_textures.insert(Arc::as_ptr(texture), texture.clone());
 
                         true
+                    }
+                    TextureInner::Child { .. } => {
+                        unreachable!(
+                            "Child textures should not appear here after try_inner_nested."
+                        );
                     }
                 };
                 if should_extend {

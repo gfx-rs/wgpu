@@ -25,6 +25,7 @@ mod buffer;
 mod buffer_copy;
 mod buffer_resource_limits;
 mod buffer_usages;
+mod child_texture;
 mod clear_texture;
 mod clip_distances;
 mod cloneable_types;
@@ -104,6 +105,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     buffer_usages::all_tests(&mut tests);
     buffer::all_tests(&mut tests);
     clear_texture::all_tests(&mut tests);
+    child_texture::all_tests(&mut tests);
     clip_distances::all_tests(&mut tests);
     cloneable_types::all_tests(&mut tests);
     compute_pass_ownership::all_tests(&mut tests);

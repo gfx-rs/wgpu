@@ -1059,7 +1059,7 @@ impl CommandEncoder {
         let texture_barriers = transitions
             .into_iter()
             .enumerate()
-            .map(|(i, p)| p.into_hal(textures[i].unwrap().raw()))
+            .map(|(i, p)| p.into_hal(textures[i].unwrap()))
             .collect::<Vec<_>>();
 
         unsafe {
