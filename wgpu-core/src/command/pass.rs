@@ -82,24 +82,33 @@ impl ImmediateState {
         Ok(())
     }
 
+    /// Marks the immediates as clean and returns the dirty immediates that `layout` can hold.
+    ///
+    /// Returns `None` if there is nothing to write.
+    pub(crate) fn take_dirty(&mut self, layout: &binding_model::PipelineLayout) -> Option<&[u32]> {
+        if !core::mem::take(&mut self.immediates_dirty) {
+            return None;
+        }
+        let len = self
+            .immediates
+            .len()
+            .min(layout.immediate_size as usize / size_of::<u32>());
+        if len == 0 {
+            return None;
+        }
+        Some(&self.immediates[..len])
+    }
+
     pub(crate) fn flush_immediates(
         &mut self,
         layout: &Arc<binding_model::PipelineLayout>,
         raw_encoder: &mut dyn hal::DynCommandEncoder,
     ) {
-        if !self.immediates.is_empty() && self.immediates_dirty {
+        if let Some(data) = self.take_dirty(layout) {
             // SAFETY: The range of immediates written is within layout immediate size.
             unsafe {
-                raw_encoder.set_immediates(
-                    layout.raw().unwrap(),
-                    0,
-                    &self.immediates[..(self
-                        .immediates
-                        .len()
-                        .min(layout.immediate_size as usize / size_of::<u32>()))],
-                );
+                raw_encoder.set_immediates(layout.raw().unwrap(), 0, data);
             }
-            self.immediates_dirty = false;
         }
     }
 }
