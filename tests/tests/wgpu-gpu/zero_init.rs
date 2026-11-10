@@ -78,7 +78,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH32FLOAT_STENCIL8,
         DYNAMIC_OFFSET_BUFFER_BINDING_INIT,
         ZERO_INIT_MULTIPLANAR_TEXTURE,
-        ZERO_INIT_MULTIPLANAR_RENDER_ATTACHMENT_NV12,
+        ZERO_INIT_MULTIPLANAR_RENDER_ATTACHMENT,
         COPY_TEXTURE_TO_BUFFER_3D_SOURCE_ORIGIN_Z_UNINIT,
         COPY_TEXTURE_TO_TEXTURE_3D_SOURCE_ORIGIN_Z_UNINIT,
         COPY_BUFFER_TO_TEXTURE_3D_DEST_ORIGIN_Z_PARTIAL,
@@ -2172,25 +2172,19 @@ static ZERO_INIT_MULTIPLANAR_TEXTURE: GpuTestConfiguration = GpuTestConfiguratio
 // buffer copies. Use multiple layers so that every (layer, plane) clear view must be selected
 // correctly. (Vulkan does not allow multiple mip levels for these formats.)
 //
-// Zero-init tests are only reliable on llvmpipe with LVP_POISON_MEMORY, but llvmpipe has a
-// bug with rendering to planes other than plane 0, so this test is skipped there, and thus
-// is not providing meaningful coverage.
+// TODO(https://github.com/gfx-rs/wgpu/issues/8122): With `tier1-texture-formats`, the
+// 16-bit norm formats should be renderable, but they currently are not.
 #[apply(gpu_test!)]
-static ZERO_INIT_MULTIPLANAR_RENDER_ATTACHMENT_NV12: GpuTestConfiguration =
-    GpuTestConfiguration::new()
-        .parameters(
-            TestParameters::default()
-                .features(Features::TEXTURE_FORMAT_NV12)
-                .limits(Limits::downlevel_defaults())
-                // llvmpipe has a bug rendering to planes other than plane 0
-                .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
-        )
-        .run_async(|ctx| async move {
-            // P010 doesn't support RENDER_ATTACHMENT usage on llvmpipe, so
-            // don't bother testing it (these tests are only reliable on
-            // llvmpipe with LVP_POISON_MEMORY=true).
-            check_multiplanar_render_attachment_zero_init(&ctx, TextureFormat::NV12).await;
-        });
+static ZERO_INIT_MULTIPLANAR_RENDER_ATTACHMENT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::TEXTURE_FORMAT_NV12)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| async move {
+        check_multiplanar_render_attachment_zero_init(&ctx, TextureFormat::NV12).await;
+        // TODO(https://github.com/gfx-rs/wgpu/issues/8122): Add P010 (see above)
+    });
 
 async fn check_multiplanar_render_attachment_zero_init(
     ctx: &TestingContext,

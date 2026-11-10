@@ -2149,25 +2149,13 @@ impl Device {
             );
 
             let clear_views = resource::ClearViews::new(
+                clear_label,
+                usage,
                 desc.format,
                 desc.mip_level_count,
                 desc.size.depth_or_array_layers,
-                |mip_level, array_layer, aspect| {
-                    let desc = hal::TextureViewDescriptor {
-                        label: clear_label,
-                        format: desc.format.aspect_specific_format(aspect).unwrap(),
-                        dimension: TextureViewDimension::D2,
-                        usage,
-                        range: wgt::ImageSubresourceRange {
-                            aspect,
-                            base_mip_level: mip_level,
-                            mip_level_count: Some(1),
-                            base_array_layer: array_layer,
-                            array_layer_count: Some(1),
-                        },
-                        swizzle: wgt::TextureComponentSwizzle::default(),
-                    };
-                    unsafe { self.raw().create_texture_view(raw_texture.as_ref(), &desc) }
+                |desc| {
+                    unsafe { self.raw().create_texture_view(raw_texture.as_ref(), desc) }
                         .map_err(|e| self.handle_hal_error(e))
                 },
             )?;

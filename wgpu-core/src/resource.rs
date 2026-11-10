@@ -1682,7 +1682,11 @@ impl TextureInner {
     }
 }
 
-/// Views for clearing a 2D texture with render passes.
+/// Views for clearing a 2D texture with render passes. The contained views must be manually
+/// destroyed by calling [`Self::destroy`].
+///
+/// This helper encapsulates the indexing logic for clear views (in [`Self::views`]),
+/// to reduce the chance of doing so incorrectly and failing to properly clear a texture.
 ///
 /// Color and depth/stencil textures have a single clear view with [`wgt::TextureAspect::All`].
 /// This is true even for combined depth/stencil formats, which clear both aspects
@@ -1691,11 +1695,6 @@ impl TextureInner {
 ///
 /// Multi-planar textures have a clear view per plane. The number of views is (mip level
 /// count) * (array layer count) * (plane count).
-///
-/// Encapsulating the indexing logic for clear views in [`ClearViews::views`] reduces the
-/// chance of doing so incorrectly and failing to properly clear a texture.
-///
-/// The contained views must be manually destroyed by calling [`ClearViews::destroy`].
 #[derive(Debug)]
 pub struct ClearViews {
     views: SmallVec<[Box<dyn hal::DynTextureView>; 1]>,
@@ -1708,13 +1707,13 @@ impl ClearViews {
     /// Creates [`ClearViews`] by calling the provided `create_view` closure with `(mip_level,
     /// array_layer, aspect)` for each clear view of the texture.
     pub(crate) fn new<E>(
+        label: hal::Label<'_>,
+        usage: wgt::TextureUses,
         format: wgt::TextureFormat,
         mip_level_count: u32,
         array_layer_count: u32,
         mut create_view: impl FnMut(
-            u32,
-            u32,
-            wgt::TextureAspect,
+            &hal::TextureViewDescriptor,
         ) -> Result<Box<dyn hal::DynTextureView>, E>,
     ) -> Result<Self, E> {
         const PLANES: [wgt::TextureAspect; 3] = [
@@ -1731,7 +1730,21 @@ impl ClearViews {
         for mip_level in 0..mip_level_count {
             for array_layer in 0..array_layer_count {
                 for &aspect in aspects {
-                    views.push(create_view(mip_level, array_layer, aspect)?);
+                    let desc = hal::TextureViewDescriptor {
+                        label,
+                        format: format.aspect_specific_format(aspect).unwrap(),
+                        dimension: wgt::TextureViewDimension::D2,
+                        usage,
+                        range: wgt::ImageSubresourceRange {
+                            aspect,
+                            base_mip_level: mip_level,
+                            mip_level_count: Some(1),
+                            base_array_layer: array_layer,
+                            array_layer_count: Some(1),
+                        },
+                        swizzle: wgt::TextureComponentSwizzle::default(),
+                    };
+                    views.push(create_view(&desc)?);
                 }
             }
         }
