@@ -229,14 +229,12 @@ pub fn apply_limit_buckets(mut raw: hal::DynExposedAdapter) -> Option<hal::DynEx
     None
 }
 
-/// These features are preserved by limit bucketing and exposed to higher layers whenever the
-/// device supports them. The external-texture-related features are not considered when
-/// determining bucket compatibility. `CORE_FEATURES_AND_LIMITS` is required by the specialized
-/// buckets, so its availability does affect compatibility with those buckets.
+/// These features are left alone by limit bucketing. They will be exposed to higher layers
+/// whenever the device supports them, and they are not considered when determining bucket
+/// compatibility.
 ///
-/// All four features (apart from `CORE_FEATURES_AND_LIMITS`) in the list are related to
-/// external textures. (The texture format features are used internally by Firefox to
-/// support external textures.)
+/// All four features in the list are related to external textures. (The texture format
+/// features are used internally by Firefox to support external textures.)
 ///
 /// Handling them this way is a bit of a kludge, but is expected to be a short-term
 /// situation only until external texture support is universally available.
@@ -246,8 +244,7 @@ pub fn apply_limit_buckets(mut raw: hal::DynExposedAdapter) -> Option<hal::DynEx
 /// at that point neither excluding the tier1 formats from WebIDL entirely nor allowing
 /// content to use them on a device that doesn't have the feature enabled will be
 /// acceptable. See <https://github.com/gfx-rs/wgpu/issues/8122>.
-pub(crate) const EXEMPT_FEATURES: Features = Features::CORE_FEATURES_AND_LIMITS
-    .union(Features::EXTERNAL_TEXTURE)
+pub(crate) const EXEMPT_FEATURES: Features = Features::EXTERNAL_TEXTURE
     .union(Features::TEXTURE_FORMAT_NV12)
     .union(Features::TEXTURE_FORMAT_P010)
     .union(Features::TEXTURE_FORMAT_16BIT_NORM);
@@ -540,7 +537,7 @@ const BUCKET_DEFAULT: Bucket = Bucket {
     name: "default",
     limits: Limits::defaults(),
     info: BucketedAdapterInfo::defaults(),
-    features: Features::empty(),
+    features: Features::CORE_FEATURES_AND_LIMITS,
 };
 
 // WebGPU default limits, is a fallback adapter
@@ -551,7 +548,7 @@ const BUCKET_FALLBACK: Bucket = Bucket {
         is_fallback_adapter: true,
         ..BucketedAdapterInfo::defaults()
     },
-    features: Features::empty(),
+    features: Features::CORE_FEATURES_AND_LIMITS,
 };
 
 #[cfg(test)]
