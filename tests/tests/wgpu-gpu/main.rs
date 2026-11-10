@@ -30,6 +30,7 @@ mod clip_distances;
 mod cloneable_types;
 mod compute_pass_ownership;
 mod compute_pass_transition_resources;
+mod cooperative_matrix;
 mod create_surface_error;
 mod device;
 mod dispatch_workgroups_indirect;
@@ -107,6 +108,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     clip_distances::all_tests(&mut tests);
     cloneable_types::all_tests(&mut tests);
     compute_pass_ownership::all_tests(&mut tests);
+    cooperative_matrix::all_tests(&mut tests);
 
     #[cfg(wasm_test)]
     create_surface_error::all_tests(&mut tests);
