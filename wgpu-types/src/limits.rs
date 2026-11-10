@@ -1306,6 +1306,7 @@ bitflags::bitflags! {
         ///
         /// See <https://gpuweb.github.io/gpuweb/#dom-gpudevice-createtexture>
         const ARBITRARY_BINDING_VIEW_DIMENSIONS = 1 << 27;
+        // Free flag slot at 1 << 23
     }
 }
 
