@@ -404,8 +404,8 @@ fn write_output_msl(
 
     let mut options = options.clone();
     options.bounds_check_policies = shared_options.bounds_checks_policies;
-    options.mesh_shader_primitive_indices_clamp = shared_options.mesh_output_validation;
-    options.task_dispatch_limits = shared_options.task_limits;
+    options.common.mesh_shader_primitive_indices_clamp = shared_options.mesh_output_validation;
+    options.common.task_dispatch_limits = shared_options.task_limits;
     let (string, tr_info) = msl::write_string(&module, &info, &options, pipeline_options)
         .unwrap_or_else(|err| panic!("Metal write failed: {err}"));
 
@@ -477,8 +477,8 @@ fn write_output_hlsl(
             .expect("override evaluation failed");
 
     let mut options = options.clone();
-    options.mesh_shader_primitive_indices_clamp = shared_info.mesh_output_validation;
-    options.task_dispatch_limits = shared_info.task_limits;
+    options.common.mesh_shader_primitive_indices_clamp = shared_info.mesh_output_validation;
+    options.common.task_dispatch_limits = shared_info.task_limits;
 
     let mut buffer = String::new();
     let pipeline_options = Default::default();

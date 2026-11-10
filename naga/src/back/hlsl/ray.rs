@@ -69,7 +69,7 @@ impl<W: Write> super::Writer<'_, W> {
         self.write_type(module, module.special_types.ray_intersection.unwrap())?;
         writeln!(self.out, ")0;")?;
         let mut extra_level = Level(0);
-        if self.options.ray_query_initialization_tracking {
+        if self.options.common.ray_query_initialization_tracking {
             // *Technically*, `CommittedStatus` is valid as long as the ray query is initialized, but the metal backend
             // doesn't support this function unless it has finished traversal, so to encourage portable behaviour we
             // disallow it here too.
@@ -132,7 +132,7 @@ impl<W: Write> super::Writer<'_, W> {
             "        {extra_level}ret.world_to_object = rq.CommittedWorldToObject4x3();"
         )?;
         writeln!(self.out, "    {extra_level}}}")?;
-        if self.options.ray_query_initialization_tracking {
+        if self.options.common.ray_query_initialization_tracking {
             writeln!(self.out, "    }}")?;
         }
         writeln!(self.out, "    return ret;")?;
@@ -161,7 +161,7 @@ impl<W: Write> super::Writer<'_, W> {
         self.write_type(module, module.special_types.ray_intersection.unwrap())?;
         writeln!(self.out, ")0;")?;
         let mut extra_level = Level(0);
-        if self.options.ray_query_initialization_tracking {
+        if self.options.common.ray_query_initialization_tracking {
             write!(self.out, "    if (")?;
             self.write_contains_flags("rq_tracker", crate::back::RayQueryPoint::PROCEED.bits())?;
             write!(self.out, " && !")?;
@@ -233,7 +233,7 @@ impl<W: Write> super::Writer<'_, W> {
             self.out,
             "    {extra_level}ret.world_to_object = rq.CandidateWorldToObject4x3();"
         )?;
-        if self.options.ray_query_initialization_tracking {
+        if self.options.common.ray_query_initialization_tracking {
             writeln!(self.out, "    }}")?;
         }
         writeln!(self.out, "    return ret;")?;
@@ -270,7 +270,7 @@ impl<W: Write> super::Writer<'_, W> {
         self.write_expr(module, descriptor, func_ctx)?;
         writeln!(self.out, ";")?;
 
-        if self.options.ray_query_initialization_tracking {
+        if self.options.common.ray_query_initialization_tracking {
             // Validate ray extents https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#ray-extents
 
             // just for convenience
@@ -379,7 +379,7 @@ impl<W: Write> super::Writer<'_, W> {
             self.out,
             ", naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));"
         )?;
-        if self.options.ray_query_initialization_tracking {
+        if self.options.common.ray_query_initialization_tracking {
             writeln!(self.out, "{base_level}    }}")?;
         }
         writeln!(self.out, "{base_level}}}")?;
@@ -400,7 +400,7 @@ impl<W: Write> super::Writer<'_, W> {
         let name = Baked(result).to_string();
         writeln!(self.out, "bool {name} = false;")?;
         // This prevents variables flowing down a level and causing compile errors.
-        if self.options.ray_query_initialization_tracking {
+        if self.options.common.ray_query_initialization_tracking {
             writeln!(self.out, "{level}{{")?;
             level = level.next();
             write!(self.out, "{level}bool naga_has_initialized = ")?;
@@ -423,7 +423,7 @@ impl<W: Write> super::Writer<'_, W> {
         self.write_expr(module, query, func_ctx)?;
         writeln!(self.out, ".Proceed();")?;
 
-        if self.options.ray_query_initialization_tracking {
+        if self.options.common.ray_query_initialization_tracking {
             writeln!(
                 self.out,
                 "{level}{rq_tracker} = {rq_tracker} | {};",
@@ -452,7 +452,7 @@ impl<W: Write> super::Writer<'_, W> {
         func_ctx: &crate::back::FunctionCtx<'_>,
     ) -> BackendResult {
         let base_level = level;
-        if self.options.ray_query_initialization_tracking {
+        if self.options.common.ray_query_initialization_tracking {
             write!(self.out, "{level}if (")?;
             self.write_contains_flags(rq_tracker, crate::back::RayQueryPoint::PROCEED.bits())?;
             write!(self.out, " && !")?;
@@ -490,7 +490,7 @@ impl<W: Write> super::Writer<'_, W> {
         write!(self.out, ".CommitProceduralPrimitiveHit(")?;
         self.write_expr(module, hit_t, func_ctx)?;
         writeln!(self.out, ");")?;
-        if self.options.ray_query_initialization_tracking {
+        if self.options.common.ray_query_initialization_tracking {
             writeln!(self.out, "{base_level}}}}}")?;
         }
         Ok(())
@@ -504,7 +504,7 @@ impl<W: Write> super::Writer<'_, W> {
         func_ctx: &crate::back::FunctionCtx<'_>,
     ) -> BackendResult {
         let base_level = level;
-        if self.options.ray_query_initialization_tracking {
+        if self.options.common.ray_query_initialization_tracking {
             write!(self.out, "{level}if (")?;
             self.write_contains_flags(rq_tracker, crate::back::RayQueryPoint::PROCEED.bits())?;
             write!(self.out, " && !")?;
@@ -527,7 +527,7 @@ impl<W: Write> super::Writer<'_, W> {
         write!(self.out, "{level}")?;
         self.write_expr(module, query, func_ctx)?;
         writeln!(self.out, ".CommitNonOpaqueTriangleHit();")?;
-        if self.options.ray_query_initialization_tracking {
+        if self.options.common.ray_query_initialization_tracking {
             writeln!(self.out, "{base_level}}}}}")?;
         }
         Ok(())
@@ -542,7 +542,7 @@ impl<W: Write> super::Writer<'_, W> {
         func_ctx: &crate::back::FunctionCtx<'_>,
     ) -> BackendResult {
         let base_level = level;
-        if self.options.ray_query_initialization_tracking {
+        if self.options.common.ray_query_initialization_tracking {
             write!(self.out, "{level}if (")?;
             // RayQuery::Abort() can be called any time after RayQuery::TraceRayInline() has been called.
             // from https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#rayquery-abort
@@ -555,7 +555,7 @@ impl<W: Write> super::Writer<'_, W> {
         self.write_expr(module, query, func_ctx)?;
         writeln!(self.out, ".Abort();")?;
 
-        if self.options.ray_query_initialization_tracking {
+        if self.options.common.ray_query_initialization_tracking {
             writeln!(self.out, "{base_level}}}")?;
         }
 

@@ -1,0 +1,28 @@
+{
+  "success": false,
+  "diagnostics": [
+    {
+      "severity": "error",
+      "message": "expected identifier, found \"{\"",
+      "location": {
+        "line": 1,
+        "column": 7,
+        "byte_offset": 6,
+        "length": 1
+      },
+      "labels": [
+        {
+          "message": "expected identifier",
+          "location": {
+            "line": 1,
+            "column": 7,
+            "byte_offset": 6,
+            "length": 1
+          }
+        }
+      ],
+      "notes": []
+    }
+  ],
+  "reflection": null
+}

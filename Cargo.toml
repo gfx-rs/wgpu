@@ -131,6 +131,7 @@ bytemuck = { version = "1.22", features = [
 cargo_metadata = "0.23"
 cfg_aliases = "0.2.2"
 cfg-if = "1"
+clap = { version = "4.5", features = ["derive"] }
 codespan-reporting = { version = "0.13", default-features = false }
 concurrent-queue = { version = "2.5.0", default-features = false }
 diff = "0.1"
@@ -204,6 +205,7 @@ ron = "0.12"
 # see discussion here (including with some other alternatives): https://github.com/gfx-rs/wgpu/issues/6999
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
 rustc-hash = { version = "1.1", default-features = false }
+schemars = "1.2"
 scopeguard = { version = "1.2", default-features = false }
 serde_json = "1.0.143"
 serde = { version = "1.0.225", default-features = false }

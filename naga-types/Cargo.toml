@@ -18,6 +18,7 @@ workspace = true
 serialize = ["dep:serde", "indexmap/serde"]
 deserialize = ["dep:serde", "indexmap/serde"]
 arbitrary = ["dep:arbitrary", "std", "indexmap/arbitrary"]
+schemars = ["dep:schemars"]
 std = []
 
 [dependencies]
@@ -26,6 +27,7 @@ bytemuck = { workspace = true, features = ["derive"] }
 hashbrown.workspace = true
 indexmap.workspace = true
 rustc-hash.workspace = true
+schemars = { workspace = true, optional = true }
 serde = { workspace = true, features = ["alloc", "derive"], optional = true }
 
 [dev-dependencies]
