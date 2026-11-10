@@ -313,6 +313,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix ambiguous `metal::select` calls in the Metal backend's division/remainder zero guards for 64-bit integers: the guards now emit `L`/`uL` suffixed literals (e.g. `metal::select(rhs, 1uL, rhs == 0uL)`) so MSL generated for `i64`/`u64` `/` and `%` compiles. By @Statesman-forge in [#10278](https://github.com/gfx-rs/wgpu/pull/10278).
 - In the MSL backend, `subgroupBallot` now keeps lanes 32-63, which were lost on GPUs with 64-wide SIMD groups (AMD GPUs on macOS). By @ErkoRisthein in [#10797](https://github.com/gfx-rs/wgpu/pull/10797).
 - Fix a panic in the SPIR-V backend for WGSL `coopStore` and `coopStoreT` whose stride is not a constant: the stride was evaluated after the store that uses it. By @Sandvoxel in [#10901](https://github.com/gfx-rs/wgpu/pull/10901).
+- Fix SPIR-V for cooperative matrices that only appear as expression results, such as `let m = coopLoad<...>(...)`. The module declared `CooperativeMatrixKHR` without the `SPV_KHR_cooperative_matrix` extension or the Vulkan memory model, so Vulkan rejected it. By @Sandvoxel in [#10901](https://github.com/gfx-rs/wgpu/pull/10901).
 
 #### Validation
 
