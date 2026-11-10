@@ -38,7 +38,19 @@ impl NullAccelerationStructure {
         }
 
         unsafe {
-            let entries = hal::AccelerationStructureEntries::Triangles(alloc::vec![]);
+            let entries = hal::AccelerationStructureEntries::Triangles(alloc::vec![
+                hal::AccelerationStructureTriangles {
+                    vertex_buffer: Some(device.zero_buffer.as_ref()),
+                    vertex_format: wgt::VertexFormat::Float32x3,
+                    first_vertex: 0,
+                    vertex_count: 3,
+                    vertex_stride: wgt::VertexFormat::Float32x3
+                        .min_acceleration_structure_vertex_stride(),
+                    indices: None,
+                    transform: None,
+                    flags: wgt::AccelerationStructureGeometryFlags::empty()
+                }
+            ]);
 
             let sizes = device.raw().get_acceleration_structure_build_sizes(
                 &GetAccelerationStructureBuildSizesDescriptor {
