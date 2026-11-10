@@ -32,12 +32,14 @@ queue_rules:
       - 'label = "merge: rebase"'
     merge_method: rebase
     update_method: rebase
+    max_checks_retries: 1
 
   - name: squash
     queue_conditions:
       - '-label = "merge: rebase"'
     merge_method: squash
     update_method: rebase
+    max_checks_retries: 1
     commit_message_format:
       title: inherit
       body: inherit

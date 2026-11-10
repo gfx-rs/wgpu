@@ -21,7 +21,7 @@ runs:
       run: | # zizmor: ignore[github-env]
         set -e
 
-        curl -L --retry 5 https://sdk.lunarg.com/sdk/download/${VULKAN_FULL_SDK_VERSION}/linux/vulkansdk-linux-x86_64-${VULKAN_FULL_SDK_VERSION}.tar.xz -o vulkan-sdk.tar.xz
+        curl --fail --show-error -L --retry 5 --retry-max-time 300 --connect-timeout 30 --max-time 120 https://sdk.lunarg.com/sdk/download/${VULKAN_FULL_SDK_VERSION}/linux/vulkansdk-linux-x86_64-${VULKAN_FULL_SDK_VERSION}.tar.xz -o vulkan-sdk.tar.xz
         mkdir vulkan-sdk
         tar xpf vulkan-sdk.tar.xz -C vulkan-sdk
 
@@ -43,7 +43,7 @@ runs:
       run: | # zizmor: ignore[github-env]
         set -e
 
-        curl.exe -L --retry 5 https://sdk.lunarg.com/sdk/download/${VULKAN_FULL_SDK_VERSION}/windows/vulkansdk-windows-X64-${VULKAN_FULL_SDK_VERSION}.exe -o vulkan-sdk-installer.exe
+        curl.exe --fail --show-error -L --retry 5 --retry-max-time 300 --connect-timeout 30 --max-time 120 https://sdk.lunarg.com/sdk/download/${VULKAN_FULL_SDK_VERSION}/windows/vulkansdk-windows-X64-${VULKAN_FULL_SDK_VERSION}.exe -o vulkan-sdk-installer.exe
 
         ./vulkan-sdk-installer.exe --accept-licenses --default-answer --confirm-command install
 
@@ -61,7 +61,7 @@ runs:
       run: | # zizmor: ignore[github-env]
         set -e
 
-        curl -L --retry 5 https://sdk.lunarg.com/sdk/download/${VULKAN_FULL_SDK_VERSION}/mac/vulkansdk-macos-${VULKAN_FULL_SDK_VERSION}.zip -o vulkan-sdk.zip
+        curl --fail --show-error -L --retry 5 --retry-max-time 300 --connect-timeout 30 --max-time 120 https://sdk.lunarg.com/sdk/download/${VULKAN_FULL_SDK_VERSION}/mac/vulkansdk-macos-${VULKAN_FULL_SDK_VERSION}.zip -o vulkan-sdk.zip
         unzip vulkan-sdk.zip -d vulkan-sdk
 
         ls -l vulkan-sdk

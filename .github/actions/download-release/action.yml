@@ -1,0 +1,46 @@
+name: "Download release asset"
+description: "Restore or download a checksum-pinned GitHub release asset"
+inputs:
+  repository:
+    required: true
+  tag:
+    required: true
+  filename:
+    required: true
+  sha256:
+    required: true
+outputs:
+  path:
+    description: "Verified archive path"
+    value: ${{ runner.temp }}/wgpu-release-assets/${{ inputs.sha256 }}/${{ inputs.filename }}
+runs:
+  using: "composite"
+  steps:
+    - name: Restore release archive
+      id: cache
+      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+      with:
+        path: ${{ runner.temp }}/wgpu-release-assets/${{ inputs.sha256 }}/${{ inputs.filename }}
+        key: wgpu-release-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.repository }}-${{ inputs.tag }}-${{ inputs.filename }}-${{ inputs.sha256 }}
+
+    - name: Download and verify release archive
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_REPOSITORY: ${{ inputs.repository }}
+        RELEASE_TAG: ${{ inputs.tag }}
+        RELEASE_FILENAME: ${{ inputs.filename }}
+        RELEASE_SHA256: ${{ inputs.sha256 }}
+        RELEASE_DIRECTORY: ${{ runner.temp }}/wgpu-release-assets/${{ inputs.sha256 }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: python "$ACTION_PATH/download.py"
+
+    - name: Save verified release archive
+      if: >-
+        steps.cache.outputs.cache-hit != 'true' &&
+        github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+        contains(fromJSON('["push", "schedule", "workflow_dispatch"]'), github.event_name)
+      uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+      with:
+        path: ${{ runner.temp }}/wgpu-release-assets/${{ inputs.sha256 }}/${{ inputs.filename }}
+        key: ${{ steps.cache.outputs.cache-primary-key }}
