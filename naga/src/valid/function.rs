@@ -2137,19 +2137,31 @@ impl super::Validator {
         mod_info: &ModuleInfo,
         entry_point: bool,
     ) -> Result<FunctionInfo, WithSpan<FunctionError>> {
-        for &handle in fun.expression_controls.keys() {
-            let valid = matches!(
-                fun.expressions.try_get(handle),
-                Ok(crate::Expression::Binary {
-                    op: crate::BinaryOperator::Add
-                        | crate::BinaryOperator::Subtract
-                        | crate::BinaryOperator::Multiply,
-                    ..
-                }) | Ok(crate::Expression::Math {
-                    fun: crate::MathFunction::Dot,
-                    ..
-                })
-            );
+        for (&handle, &control) in &fun.expression_controls {
+            let valid = match control {
+                crate::ArithmeticControl::Exp2F32NoRefactoringV1 => matches!(
+                    fun.expressions.try_get(handle),
+                    Ok(crate::Expression::Math {
+                        fun: crate::MathFunction::Exp2,
+                        arg1: None,
+                        arg2: None,
+                        arg3: None,
+                        ..
+                    })
+                ),
+                crate::ArithmeticControl::NoContraction => matches!(
+                    fun.expressions.try_get(handle),
+                    Ok(crate::Expression::Binary {
+                        op: crate::BinaryOperator::Add
+                            | crate::BinaryOperator::Subtract
+                            | crate::BinaryOperator::Multiply,
+                        ..
+                    }) | Ok(crate::Expression::Math {
+                        fun: crate::MathFunction::Dot,
+                        ..
+                    })
+                ),
+            };
             if !valid {
                 return Err(FunctionError::InvalidArithmeticControl(handle).with_span());
             }
@@ -2157,6 +2169,16 @@ impl super::Validator {
         let mut info = mod_info.process_function(fun, module, self.flags, self.capabilities)?;
         for &handle in fun.expression_controls.keys() {
             let valid = match fun.expressions[handle] {
+                crate::Expression::Math {
+                    fun: crate::MathFunction::Exp2,
+                    arg,
+                    ..
+                } => {
+                    *info[arg].ty.inner_with(&module.types)
+                        == crate::TypeInner::Scalar(crate::Scalar::F32)
+                        && *info[handle].ty.inner_with(&module.types)
+                            == crate::TypeInner::Scalar(crate::Scalar::F32)
+                }
                 crate::Expression::Binary { left, right, .. } => {
                     matches!(
                         info[left].ty.inner_with(&module.types),

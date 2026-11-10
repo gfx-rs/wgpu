@@ -16,6 +16,14 @@ use crate::{arena::Handle, error::replace_control_chars, front::atomic_upgrade};
 pub enum Error {
     #[error("NoContraction on result %{0} cannot be preserved by this lowering")]
     UnsupportedNoContraction(spirv::Word),
+    #[error("Unsupported FPFastMathMode control, flags or target %{0}")]
+    UnsupportedExp2Control(spirv::Word),
+    #[error(
+        "FPFastMathDefault on entry point %{0} cannot be preserved: every entry point must set \
+         NotNaN|NotInf|NSZ|AllowRecip|AllowContract|AllowReassoc|AllowTransform for every \
+         floating-point width, and the module must not use NoContraction"
+    )]
+    UnsupportedFPFastMathDefault(spirv::Word),
     #[error("invalid header")]
     InvalidHeader,
     #[error("invalid word count")]

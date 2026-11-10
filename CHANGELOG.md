@@ -177,6 +177,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 #### Naga
 
+- Add `ArithmeticControl::Exp2F32NoRefactoringV1` for selective scalar-f32 Exp2 producer control, preserved by SPIR-V FloatControls2 and DXC-compatible HLSL. Unsupported output routes reject the control. A SPIR-V module that declares `FloatControls2` is written in the explicit `SPV_KHR_float_controls2` form: each entry point sets `FPFastMathDefault` to the Vulkan default flags for every float width, and `NoContraction` on a float result is written as `FPFastMathMode NotNaN|NotInf|NSZ`. The SPIR-V frontend reads that form back and rejects defaults and masks it cannot preserve.
 - Preserve SPIR-V `NoContraction` on supported scalar/vector arithmetic and dot results through IR compaction and SPIR-V output. Emit isolated operation helpers for GLSL 4.00+/ESSL 3.20+ and HLSL shader model 6+ (DXC). Other text targets return an explicit error for reachable controlled functions. Adds `Function::expression_controls` and `ArithmeticControl`.
 
 - Add `@builtin(hit_barycentrics)`, a `vec2<f32>` readable in `@any_hit` and `@closest_hit` ray tracing pipeline shaders, holding two of the barycentric coordinates of the hit point on the triangle (the third is `1.0 - x - y`). Currently only supported with the SPIR-V backend. By @JMS55 in [#10193](https://github.com/gfx-rs/wgpu/pull/10193).

@@ -1782,8 +1782,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     let arg_count = fun.argument_count();
                     inst.expect(base_wc + arg_count as u16)?;
+                    let input_id = self.next()?;
                     let arg = {
-                        let arg_id = self.next()?;
+                        let arg_id = input_id;
                         let lexp = self.lookup_expression.lookup(arg_id)?;
                         get_expr_handle!(arg_id, lexp)
                     };
@@ -1816,10 +1817,27 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         arg2,
                         arg3,
                     };
+                    let handle = ctx.expressions.append(expr, span);
+                    self.register_arithmetic_control(ctx, result_id, handle)?;
+                    if self.pending_exp2.remove(&result_id) {
+                        let input_type = self.lookup_expression.lookup(input_id)?.type_id;
+                        let scalar_f32 = |id| {
+                            self.lookup_type.get(&id).is_some_and(|t| {
+                                ctx.module.types[t.handle].inner
+                                    == crate::TypeInner::Scalar(crate::Scalar::F32)
+                            })
+                        };
+                        if fun != Mf::Exp2 || !scalar_f32(input_type) || !scalar_f32(result_type_id)
+                        {
+                            return Err(Error::UnsupportedExp2Control(result_id));
+                        }
+                        ctx.expression_controls
+                            .insert(handle, crate::ArithmeticControl::Exp2F32NoRefactoringV1);
+                    }
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: ctx.expressions.append(expr, span),
+                            handle,
                             type_id: result_type_id,
                             block_id,
                         },

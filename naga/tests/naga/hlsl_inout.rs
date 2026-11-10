@@ -308,6 +308,80 @@ fn inout_width_shape_operator_matrix() {
     }
 }
 
+#[test]
+fn inout_exp2_preserves_one_scalar_operation_and_operand_evaluation() {
+    let source = format!(
+        "{STORAGE} {}",
+        r#"
+        fn effect()->f32 { let old=output[0].x; output[0].x=old+1.; return old; }
+        @compute @workgroup_size(1) fn main() {
+            let x=effect();
+            let ordinary=x*x;
+            let exp_result=exp2(ordinary);
+            output[0]=vec4<f32>(exp_result+exp_result);
+        }
+    "#
+    );
+    let mut module = marked(&source);
+    let function = &mut module.entry_points[0].function;
+    let handle = *function
+        .named_expressions
+        .iter()
+        .find(|(_, name)| name.as_str() == "exp_result")
+        .unwrap()
+        .0;
+    function
+        .expression_controls
+        .insert(handle, ArithmeticControl::Exp2F32NoRefactoringV1);
+    let text = emit(&module);
+    assert_eq!(text.matches("= effect();").count(), 1);
+    assert_eq!(text.matches("[noinline]").count(), 1);
+    assert!(text.contains("inout float operands[1]"));
+    assert!(text.contains("precise float result = exp2(operands[0])"));
+    assert_eq!(text.matches("= exp2(").count(), 1);
+    assert!(text.find("float ordinary = ").unwrap() < text.find("gen_naga_operands[1]").unwrap());
+    assert!(!text.contains("return result;"));
+    save("exp2-effects", &text);
+}
+
+#[test]
+fn inout_exp2_rejects_other_types() {
+    for (scalar, size) in [
+        (Scalar::F32, Some(VectorSize::Bi)),
+        (Scalar::F64, None),
+        (
+            Scalar {
+                kind: ScalarKind::Float,
+                width: 2,
+            },
+            None,
+        ),
+    ] {
+        let mut module = typed(scalar, size, BinaryOperator::Multiply, false);
+        let function = module.functions.iter_mut().next().unwrap().1;
+        let handle = *function.expression_controls.keys().next().unwrap();
+        let arg = match function.expressions[handle] {
+            Expression::Binary { left, .. } => left,
+            _ => unreachable!(),
+        };
+        function.expressions[handle] = Expression::Math {
+            fun: MathFunction::Exp2,
+            arg,
+            arg1: None,
+            arg2: None,
+            arg3: None,
+        };
+        function
+            .expression_controls
+            .insert(handle, ArithmeticControl::Exp2F32NoRefactoringV1);
+        let error =
+            valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all())
+                .validate(&module)
+                .unwrap_err();
+        assert!(format!("{error:?}").contains("InvalidArithmeticControl"));
+    }
+}
+
 fn check_atomic_load_continuing(address: &str) {
     for (kind, literal, scalar) in [("u32", "u", "uint"), ("i32", "i", "int")] {
         let declaration = if address == "workgroup" {

@@ -251,6 +251,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.need_bake_expressions
             .extend(func.expression_controls.keys().copied());
         for &handle in func.expression_controls.keys() {
+            if let Expression::Math {
+                fun: crate::MathFunction::Exp2,
+                arg,
+                ..
+            } = func.expressions[handle]
+            {
+                self.need_bake_expressions.insert(arg);
+                continue;
+            }
             let (left, right) = back::arithmetic_control_operands(&func.expressions[handle]);
             self.need_bake_expressions.extend([left, right]);
         }
@@ -357,7 +366,18 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         // and retain stock DXC dependencies through their real input stores.
         for &handle in function.expression_controls.keys() {
             let expression = &function.expressions[handle];
-
+            if matches!(
+                expression,
+                crate::Expression::Math {
+                    fun: crate::MathFunction::Exp2,
+                    ..
+                }
+            ) {
+                let name = self.namer.call("naga_exp2_no_refactoring_v1");
+                writeln!(self.out, "[noinline]\nvoid {name}(inout float operands[1]) {{\n    precise float result = exp2(operands[0]);\n    operands[0] = result;\n}}")?;
+                self.arithmetic_control_helpers.insert((ty, handle), name);
+                continue;
+            }
             let (left, _) = back::arithmetic_control_operands(expression);
             let argument_type = info[left].ty.inner_with(&module.types);
             let scalar = argument_type.scalar().unwrap();
@@ -2543,23 +2563,30 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         let expression = &func_ctx.expressions[handle];
         let result_type = func_ctx.resolve_type(handle, &module.types);
         let scalar_type = TypeInner::Scalar(result_type.scalar().unwrap());
-        let (operands, dot_size) = {
-            let (left, right) = back::arithmetic_control_operands(expression);
-            let dot_size = if matches!(
-                *expression,
-                Expression::Math {
-                    fun: crate::MathFunction::Dot,
-                    ..
-                }
-            ) {
-                match *func_ctx.resolve_type(left, &module.types) {
-                    TypeInner::Vector { size, .. } => Some(size),
-                    _ => return Err(Error::UnsupportedArithmeticControls),
-                }
-            } else {
-                None
-            };
-            (alloc::vec![left, right], dot_size)
+        let (operands, dot_size) = match *expression {
+            Expression::Math {
+                fun: crate::MathFunction::Exp2,
+                arg,
+                ..
+            } => (alloc::vec![arg], None),
+            _ => {
+                let (left, right) = back::arithmetic_control_operands(expression);
+                let dot_size = if matches!(
+                    *expression,
+                    Expression::Math {
+                        fun: crate::MathFunction::Dot,
+                        ..
+                    }
+                ) {
+                    match *func_ctx.resolve_type(left, &module.types) {
+                        TypeInner::Vector { size, .. } => Some(size),
+                        _ => return Err(Error::UnsupportedArithmeticControls),
+                    }
+                } else {
+                    None
+                };
+                (alloc::vec![left, right], dot_size)
+            }
         };
         // A runtime operand lacking its baked name has no valid dominating
         // Emit here. Do not re-evaluate it or hoist it to manufacture one.
