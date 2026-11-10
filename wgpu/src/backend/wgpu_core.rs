@@ -84,6 +84,38 @@ impl ContextWgpuCore {
     pub(crate) fn as_core(&self) -> Arc<wgc::instance::Instance> {
         self.0.clone()
     }
+
+    pub(crate) fn request_adapters(
+        &self,
+        options: &crate::api::RequestAdapterOptions<'_, '_>,
+        backend_options: wgt::Extensions<wgt::BackendAdapterOptionsMap>,
+    ) -> Pin<Box<dyn dispatch::RequestAdaptersFuture>> {
+        let adapters = self
+            .0
+            .request_adapters(
+                &wgt::RequestAdapterOptions {
+                    power_preference: options.power_preference,
+                    force_fallback_adapter: options.force_fallback_adapter,
+                    compatible_surface: options
+                        .compatible_surface
+                        .map(|surface| &*surface.inner.as_core().wgpu_surface),
+                    apply_limit_buckets: options.apply_limit_buckets,
+                },
+                wgt::Backends::all(),
+                backend_options,
+            )
+            .map(|adapters| {
+                adapters
+                    .into_iter()
+                    .map(|wgpu_adapter| {
+                        let core = CoreAdapter { wgpu_adapter };
+                        let generic: dispatch::DispatchAdapter = core.into();
+                        generic
+                    })
+                    .collect()
+            });
+        Box::pin(ready(adapters))
+    }
 }
 
 fn map_buffer_copy_view(
@@ -847,7 +879,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                 compatible_surface: options
                     .compatible_surface
                     .map(|surface| &*surface.inner.as_core().wgpu_surface),
-                apply_limit_buckets: false,
+                apply_limit_buckets: options.apply_limit_buckets,
             },
             wgt::Backends::all(),
         );

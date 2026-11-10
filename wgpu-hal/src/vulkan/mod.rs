@@ -38,6 +38,7 @@ mod semaphore_list;
 mod swapchain;
 
 pub use adapter::PhysicalDeviceFeatures;
+pub use instance::VulkanAdapterOptions;
 pub(crate) use pnext_chain::PnextChain;
 
 use alloc::{boxed::Box, ffi::CString, sync::Arc, vec::Vec};
@@ -100,6 +101,8 @@ impl crate::Api for Api {
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
     type RayTracingPipeline = RayTracingPipeline;
+
+    type AdapterOptions = VulkanAdapterOptions;
 }
 
 crate::impl_dyn_resource!(
