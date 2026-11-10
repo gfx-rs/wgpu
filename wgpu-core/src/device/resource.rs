@@ -848,8 +848,7 @@ impl Device {
 
         self.init_default_external_texture_params_buffer()?;
 
-        // TODO: replace with `require_acceleration_structure()` when rt pipelines arrive
-        if let Ok(_) = self.require_features(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
+        if let Ok(_) = self.require_acceleration_structures() {
             let null_acceleration_structure =
                 crate::null_acceleration_structure::NullAccelerationStructure::new(
                     self,
