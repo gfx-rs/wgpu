@@ -43,54 +43,54 @@ layout(set = 0, binding = 1, std430) buffer _18_17
 
 layout(set = 0, binding = 0) uniform accelerationStructureEXT _15;
 
-void _42(rayQueryEXT _43, accelerationStructureEXT _44, _12 _45, inout uint _46, out float _47)
+void _41(rayQueryEXT _42, accelerationStructureEXT _43, _12 _44, inout uint _45, out float _46)
 {
-    bool _72 = (_45._m0 & 256u) != 0u;
-    bool _80 = (_45._m0 & 16u) != 0u;
-    bool _83 = (_45._m0 & 32u) != 0u;
-    bool _92 = (_45._m0 & 1u) != 0u;
-    bool _95 = (_45._m0 & 2u) != 0u;
-    bool _98 = (_45._m0 & 64u) != 0u;
-    bool _101 = (_45._m0 & 128u) != 0u;
-    _47 = _45._m3;
-    if (((((((!((((((_95 && _92) || (_101 && _92)) || (_101 && _95)) || (_101 && _98)) || (_98 && _92)) || (_98 && _95))) && (_45._m2 <= _45._m3)) && (_45._m2 >= 0.0)) && (!(any(isnan(_45._m4)) || any(isinf(_45._m4))))) && (!(any(isnan(_45._m5)) || any(isinf(_45._m5))))) && (!(((_45._m0 & 512u) != 0u) && _72))) && (!(((_80 && _72) || (_83 && _72)) || (_83 && _80))))
+    bool _72 = (_44._m0 & 256u) != 0u;
+    bool _80 = (_44._m0 & 16u) != 0u;
+    bool _83 = (_44._m0 & 32u) != 0u;
+    bool _92 = (_44._m0 & 1u) != 0u;
+    bool _95 = (_44._m0 & 2u) != 0u;
+    bool _98 = (_44._m0 & 64u) != 0u;
+    bool _101 = (_44._m0 & 128u) != 0u;
+    _46 = _44._m3;
+    if (((((((!((((((_95 && _92) || (_101 && _92)) || (_101 && _95)) || (_101 && _98)) || (_98 && _92)) || (_98 && _95))) && (_44._m2 <= _44._m3)) && (_44._m2 >= 0.0)) && (!(any(isnan(_44._m4)) || any(isinf(_44._m4))))) && (!(any(isnan(_44._m5)) || any(isinf(_44._m5))))) && (!(((_44._m0 & 512u) != 0u) && _72))) && (!(((_80 && _72) || (_83 && _72)) || (_83 && _80))))
     {
-        rayQueryInitializeEXT(_43, _44, _45._m0, _45._m1, _45._m4, _45._m2, _45._m5, _45._m3);
-        _46 = 1u;
+        rayQueryInitializeEXT(_42, _43, _44._m0, _44._m1, _44._m4, _44._m2, _44._m5, _44._m3);
+        _45 = 1u;
     }
     else
     {
     }
 }
 
-bool _148(rayQueryEXT _149, inout uint _150)
+bool _147(rayQueryEXT _148, inout uint _149)
 {
     bool _152 = false;
-    if ((!((_150 & 4u) != 0u)) && ((_150 & 1u) != 0u))
+    if ((!((_149 & 4u) != 0u)) && ((_149 & 1u) != 0u))
     {
-        bool _163 = rayQueryProceedEXT(_149);
+        bool _163 = rayQueryProceedEXT(_148);
         _152 = _163;
-        _150 |= (_163 ? 2u : 6u);
+        _149 |= (_163 ? 2u : 6u);
     }
     return _152;
 }
 
-_10 _176(rayQueryEXT _177, uint _178)
+_10 _175(rayQueryEXT _176, uint _177)
 {
     _10 _181 = _10(0u, 0.0, 0u, 0u, 0u, 0u, 0u, vec2(0.0), false, mat4x3(vec3(0.0), vec3(0.0), vec3(0.0), vec3(0.0)), mat4x3(vec3(0.0), vec3(0.0), vec3(0.0), vec3(0.0)));
-    if (((_178 & 4u) != 0u) && ((_178 & 2u) != 0u))
+    if (((_177 & 4u) != 0u) && ((_177 & 2u) != 0u))
     {
-        uint _190 = rayQueryGetIntersectionTypeEXT(_177, bool(1u));
+        uint _190 = rayQueryGetIntersectionTypeEXT(_176, bool(1u));
         _181._m0 = _190;
         if (_190 != 0u)
         {
-            uint _195 = rayQueryGetIntersectionInstanceCustomIndexEXT(_177, bool(1u));
-            uint _196 = rayQueryGetIntersectionInstanceIdEXT(_177, bool(1u));
-            uint _197 = rayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetEXT(_177, bool(1u));
-            uint _198 = rayQueryGetIntersectionGeometryIndexEXT(_177, bool(1u));
-            uint _199 = rayQueryGetIntersectionPrimitiveIndexEXT(_177, bool(1u));
-            mat4x3 _200 = rayQueryGetIntersectionObjectToWorldEXT(_177, bool(1u));
-            mat4x3 _201 = rayQueryGetIntersectionWorldToObjectEXT(_177, bool(1u));
+            uint _195 = rayQueryGetIntersectionInstanceCustomIndexEXT(_176, bool(1u));
+            uint _196 = rayQueryGetIntersectionInstanceIdEXT(_176, bool(1u));
+            uint _197 = rayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetEXT(_176, bool(1u));
+            uint _198 = rayQueryGetIntersectionGeometryIndexEXT(_176, bool(1u));
+            uint _199 = rayQueryGetIntersectionPrimitiveIndexEXT(_176, bool(1u));
+            mat4x3 _200 = rayQueryGetIntersectionObjectToWorldEXT(_176, bool(1u));
+            mat4x3 _201 = rayQueryGetIntersectionWorldToObjectEXT(_176, bool(1u));
             _181._m2 = _195;
             _181._m3 = _196;
             _181._m4 = _197;
@@ -98,12 +98,12 @@ _10 _176(rayQueryEXT _177, uint _178)
             _181._m6 = _199;
             _181._m9 = _200;
             _181._m10 = _201;
-            float _216 = rayQueryGetIntersectionTEXT(_177, bool(1u));
+            float _216 = rayQueryGetIntersectionTEXT(_176, bool(1u));
             _181._m1 = _216;
             if (_190 == 1u)
             {
-                vec2 _218 = rayQueryGetIntersectionBarycentricsEXT(_177, bool(1u));
-                bool _219 = rayQueryGetIntersectionFrontFaceEXT(_177, bool(1u));
+                vec2 _218 = rayQueryGetIntersectionBarycentricsEXT(_176, bool(1u));
+                bool _219 = rayQueryGetIntersectionFrontFaceEXT(_176, bool(1u));
                 _181._m7 = _218;
                 _181._m8 = _219;
             }
@@ -118,7 +118,7 @@ _10 _25(vec3 _21, vec3 _22, accelerationStructureEXT _23)
     float _37 = 0.0;
     uvec2 _134 = uvec2(4294967295u);
     rayQueryEXT _31;
-    _42(_31, _23, _12(4u, 255u, 0.100000001490116119384765625, 100.0, _21, _22), _34, _37);
+    _41(_31, _23, _12(4u, 255u, 0.100000001490116119384765625, 100.0, _21, _22), _34, _37);
     for (;;)
     {
         if (all(equal(uvec2(0u), _134)))
@@ -126,14 +126,14 @@ _10 _25(vec3 _21, vec3 _22, accelerationStructureEXT _23)
             break;
         }
         _134 -= uvec2(uint(_134.y == 0u), 1u);
-        bool _145 = _148(_31, _34);
+        bool _145 = _147(_31, _34);
         if (!_145)
         {
             break;
         }
         continue;
     }
-    return _176(_31, _34);
+    return _175(_31, _34);
 }
 
 vec3 _229(vec3 _227, _10 _228)
@@ -189,20 +189,20 @@ struct _13
 
 layout(set = 0, binding = 0) uniform accelerationStructureEXT _15;
 
-void _42(rayQueryEXT _43, accelerationStructureEXT _44, _12 _45, inout uint _46, out float _47)
+void _41(rayQueryEXT _42, accelerationStructureEXT _43, _12 _44, inout uint _45, out float _46)
 {
-    bool _72 = (_45._m0 & 256u) != 0u;
-    bool _80 = (_45._m0 & 16u) != 0u;
-    bool _83 = (_45._m0 & 32u) != 0u;
-    bool _92 = (_45._m0 & 1u) != 0u;
-    bool _95 = (_45._m0 & 2u) != 0u;
-    bool _98 = (_45._m0 & 64u) != 0u;
-    bool _101 = (_45._m0 & 128u) != 0u;
-    _47 = _45._m3;
-    if (((((((!((((((_95 && _92) || (_101 && _92)) || (_101 && _95)) || (_101 && _98)) || (_98 && _92)) || (_98 && _95))) && (_45._m2 <= _45._m3)) && (_45._m2 >= 0.0)) && (!(any(isnan(_45._m4)) || any(isinf(_45._m4))))) && (!(any(isnan(_45._m5)) || any(isinf(_45._m5))))) && (!(((_45._m0 & 512u) != 0u) && _72))) && (!(((_80 && _72) || (_83 && _72)) || (_83 && _80))))
+    bool _72 = (_44._m0 & 256u) != 0u;
+    bool _80 = (_44._m0 & 16u) != 0u;
+    bool _83 = (_44._m0 & 32u) != 0u;
+    bool _92 = (_44._m0 & 1u) != 0u;
+    bool _95 = (_44._m0 & 2u) != 0u;
+    bool _98 = (_44._m0 & 64u) != 0u;
+    bool _101 = (_44._m0 & 128u) != 0u;
+    _46 = _44._m3;
+    if (((((((!((((((_95 && _92) || (_101 && _92)) || (_101 && _95)) || (_101 && _98)) || (_98 && _92)) || (_98 && _95))) && (_44._m2 <= _44._m3)) && (_44._m2 >= 0.0)) && (!(any(isnan(_44._m4)) || any(isinf(_44._m4))))) && (!(any(isnan(_44._m5)) || any(isinf(_44._m5))))) && (!(((_44._m0 & 512u) != 0u) && _72))) && (!(((_80 && _72) || (_83 && _72)) || (_83 && _80))))
     {
-        rayQueryInitializeEXT(_43, _44, _45._m0, _45._m1, _45._m4, _45._m2, _45._m5, _45._m3);
-        _46 = 1u;
+        rayQueryInitializeEXT(_42, _43, _44._m0, _44._m1, _44._m4, _44._m2, _44._m5, _44._m3);
+        _45 = 1u;
     }
     else
     {
@@ -247,38 +247,38 @@ _10 _275(rayQueryEXT _276, uint _277)
     return _279;
 }
 
-void _327(rayQueryEXT _328, uint _329, float _330, float _331)
+void _326(rayQueryEXT _327, uint _328, float _329, float _330)
 {
-    if ((!((_329 & 4u) != 0u)) && ((_329 & 2u) != 0u))
+    if ((!((_328 & 4u) != 0u)) && ((_328 & 2u) != 0u))
     {
-        uint _344 = rayQueryGetIntersectionTypeEXT(_328, bool(0u));
-        float _346 = rayQueryGetRayTMinEXT(_328);
-        uint _347 = rayQueryGetIntersectionTypeEXT(_328, bool(1u));
+        uint _344 = rayQueryGetIntersectionTypeEXT(_327, bool(0u));
+        float _346 = rayQueryGetRayTMinEXT(_327);
+        uint _347 = rayQueryGetIntersectionTypeEXT(_327, bool(1u));
         float _334;
         if (_347 == 0u)
         {
-            _334 = _331;
+            _334 = _330;
         }
         else
         {
-            float _353 = rayQueryGetIntersectionTEXT(_328, bool(0u));
+            float _353 = rayQueryGetIntersectionTEXT(_327, bool(0u));
             _334 = _353;
         }
-        if (((_330 >= _346) && (_330 <= _334)) && (_344 == 1u))
+        if (((_329 >= _346) && (_329 <= _334)) && (_344 == 1u))
         {
-            rayQueryGenerateIntersectionEXT(_328, _330);
+            rayQueryGenerateIntersectionEXT(_327, _329);
         }
     }
 }
 
-void _368(rayQueryEXT _369, uint _370)
+void _367(rayQueryEXT _368, uint _369)
 {
-    if ((!((_370 & 4u) != 0u)) && ((_370 & 2u) != 0u))
+    if ((!((_369 & 4u) != 0u)) && ((_369 & 2u) != 0u))
     {
-        uint _381 = rayQueryGetIntersectionTypeEXT(_369, bool(0u));
+        uint _381 = rayQueryGetIntersectionTypeEXT(_368, bool(0u));
         if (_381 == 0u)
         {
-            rayQueryConfirmIntersectionEXT(_369);
+            rayQueryConfirmIntersectionEXT(_368);
         }
     }
 }
@@ -296,18 +296,18 @@ void main()
     uint _271 = 0u;
     float _272 = 0.0;
     rayQueryEXT _270;
-    _42(_270, _15, _12(4u, 255u, 0.100000001490116119384765625, 100.0, vec3(0.0), vec3(0.0, 1.0, 0.0)), _271, _272);
+    _41(_270, _15, _12(4u, 255u, 0.100000001490116119384765625, 100.0, vec3(0.0), vec3(0.0, 1.0, 0.0)), _271, _272);
     _10 _320 = _275(_270, _271);
     if (_320._m0 == 3u)
     {
-        _327(_270, _271, 10.0, _272);
+        _326(_270, _271, 10.0, _272);
         return;
     }
     else
     {
         if (_320._m0 == 1u)
         {
-            _368(_270, _271);
+            _367(_270, _271);
             return;
         }
         else

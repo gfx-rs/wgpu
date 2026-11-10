@@ -98,7 +98,7 @@ OpDecorate %392 BuiltIn LocalInvocationIndex
 %38 = OpVariable  %40  StorageBuffer
 %42 = OpTypePointer Workgroup %4
 %41 = OpVariable  %42  Workgroup
-%44 = OpTypeFunction %3 %3 %3
+%46 = OpTypeFunction %3 %3 %3
 %48 = OpTypeBool
 %49 = OpConstant  %3  0
 %51 = OpConstant  %3  -32768
@@ -139,7 +139,7 @@ OpDecorate %392 BuiltIn LocalInvocationIndex
 %216 = OpTypePointer StorageBuffer %5
 %220 = OpTypePointer StorageBuffer %6
 %224 = OpTypePointer StorageBuffer %7
-%243 = OpTypeFunction %4 %4 %4
+%245 = OpTypeFunction %4 %4 %4
 %247 = OpConstant  %4  0
 %261 = OpTypeFunction %4 %4
 %267 = OpConstant  %4  5
@@ -172,20 +172,20 @@ OpDecorate %392 BuiltIn LocalInvocationIndex
 %392 = OpVariable  %375  Input
 %397 = OpConstant  %5  264
 %403 = OpConstant  %5  11
-%43 = OpFunction  %3  None %44
+%43 = OpFunction  %3  None %46
+%44 = OpFunctionParameter  %3
 %45 = OpFunctionParameter  %3
-%46 = OpFunctionParameter  %3
 %47 = OpLabel
-%50 = OpIEqual  %48  %46 %49
-%53 = OpIEqual  %48  %45 %51
-%54 = OpIEqual  %48  %46 %52
+%50 = OpIEqual  %48  %45 %49
+%53 = OpIEqual  %48  %44 %51
+%54 = OpIEqual  %48  %45 %52
 %55 = OpLogicalAnd  %48  %53 %54
 %56 = OpLogicalOr  %48  %50 %55
-%57 = OpSelect  %3  %56 %21 %46
-%58 = OpSDiv  %3  %45 %57
+%57 = OpSelect  %3  %56 %21 %45
+%58 = OpSDiv  %3  %44 %57
 OpReturnValue %58
 OpFunctionEnd
-%59 = OpFunction  %3  None %44
+%59 = OpFunction  %3  None %46
 %60 = OpFunctionParameter  %3
 %61 = OpFunctionParameter  %3
 %62 = OpLabel
@@ -371,16 +371,16 @@ OpStore %240 %239
 %241 = OpLoad  %3  %96
 OpReturnValue %241
 OpFunctionEnd
-%242 = OpFunction  %4  None %243
+%242 = OpFunction  %4  None %245
+%243 = OpFunctionParameter  %4
 %244 = OpFunctionParameter  %4
-%245 = OpFunctionParameter  %4
 %246 = OpLabel
-%248 = OpIEqual  %48  %245 %247
-%249 = OpSelect  %4  %248 %94 %245
-%250 = OpUDiv  %4  %244 %249
+%248 = OpIEqual  %48  %244 %247
+%249 = OpSelect  %4  %248 %94 %244
+%250 = OpUDiv  %4  %243 %249
 OpReturnValue %250
 OpFunctionEnd
-%251 = OpFunction  %4  None %243
+%251 = OpFunction  %4  None %245
 %252 = OpFunctionParameter  %4
 %253 = OpFunctionParameter  %4
 %254 = OpLabel
