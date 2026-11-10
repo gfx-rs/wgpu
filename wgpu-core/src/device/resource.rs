@@ -1996,6 +1996,15 @@ impl Device {
             .describe_format_features(desc.format)
             .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
 
+        if let Some(planes) = desc.format.planes() {
+            for plane in 0..planes {
+                let aspect = wgt::TextureAspect::from_plane(plane).unwrap();
+                let format = desc.format.aspect_specific_format(aspect).unwrap();
+                self.require_features(format.required_features())
+                    .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
+            }
+        }
+
         if desc.sample_count > 1 {
             // <https://www.w3.org/TR/2025/CRD-webgpu-20251120/#:~:text=If%20descriptor%2EsampleCount%20%3E%201>
             //
@@ -2055,24 +2064,7 @@ impl Device {
             };
         }
 
-        let missing_allowed_usages = match desc.format.planes() {
-            Some(planes) => {
-                let mut planes_usages = wgt::TextureUsages::all();
-                for plane in 0..planes {
-                    let aspect = wgt::TextureAspect::from_plane(plane).unwrap();
-                    let format = desc.format.aspect_specific_format(aspect).unwrap();
-                    let format_features = self
-                        .describe_format_features(format)
-                        .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
-
-                    planes_usages &= format_features.allowed_usages;
-                }
-
-                desc.usage - planes_usages
-            }
-            None => desc.usage - format_features.allowed_usages,
-        };
-
+        let missing_allowed_usages = desc.usage - format_features.allowed_usages;
         if !missing_allowed_usages.is_empty() {
             // detect downlevel incompatibilities
             let wgpu_allowed_usages = desc

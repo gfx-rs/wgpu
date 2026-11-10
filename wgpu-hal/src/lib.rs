@@ -2087,6 +2087,22 @@ bitflags!(
     }
 );
 
+#[cfg(any(metal, vulkan))]
+impl TextureFormatCapabilities {
+    /// Capabilities that may be offered by multi-planar texture formats. It is generally
+    /// not possible to operate on a multi-planar texture as a whole. Presence of these
+    /// capabilities on a multi-planar format signifies that plane views support the
+    /// indicated usage.
+    ///
+    /// This constant omits `COPY_SRC` and `COPY_DST` because they are handled separately
+    /// in the code that uses it.
+    pub(crate) const VALID_FOR_MULTI_PLANAR: Self = Self::empty()
+        .union(Self::SAMPLED)
+        .union(Self::SAMPLED_LINEAR)
+        .union(Self::COLOR_ATTACHMENT)
+        .union(Self::COLOR_ATTACHMENT_BLEND);
+}
+
 bitflags!(
     /// Texture format capability flags.
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]

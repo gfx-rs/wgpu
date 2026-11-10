@@ -3245,6 +3245,18 @@ impl crate::Adapter for super::Adapter {
             Tfc::STORAGE_ATOMIC,
             features.intersects(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC),
         );
+        // Multi-planar images are created with `EXTENDED_USAGE`, so views of
+        // the planes are limited by the plane view formats, not by this format.
+        if format.is_multi_planar_format() && !flags.is_empty() {
+            let plane_caps = |aspect| unsafe {
+                self.texture_format_capabilities(format.aspect_specific_format(aspect).unwrap())
+            };
+            return (flags & (Tfc::COPY_SRC | Tfc::COPY_DST))
+                | (plane_caps(wgt::TextureAspect::Plane0)
+                    & plane_caps(wgt::TextureAspect::Plane1)
+                    & Tfc::VALID_FOR_MULTI_PLANAR);
+        }
+
         // Vulkan is very permissive about MSAA
         flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.is_compressed());
 

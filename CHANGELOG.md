@@ -242,6 +242,8 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Fix pending buffer mappings incorrectly succeeding when the device is lost before they are processed. By @jinleili in [#10301](https://github.com/gfx-rs/wgpu/pull/10301).
 - Fix initialization tracking for `external_texture` binding points, for both `ExternalTexture`s and `TextureView`s bound to them. By @ErichDonGubler in [#10276](https://github.com/gfx-rs/wgpu/pull/10276) and [#10366](https://github.com/gfx-rs/wgpu/pull/10366).
 - Make `TextureBlitter` respect the `sample_type` when performing downsampling. Previously, `FilterMode::Nearest` was always used when copying a larger texture to a smaller one. By @DouglasDwyer in [#10657](https://github.com/gfx-rs/wgpu/pull/10657)
+- Fixed some cases where `Adapter::get_texture_format_features` and `TextureFormat::guaranteed_format_features` did not match the validation applied by `create_texture`. By @andyleiserson in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
+- `STORAGE_BINDING` usage is no longer allowed for multi-planar textures. It was previously accepted, but was untested, and likely broken. By @andyleiserson in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
 
 #### naga
 
