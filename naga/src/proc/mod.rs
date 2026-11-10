@@ -503,6 +503,17 @@ impl super::ImageClass {
 }
 
 impl crate::Module {
+    /// Whether any function contains restricted arithmetic expressions.
+    pub fn has_arithmetic_controls(&self) -> bool {
+        self.functions
+            .iter()
+            .any(|(_, f)| !f.expression_controls.is_empty())
+            || self
+                .entry_points
+                .iter()
+                .any(|e| !e.function.expression_controls.is_empty())
+    }
+
     pub const fn to_ctx(&self) -> GlobalCtx<'_> {
         GlobalCtx {
             types: &self.types,

@@ -60,6 +60,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     &module.overrides,
                 ),
                 named_expressions: crate::NamedExpressions::default(),
+                expression_controls: Default::default(),
                 body: crate::Block::new(),
                 diagnostic_filter_leaf: None,
             }
@@ -129,6 +130,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             module,
             function_id: fun_id,
             expressions: &mut fun.expressions,
+            expression_controls: &mut fun.expression_controls,
             local_arena: &mut fun.local_variables,
             arguments: &fun.arguments,
             parameter_sampling: &mut parameters_sampling,
@@ -331,6 +333,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             local_variables: Arena::new(),
             expressions: Arena::new(),
             named_expressions: crate::NamedExpressions::default(),
+            expression_controls: Default::default(),
             body: crate::Block::new(),
             diagnostic_filter_leaf: None,
         };

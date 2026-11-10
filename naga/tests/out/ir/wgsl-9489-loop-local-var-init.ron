@@ -256,6 +256,7 @@
                 named_expressions: {
                     22: "v",
                 },
+                expression_controls: {},
                 body: [
                     Loop(
                         body: [

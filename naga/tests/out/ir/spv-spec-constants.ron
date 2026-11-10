@@ -567,6 +567,7 @@
                 ),
             ],
             named_expressions: {},
+            expression_controls: {},
             body: [
                 Emit((
                     start: 17,
@@ -695,6 +696,7 @@
                     ),
                 ],
                 named_expressions: {},
+                expression_controls: {},
                 body: [
                     Store(
                         pointer: 1,

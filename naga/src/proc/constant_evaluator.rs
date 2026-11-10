@@ -793,6 +793,24 @@ impl ExpressionKindTracker {
         tracker
     }
 
+    /// Classify function expressions without folding controlled arithmetic into
+    /// constant-only contexts. Consumers must inherit the runtime requirement
+    /// while traversing the arena, not after their kinds have been computed.
+    pub(crate) fn from_function(function: &crate::Function) -> Self {
+        let mut tracker = Self {
+            inner: HandleVec::with_capacity(function.expressions.len()),
+        };
+        for (handle, expr) in function.expressions.iter() {
+            let kind = if function.expression_controls.contains_key(&handle) {
+                ExpressionKind::Runtime
+            } else {
+                tracker.type_of_with_expr(expr)
+            };
+            tracker.inner.insert(handle, kind);
+        }
+        tracker
+    }
+
     fn type_of_with_expr(&self, expr: &Expression) -> ExpressionKind {
         match *expr {
             Expression::Literal(_) | Expression::ZeroValue(_) | Expression::Constant(_) => {
@@ -1213,6 +1231,17 @@ impl<'a> ConstantEvaluator<'a> {
                 }
             }
         }
+    }
+
+    pub(crate) fn append_runtime(
+        &mut self,
+        expr: Expression,
+        span: Span,
+    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        if !self.behavior.has_runtime_restrictions() {
+            return Err(ConstantEvaluatorError::RuntimeExpr);
+        }
+        Ok(self.append_expr(expr, span, ExpressionKind::Runtime))
     }
 
     /// Is the [`Self::expressions`] arena the global module expression arena?

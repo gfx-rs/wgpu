@@ -34,6 +34,8 @@ pub struct Writer<'a, W> {
     named_expressions: crate::NamedExpressions,
     /// Set of expressions that need to be baked to avoid unnecessary repetition in output
     need_bake_expressions: back::NeedBakeExpressions,
+    arithmetic_control_helpers:
+        crate::FastHashMap<(back::FunctionType, Handle<crate::Expression>), String>,
     /// Information about nesting of loops and switches.
     ///
     /// Used for forwarding continue statements in switches that have been
@@ -111,6 +113,7 @@ impl<'a, W: Write> Writer<'a, W> {
             block_id: IdGenerator::default(),
             named_expressions: Default::default(),
             need_bake_expressions: Default::default(),
+            arithmetic_control_helpers: Default::default(),
             continue_ctx: back::continue_forward::ContinueCtx::default(),
             varying: Default::default(),
             clip_distance_count: 0,
@@ -130,6 +133,30 @@ impl<'a, W: Write> Writer<'a, W> {
     /// # Panics
     /// Might panic if the module is invalid
     pub fn write(&mut self) -> Result<ReflectionInfo, Error> {
+        let reachable = (self.module.has_arithmetic_controls()
+            && !self
+                .options
+                .writer_flags
+                .contains(WriterFlags::INCLUDE_UNUSED_ITEMS))
+        .then(|| {
+            let index = self.entry_point_idx as usize;
+            back::reachable_functions(self.module, index..index + 1)
+        });
+        let has_controls = !self.entry_point.function.expression_controls.is_empty()
+            || self.module.functions.iter().any(|(handle, function)| {
+                !function.expression_controls.is_empty()
+                    && reachable
+                        .as_ref()
+                        .is_none_or(|functions| functions.contains(&handle))
+            });
+        let supports_precise = match self.options.version {
+            Version::Desktop(version) => version >= 400,
+            Version::Embedded { version, .. } => version >= 320,
+        };
+        if has_controls && !supports_precise {
+            return Err(Error::UnsupportedArithmeticControls);
+        }
+        self.arithmetic_control_helpers.clear();
         // We use `writeln!(self.out)` throughout the write to add newlines
         // to make the output more readable
 
@@ -415,6 +442,30 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Write all regular functions
         for (handle, function) in self.module.functions.iter() {
+            if reachable
+                .as_ref()
+                .is_some_and(|functions| !functions.contains(&handle))
+            {
+                continue;
+            }
+            self.write_arithmetic_control_helpers(
+                back::FunctionType::Function(handle),
+                function,
+                &self.info[handle],
+            )?;
+        }
+        self.write_arithmetic_control_helpers(
+            back::FunctionType::EntryPoint(self.entry_point_idx),
+            &self.entry_point.function,
+            ep_info,
+        )?;
+        for (handle, function) in self.module.functions.iter() {
+            if reachable
+                .as_ref()
+                .is_some_and(|functions| !functions.contains(&handle))
+            {
+                continue;
+            }
             // Check that the function doesn't use globals that aren't supported
             // by the current entry point
             if !include_unused && !ep_info.dominates_global_use(&self.info[handle]) {
@@ -847,6 +898,8 @@ impl<'a, W: Write> Writer<'a, W> {
     fn update_expressions_to_bake(&mut self, func: &crate::Function, info: &valid::FunctionInfo) {
         use crate::Expression;
         self.need_bake_expressions.clear();
+        self.need_bake_expressions
+            .extend(func.expression_controls.keys().copied());
         for (fun_handle, expr) in func.expressions.iter() {
             let expr_info = &info[fun_handle];
             let min_ref_count = func.expressions[fun_handle].bake_ref_count();
@@ -1206,6 +1259,91 @@ impl<'a, W: Write> Writer<'a, W> {
             self.varying.insert(vname.to_string(), location);
         }
 
+        Ok(())
+    }
+
+    /// GLSL limits `precise` propagation to the function containing the
+    /// qualified assignment. Isolate each controlled operation so unrelated
+    /// argument computations do not acquire its restrictions.
+    fn write_arithmetic_control_helpers(
+        &mut self,
+        ty: back::FunctionType,
+        function: &crate::Function,
+        info: &valid::FunctionInfo,
+    ) -> BackendResult {
+        for &handle in function.expression_controls.keys() {
+            let expression = &function.expressions[handle];
+            let (left, _) = back::arithmetic_control_operands(expression);
+            let argument_type = info[left].ty.inner_with(&self.module.types);
+            let result_type = info[handle].ty.inner_with(&self.module.types);
+            let scalar = argument_type.scalar().unwrap();
+            if matches!(
+                scalar.kind,
+                crate::ScalarKind::Sint | crate::ScalarKind::Uint
+            ) && scalar.width != 4
+            {
+                return Err(Error::UnsupportedArithmeticControls);
+            }
+            // GLSL constructors preserve signed/unsigned integer bit patterns.
+            // Qualify the arithmetic producer itself, before the signed cast.
+            let unsigned_type = match *result_type {
+                TypeInner::Scalar(scalar) if scalar.kind == crate::ScalarKind::Sint => {
+                    Some(TypeInner::Scalar(crate::Scalar {
+                        kind: crate::ScalarKind::Uint,
+                        ..scalar
+                    }))
+                }
+                TypeInner::Vector { size, scalar } if scalar.kind == crate::ScalarKind::Sint => {
+                    Some(TypeInner::Vector {
+                        size,
+                        scalar: crate::Scalar {
+                            kind: crate::ScalarKind::Uint,
+                            ..scalar
+                        },
+                    })
+                }
+                _ => None,
+            };
+            let arithmetic_type = unsigned_type.as_ref().unwrap_or(result_type);
+            let name = self.namer.call("naga_no_contraction");
+            self.write_value_type(result_type)?;
+            write!(self.out, " {name}(")?;
+            self.write_value_type(argument_type)?;
+            write!(self.out, " left, ")?;
+            self.write_value_type(argument_type)?;
+            writeln!(self.out, " right) {{")?;
+            write!(self.out, "{}precise ", back::INDENT)?;
+            self.write_value_type(arithmetic_type)?;
+            write!(self.out, " result = ")?;
+            match *expression {
+                crate::Expression::Binary { op, .. } => {
+                    if unsigned_type.is_some() {
+                        self.write_value_type(arithmetic_type)?;
+                        write!(self.out, "(left) {} ", back::binary_operation_str(op))?;
+                        self.write_value_type(arithmetic_type)?;
+                        write!(self.out, "(right)")?;
+                    } else {
+                        write!(self.out, "left {} right", back::binary_operation_str(op))?;
+                    }
+                }
+                crate::Expression::Math {
+                    fun: crate::MathFunction::Dot,
+                    ..
+                } => {
+                    write!(self.out, "dot(left, right)")?;
+                }
+                _ => unreachable!("validated arithmetic control"),
+            }
+            write!(self.out, ";\n{}return ", back::INDENT)?;
+            if unsigned_type.is_some() {
+                self.write_value_type(result_type)?;
+                write!(self.out, "(result)")?;
+            } else {
+                write!(self.out, "result")?;
+            }
+            writeln!(self.out, ";\n}}\n")?;
+            self.arithmetic_control_helpers.insert((ty, handle), name);
+        }
         Ok(())
     }
 
@@ -2432,6 +2570,20 @@ impl<'a, W: Write> Writer<'a, W> {
 
         if let Some(name) = self.named_expressions.get(&expr) {
             write!(self.out, "{name}")?;
+            return Ok(());
+        }
+
+        if let Some(name) = self
+            .arithmetic_control_helpers
+            .get(&(ctx.ty, expr))
+            .cloned()
+        {
+            let (left, right) = back::arithmetic_control_operands(&ctx.expressions[expr]);
+            write!(self.out, "{name}(")?;
+            self.write_expr(left, ctx)?;
+            write!(self.out, ", ")?;
+            self.write_expr(right, ctx)?;
+            write!(self.out, ")")?;
             return Ok(());
         }
 
