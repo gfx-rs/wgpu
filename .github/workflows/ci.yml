@@ -123,81 +123,81 @@ jobs:
 
           # Linux
           - name: Linux x86_64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: x86_64-unknown-linux-gnu
             tier: 1
             kind: native
 
           - name: Linux aarch64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: aarch64-unknown-linux-gnu
             tier: 1
             kind: native
 
           # FreeBSD
           - name: FreeBSD x86_64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: x86_64-unknown-freebsd
             tier: 2
             kind: wgpu-only
 
           # NetBSD
           - name: NetBSD x86_64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: x86_64-unknown-netbsd
             tier: 2
             kind: wgpu-only
 
           # Android
           - name: Android aarch64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: aarch64-linux-android
             tier: 2
             kind: native
 
           # Android
           - name: Android ARMv7
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: armv7-linux-androideabi
             tier: 2
             kind: wgpu-only
 
           # Android
           - name: Android x86_64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: x86_64-linux-android
             tier: 2
             kind: wgpu-only
 
           # OpenHarmony
           - name: OpenHarmony aarch64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: aarch64-unknown-linux-ohos
             tier: 2
             kind: native
 
           # WebGPU/WebGL
           - name: WebAssembly
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: wasm32-unknown-unknown
             tier: 2
             kind: web
 
           - name: WebAssembly 64-bit
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: wasm64-unknown-unknown
             kind: wgpu-only
             tier: 3
             extra-flags: -Zbuild-std=std,panic_abort
 
           - name: Emscripten
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: wasm32-unknown-emscripten
             tier: 2
             kind: wgpu-only
 
           - name: WebAssembly Core 1.0
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: wasm32v1-none
             tier: 2
             kind: no_std
@@ -205,7 +205,7 @@ jobs:
           # 32-bit PowerPC Linux
           # Included to test support for `portable-atomic`
           - name: Linux ppc32
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: powerpc-unknown-linux-gnu
             tier: 2
             kind: wgpu-only
@@ -412,12 +412,12 @@ jobs:
 
           # Linux
           - name: Linux x86_64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: x86_64-unknown-linux-gnu
 
           # WebGPU
           - name: WebAssembly
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: wasm32-unknown-unknown
 
     name: wgpu MSRV Check ${{ matrix.name }}
@@ -495,7 +495,7 @@ jobs:
 
           # Linux
           - name: Linux x86_64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: x86_64-unknown-linux-gnu
 
     name: Core MSRV Check ${{ matrix.name }}
@@ -557,7 +557,7 @@ jobs:
     timeout-minutes: 10
 
     name: MSRV Minimal Versions
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     env:
       # Override flags to NOT include `-D warnings`, because warnings may be due to harmless problems in deps.
       # Also, allow unexpected_cfgs because it is very common and spammy when using old deps.
@@ -606,7 +606,7 @@ jobs:
     timeout-minutes: 20
 
     name: Test WebAssembly
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     permissions: {}
 
@@ -657,7 +657,7 @@ jobs:
 
           # Linux
           - name: Linux x86_64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
 
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -739,11 +739,11 @@ jobs:
         uses: $/.github/actions/install-vulkan-sdk
 
       - name: (Linux) Install Vulkan SDK
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'ubuntu-26.04'
         uses: $/.github/actions/install-vulkan-sdk
 
       - name: (Linux) Install Mesa
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'ubuntu-26.04'
         uses: $/.github/actions/install-mesa
 
       - name: Delete Naga snapshots
@@ -892,7 +892,7 @@ jobs:
     timeout-minutes: 2
 
     name: Test Windows x86_64
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     permissions: {}
 
@@ -918,7 +918,7 @@ jobs:
     timeout-minutes: 10
 
     name: Doctest
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     permissions: {}
 
@@ -953,7 +953,7 @@ jobs:
     timeout-minutes: 10
 
     name: Miri (limited scope)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     permissions: {}
 
@@ -993,7 +993,7 @@ jobs:
     timeout-minutes: 2
 
     name: Format & Typos
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions: {}
     steps:
       - name: Checkout repo
@@ -1041,7 +1041,7 @@ jobs:
     timeout-minutes: 10
 
     name: Clippy cts_runner
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions: {}
     steps:
       - name: Checkout repo
@@ -1084,7 +1084,7 @@ jobs:
     timeout-minutes: 5
 
     name: "cargo-deny advisories"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions: {}
     steps:
       - name: Checkout repo
@@ -1105,7 +1105,7 @@ jobs:
     timeout-minutes: 5
 
     name: "cargo-deny"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions: {}
     steps:
       - name: Checkout repo
@@ -1123,7 +1123,7 @@ jobs:
 
   zizmor:
     name: "Zizmor"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       # `zizmor-action` uploads its findings to GitHub code scanning as SARIF.
       security-events: write
