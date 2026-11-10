@@ -282,7 +282,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix pending buffer mappings incorrectly succeeding when the device is lost before they are processed. By @jinleili in [#10301](https://github.com/gfx-rs/wgpu/pull/10301).
 - Fix initialization tracking for `external_texture` binding points, for both `ExternalTexture`s and `TextureView`s bound to them. By @ErichDonGubler in [#10276](https://github.com/gfx-rs/wgpu/pull/10276) and [#10366](https://github.com/gfx-rs/wgpu/pull/10366).
 - Make `TextureBlitter` respect the `sample_type` when performing downsampling. Previously, `FilterMode::Nearest` was always used when copying a larger texture to a smaller one. By @DouglasDwyer in [#10657](https://github.com/gfx-rs/wgpu/pull/10657)
-- Fix a panic on Metal and DX12, and a Vulkan validation error, when `set_immediates` writes past the immediate size of the current pipeline layout, including layouts with no immediates. By @cwfitzgerald in [#10903](https://github.com/gfx-rs/wgpu/pull/10903).
+- Fix a panic on Metal and DX12, and a Vulkan validation error, when `set_immediates` writes past the immediate size of the current pipeline layout, including layouts with no immediates. Fix a DX12 panic when a pipeline layout has immediates that are never set. By @cwfitzgerald in [#10903](https://github.com/gfx-rs/wgpu/pull/10903).
 
 #### naga
 
