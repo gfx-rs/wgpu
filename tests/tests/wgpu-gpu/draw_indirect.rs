@@ -1538,7 +1538,12 @@ static MULTI_DRAW_INDIRECT_AFTER_DISCARDED_3D_ATTACHMENT: GpuTestConfiguration =
                 // With indirect validation on, its compute pass would sit
                 // between the attachment's re-initialization and the
                 // multi-draw's own pre-pass work and hide the case under test.
-                .remove_instance_flags(wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL),
+                .remove_instance_flags(wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL)
+                // https://github.com/gfx-rs/wgpu/issues/9184
+                .expect_fail(
+                    wgpu_test::FailureCase::molten_vk()
+                        .validation_error("VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT"),
+                ),
         )
         .run_async(run_multi_draw_indirect_after_discarded_3d_attachment);
 
