@@ -71,7 +71,7 @@ jobs:
 
           # Linux
           - platform: Linux x86_64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: x86_64-unknown-linux-gnu
             backend: vulkan
             shell: bash
@@ -153,7 +153,7 @@ jobs:
           target-dir: "target/debug"
 
       - name: (Linux) Install Mesa
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'ubuntu-26.04'
         uses: $/.github/actions/install-mesa
         with:
           target-dir: "target/debug"
