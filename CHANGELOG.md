@@ -168,6 +168,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 - Added `Utf16SourceLocation` which is analogue to `SourceLocation` but using UTF-16 code units. Added `Utf16SourceLocation::to_utf8` and `SourceLocation::to_utf16` to convert between them. By @sagudev in [#10294](https://github.com/gfx-rs/wgpu/pull/10294).
 - Add `as_core` and `from_core` methods on various wgpu resources. By @sagudev in [#10211](https://github.com/gfx-rs/wgpu/pull/10211).
+- Add `SurfaceColorSpace::PassThrough` on Vulkan and Metal, mapped to `VK_COLOR_SPACE_PASS_THROUGH_EXT` and a `nil` `CAMetalLayer.colorspace`, respectively, so applications can manage surface color interpretation themselves. By @yikerman in [#10546](https://github.com/gfx-rs/wgpu/pull/10546).
 - Added `Features::UNRESTRICTED_BYTES_PER_ROW`: `bytes_per_row` in `copy_buffer_to_texture` and `copy_texture_to_buffer` need only be a multiple of the texel block copy size, not of 256. Supported on Vulkan, Metal, GL, and DX12 with `UnrestrictedBufferTextureCopyPitchSupported`. By @michael-dm in [#10619](https://github.com/gfx-rs/wgpu/pull/10619).
 - The format string of `debugPrintf` is now checked for correctness. By @evilpie in [#9641](https://github.com/gfx-rs/wgpu/pull/9641).
 - Added `wgt::Features::CORE_FEATURES_AND_LIMITS`, which is reported only when the adapter supports WebGPU default limits and its downlevel capabilities are WebGPU-compliant. By @sagudev in [#10293](https://github.com/gfx-rs/wgpu/pull/10293).
