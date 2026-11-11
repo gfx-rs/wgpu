@@ -995,6 +995,11 @@ fn future_request_device(
             // `Surface::get_capabilities` can report `Rgba16Float` truthfully.
             rgba16float_probe::probe_rgba16float_canvas_support(&device);
 
+            let queue = WebQueue {
+                inner: queue,
+                ident: crate::cmp::Identifier::create(),
+            };
+
             (
                 WebDevice {
                     inner: device,
@@ -1002,13 +1007,10 @@ fn future_request_device(
                     error_scope_count: Rc::new(Cell::new(0)),
                     uncaptured_error_listener: Rc::new(RefCell::new(None)),
                     cached_properties: Rc::new(CachedProperties::default()),
+                    queue: queue.clone(),
                 }
                 .into(),
-                WebQueue {
-                    inner: queue,
-                    ident: crate::cmp::Identifier::create(),
-                }
-                .into(),
+                queue.into(),
             )
         })
         .map_err(|error_value| crate::RequestDeviceError {
@@ -1245,6 +1247,8 @@ pub struct WebDevice {
     uncaptured_error_listener: Rc<RefCell<Option<js_sys::Function>>>,
     /// Cached Rust values for the device's properties.
     cached_properties: Rc<CachedProperties>,
+    /// The default queue associated with this device.
+    queue: WebQueue,
 }
 
 #[derive(Debug, Clone)]
@@ -2050,6 +2054,10 @@ impl dispatch::DeviceInterface for WebDevice {
             .adapter_info
             .get_or_init(|| map_adapter_info(&self.inner.adapter_info()))
             .clone()
+    }
+
+    fn queue(&self) -> dispatch::DispatchQueue {
+        self.queue.clone().into()
     }
 
     fn create_shader_module(

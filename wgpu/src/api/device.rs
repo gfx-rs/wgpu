@@ -136,6 +136,13 @@ impl Device {
         self.inner.adapter_info()
     }
 
+    /// Get a primary [Queue] for this device
+    pub fn queue(&self) -> Queue {
+        Queue {
+            inner: self.inner.queue(),
+        }
+    }
+
     /// Creates a shader module.
     ///
     /// <div class="warning">
