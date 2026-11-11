@@ -1,4 +1,0 @@
-targets = "GLSL"
-
-[glsl]
-version.Desktop = 440

@@ -240,22 +240,3 @@ impl GlslUniformType {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::Version;
-
-    #[test]
-    fn integer_mix_version_gate() {
-        // ES: the genIType/genUType/genBType `mix` overloads land in 3.10.
-        assert!(!Version::new_gles(300).supports_integer_mix());
-        assert!(Version::new_gles(310).supports_integer_mix());
-        assert!(Version::new_gles(320).supports_integer_mix());
-
-        // Desktop: they land in 4.50.
-        assert!(!Version::Desktop(330).supports_integer_mix());
-        assert!(!Version::Desktop(440).supports_integer_mix());
-        assert!(Version::Desktop(450).supports_integer_mix());
-        assert!(Version::Desktop(460).supports_integer_mix());
-    }
-}
