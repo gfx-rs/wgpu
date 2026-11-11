@@ -109,7 +109,7 @@ pub use self::wgl::{AdapterContext, AdapterContextLock, Instance, Surface};
 
 pub use fence::Fence;
 
-use alloc::{boxed::Box, string::String, string::ToString as _, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::{fmt, ops::Range};
 use wgpu_sync::{
     atomic::{AtomicU32, AtomicU8},
@@ -511,23 +511,12 @@ impl Texture {
         }
     }
 
-    /// Returns the `target`, whether the image is 3d and whether the image is a cubemap.
+    /// Returns the GL texture bind target for a texture descriptor.
     fn get_info_from_desc(desc: &TextureDescriptor) -> u32 {
-        match desc.dimension {
-            // WebGL (1 and 2) as well as some GLES versions do not have 1D textures, so we are
-            // doing `TEXTURE_2D` instead
-            wgt::TextureDimension::D1 => glow::TEXTURE_2D,
-            wgt::TextureDimension::D2 => {
-                // HACK: detect a cube map; forces cube compatible textures to be cube textures
-                match (desc.is_cube_compatible(), desc.size.depth_or_array_layers) {
-                    (false, 1) => glow::TEXTURE_2D,
-                    (false, _) => glow::TEXTURE_2D_ARRAY,
-                    (true, 6) => glow::TEXTURE_CUBE_MAP,
-                    (true, _) => glow::TEXTURE_CUBE_MAP_ARRAY,
-                }
-            }
-            wgt::TextureDimension::D3 => glow::TEXTURE_3D,
-        }
+        Self::target_for_view_dimension(
+            desc.texture_binding_view_dimension
+                .expect("GLES requires a texture binding view dimension"),
+        )
     }
 
     /// GL bind target corresponding to a view dimension.
@@ -542,49 +531,6 @@ impl Texture {
             wgt::TextureViewDimension::CubeArray => glow::TEXTURE_CUBE_MAP_ARRAY,
             wgt::TextureViewDimension::D3 => glow::TEXTURE_3D,
         }
-    }
-
-    /// More information can be found in issues #1614 and #1574
-    fn log_failing_target_heuristics(view_dimension: wgt::TextureViewDimension, target: u32) {
-        let expected_target = Self::target_for_view_dimension(view_dimension);
-
-        if expected_target == target {
-            return;
-        }
-
-        let buffer;
-        let got = match target {
-            glow::TEXTURE_2D => "D2",
-            glow::TEXTURE_2D_ARRAY => "D2Array",
-            glow::TEXTURE_CUBE_MAP => "Cube",
-            glow::TEXTURE_CUBE_MAP_ARRAY => "CubeArray",
-            glow::TEXTURE_3D => "D3",
-            target => {
-                buffer = target.to_string();
-                &buffer
-            }
-        };
-
-        log::error!(
-            concat!(
-                "wgpu-hal heuristics assumed that ",
-                "the view dimension will be equal to `{}` rather than `{:?}`.\n",
-                "`D2` textures with ",
-                "`depth_or_array_layers == 1` ",
-                "are assumed to have view dimension `D2`\n",
-                "`D2` textures with ",
-                "`depth_or_array_layers > 1` ",
-                "are assumed to have view dimension `D2Array`\n",
-                "`D2` textures with ",
-                "`depth_or_array_layers == 6` ",
-                "are assumed to have view dimension `Cube`\n",
-                "`D2` textures with ",
-                "`depth_or_array_layers > 6 && depth_or_array_layers % 6 == 0` ",
-                "are assumed to have view dimension `CubeArray`\n",
-            ),
-            got,
-            view_dimension,
-        );
     }
 }
 
@@ -1194,6 +1140,8 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
 
     #[cfg(feature = "validation_canary")]
     if cfg!(debug_assertions) && log_severity == log::Level::Error {
+        use alloc::string::ToString as _;
+
         // Set canary and continue
         crate::VALIDATION_CANARY.add(message.to_string());
     }

@@ -101,6 +101,35 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
+#### `TextureDescriptor` has new field `texture_binding_view_dimension`, new downlevel flag `ARBITRARY_BINDING_VIEW_DIMENSIONS`
+
+`TextureDescriptor` has a new field `texture_binding_view_dimension`,
+implementing WebGPU's
+[`textureBindingViewDimension`](https://gpuweb.github.io/gpuweb/#dom-gputexturedescriptor-texturebindingviewdimension)
+. On devices without the new
+`DownlevelFlags::ARBITRARY_BINDING_VIEW_DIMENSIONS` (GLES/WebGL), texture
+bindings must use a view of this dimension, `None` infers it from the texture's
+dimension and layer count, and `CubeArray` requires
+`DownlevelFlags::CUBE_ARRAY_TEXTURES` and a layer count that is a multiple of 6.
+Devices with the downlevel flag ignore it.
+`Texture::texture_binding_view_dimension()` returns the resolved value. This allows specifying a binding view dimension that was
+otherwise only inferred from a heuristic for GLSL that could get it wrong.
+
+Example for a cube map:
+
+```diff
+ wgpu::TextureDescriptor {
+     size: wgpu::Extent3d { width: 256, height: 256, depth_or_array_layers: 6 },
+     dimension: wgpu::TextureDimension::D2,
+     // ...
++    texture_binding_view_dimension: Some(wgpu::TextureViewDimension::Cube),
+ }
+```
+
+**Breaking for custom backends:** Implementations of `TextureInterface` must implement `texture_binding_view_dimension`.
+
+By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
+
 ### Added/New Features
 
 #### General
@@ -142,6 +171,8 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Added `Features::UNRESTRICTED_BYTES_PER_ROW`: `bytes_per_row` in `copy_buffer_to_texture` and `copy_texture_to_buffer` need only be a multiple of the texel block copy size, not of 256. Supported on Vulkan, Metal, GL, and DX12 with `UnrestrictedBufferTextureCopyPitchSupported`. By @michael-dm in [#10619](https://github.com/gfx-rs/wgpu/pull/10619).
 - The format string of `debugPrintf` is now checked for correctness. By @evilpie in [#9641](https://github.com/gfx-rs/wgpu/pull/9641).
 - Added `Queue` getter on `Device`. By @sagudev in [#10895](https://github.com/gfx-rs/wgpu/pull/10895).
+- Added `wgt::Features::CORE_FEATURES_AND_LIMITS`, which is reported only when the adapter supports WebGPU default limits and its downlevel capabilities are WebGPU-compliant. By @sagudev in [#10293](https://github.com/gfx-rs/wgpu/pull/10293).
+- Added `TextureDescriptor::default_view_dimension` to get the view dimension a texture's views default to. By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 #### Naga
 
@@ -170,6 +201,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Metal now runs fixed-count multi-draws of 512 or more draws through GPU-generated indirect command buffers, instead of one indirect draw per command on the CPU. This is off with `InstanceFlags::STRICT_WEBGPU_COMPLIANCE`. The memory they hold is reported as `HalCounters::indirect_command_buffer_memory`, and pooled ones unused for two seconds are released. By @matthargett in [#9640](https://github.com/gfx-rs/wgpu/pull/9640).
 - Fix `max_task_workgroup_count` being misreported on pre-Apple7 devices. By @inner-daemons in [#10065](https://github.com/gfx-rs/wgpu/pull/10065).
 - The value of the `max_binding_array_sampler_elements_per_shader_stage` on Apple7, Apple8, and Mac2 hardware is reduced from 1024 to 996, to match the latest Metal documentation. By @andyleiserson in [#10649](https://github.com/gfx-rs/wgpu/pull/10649).
+- Added support for NV12 and P010 texture formats. Due to no native support, they're implemented using separate textures for each plane. By @jerzywilczek in [#9624](https://github.com/gfx-rs/wgpu/pull/9624)
 
 #### GLES
 
@@ -185,6 +217,10 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 - Add `Device::import_external_texture` to bind a `GPUExternalTexture` sampled from an `HTMLVideoElement` or WebCodecs `VideoFrame`, without a copy. By @AdrianEddy in [#9936](https://github.com/gfx-rs/wgpu/pull/9936).
 - The `subgroups` feature (and any other features added in the future) will now be reported by the WebGPU backend, if reported by the underlying WebGPU implementation. By @andyleiserson in [#10265](https://github.com/gfx-rs/wgpu/pull/10265).
+
+#### deno_webgpu
+
+- `GPUTextureDescriptor` accepts `textureBindingViewDimension`. By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 ### Changes
 
@@ -212,6 +248,10 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Added `naga::valid::Capabilities::LINEAR_INTERPOLATION`, which is now required in order to use `@interpolate(linear)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - The GLSL backend's `MissingFeatures` error now names the GLSL version that lacks the features, e.g. `GLSL 300 es doesn't support the required feature(s): NOPERSPECTIVE_QUALIFIER`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - Bit reinterpretation is now represented in the Naga IR by the new `naga::ir::Expression::Bitcast`, which names its result type. `naga::ir::Expression::As` now only converts, and its `kind` and `convert` fields are replaced by `target: Scalar`. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
+
+#### Hal
+
+- `TextureDescriptor` has a new field `texture_binding_view_dimension`. It must be `Some` on devices without `DownlevelFlags::ARBITRARY_BINDING_VIEW_DIMENSIONS` (the GLES backend allocates the texture's GL target from it), and is ignored otherwise. By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 #### Metal
 
