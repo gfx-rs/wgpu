@@ -953,10 +953,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 reject,
             } = *expr
             {
-                // A vector `select` on non-float components is lowered to a componentwise
-                // `?:` in `write_expr` when the target version lacks the integer `mix`
-                // overloads. That names each operand once per component, so bake all three
-                // to avoid re-evaluating them.
+                // Componentwise `select` below names each operand once per component.
                 if !self.options.version.supports_integer_mix()
                     && !matches!(inner.scalar_kind(), Some(crate::ScalarKind::Float))
                 {
@@ -3062,8 +3059,6 @@ impl<'a, W: Write> Writer<'a, W> {
                     let result_ty = ctx.resolve_type(accept, &self.module.types);
                     let size = match *result_ty {
                         TypeInner::Vector { size, .. } => size,
-                        // A vector condition requires vector operands; the
-                        // validator rejects anything else.
                         _ => unreachable!(),
                     };
                     let is_float =
@@ -3081,11 +3076,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         self.write_expr(condition, ctx)?;
                         write!(self.out, ")")?;
                     } else {
-                        // The `mix` overloads taking a boolean selector only accept float
-                        // components before GLSL 4.50 / ES 3.10, so select each component
-                        // with `?:` instead. The operands are baked in
-                        // `update_expressions_to_bake`, so naming them once per component
-                        // does not evaluate them more than once.
+                        // No integer `mix` before GLSL 4.50 / ES 3.10.
                         self.write_value_type(result_ty)?;
                         write!(self.out, "(")?;
 

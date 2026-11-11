@@ -100,11 +100,7 @@ impl Version {
         *self >= Version::Desktop(450)
     }
 
-    /// Returns true if the version has the `mix` overloads that take a boolean
-    /// selector with non-float components (`genIType`, `genUType`, `genBType`).
-    ///
-    /// Older versions only provide the float overloads, so a vector `select` on
-    /// integers or booleans has to be lowered componentwise instead.
+    /// Returns true if `mix` with a boolean selector accepts non-float vectors.
     pub fn supports_integer_mix(&self) -> bool {
         *self >= Version::Desktop(450) || *self >= Version::new_gles(310)
     }
