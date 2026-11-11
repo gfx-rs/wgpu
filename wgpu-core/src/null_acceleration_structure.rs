@@ -72,12 +72,17 @@ impl NullAccelerationStructure {
                 })
                 .map_err(NullAccelerationStructureInitError::AccelerationStructure)?;
 
-            let scratch = ScratchBuffer::new(
+            let scratch = match ScratchBuffer::new(
                 device,
                 NonZeroU64::new(sizes.build_scratch_size)
-                    .expect(".max(1) to ensure it is non-zero"),
-            )
-            .map_err(NullAccelerationStructureInitError::ScratchBuffer)?;
+                    .expect("scratch size should always be non-zero"),
+            ) {
+                Ok(buf) => buf,
+                Err(e) => {
+                    device.raw().destroy_acceleration_structure(acceleration_structure);
+                    return Err(NullAccelerationStructureInitError::ScratchBuffer(e))
+                }
+            };
 
             let mut pending = queue.pending_writes.lock();
             let command_encoder = pending.activate();
