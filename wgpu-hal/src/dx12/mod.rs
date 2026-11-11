@@ -1246,6 +1246,7 @@ pub(super) struct ShaderCacheKey {
     entry_point: String,
     stage: naga::ShaderStage,
     shader_model: naga::back::hlsl::ShaderModel,
+    denormal_mode: Option<wgt::DxcDenormalMode>,
 }
 
 pub(super) struct ShaderCacheValue {

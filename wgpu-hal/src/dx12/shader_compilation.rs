@@ -21,6 +21,7 @@ pub(super) struct CompilerFxc {
 }
 
 pub(super) struct CompilerDynamicDxc {
+    denormal_mode: Option<wgt::DxcDenormalMode>,
     max_shader_model: wgt::DxcShaderModel,
     compiler: Dxc::IDxcCompiler3,
     // Has to be held onto for the lifetime of the device otherwise shaders will fail to compile.
@@ -29,6 +30,7 @@ pub(super) struct CompilerDynamicDxc {
 }
 
 pub(super) struct CompilerStaticDxc {
+    denormal_mode: Option<wgt::DxcDenormalMode>,
     max_shader_model: wgt::DxcShaderModel,
     compiler: Dxc::IDxcCompiler3,
 }
@@ -42,6 +44,31 @@ pub(super) enum GetContainerError {
 }
 
 impl CompilerContainer {
+    pub(super) fn with_denormal_mode(
+        mut self,
+        mode: Option<wgt::DxcDenormalMode>,
+    ) -> Result<Self, crate::InstanceError> {
+        match &mut self {
+            Self::Fxc(_) if mode.is_some() => {
+                return Err(crate::InstanceError::new(String::from(
+                    "An explicit DXC denormal mode requires DXC; FXC was selected",
+                )));
+            }
+            Self::Fxc(_) => {}
+            Self::DynamicDxc(compiler) => compiler.denormal_mode = mode,
+            Self::StaticDxc(compiler) => compiler.denormal_mode = mode,
+        }
+        Ok(self)
+    }
+
+    pub(super) fn denormal_mode(&self) -> Option<wgt::DxcDenormalMode> {
+        match self {
+            Self::Fxc(_) => None,
+            Self::DynamicDxc(compiler) => compiler.denormal_mode,
+            Self::StaticDxc(compiler) => compiler.denormal_mode,
+        }
+    }
+
     pub(super) fn new_fxc() -> Result<Self, GetContainerError> {
         FxcLib::new_dynamic().map(|fxc| Self::Fxc(CompilerFxc { fxc }))
     }
@@ -62,6 +89,7 @@ impl CompilerContainer {
 
         Ok(Self::DynamicDxc(CompilerDynamicDxc {
             max_shader_model: wgt::DxcShaderModel::from_dxc_version(major, minor),
+            denormal_mode: None,
             compiler,
             _dxc: dxc,
         }))
@@ -82,6 +110,7 @@ impl CompilerContainer {
 
                 Ok(CompilerContainer::StaticDxc(CompilerStaticDxc {
                     max_shader_model: wgt::DxcShaderModel::V6_7,
+                    denormal_mode: None,
                     compiler,
                 }))
             }
@@ -107,18 +136,19 @@ impl CompilerContainer {
     pub(super) fn compile(
         &self,
         device: &super::Device,
-        source: &str,
+        key: &super::ShaderCacheKey,
         source_name: Option<&CStr>,
-        raw_ep: &str,
         stage_bit: wgt::ShaderStages,
         full_stage: &str,
     ) -> Result<super::CompiledShader, crate::PipelineError> {
+        validate_denormal_mode(self.denormal_mode(), key.shader_model)
+            .map_err(|message| crate::PipelineError::Linkage(stage_bit, message.into()))?;
         match self {
             CompilerContainer::Fxc(CompilerFxc { fxc }) => compile_fxc(
                 device,
-                source,
+                &key.source,
                 source_name,
-                raw_ep,
+                &key.entry_point,
                 stage_bit,
                 full_stage,
                 fxc,
@@ -126,12 +156,13 @@ impl CompilerContainer {
             CompilerContainer::DynamicDxc(CompilerDynamicDxc { compiler, .. })
             | CompilerContainer::StaticDxc(CompilerStaticDxc { compiler, .. }) => compile_dxc(
                 device,
-                source,
+                &key.source,
                 source_name,
-                raw_ep,
+                &key.entry_point,
                 stage_bit,
                 full_stage,
                 compiler,
+                self.denormal_mode(),
             ),
         }
     }
@@ -362,30 +393,32 @@ fn as_err_str(blob: &Dxc::IDxcBlobUtf8) -> Result<&str, crate::DeviceError> {
         .map_err(|_| crate::DeviceError::Unexpected)
 }
 
-fn compile_dxc(
-    device: &crate::dx12::Device,
-    source: &str,
-    source_name: Option<&CStr>,
-    raw_ep: &str,
-    stage_bit: wgt::ShaderStages,
-    full_stage: &str,
-    compiler: &Dxc::IDxcCompiler3,
-) -> Result<crate::dx12::CompiledShader, crate::PipelineError> {
-    profiling::scope!("compile_dxc");
-
-    let source_name = source_name
-        .and_then(|cstr| cstr.to_str().ok())
-        .and_then(sanitize_source_name);
-    let source_name = source_name.as_deref().map(OPCWSTR::new);
-    let raw_ep = OPCWSTR::new(raw_ep);
-    let full_stage = OPCWSTR::new(full_stage);
-
-    let mut compile_args = arrayvec::ArrayVec::<PCWSTR, 13>::new_const();
-
-    if let Some(source_name) = source_name.as_ref() {
-        compile_args.push(source_name.ptr())
+// Validate the actual selected profile, not just the compiler's maximum profile.
+fn validate_denormal_mode(
+    mode: Option<wgt::DxcDenormalMode>,
+    shader_model: naga::back::hlsl::ShaderModel,
+) -> Result<(), &'static str> {
+    if mode.is_some() && shader_model < naga::back::hlsl::ShaderModel::V6_2 {
+        Err("An explicit DXC denormal mode requires shader model 6.2 or later")
+    } else {
+        Ok(())
     }
+}
 
+// The caller keeps the three owned UTF-16 strings alive through Compile. All other
+// pointers refer to static strings. Leave the existing argument order intact for None.
+fn dxc_arguments(
+    source_name: Option<&OPCWSTR>,
+    raw_ep: &OPCWSTR,
+    full_stage: &OPCWSTR,
+    debug: bool,
+    enable_16bit: bool,
+    denormal_mode: Option<wgt::DxcDenormalMode>,
+) -> arrayvec::ArrayVec<PCWSTR, 15> {
+    let mut compile_args = arrayvec::ArrayVec::<PCWSTR, 15>::new_const();
+    if let Some(source_name) = source_name {
+        compile_args.push(source_name.ptr());
+    }
     compile_args.extend([
         windows::core::w!("-E"),
         raw_ep.ptr(),
@@ -396,8 +429,47 @@ fn compile_dxc(
         windows::core::w!("-no-warnings"),
         Dxc::DXC_ARG_ENABLE_STRICTNESS,
     ]);
+    if debug {
+        compile_args.push(Dxc::DXC_ARG_DEBUG);
+        compile_args.push(Dxc::DXC_ARG_SKIP_OPTIMIZATIONS);
+    }
+    if enable_16bit {
+        compile_args.push(windows::core::w!("-enable-16bit-types"));
+    }
+    if let Some(mode) = denormal_mode {
+        compile_args.extend([
+            windows::core::w!("-denorm"),
+            match mode {
+                wgt::DxcDenormalMode::Any => windows::core::w!("any"),
+                wgt::DxcDenormalMode::Preserve => windows::core::w!("preserve"),
+                wgt::DxcDenormalMode::FlushToZero => windows::core::w!("ftz"),
+            },
+        ]);
+    }
+    compile_args
+}
 
-    if device
+#[allow(clippy::too_many_arguments)]
+fn compile_dxc(
+    device: &crate::dx12::Device,
+    source: &str,
+    source_name: Option<&CStr>,
+    raw_ep: &str,
+    stage_bit: wgt::ShaderStages,
+    full_stage: &str,
+    compiler: &Dxc::IDxcCompiler3,
+    denormal_mode: Option<wgt::DxcDenormalMode>,
+) -> Result<crate::dx12::CompiledShader, crate::PipelineError> {
+    profiling::scope!("compile_dxc");
+
+    let source_name = source_name
+        .and_then(|cstr| cstr.to_str().ok())
+        .and_then(sanitize_source_name);
+    let source_name = source_name.as_deref().map(OPCWSTR::new);
+    let raw_ep = OPCWSTR::new(raw_ep);
+    let full_stage = OPCWSTR::new(full_stage);
+
+    let debug = device
         .shared
         .private_caps
         .instance_flags
@@ -406,18 +478,18 @@ fn compile_dxc(
             .shared
             .private_caps
             .workarounds
-            .avoid_shader_debug_info
-    {
-        compile_args.push(Dxc::DXC_ARG_DEBUG);
-        compile_args.push(Dxc::DXC_ARG_SKIP_OPTIMIZATIONS);
-    }
-
-    if device
+            .avoid_shader_debug_info;
+    let enable_16bit = device
         .features
-        .intersects(wgt::Features::SHADER_F16 | wgt::Features::SHADER_I16)
-    {
-        compile_args.push(windows::core::w!("-enable-16bit-types"));
-    }
+        .intersects(wgt::Features::SHADER_F16 | wgt::Features::SHADER_I16);
+    let compile_args = dxc_arguments(
+        source_name.as_ref(),
+        &raw_ep,
+        &full_stage,
+        debug,
+        enable_16bit,
+        denormal_mode,
+    );
 
     let buffer = Dxc::DxcBuffer {
         Ptr: source.as_ptr().cast(),
@@ -539,5 +611,233 @@ mod tests {
     #[test]
     fn sanitize_source_name_drops_empty() {
         assert_eq!(sanitize_source_name(""), None);
+    }
+}
+
+#[cfg(test)]
+mod denormal_mode_tests {
+    use super::*;
+    use naga::back::hlsl::ShaderModel;
+    use wgt::DxcDenormalMode::{Any, FlushToZero, Preserve};
+
+    #[test]
+    fn denormal_arguments_preserve_defaults_and_optional_flags() {
+        let name = OPCWSTR::new("./shader");
+        let entry = OPCWSTR::new("main");
+        let profile = OPCWSTR::new("cs_6_2");
+        for named in [false, true] {
+            for debug in [false, true] {
+                for enable_16bit in [false, true] {
+                    let mut expected = Vec::new();
+                    if named {
+                        expected.push("./shader");
+                    }
+                    expected.extend([
+                        "-E",
+                        "main",
+                        "-T",
+                        "cs_6_2",
+                        "-HV",
+                        "2018",
+                        "-no-warnings",
+                        "-Ges",
+                    ]);
+                    if debug {
+                        expected.extend(["-Zi", "-Od"]);
+                    }
+                    if enable_16bit {
+                        expected.push("-enable-16bit-types");
+                    }
+                    for (mode, value) in [
+                        (None, None),
+                        (Some(Any), Some("any")),
+                        (Some(Preserve), Some("preserve")),
+                        (Some(FlushToZero), Some("ftz")),
+                    ] {
+                        let args = dxc_arguments(
+                            named.then_some(&name),
+                            &entry,
+                            &profile,
+                            debug,
+                            enable_16bit,
+                            mode,
+                        );
+                        // All backing strings remain in scope during this inspection and Compile.
+                        let actual: Vec<_> = args
+                            .iter()
+                            .map(|arg| unsafe { arg.to_string().unwrap() })
+                            .collect();
+                        let mut expected = expected.clone();
+                        if let Some(value) = value {
+                            expected.extend(["-denorm", value]);
+                        }
+                        assert_eq!(actual, expected);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn denormal_profile_requirements() {
+        for profile in [
+            ShaderModel::V5_1,
+            ShaderModel::V6_0,
+            ShaderModel::V6_1,
+            ShaderModel::V6_2,
+            ShaderModel::V6_7,
+            ShaderModel::V6_8,
+        ] {
+            assert!(validate_denormal_mode(None, profile).is_ok());
+            for mode in [Any, Preserve, FlushToZero] {
+                assert_eq!(
+                    validate_denormal_mode(Some(mode), profile).is_ok(),
+                    profile >= ShaderModel::V6_2
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn denormal_cache_identity() {
+        use hashbrown::HashSet;
+        let mut keys = HashSet::new();
+        for mode in [None, Some(Any), Some(Preserve), Some(FlushToZero)] {
+            let key = || super::super::ShaderCacheKey {
+                source: String::from("same HLSL"),
+                entry_point: String::from("main"),
+                stage: naga::ShaderStage::Compute,
+                shader_model: ShaderModel::V6_2,
+                denormal_mode: mode,
+            };
+            assert!(keys.insert(key()));
+            assert!(!keys.insert(key()));
+        }
+        assert_eq!(keys.len(), 4);
+    }
+
+    #[test]
+    fn denormal_fxc_rejects_explicit_modes() {
+        // Compiler library only: no D3D12 device or adapter is created.
+        assert!(CompilerContainer::new_fxc()
+            .unwrap()
+            .with_denormal_mode(None)
+            .is_ok());
+        for mode in [Any, Preserve, FlushToZero] {
+            assert!(CompilerContainer::new_fxc()
+                .unwrap()
+                .with_denormal_mode(Some(mode))
+                .is_err());
+        }
+    }
+
+    #[cfg(static_dxc)]
+    #[test]
+    fn denormal_static_compiler_selection() {
+        for mode in [None, Some(Any), Some(Preserve), Some(FlushToZero)] {
+            let container = CompilerContainer::new_static_dxc()
+                .unwrap()
+                .with_denormal_mode(mode)
+                .unwrap();
+            assert_eq!(container.denormal_mode(), mode);
+        }
+    }
+
+    #[test]
+    fn denormal_missing_dynamic_compiler() {
+        assert!(matches!(
+            CompilerContainer::new_dynamic_dxc("nonexistent-wgpu-denormal-test.dll".into()),
+            Err(GetContainerError::FailedToLoad(..))
+        ));
+    }
+}
+
+#[cfg(test)]
+mod denormal_compiler_tests {
+    use super::*;
+
+    // Run the test executable from a directory containing the desired DXC DLL.
+    // This uses compiler COM APIs only; it never creates a graphics device.
+    #[test]
+    #[ignore = "requires dxcompiler.dll in the working directory"]
+    fn denormal_actual_dxc() {
+        let source = r#"
+[noinline] float controlled(float x, float y) { precise float p = x * y; return p; }
+float4 main(float4 x : TEXCOORD0) : SV_Target {
+    return float4(controlled(x.x, x.y), x.z + x.w, 0.0, 1.0);
+}
+"#;
+        let entry = OPCWSTR::new("main");
+        let profile = OPCWSTR::new("ps_6_2");
+        for (mode, value) in [
+            (None, None),
+            (Some(wgt::DxcDenormalMode::Any), Some("any")),
+            (Some(wgt::DxcDenormalMode::Preserve), Some("preserve")),
+            (Some(wgt::DxcDenormalMode::FlushToZero), Some("ftz")),
+        ] {
+            let container = CompilerContainer::new_dynamic_dxc(
+                std::env::current_dir().unwrap().join("dxcompiler.dll"),
+            )
+            .unwrap()
+            .with_denormal_mode(mode)
+            .unwrap();
+            assert_eq!(container.denormal_mode(), mode);
+            let CompilerContainer::DynamicDxc(ref dxc) = container else {
+                unreachable!()
+            };
+            let args = dxc_arguments(
+                None,
+                &entry,
+                &profile,
+                false,
+                false,
+                container.denormal_mode(),
+            );
+            let buffer = Dxc::DxcBuffer {
+                Ptr: source.as_ptr().cast(),
+                Size: source.len(),
+                Encoding: Dxc::DXC_CP_UTF8.0,
+            };
+            let result: Dxc::IDxcResult =
+                unsafe { dxc.compiler.Compile(&buffer, Some(&args), None) }.unwrap();
+            let errors = get_output::<Dxc::IDxcBlobUtf8>(&result, Dxc::DXC_OUT_ERRORS).unwrap();
+            assert!(
+                as_err_str(&errors).unwrap().is_empty(),
+                "{}",
+                as_err_str(&errors).unwrap()
+            );
+            let object = get_output::<Dxc::IDxcBlob>(&result, Dxc::DXC_OUT_OBJECT).unwrap();
+            let buffer = Dxc::DxcBuffer {
+                Ptr: unsafe { object.GetBufferPointer() },
+                Size: unsafe { object.GetBufferSize() },
+                Encoding: 0,
+            };
+            let disassembly: Dxc::IDxcResult =
+                unsafe { dxc.compiler.Disassemble(&buffer) }.unwrap();
+            let text =
+                get_output::<Dxc::IDxcBlobUtf8>(&disassembly, Dxc::DXC_OUT_DISASSEMBLY).unwrap();
+            let text = as_err_str(&text).unwrap();
+            std::println!("MODE {mode:?}\n{text}");
+            let mut functions = 0;
+            for line in text.lines().filter(|line| line.starts_with("define ")) {
+                functions += 1;
+                let attrs = if let Some((_, tail)) = line.rsplit_once('#') {
+                    let group = tail.split_whitespace().next().unwrap();
+                    let prefix = format!("attributes #{group} =");
+                    text.lines().find(|line| line.starts_with(&prefix)).unwrap()
+                } else {
+                    ""
+                };
+                if let Some(value) = value {
+                    assert!(attrs.contains(&format!("\"fp32-denorm-mode\"=\"{value}\"")));
+                } else {
+                    assert!(!attrs.contains("fp32-denorm-mode"));
+                }
+            }
+            assert_eq!(functions, 2);
+            assert!(text.contains("fmul float"));
+            assert!(!text.contains("fmul fast"));
+            assert!(text.contains("fadd fast"));
+        }
     }
 }

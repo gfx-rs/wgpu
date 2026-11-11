@@ -547,6 +547,23 @@ impl Dx12AgilitySDK {
     }
 }
 
+/// Controls how DXC handles denormal (subnormal) values in 32-bit floating-point arithmetic.
+///
+/// This selects DXC's `-denorm` option for the whole shader, including helper functions
+/// and arithmetic not marked `precise`. It does not select precision or contraction
+/// rules, change intrinsic-specific rules, or affect 16-bit or 64-bit arithmetic.
+/// Requires DXC and shader model 6.2 or later.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum DxcDenormalMode {
+    /// Permit either flushing or preserving denormals, as chosen by the implementation.
+    Any,
+    /// Preserve denormal inputs and results for mode-controlled arithmetic.
+    Preserve,
+    /// Flush denormal inputs and results to sign-preserving zero for mode-controlled arithmetic.
+    FlushToZero,
+}
+
 /// Configuration for the DX12 backend.
 ///
 /// Part of [`BackendOptions`].
@@ -554,6 +571,16 @@ impl Dx12AgilitySDK {
 pub struct Dx12BackendOptions {
     /// Which DX12 shader compiler to use.
     pub shader_compiler: Dx12Compiler,
+    /// Optional DXC mode for all f32 arithmetic governed by denormal-mode selection.
+    ///
+    /// `None` (the default) leaves the compiler invocation unchanged. An explicit
+    /// mode requires DXC: instance initialization fails if FXC is selected, including
+    /// an [`Dx12Compiler::Auto`] fallback to FXC. Shader compilation fails below
+    /// shader model 6.2, even for [`DxcDenormalMode::FlushToZero`].
+    ///
+    /// Applies to generated and passthrough HLSL, but cannot change precompiled DXIL.
+    /// This setting has no environment variable; [`Self::with_env`] preserves it.
+    pub dxc_denormal_mode: Option<DxcDenormalMode>,
     /// Presentation system to use.
     pub presentation_system: Dx12SwapchainKind,
     /// Whether to wait for the latency waitable object before acquiring the next swapchain image.
@@ -587,6 +614,7 @@ impl Dx12BackendOptions {
         let agility_sdk = Dx12AgilitySDK::from_env();
         Self {
             shader_compiler: compiler,
+            dxc_denormal_mode: None,
             presentation_system,
             latency_waitable_object,
             force_shader_model: ForceShaderModelToken::default(),
@@ -608,6 +636,7 @@ impl Dx12BackendOptions {
             .or_else(Dx12AgilitySDK::from_env);
         Self {
             shader_compiler,
+            dxc_denormal_mode: self.dxc_denormal_mode,
             presentation_system,
             latency_waitable_object,
             force_shader_model: ForceShaderModelToken::default(),
@@ -1034,6 +1063,53 @@ impl GlFenceBehavior {
             fence
         } else {
             self
+        }
+    }
+}
+
+#[cfg(test)]
+mod dxc_denormal_mode_tests {
+    use super::*;
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn denormal_mode_serde_round_trip() {
+        for mode in [
+            None,
+            Some(DxcDenormalMode::Any),
+            Some(DxcDenormalMode::Preserve),
+            Some(DxcDenormalMode::FlushToZero),
+        ] {
+            let encoded = serde_json::to_string(&mode).unwrap();
+            let decoded: Option<DxcDenormalMode> = serde_json::from_str(&encoded).unwrap();
+            assert_eq!(decoded, mode);
+        }
+    }
+
+    #[test]
+    fn denormal_mode_defaults_and_environment() {
+        assert_eq!(Dx12BackendOptions::default().dxc_denormal_mode, None);
+        const OPTIONS: Dx12BackendOptions = Dx12BackendOptions::default();
+        assert_eq!(OPTIONS.dxc_denormal_mode, None);
+        assert_eq!(
+            Dx12BackendOptions::from_env_or_default().dxc_denormal_mode,
+            None
+        );
+        for mode in [
+            DxcDenormalMode::Any,
+            DxcDenormalMode::Preserve,
+            DxcDenormalMode::FlushToZero,
+        ] {
+            let options = Dx12BackendOptions {
+                dxc_denormal_mode: Some(mode),
+                ..Default::default()
+            };
+            assert_eq!(options.clone().with_env().dxc_denormal_mode, Some(mode));
+            let options = BackendOptions {
+                dx12: options,
+                ..Default::default()
+            };
+            assert_eq!(options.with_env().dx12.dxc_denormal_mode, Some(mode));
         }
     }
 }

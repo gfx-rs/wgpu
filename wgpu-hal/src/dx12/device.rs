@@ -394,6 +394,7 @@ impl super::Device {
                     entry_point,
                     stage: naga_stage,
                     shader_model: naga_options.shader_model,
+                    denormal_mode: self.compiler_container.denormal_mode(),
                 }
             }
             super::ShaderModuleSource::HlslPassthrough(passthrough) => ShaderCacheKey {
@@ -401,6 +402,7 @@ impl super::Device {
                 entry_point: stage.entry_point.to_string(),
                 stage: naga_stage,
                 shader_model: naga_options.shader_model,
+                denormal_mode: self.compiler_container.denormal_mode(),
             },
             super::ShaderModuleSource::DxilPassthrough(passthrough) => {
                 return Ok(passthrough.shader.as_slice().into())
@@ -424,14 +426,9 @@ impl super::Device {
             key.shader_model.to_str()
         );
 
-        let compiled_shader = self.compiler_container.compile(
-            self,
-            &key.source,
-            source_name,
-            &key.entry_point,
-            stage_bit,
-            &full_stage,
-        )?;
+        let compiled_shader =
+            self.compiler_container
+                .compile(self, &key, source_name, stage_bit, &full_stage)?;
 
         {
             let mut shader_cache = self.shader_cache.lock();
