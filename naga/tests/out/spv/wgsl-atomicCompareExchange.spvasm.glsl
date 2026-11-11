@@ -4,27 +4,27 @@
 #version 460
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-struct _9
+struct _10
 {
     int _m0;
     bool _m1;
 };
 
-struct _10
+struct _11
 {
     uint _m0;
     bool _m1;
 };
 
-layout(set = 0, binding = 0, std430) buffer _12_11
+layout(set = 0, binding = 0, std430) buffer _13_12
 {
     int _m0[128];
-} _11;
+} _12;
 
-layout(set = 0, binding = 1, std430) buffer _15_14
+layout(set = 0, binding = 1, std430) buffer _16_15
 {
     uint _m0[128];
-} _14;
+} _15;
 
 void main()
 {
@@ -44,7 +44,7 @@ void main()
         {
             break;
         }
-        int _66 = atomicAdd(_11._m0[_27], 0);
+        int _66 = atomicAdd(_12._m0[_27], 0);
         _29 = _66;
         _32 = false;
         for (;;)
@@ -59,8 +59,8 @@ void main()
                 break;
             }
             int _94 = _29;
-            int _97 = atomicCompSwap(_11._m0[_27], _94, floatBitsToInt(intBitsToFloat(_29) + 1.0));
-            _9 _95 = _9(_97, _97 == _94);
+            int _97 = atomicCompSwap(_12._m0[_27], _94, floatBitsToInt(intBitsToFloat(_29) + 1.0));
+            _10 _95 = _10(_97, _97 == _94);
             _29 = _95._m0;
             _32 = _95._m1;
             continue;
@@ -77,27 +77,27 @@ void main()
 #version 460
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-struct _9
+struct _10
 {
     int _m0;
     bool _m1;
 };
 
-struct _10
+struct _11
 {
     uint _m0;
     bool _m1;
 };
 
-layout(set = 0, binding = 0, std430) buffer _12_11
+layout(set = 0, binding = 0, std430) buffer _13_12
 {
     int _m0[128];
-} _11;
+} _12;
 
-layout(set = 0, binding = 1, std430) buffer _15_14
+layout(set = 0, binding = 1, std430) buffer _16_15
 {
     uint _m0[128];
-} _14;
+} _15;
 
 void main()
 {
@@ -117,7 +117,7 @@ void main()
         {
             break;
         }
-        uint _137 = atomicAdd(_14._m0[_107], 0u);
+        uint _137 = atomicAdd(_15._m0[_107], 0u);
         _108 = _137;
         _110 = false;
         for (;;)
@@ -132,8 +132,8 @@ void main()
                 break;
             }
             uint _164 = _108;
-            uint _167 = atomicCompSwap(_14._m0[_107], _164, floatBitsToUint(uintBitsToFloat(_108) + 1.0));
-            _10 _165 = _10(_167, _167 == _164);
+            uint _167 = atomicCompSwap(_15._m0[_107], _164, floatBitsToUint(uintBitsToFloat(_108) + 1.0));
+            _11 _165 = _11(_167, _167 == _164);
             _108 = _165._m0;
             _110 = _165._m1;
             continue;

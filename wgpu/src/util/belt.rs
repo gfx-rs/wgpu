@@ -2,12 +2,16 @@ use crate::{
     util::align_to, Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferSlice, BufferUsages,
     BufferViewMut, CommandEncoder, Device, MapMode,
 };
+use alloc::sync::Arc;
 use alloc::vec::Vec;
+use concurrent_queue::ConcurrentQueue;
 use core::fmt;
-use std::sync::mpsc;
 use wgt::Features;
 
 use crate::COPY_BUFFER_ALIGNMENT;
+
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(StagingBelt: Send, Sync);
 
 /// Efficiently performs many buffer writes by sharing and reusing temporary buffers.
 ///
@@ -45,9 +49,10 @@ pub struct StagingBelt {
     /// into `active_chunks`.
     free_chunks: Vec<Chunk>,
     /// When closed chunks are mapped again, the map callback sends them here.
-    sender: Exclusive<mpsc::Sender<Chunk>>,
-    /// Free chunks are received here to be put on `self.free_chunks`.
-    receiver: Exclusive<mpsc::Receiver<Chunk>>,
+    /// Free chunks are retrieved from this to be put on `self.free_chunks`.
+    queue: Arc<ConcurrentQueue<Chunk>>,
+    /// Whether the belt has grown since last recall.
+    grew_since_recall: bool,
 }
 
 impl StagingBelt {
@@ -92,8 +97,6 @@ impl StagingBelt {
         chunk_size: BufferAddress,
         mut buffer_usages: BufferUsages,
     ) -> Self {
-        let (sender, receiver) = mpsc::channel();
-
         // make sure anything other than MAP_WRITE | COPY_SRC is only allowed with MAPPABLE_PRIMARY_BUFFERS.
         let extra_usages =
             buffer_usages.difference(BufferUsages::MAP_WRITE | BufferUsages::COPY_SRC);
@@ -114,8 +117,8 @@ impl StagingBelt {
             active_chunks: Vec::new(),
             closed_chunks: Vec::new(),
             free_chunks: Vec::new(),
-            sender: Exclusive::new(sender),
-            receiver: Exclusive::new(receiver),
+            queue: Arc::new(ConcurrentQueue::unbounded()),
+            grew_since_recall: false,
         }
     }
 
@@ -215,6 +218,7 @@ impl StagingBelt {
             {
                 self.free_chunks.swap_remove(index)
             } else {
+                self.grew_since_recall = true;
                 Chunk {
                     buffer: self.device.create_buffer(&BufferDescriptor {
                         label: Some("(wgpu internal) StagingBelt staging buffer"),
@@ -223,11 +227,13 @@ impl StagingBelt {
                         mapped_at_creation: true,
                     }),
                     offset: 0,
+                    used_since_recall: false,
                 }
             }
         };
 
         let allocation_offset = chunk.allocate(size, alignment);
+        chunk.used_since_recall = true;
 
         self.active_chunks.push(chunk);
         let chunk = self.active_chunks.last().unwrap();
@@ -261,13 +267,13 @@ impl StagingBelt {
         self.receive_chunks();
 
         for chunk in self.closed_chunks.drain(..) {
-            let sender = self.sender.get_mut().clone();
+            let queue = self.queue.clone();
             chunk
                 .buffer
                 .clone()
                 .slice(..)
                 .map_async(MapMode::Write, move |_| {
-                    let _ = sender.send(chunk);
+                    let _ = queue.push(chunk);
                 });
         }
     }
@@ -297,21 +303,37 @@ impl StagingBelt {
         self.receive_chunks();
 
         for chunk in self.closed_chunks.drain(..) {
-            let sender = self.sender.get_mut().clone();
+            let queue = self.queue.clone();
             let buffer = chunk.buffer.clone();
             encoder.map_buffer_on_submit(&buffer, MapMode::Write, .., move |_| {
-                let _ = sender.send(chunk);
+                let _ = queue.push(chunk);
             });
         }
     }
 
     /// Move all chunks that the GPU is done with (and are now mapped again)
-    /// from `self.receiver` to `self.free_chunks`.
+    /// from `self.queue` to `self.free_chunks`.
     fn receive_chunks(&mut self) {
-        while let Ok(mut chunk) = self.receiver.get_mut().try_recv() {
+        while let Ok(mut chunk) = self.queue.pop() {
             chunk.offset = 0;
             self.free_chunks.push(chunk);
         }
+    }
+
+    /// Discard all free chunks that have not been used since the last
+    /// [`StagingBelt::recall()`] back to the device and unmap their buffers.
+    pub fn discard_free_chunks(&mut self) {
+        self.receive_chunks();
+        self.free_chunks.retain_mut(|chunk| {
+            if !self.grew_since_recall || chunk.used_since_recall {
+                chunk.used_since_recall = false;
+                true
+            } else {
+                chunk.buffer.unmap();
+                false
+            }
+        });
+        self.grew_since_recall = false;
     }
 }
 
@@ -324,8 +346,8 @@ impl fmt::Debug for StagingBelt {
             active_chunks,
             closed_chunks,
             free_chunks,
-            sender: _,
-            receiver: _,
+            queue: _,
+            grew_since_recall: _,
         } = self;
         f.debug_struct("StagingBelt")
             .field("device", device)
@@ -341,6 +363,7 @@ impl fmt::Debug for StagingBelt {
 struct Chunk {
     buffer: Buffer,
     offset: BufferAddress,
+    used_since_recall: bool,
 }
 
 impl Chunk {
@@ -358,26 +381,5 @@ impl Chunk {
         assert!(alloc_end <= self.buffer.size());
         self.offset = alloc_end;
         alloc_start
-    }
-}
-
-use exclusive::Exclusive;
-mod exclusive {
-    /// `Sync` wrapper that works by providing only exclusive access.
-    ///
-    /// See <https://doc.rust-lang.org/nightly/std/sync/struct.Exclusive.html>
-    pub(super) struct Exclusive<T>(T);
-
-    /// Safety: `&Exclusive` has no operations.
-    unsafe impl<T> Sync for Exclusive<T> {}
-
-    impl<T> Exclusive<T> {
-        pub fn new(value: T) -> Self {
-            Self(value)
-        }
-
-        pub fn get_mut(&mut self) -> &mut T {
-            &mut self.0
-        }
     }
 }

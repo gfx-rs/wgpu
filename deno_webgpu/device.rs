@@ -148,6 +148,9 @@ impl GPUDevice {
   #[undefined]
   fn destroy(&self) {
     self.wgpu_device.destroy();
+    // Poll the device to encourage it to process any pending operations
+    // and release resources associated with the destroyed device (and thus calling lost closure).
+    let _ = self.wgpu_device.poll(wgpu_types::PollType::Poll);
   }
 
   #[reentrant]
@@ -247,6 +250,9 @@ impl GPUDevice {
         .into_iter()
         .map(Into::into)
         .collect::<Vec<_>>(),
+      texture_binding_view_dimension: descriptor
+        .texture_binding_view_dimension
+        .map(Into::into),
     };
 
     // 2. ? Validate texture format required features of descriptor.format with this.[[device]].

@@ -116,6 +116,7 @@ impl Example {
                 | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
             label: None,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         };
 
         device

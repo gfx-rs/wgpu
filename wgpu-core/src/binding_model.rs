@@ -28,6 +28,7 @@ use crate::{
     device::{bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     pipeline::{ComputePipeline, RenderPipeline},
+    ray_tracing_pipeline::RayTracingPipeline,
     resource::{
         Buffer, DestroyedResourceError, ExternalTexture, InvalidOrDestroyedResourceError,
         InvalidResourceError, Labeled, MissingBufferUsageError, MissingTextureUsageError,
@@ -246,6 +247,12 @@ pub enum CreateBindGroupError {
         layout_dimension: wgt::TextureViewDimension,
         view_dimension: wgt::TextureViewDimension,
     },
+    #[error("Texture binding {binding} is given a view with dimension = {view_dimension:?}, but the texture was created with texture_binding_view_dimension = {texture_binding_view_dimension:?}")]
+    InvalidTextureBindingViewDimension {
+        binding: u32,
+        view_dimension: wgt::TextureViewDimension,
+        texture_binding_view_dimension: wgt::TextureViewDimension,
+    },
     #[error("Storage texture binding {binding} expects format = {layout_format:?}, but given a view with format = {view_format:?}")]
     InvalidStorageTextureFormat {
         binding: u32,
@@ -321,7 +328,8 @@ impl WebGpuError for CreateBindGroupError {
             | Self::DepthStencilAspect
             | Self::MissingTLASVertexReturn { .. }
             | Self::InvalidExternalTextureMipLevelCount { .. }
-            | Self::InvalidExternalTextureFormat { .. } => ErrorType::Validation,
+            | Self::InvalidExternalTextureFormat { .. }
+            | Self::InvalidTextureBindingViewDimension { .. } => ErrorType::Validation,
         }
     }
 }
@@ -407,6 +415,10 @@ pub(crate) struct PerStageBindingTypeCounter {
     vertex: Saturating<u32>,
     fragment: Saturating<u32>,
     compute: Saturating<u32>,
+    ray_generation: Saturating<u32>,
+    miss: Saturating<u32>,
+    any_hit: Saturating<u32>,
+    closest_hit: Saturating<u32>,
 }
 
 impl PerStageBindingTypeCounter {
@@ -420,10 +432,29 @@ impl PerStageBindingTypeCounter {
         if stage.contains(wgt::ShaderStages::COMPUTE) {
             self.compute += count;
         }
+        if stage.contains(wgt::ShaderStages::RAY_GENERATION) {
+            self.ray_generation += count;
+        }
+        if stage.contains(wgt::ShaderStages::MISS) {
+            self.miss += count;
+        }
+        if stage.contains(wgt::ShaderStages::ANY_HIT) {
+            self.any_hit += count;
+        }
+        if stage.contains(wgt::ShaderStages::CLOSEST_HIT) {
+            self.closest_hit += count;
+        }
     }
 
     pub(crate) fn max(&self) -> (BindingZone, u32) {
-        let max_value = self.vertex.max(self.fragment.max(self.compute));
+        let max_value = self.vertex.max(
+            self.fragment.max(
+                self.compute.max(
+                    self.ray_generation
+                        .max(self.miss.max(self.any_hit.max(self.closest_hit))),
+                ),
+            ),
+        );
         let mut stage = wgt::ShaderStages::NONE;
         if max_value == self.vertex {
             stage |= wgt::ShaderStages::VERTEX
@@ -433,6 +464,18 @@ impl PerStageBindingTypeCounter {
         }
         if max_value == self.compute {
             stage |= wgt::ShaderStages::COMPUTE
+        }
+        if max_value == self.ray_generation {
+            stage |= wgt::ShaderStages::RAY_GENERATION
+        }
+        if max_value == self.miss {
+            stage |= wgt::ShaderStages::MISS
+        }
+        if max_value == self.any_hit {
+            stage |= wgt::ShaderStages::ANY_HIT
+        }
+        if max_value == self.closest_hit {
+            stage |= wgt::ShaderStages::CLOSEST_HIT
         }
         (BindingZone::Stage(stage), max_value.0)
     }
@@ -1163,6 +1206,7 @@ pub(crate) enum ExclusivePipeline {
     None,
     Render(Weak<RenderPipeline>),
     Compute(Weak<ComputePipeline>),
+    RayTracing(Weak<RayTracingPipeline>),
 }
 
 impl From<&Arc<RenderPipeline>> for ExclusivePipeline {
@@ -1174,6 +1218,12 @@ impl From<&Arc<RenderPipeline>> for ExclusivePipeline {
 impl From<&Arc<ComputePipeline>> for ExclusivePipeline {
     fn from(pipeline: &Arc<ComputePipeline>) -> Self {
         Self::Compute(Arc::downgrade(pipeline))
+    }
+}
+
+impl From<&Arc<RayTracingPipeline>> for ExclusivePipeline {
+    fn from(pipeline: &Arc<RayTracingPipeline>) -> Self {
+        Self::RayTracing(Arc::downgrade(pipeline))
     }
 }
 
@@ -1193,6 +1243,13 @@ impl fmt::Display for ExclusivePipeline {
                     p.error_ident().fmt(f)
                 } else {
                     f.write_str("ComputePipeline")
+                }
+            }
+            ExclusivePipeline::RayTracing(p) => {
+                if let Some(p) = p.upgrade() {
+                    p.error_ident().fmt(f)
+                } else {
+                    f.write_str("RayTracingPipeline")
                 }
             }
         }

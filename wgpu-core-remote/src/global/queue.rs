@@ -44,7 +44,7 @@ impl Global {
         &self,
         queue_id: QueueId,
         command_buffer_ids: &[CommandBufferId],
-    ) -> SubmissionIndex {
+    ) -> Option<SubmissionIndex> {
         let hub = self.hub.borrow();
         let queue = hub.queues.get(queue_id);
         let command_buffers = command_buffer_ids
