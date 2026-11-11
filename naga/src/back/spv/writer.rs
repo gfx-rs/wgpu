@@ -309,6 +309,18 @@ impl Writer {
         self.extensions_used.insert(extension);
     }
 
+    /// Request the capabilities and extensions any cooperative matrix use needs.
+    pub(super) fn require_cooperative_matrix(&mut self) -> Result<(), Error> {
+        self.require_any(
+            "cooperative matrix",
+            &[spirv::Capability::CooperativeMatrixKHR],
+        )?;
+        self.require_any("memory model", &[spirv::Capability::VulkanMemoryModel])?;
+        self.use_extension("SPV_KHR_cooperative_matrix");
+        self.use_extension("SPV_KHR_vulkan_memory_model");
+        Ok(())
+    }
+
     pub(super) fn get_type_id(&mut self, lookup_ty: LookupType) -> Word {
         match self.lookup_type.entry(lookup_ty) {
             Entry::Occupied(e) => *e.get(),
@@ -2198,15 +2210,7 @@ impl Writer {
                 self.use_extension("SPV_KHR_16bit_storage");
             }
             // Cooperative types and ops
-            crate::TypeInner::CooperativeMatrix { .. } => {
-                self.require_any(
-                    "cooperative matrix",
-                    &[spirv::Capability::CooperativeMatrixKHR],
-                )?;
-                self.require_any("memory model", &[spirv::Capability::VulkanMemoryModel])?;
-                self.use_extension("SPV_KHR_cooperative_matrix");
-                self.use_extension("SPV_KHR_vulkan_memory_model");
-            }
+            crate::TypeInner::CooperativeMatrix { .. } => self.require_cooperative_matrix()?,
             _ => {}
         }
         Ok(())

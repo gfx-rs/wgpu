@@ -3919,6 +3919,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     args.finish()?;
 
                     let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block
+                        .extend(rctx.emitter.finish(&rctx.function.expressions));
+                    rctx.emitter.start(&rctx.function.expressions);
                     rctx.block.push(
                         crate::Statement::CooperativeStore {
                             target,

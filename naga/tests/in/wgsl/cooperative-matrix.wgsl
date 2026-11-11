@@ -5,6 +5,8 @@ var<private> a: coop_mat8x8<f32, A>;
 var<private> b: coop_mat8x8<f32, B>;
 @group(0) @binding(0)
 var<storage, read_write> ext: array<f32>;
+@group(0) @binding(1)
+var<uniform> stride: u32;
 
 @compute @workgroup_size(8, 8, 1)
 fn main() {
@@ -14,6 +16,8 @@ fn main() {
     var d = coopMultiplyAdd(a, b, c);
     // storing into memory
     coopStore(d, &ext[0]);
+    // storing with a runtime stride
+    coopStoreT(d, &ext[0], stride);
     // operations on the type
     c = d;
 }

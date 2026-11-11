@@ -2224,10 +2224,7 @@ impl BlockContext<'_> {
                 self.write_ray_query_return_vertex_position(query, block, committed)
             }
             crate::Expression::CooperativeLoad { ref data, .. } => {
-                self.writer.require_any(
-                    "CooperativeMatrix",
-                    &[spirv::Capability::CooperativeMatrixKHR],
-                )?;
+                self.writer.require_cooperative_matrix()?;
                 let layout = if data.row_major {
                     spirv::CooperativeMatrixLayout::RowMajorKHR
                 } else {
@@ -2269,10 +2266,7 @@ impl BlockContext<'_> {
                 }
             }
             crate::Expression::CooperativeMultiplyAdd { a, b, c } => {
-                self.writer.require_any(
-                    "CooperativeMatrix",
-                    &[spirv::Capability::CooperativeMatrixKHR],
-                )?;
+                self.writer.require_cooperative_matrix()?;
                 let a_id = self.cached[a];
                 let b_id = self.cached[b];
                 let c_id = self.cached[c];
