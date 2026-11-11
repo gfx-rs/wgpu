@@ -154,6 +154,7 @@ impl State {
             format: wgpu::TextureFormat::R32Uint,
             usage: wgpu::TextureUsages::STORAGE_ATOMIC | wgpu::TextureUsages::STORAGE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let storage_view = storage_texture.create_view(&Default::default());
 
@@ -166,6 +167,7 @@ impl State {
             format: wgpu::TextureFormat::R8Uint,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let dummy_view = dummy_texture.create_view(&Default::default());
 

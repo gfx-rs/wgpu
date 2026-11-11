@@ -989,6 +989,13 @@ impl dispatch::DeviceInterface for CoreDevice {
         self.wgpu_device.adapter_info()
     }
 
+    fn queue(&self) -> dispatch::DispatchQueue {
+        CoreQueue {
+            wgpu_queue: self.wgpu_device.get_queue().expect("Queue should be set"),
+        }
+        .into()
+    }
+
     // If we have no way to create a shader module, we can't return one, and so most of the function is unreachable.
     #[cfg_attr(
         not(any(
@@ -2016,6 +2023,10 @@ impl dispatch::TextureInterface for CoreTexture {
 
     unsafe fn mark_externally_initialized(&self) {
         unsafe { self.wgpu_texture.mark_externally_initialized() }
+    }
+
+    fn texture_binding_view_dimension(&self) -> Option<crate::TextureViewDimension> {
+        self.wgpu_texture.texture_binding_view_dimension()
     }
 }
 

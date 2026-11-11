@@ -145,6 +145,7 @@ pub trait DeviceInterface: CommonTraits {
     fn features(&self) -> crate::Features;
     fn limits(&self) -> crate::Limits;
     fn adapter_info(&self) -> crate::AdapterInfo;
+    fn queue(&self) -> DispatchQueue;
 
     fn create_shader_module(
         &self,
@@ -328,6 +329,8 @@ pub trait TextureInterface: CommonTraits {
     ///
     /// The entire contents of the texture must already be initialized.
     unsafe fn mark_externally_initialized(&self) {}
+
+    fn texture_binding_view_dimension(&self) -> Option<crate::TextureViewDimension>;
 }
 pub trait ExternalTextureInterface: CommonTraits {
     fn destroy(&self);

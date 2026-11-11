@@ -136,6 +136,10 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
+    fn queue(&self) -> DispatchQueue {
+        unimplemented!()
+    }
+
     fn create_shader_module(
         &self,
         desc: wgpu::ShaderModuleDescriptor<'_>,
