@@ -1006,6 +1006,60 @@ impl super::Device {
             Err(crate::DeviceError::OutOfMemory)
         }
     }
+
+    fn buffer_memory_types_with_budget(
+        &self,
+        location: gpu_allocator::MemoryLocation,
+        requirements: &vk::MemoryRequirements,
+    ) -> Result<u32, crate::DeviceError> {
+        use gpu_allocator::MemoryLocation;
+
+        let valid_types = requirements.memory_type_bits & self.valid_ash_memory_types;
+        let Some(threshold) = self
+            .shared
+            .instance
+            .memory_budget_thresholds
+            .for_resource_creation
+        else {
+            return Ok(valid_types);
+        };
+        let Some(properties) = self.get_memory_properties() else {
+            return Ok(valid_types);
+        };
+
+        let mut permitted_types = 0;
+        for (index, ty) in properties.types().iter().enumerate() {
+            let bit = 1 << index;
+            if valid_types & bit == 0 {
+                continue;
+            }
+            let heap = ty.heap_index as usize;
+            let budget = properties.heap_budget()[heap] / 100 * threshold as u64;
+            if properties.heap_usage()[heap]
+                .checked_add(requirements.size)
+                .is_some_and(|usage| usage < budget)
+            {
+                permitted_types |= bit;
+            }
+        }
+        let required_flags = match location {
+            MemoryLocation::GpuOnly => vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            MemoryLocation::CpuToGpu | MemoryLocation::GpuToCpu => {
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT
+            }
+            MemoryLocation::Unknown => vk::MemoryPropertyFlags::empty(),
+        };
+        if properties.types().iter().enumerate().any(|(index, ty)| {
+            permitted_types & (1 << index) != 0 && ty.property_flags.contains(required_flags)
+        }) {
+            Ok(permitted_types)
+        } else {
+            log::warn!(
+                "No compatible buffer memory type has available budget for {requirements:?}"
+            );
+            Err(crate::DeviceError::OutOfMemory)
+        }
+    }
 }
 
 impl crate::Device for super::Device {
@@ -1039,7 +1093,8 @@ impl crate::Device for super::Device {
             (false, false) => gpu_allocator::MemoryLocation::GpuOnly,
         };
 
-        self.error_if_would_oom_on_resource_allocation(location, &requirements)
+        requirements.memory_type_bits = self
+            .buffer_memory_types_with_budget(location, &requirements)
             .inspect_err(|_| {
                 unsafe { self.shared.raw.destroy_buffer(raw, None) };
             })?;
@@ -1071,11 +1126,7 @@ impl crate::Device for super::Device {
                 super::MemoryPool::from_memory_flags(desc.memory_flags),
                 &gpu_allocator::vulkan::AllocationCreateDesc {
                     name,
-                    requirements: vk::MemoryRequirements {
-                        memory_type_bits: requirements.memory_type_bits
-                            & self.valid_ash_memory_types,
-                        ..requirements
-                    },
+                    requirements,
                     location,
                     linear: true, // Buffers are always linear
                     allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
