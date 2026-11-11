@@ -4322,6 +4322,37 @@ fn const_assert_must_be_bool() {
 }
 
 #[test]
+fn const_assert_must_be_bool_composite() {
+    check(
+        "
+            const_assert(vec2i());
+        ",
+        r###"error: must be a const-expression that resolves to a `bool`
+  ┌─ wgsl:2:26
+  │
+2 │             const_assert(vec2i());
+  │                          ^^^^^^^ must resolve to `bool`
+
+"###,
+    );
+
+    check(
+        "
+            fn foo() {
+                const_assert vec2(true, false);
+            }
+        ",
+        r###"error: must be a const-expression that resolves to a `bool`
+  ┌─ wgsl:3:30
+  │
+3 │                 const_assert vec2(true, false);
+  │                              ^^^^^^^^^^^^^^^^^ must resolve to `bool`
+
+"###,
+    );
+}
+
+#[test]
 fn const_assert_failed() {
     check(
         "
