@@ -901,6 +901,11 @@ impl Buffer {
     fn as_raw(&self) -> NonNull<ProtocolObject<dyn MTLBuffer>> {
         unsafe { NonNull::new_unchecked(Retained::as_ptr(&self.raw) as *mut _) }
     }
+
+    /// The underlying `MTLBuffer`, for interop with other Metal clients on the same device.
+    pub fn raw_handle(&self) -> &ProtocolObject<dyn MTLBuffer> {
+        &self.raw
+    }
 }
 
 #[derive(Debug)]
