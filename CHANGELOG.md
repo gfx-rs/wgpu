@@ -42,11 +42,13 @@ Bottom level categories:
 
 ## Unreleased
 
+## v30.0.2 (2026-11-12)
+
 ### Bug Fixes
 
 #### General
 
-- Explicitly implement `Send` and `Sync` in `wgpu-core` to reduce the risk of `recursion_limit` overflow. By @nazar-pc in [#9953](https://github.com/gfx-rs/wgpu/pull/9953)
+- Explicitly implement `Send` and `Sync` in `wgpu-core` to reduce the risk of `recursion_limit` overflow. By @nazar-pc in [#9953](https://github.com/gfx-rs/wgpu/pull/9953).
 - Fix a texture id leak when surface acquire returns no texture. By @jnb in [#10184](https://github.com/gfx-rs/wgpu/pull/10184).
 - Fix a use after free of a mapped buffer when its device is lost or destroyed. By @uael in [#10593](https://github.com/gfx-rs/wgpu/pull/10593).
 
