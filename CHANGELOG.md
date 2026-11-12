@@ -53,6 +53,7 @@ Bottom level categories:
 #### Metal
 
 - Fix a crash/hang when configuring a surface with the `Bt2100Pq`, `Bt2100Hlg`, or `ExtendedDisplayP3` color space: the dynamically resolved CoreGraphics color-space constants were read with one level of indirection missing. By @stuartparmenter in [#10175](https://github.com/gfx-rs/wgpu/pull/10175), backported in [#10672](https://github.com/gfx-rs/wgpu/pull/10672).
+- Fix oversaturated sRGB surface colors on wide-gamut displays by explicitly setting the layer's sRGB color space. By @jinleili in [#10286](https://github.com/gfx-rs/wgpu/pull/10286), backported in [#10780](https://github.com/gfx-rs/wgpu/pull/10780).
 
 #### WebGPU
 
