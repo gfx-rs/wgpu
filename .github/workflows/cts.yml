@@ -71,7 +71,7 @@ jobs:
           # ancient MacOS bash. `zsh` is a non-standard shell in GitHub
           # actions, so must be specified as a command string.
           - platform: Mac aarch64
-            os: macos-14
+            os: macos-26
             target: x86_64-apple-darwin
             backend: metal
             shell: zsh {0}

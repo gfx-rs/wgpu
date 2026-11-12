@@ -100,27 +100,27 @@ jobs:
 
           # MacOS
           - name: MacOS x86_64
-            os: macos-14
+            os: macos-26
             target: x86_64-apple-darwin
             tier: 1
             kind: native
 
           - name: MacOS aarch64
-            os: macos-14
+            os: macos-26
             target: aarch64-apple-darwin
             tier: 1
             kind: native
 
           # IOS
           - name: IOS aarch64
-            os: macos-14
+            os: macos-26
             target: aarch64-apple-ios
             tier: 2
             kind: native
 
           # VisionOS
           - name: VisionOS aarch64
-            os: macos-14
+            os: macos-26
             target: aarch64-apple-visionos
             kind: wgpu-only
             tier: 3
@@ -393,7 +393,7 @@ jobs:
 
           # MacOS
           - name: MacOS x86_64
-            os: macos-14
+            os: macos-26
             target: x86_64-apple-darwin
 
           # Linux
@@ -472,7 +472,7 @@ jobs:
 
           # MacOS
           - name: MacOS x86_64
-            os: macos-14
+            os: macos-26
             target: x86_64-apple-darwin
 
           # Linux
@@ -626,7 +626,7 @@ jobs:
 
           # Mac
           - name: Mac aarch64
-            os: macos-14
+            os: macos-26
 
           # Linux
           - name: Linux x86_64
@@ -693,7 +693,7 @@ jobs:
         uses: ./.github/actions/install-vulkan-sdk
 
       - name: (Mac) Install Vulkan SDK
-        if: matrix.os == 'macos-14'
+        if: matrix.os == 'macos-26'
         uses: ./.github/actions/install-vulkan-sdk
 
       - name: (Linux) Install Vulkan SDK
