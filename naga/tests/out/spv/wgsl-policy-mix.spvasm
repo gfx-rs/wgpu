@@ -68,7 +68,6 @@ OpDecorate %6 ArrayStride 16
 OpMemberDecorate %9 0 Offset 0
 OpDecorate %10 ArrayStride 16
 OpMemberDecorate %12 0 Offset 0
-OpDecorate %14 ArrayStride 4
 OpDecorate %16 ArrayStride 4
 OpDecorate %20 ArrayStride 16
 OpDecorate %22 NonWritable
