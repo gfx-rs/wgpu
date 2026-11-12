@@ -79,8 +79,10 @@ impl NullAccelerationStructure {
             ) {
                 Ok(buf) => buf,
                 Err(e) => {
-                    device.raw().destroy_acceleration_structure(acceleration_structure);
-                    return Err(NullAccelerationStructureInitError::ScratchBuffer(e))
+                    device
+                        .raw()
+                        .destroy_acceleration_structure(acceleration_structure);
+                    return Err(NullAccelerationStructureInitError::ScratchBuffer(e));
                 }
             };
 
