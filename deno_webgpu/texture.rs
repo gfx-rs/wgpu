@@ -40,6 +40,7 @@ pub(crate) struct GPUTextureDescriptor {
   pub usage: u32,
   #[webidl(default = vec![])]
   pub view_formats: Vec<GPUTextureFormat>,
+  pub texture_binding_view_dimension: Option<GPUTextureViewDimension>,
 }
 
 pub struct GPUTexture {

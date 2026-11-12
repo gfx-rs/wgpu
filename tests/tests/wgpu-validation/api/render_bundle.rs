@@ -129,6 +129,7 @@ fn invalid_bundle_rejected_by_pass() {
         format: TextureFormat::Rgba8Unorm,
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = texture.create_view(&Default::default());
     for (ops, expected) in [

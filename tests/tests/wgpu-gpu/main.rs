@@ -10,6 +10,7 @@ mod regression {
     pub mod issue_6317;
     pub mod issue_6467;
     pub mod issue_6827;
+    pub mod issue_7428;
     pub mod issue_9115;
     pub mod issue_9316;
 
@@ -76,6 +77,7 @@ mod shader_view_format;
 mod subgroup_operations;
 mod surface_configure_web;
 mod texture_binding;
+mod texture_binding_view_dimension;
 mod texture_blit;
 mod texture_bounds;
 mod texture_sampling;
@@ -153,6 +155,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     regression::issue_6317::all_tests(&mut tests);
     regression::issue_6467::all_tests(&mut tests);
     regression::issue_6827::all_tests(&mut tests);
+    regression::issue_7428::all_tests(&mut tests);
     regression::issue_9115::all_tests(&mut tests);
     regression::issue_9316::all_tests(&mut tests);
     regression::issue_10038::all_tests(&mut tests);
@@ -170,6 +173,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     #[cfg(wasm_test)]
     surface_configure_web::all_tests(&mut tests);
     texture_binding::all_tests(&mut tests);
+    texture_binding_view_dimension::all_tests(&mut tests);
     texture_blit::all_tests(&mut tests);
     texture_sampling::all_tests(&mut tests);
     texture_bounds::all_tests(&mut tests);
