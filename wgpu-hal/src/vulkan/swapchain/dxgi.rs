@@ -420,23 +420,18 @@ fn create_interop_device(device: &DeviceShared) -> Result<InteropDevice, crate::
         .as_ref()
         .ok_or(crate::SurfaceError::Other("no DXGI instance"))?;
 
-    let adapter = dxgi::factory::enumerate_adapters(dxgi_instance.factory.clone())
-        .into_iter()
-        .find(|adapter| {
-            let desc = match unsafe { adapter.GetDesc1() } {
-                Ok(desc) => desc,
-                Err(_) => return false,
-            };
-            luid == luid_bytes(desc.AdapterLuid)
-        })
-        .ok_or_else(|| {
+    let luid = LUID {
+        LowPart: u32::from_ne_bytes(luid[0..4].try_into().unwrap()),
+        HighPart: i32::from_ne_bytes(luid[4..8].try_into().unwrap()),
+    };
+    let adapter: IDXGIAdapter1 =
+        unsafe { dxgi_instance.factory.EnumAdapterByLuid(luid) }.map_err(|err| {
             log::error!(
-                "DXGI swapchain on Vulkan: no DXGI adapter has the LUID of the Vulkan device; \
-                 presentation is not available on this adapter. Update the GPU driver, or \
-                 {USE_NATIVE_HINT}"
+                "DXGI swapchain on Vulkan: no DXGI adapter has the Vulkan device LUID: {err}"
             );
             crate::SurfaceError::Other("no DXGI adapter matches the Vulkan device LUID")
         })?;
+    let adapter = dxgi::factory::DxgiAdapter::new(adapter);
 
     // The debug layer (when requested) was already enabled on the factory at instance creation.
     let d3d_device = dxgi_instance
@@ -474,13 +469,6 @@ fn create_interop_device(device: &DeviceShared) -> Result<InteropDevice, crate::
         queue,
         _d3d12_lib: Arc::clone(&dxgi_instance.d3d12_lib),
     })
-}
-
-fn luid_bytes(luid: LUID) -> [u8; vk::LUID_SIZE] {
-    let mut bytes = [0u8; vk::LUID_SIZE];
-    bytes[0..4].copy_from_slice(&luid.LowPart.to_ne_bytes());
-    bytes[4..8].copy_from_slice(&luid.HighPart.to_ne_bytes());
-    bytes
 }
 
 /// Whether `device` supports Shader Model 6.0 (DXIL). Querying `6_0` clamps the reported model to

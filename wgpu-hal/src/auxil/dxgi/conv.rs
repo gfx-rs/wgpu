@@ -1,9 +1,12 @@
+#[cfg(dx12)]
 use alloc::string::String;
+#[cfg(dx12)]
 use std::{ffi::OsString, os::windows::ffi::OsStringExt};
 
 use windows::Win32::Graphics::Dxgi;
 
 // Helper to convert DXGI adapter name to a normal string
+#[cfg(dx12)]
 pub fn map_adapter_name(name: [u16; 128]) -> String {
     let len = name.iter().take_while(|&&c| c != 0).count();
     let name = OsString::from_wide(&name[..len]);
