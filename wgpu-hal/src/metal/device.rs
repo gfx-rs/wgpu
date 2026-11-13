@@ -2223,7 +2223,10 @@ impl crate::Device for super::Device {
             None
         };
         Ok(super::Fence {
-            sync: Arc::new((CondvarMutex::new(0), Condvar::new())),
+            sync: Arc::new((
+                CondvarMutex::new(super::FenceState::default()),
+                Condvar::new(),
+            )),
             shared_event,
         })
     }
@@ -2233,7 +2236,7 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn get_fence_value(&self, fence: &super::Fence) -> DeviceResult<crate::FenceValue> {
-        Ok(fence.get_latest())
+        fence.get_latest()
     }
     unsafe fn wait(
         &self,
@@ -2244,19 +2247,26 @@ impl crate::Device for super::Device {
         let (ref mutex, ref condvar) = *fence.sync;
         let mut lock = mutex.lock();
 
-        if wait_value <= *lock {
+        if lock.lost {
+            return Err(crate::DeviceError::Lost);
+        }
+        if wait_value <= lock.completed {
             return Ok(true);
         }
 
+        let pending = |state: &mut super::FenceState| state.completed < wait_value && !state.lost;
         if let Some(timeout) = timeout {
-            let result = condvar.wait_while_for(&mut lock, |value| *value < wait_value, timeout);
-            if result.timed_out() {
-                return Ok(*lock >= wait_value);
+            let result = condvar.wait_while_for(&mut lock, pending, timeout);
+            if result.timed_out() && !lock.lost {
+                return Ok(lock.completed >= wait_value);
             }
         } else {
-            condvar.wait_while(&mut lock, |value| *value < wait_value);
+            condvar.wait_while(&mut lock, pending);
         }
 
+        if lock.lost {
+            return Err(crate::DeviceError::Lost);
+        }
         Ok(true)
     }
 

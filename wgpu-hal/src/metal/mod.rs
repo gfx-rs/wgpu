@@ -31,6 +31,7 @@ mod surface;
 mod time;
 
 use alloc::{
+    collections::VecDeque,
     string::{String, ToString as _},
     sync::Arc,
     vec::Vec,
@@ -48,12 +49,13 @@ use objc2::{
 use objc2_foundation::{ns_string, NSString};
 use objc2_metal::{
     MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLArgumentBuffersTier,
-    MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandQueue, MTLComputeCommandEncoder,
-    MTLComputePipelineState, MTLCounterSampleBuffer, MTLCullMode, MTLDepthClipMode,
-    MTLDepthStencilState, MTLDevice, MTLDrawable, MTLIndexType, MTLLanguageVersion, MTLLibrary,
-    MTLPrimitiveType, MTLReadWriteTextureTier, MTLRenderCommandEncoder, MTLRenderPipelineState,
-    MTLRenderStages, MTLResource, MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize,
-    MTLTexture, MTLTextureType, MTLTriangleFillMode, MTLWinding,
+    MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandQueue,
+    MTLComputeCommandEncoder, MTLComputePipelineState, MTLCounterSampleBuffer, MTLCullMode,
+    MTLDepthClipMode, MTLDepthStencilState, MTLDevice, MTLDrawable, MTLIndexType,
+    MTLLanguageVersion, MTLLibrary, MTLPrimitiveType, MTLReadWriteTextureTier,
+    MTLRenderCommandEncoder, MTLRenderPipelineState, MTLRenderStages, MTLResource,
+    MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize, MTLTexture, MTLTextureType,
+    MTLTriangleFillMode, MTLWinding,
 };
 use objc2_quartz_core::CAMetalLayer;
 use wgpu_sync::{atomic, Condvar, Mutex, OnceCell, RwLock};
@@ -522,6 +524,7 @@ impl Queue {
             shared: Arc::new(QueueShared {
                 raw,
                 command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
+                present_failed: atomic::AtomicBool::new(false),
                 pending_waits: Mutex::new(Vec::new()),
                 pending_signals: Mutex::new(Vec::new()),
                 relay: OnceCell::new(),
@@ -668,6 +671,8 @@ pub struct QueueShared {
     // to create command buffers for internal purposes. In those cases we always
     // commit the buffer immediately, so we don't adjust the counter for them.)
     command_buffer_created_not_submitted: atomic::AtomicUsize,
+    /// A present command buffer ended with an error; the next submit fails.
+    present_failed: atomic::AtomicBool,
     pending_waits: PendingEvents,
     pending_signals: PendingEvents,
     relay: OnceCell<Relay>,
@@ -735,6 +740,24 @@ impl crate::Queue for Queue {
         if let Some(ref icb) = self.icb {
             icb.release_idle();
         }
+        if self.shared.present_failed.load(atomic::Ordering::Acquire) {
+            return Err(crate::DeviceError::Lost);
+        }
+        // Every command buffer of this submission is counted before any is
+        // committed, so a fast one cannot complete the submission early.
+        // Once registered, a failure to create a command buffer loses the
+        // fence, as the submission can never complete.
+        let fence_lost = || {
+            signal_fence.sync.0.lock().lost = true;
+            signal_fence.sync.1.notify_all();
+            crate::DeviceError::Lost
+        };
+        signal_fence
+            .sync
+            .0
+            .lock()
+            .in_flight
+            .push_back((signal_value, command_buffers.len().max(1)));
         autoreleasepool(|_| {
             // Drain caller-staged waits onto a dedicated command buffer
             // committed before the user CBs.
@@ -770,8 +793,10 @@ impl crate::Queue for Queue {
                         .shared
                         .raw
                         .commandBufferWithUnretainedReferences()
-                        .ok_or(crate::DeviceError::Lost)?;
+                        .ok_or_else(fence_lost)?;
                     wait_cb.setLabel(Some(ns_string!("(wgpu internal) Wait")));
+                    signal_fence.sync.0.lock().add_command_buffer(signal_value);
+                    signal_fence.attach_completed_handler(&wait_cb, signal_value);
                     for (event, value) in waits.drain(..) {
                         wait_cb.encodeWaitForEvent_value(event.as_ref(), value);
                     }
@@ -786,14 +811,6 @@ impl crate::Queue for Queue {
             }
 
             let extra_command_buffer = {
-                let fence_sync = Arc::clone(&signal_fence.sync);
-                let block = block2::RcBlock::new(move |_cmd_buf| {
-                    let mut value = fence_sync.0.lock();
-                    *value = (*value).max(signal_value);
-                    drop(value);
-                    fence_sync.1.notify_all();
-                });
-
                 let raw = match command_buffers.last() {
                     Some(&cmd_buf) => cmd_buf.raw.clone(),
                     None => {
@@ -802,11 +819,10 @@ impl crate::Queue for Queue {
                         self.shared
                             .raw
                             .commandBufferWithUnretainedReferences()
-                            .ok_or(crate::DeviceError::Lost)?
+                            .ok_or_else(fence_lost)?
                     }
                 };
                 raw.setLabel(Some(ns_string!("(wgpu internal) Signal")));
-                unsafe { raw.addCompletedHandler(block2::RcBlock::as_ptr(&block)) };
 
                 if let Some(shared_event) = &signal_fence.shared_event {
                     raw.encodeSignalEvent_value(shared_event.as_ref(), signal_value);
@@ -829,6 +845,7 @@ impl crate::Queue for Queue {
             };
 
             for cmd_buffer in command_buffers {
+                signal_fence.attach_completed_handler(&cmd_buffer.raw, signal_value);
                 cmd_buffer.raw.commit();
                 // One command buffer per `end_encoding` call moves from the
                 // "created but not yet submitted" bucket into the submitted
@@ -841,6 +858,7 @@ impl crate::Queue for Queue {
             }
 
             if let Some(raw) = extra_command_buffer {
+                signal_fence.attach_completed_handler(&raw, signal_value);
                 raw.commit();
             }
             Ok(())
@@ -862,6 +880,16 @@ impl crate::Queue for Queue {
                 command_buffer.presentDrawable(&texture.drawable);
             }
 
+            let shared = Arc::clone(&self.shared);
+            let block = block2::RcBlock::new(
+                move |cmd_buf: NonNull<ProtocolObject<dyn MTLCommandBuffer>>| {
+                    if command_buffer_failed(unsafe { cmd_buf.as_ref() }) {
+                        shared.present_failed.store(true, atomic::Ordering::Release);
+                    }
+                },
+            );
+            unsafe { command_buffer.addCompletedHandler(block2::RcBlock::as_ptr(&block)) };
+
             command_buffer.commit();
 
             if texture.present_with_transaction {
@@ -882,8 +910,12 @@ impl crate::Queue for Queue {
             command_buffer.setLabel(Some(ns_string!("(wgpu internal) wait_for_idle")));
             command_buffer.commit();
             command_buffer.waitUntilCompleted();
-        });
-        Ok(())
+            if command_buffer_failed(&command_buffer) {
+                Err(crate::DeviceError::Lost)
+            } else {
+                Ok(())
+            }
+        })
     }
 }
 
@@ -1329,9 +1361,55 @@ impl crate::DynQuerySet for QuerySet {}
 unsafe impl Send for QuerySet {}
 unsafe impl Sync for QuerySet {}
 
+/// Progress of the submissions signalling a [`Fence`].
+#[derive(Debug, Default)]
+struct FenceState {
+    /// The highest value whose submission, and every earlier one, finished.
+    completed: crate::FenceValue,
+    /// Submissions in submit order, with the number of their command buffers
+    /// still running.
+    in_flight: VecDeque<(crate::FenceValue, usize)>,
+    /// Some command buffer ended with an error.
+    lost: bool,
+}
+
+impl FenceState {
+    fn add_command_buffer(&mut self, value: crate::FenceValue) {
+        let entry = self.in_flight.iter_mut().rev().find(|e| e.0 == value);
+        entry.expect("submission is not in flight").1 += 1;
+    }
+
+    fn finish_command_buffer(&mut self, value: crate::FenceValue) {
+        let entry = self.in_flight.iter_mut().rev().find(|e| e.0 == value);
+        entry.expect("submission is not in flight").1 -= 1;
+        while let Some(&(value, 0)) = self.in_flight.front() {
+            self.completed = self.completed.max(value);
+            self.in_flight.pop_front();
+        }
+    }
+}
+
+/// Logs the failure of `cmd_buf` if it ended with an error, and returns
+/// whether it did.
+fn command_buffer_failed(cmd_buf: &ProtocolObject<dyn MTLCommandBuffer>) -> bool {
+    if cmd_buf.status() != MTLCommandBufferStatus::Error {
+        return false;
+    }
+    let label = cmd_buf.label();
+    let error = cmd_buf.error();
+    log::error!(
+        "Metal command buffer {:?} failed: {}",
+        label.as_deref().map(|l| l.to_string()),
+        error
+            .as_deref()
+            .map_or_else(String::new, |e| e.localizedDescription().to_string()),
+    );
+    true
+}
+
 #[derive(Debug)]
 pub struct Fence {
-    sync: Arc<(wgpu_sync::CondvarMutex<crate::FenceValue>, Condvar)>,
+    sync: Arc<(wgpu_sync::CondvarMutex<FenceState>, Condvar)>,
     shared_event: Option<Retained<ProtocolObject<dyn MTLSharedEvent>>>,
 }
 
@@ -1341,8 +1419,34 @@ unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
 impl Fence {
-    fn get_latest(&self) -> crate::FenceValue {
-        *self.sync.0.lock()
+    fn get_latest(&self) -> Result<crate::FenceValue, crate::DeviceError> {
+        let state = self.sync.0.lock();
+        if state.lost {
+            Err(crate::DeviceError::Lost)
+        } else {
+            Ok(state.completed)
+        }
+    }
+
+    /// Makes `cmd_buf` count towards the completion of submission `value`,
+    /// which must be in flight.
+    fn attach_completed_handler(
+        &self,
+        cmd_buf: &ProtocolObject<dyn MTLCommandBuffer>,
+        value: crate::FenceValue,
+    ) {
+        let sync = Arc::clone(&self.sync);
+        let block = block2::RcBlock::new(
+            move |cmd_buf: NonNull<ProtocolObject<dyn MTLCommandBuffer>>| {
+                let failed = command_buffer_failed(unsafe { cmd_buf.as_ref() });
+                let mut state = sync.0.lock();
+                state.lost |= failed;
+                state.finish_command_buffer(value);
+                drop(state);
+                sync.1.notify_all();
+            },
+        );
+        unsafe { cmd_buf.addCompletedHandler(block2::RcBlock::as_ptr(&block)) };
     }
 
     pub fn raw_shared_event(&self) -> Option<&ProtocolObject<dyn MTLSharedEvent>> {
