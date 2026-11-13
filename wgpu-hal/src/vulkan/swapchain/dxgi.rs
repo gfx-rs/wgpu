@@ -225,7 +225,9 @@ fn transition_barrier(
 ///
 /// # Safety
 ///
-/// `allocator` and `list` must not have any prior recording still executing on the GPU.
+/// - No earlier recording of `allocator` and `list` may still execute on the GPU.
+/// - `resource`, the descriptor heap of `rtv`, and `pipeline` must stay alive until the list
+///   completes on the GPU.
 #[allow(clippy::too_many_arguments)]
 unsafe fn execute_sync_command_list(
     queue: &ID3D12CommandQueue,
@@ -1096,6 +1098,9 @@ impl Swapchain for DxgiSwapchain {
 
         // Run the acquire sync list, then signal the interop fence.
         let buffer = &self.buffers[index];
+        // SAFETY: `wait_for_value` above retired the previous acquire list of this buffer.
+        // `release_resources` waits for the interop queue before it drops the buffer, the RTV
+        // heap and the pipeline, unless that wait times out.
         unsafe {
             execute_sync_command_list(
                 &self.queue,
@@ -1182,6 +1187,9 @@ impl Swapchain for DxgiSwapchain {
         }
         // Run the present sync list, ending the buffer in `PRESENT` so we can present it.
         let buffer = &self.buffers[index];
+        // SAFETY: `wait_for_value` above retired the previous present list of this buffer.
+        // `release_resources` waits for the interop queue before it drops the buffer, the RTV
+        // heap and the pipeline, unless that wait times out.
         unsafe {
             execute_sync_command_list(
                 &self.queue,
