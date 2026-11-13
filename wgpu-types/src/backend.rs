@@ -792,12 +792,24 @@ impl VulkanBackendOptions {
 }
 
 /// Selects which kind of swapchain to use on Vulkan.
+///
+/// The DXGI kinds fall back to [`Self::Native`] for the whole instance, with a warning, if the
+/// platform is not Windows, or if the DXGI factory, `d3d12.dll`, or the D3D12 device factory is
+/// not available.
+///
+/// With a DXGI kind, presentation is not available on an adapter that has no LUID, no timeline
+/// semaphores, no `VK_KHR_external_memory_win32` or `VK_KHR_external_semaphore_win32`, or
+/// cannot import D3D12 fences. A surface only reports the formats that the adapter can import
+/// as D3D12 resources, and is not supported if there are none. Surface configuration fails if
+/// no DXGI adapter has the LUID of the Vulkan device, or if the D3D12 device on it does not
+/// support Shader Model 6.0. A missing LUID or missing Shader Model 6.0 support indicates old
+/// hardware or an old driver.
 #[derive(Clone, Copy, Debug, ConstDefault!, PartialEq, Eq)]
 pub enum VulkanSwapchainKind {
     /// Use a native vulkan swapchain via `VK_KHR_swapchain`.
     #[custom(default)]
     Native,
-    /// Use a DXGI/D3D12 swapchain presenting directly to a HWND.
+    /// Use a DXGI swapchain presenting directly to a HWND.
     ///
     /// This mode may give better frame pacing, lower latency, and more predictable performance than
     /// the native swapchain on Windows.
@@ -812,21 +824,15 @@ pub enum VulkanSwapchainKind {
     ///
     #[doc = link_to_wgpu_docs!(["`Device::start_graphics_debugger_capture`"]: "struct.Device.html#method.start_graphics_debugger_capture")]
     DxgiFromHwnd,
-    /// Use a DXGI/D3D12 swapchain presenting to a DirectComposition visual created from the HWND.
+    /// Use a DXGI swapchain presenting to a DirectComposition visual created from the HWND.
     ///
     /// This mode may give better frame pacing, lower latency, and more predictable performance than
     /// the native swapchain on Windows.
-    ///
-    /// When using RenderDoc, this mode will cause RenderDoc to only capture the work on the D3D12 interop device,
-    /// not the work on the Vulkan device. However [`Device::start_graphics_debugger_capture`] will still function
-    /// correctly and result in a vulkan capture.
     ///
     /// Nsight and RGP profiling continue to work.
     ///
     /// This mode supports transparent windows, but does not have support from RenderDoc and may have memory overhead
     /// compared to [`Self::DxgiFromHwnd`].
-    ///
-    #[doc = link_to_wgpu_docs!(["`Device::start_graphics_debugger_capture`"]: "struct.Device.html#method.start_graphics_debugger_capture")]
     DxgiFromVisual,
 }
 
