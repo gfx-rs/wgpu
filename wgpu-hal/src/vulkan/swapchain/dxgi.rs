@@ -398,17 +398,19 @@ impl InteropDevice {
     }
 }
 
-fn create_interop_device(device: &DeviceShared) -> Result<InteropDevice, crate::DeviceError> {
+/// Creates the D3D12 device on the DXGI adapter of `device`. When this adapter cannot present
+/// through DXGI, returns [`crate::SurfaceError::Other`], so the Vulkan device is not lost.
+fn create_interop_device(device: &DeviceShared) -> Result<InteropDevice, crate::SurfaceError> {
     let luid = device.private_caps.device_luid.ok_or_else(|| {
         log::error!("Vulkan physical device does not report a LUID; cannot match a DXGI adapter");
-        crate::DeviceError::Unexpected
+        crate::SurfaceError::Other("no Vulkan device LUID")
     })?;
 
     let dxgi_instance = device
         .instance
         .dxgi_instance
         .as_ref()
-        .ok_or(crate::DeviceError::Unexpected)?;
+        .ok_or(crate::SurfaceError::Other("no DXGI instance"))?;
 
     let adapter = dxgi::factory::enumerate_adapters(dxgi_instance.factory.clone())
         .into_iter()
@@ -421,7 +423,7 @@ fn create_interop_device(device: &DeviceShared) -> Result<InteropDevice, crate::
         })
         .ok_or_else(|| {
             log::error!("No DXGI adapter matches the Vulkan device LUID");
-            crate::DeviceError::Unexpected
+            crate::SurfaceError::Other("no DXGI adapter matches the Vulkan device LUID")
         })?;
 
     // The debug layer (when requested) was already enabled on the factory at instance creation.
@@ -430,7 +432,7 @@ fn create_interop_device(device: &DeviceShared) -> Result<InteropDevice, crate::
         .create_device(&dxgi_instance.d3d12_lib, &adapter, D3D_FEATURE_LEVEL_11_0)
         .map_err(|err| {
             log::error!("Failed to create the interop D3D12 device: {err}");
-            crate::DeviceError::Unexpected
+            crate::SurfaceError::Other("interop D3D12 device creation")
         })?;
 
     // The sync lists draw with DXIL (Shader Model 6) shaders, so the interop
@@ -441,7 +443,9 @@ fn create_interop_device(device: &DeviceShared) -> Result<InteropDevice, crate::
             "The interop D3D12 device does not support Shader Model 6.0 (DXIL), which the DXGI \
              interop swapchain requires"
         );
-        return Err(crate::DeviceError::Unexpected);
+        return Err(crate::SurfaceError::Other(
+            "interop D3D12 device does not support Shader Model 6.0",
+        ));
     }
 
     let queue: ID3D12CommandQueue = unsafe {
@@ -649,7 +653,10 @@ impl Surface for DxgiSurface {
                         flags,
                     )
                 }
-                .into_device_result("ResizeBuffers")?;
+                .map_err(|err| {
+                    log::error!("ResizeBuffers failed: {err}");
+                    crate::SurfaceError::Other("window is in use")
+                })?;
                 swapchain
             }
             None => {
@@ -661,10 +668,17 @@ impl Surface for DxgiSurface {
         unsafe {
             swapchain.SetColorSpace1(dxgi::swapchain::map_surface_color_space(config.color_space))
         }
-        .into_device_result("SetColorSpace1")?;
+        .map_err(|err| {
+            log::error!("IDXGISwapChain3::SetColorSpace1 failed: {err}");
+            crate::SurfaceError::Other("IDXGISwapChain3::SetColorSpace1")
+        })?;
 
-        unsafe { swapchain.SetMaximumFrameLatency(config.maximum_frame_latency) }
-            .into_device_result("SetMaximumFrameLatency")?;
+        unsafe { swapchain.SetMaximumFrameLatency(config.maximum_frame_latency) }.map_err(
+            |err| {
+                log::error!("IDXGISwapChain2::SetMaximumFrameLatency failed: {err}");
+                crate::SurfaceError::Other("IDXGISwapChain2::SetMaximumFrameLatency")
+            },
+        )?;
         let waitable = OwnedHandle(unsafe { swapchain.GetFrameLatencyWaitableObject() });
 
         // Vulkan will view the back buffers as SRGB through mutable format views and D3D12 backbuffers
@@ -891,7 +905,6 @@ impl DxgiSurface {
                         None,
                     )
                 }
-                .into_device_result("CreateSwapChainForHwnd")?
             }
             SurfaceTarget::VisualFromWndHandle { .. } => {
                 profiling::scope!("IDXGIFactory2::CreateSwapChainForComposition");
@@ -900,7 +913,6 @@ impl DxgiSurface {
                         .factory
                         .CreateSwapChainForComposition(&interop.queue, &desc, None)
                 }
-                .into_device_result("CreateSwapChainForComposition")?
             }
             // The DX12-only external-surface targets are never built by the Vulkan backend.
             #[cfg(dx12)]
@@ -911,7 +923,11 @@ impl DxgiSurface {
                     "unsupported DXGI surface target",
                 ))
             }
-        };
+        }
+        .map_err(|err| {
+            log::error!("SwapChain creation error: {err}");
+            crate::SurfaceError::Other("swapchain creation")
+        })?;
 
         match &self.target {
             SurfaceTarget::WndHandle(hwnd) => {
@@ -922,7 +938,10 @@ impl DxgiSurface {
                         DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER,
                     )
                 }
-                .into_device_result("MakeWindowAssociation")?;
+                .map_err(|err| {
+                    log::error!("IDXGIFactory::MakeWindowAssociation failed: {err}");
+                    crate::SurfaceError::Other("IDXGIFactory::MakeWindowAssociation")
+                })?;
             }
             SurfaceTarget::VisualFromWndHandle {
                 handle,
@@ -931,10 +950,14 @@ impl DxgiSurface {
                 let mut dcomp_state = dcomp_state.lock();
                 let dcomp_state =
                     unsafe { dcomp_state.get_or_init(&dxgi_instance.dcomp_lib, handle) }?;
-                unsafe { dcomp_state.visual.SetContent(&swapchain1) }
-                    .into_device_result("IDCompositionVisual::SetContent")?;
-                unsafe { dcomp_state.device.Commit() }
-                    .into_device_result("IDCompositionDevice::Commit")?;
+                unsafe { dcomp_state.visual.SetContent(&swapchain1) }.map_err(|err| {
+                    log::error!("IDCompositionVisual::SetContent failed: {err}");
+                    crate::SurfaceError::Other("IDCompositionVisual::SetContent")
+                })?;
+                unsafe { dcomp_state.device.Commit() }.map_err(|err| {
+                    log::error!("IDCompositionDevice::Commit failed: {err}");
+                    crate::SurfaceError::Other("IDCompositionDevice::Commit")
+                })?;
             }
             #[cfg(dx12)]
             SurfaceTarget::Visual(_)
@@ -942,9 +965,10 @@ impl DxgiSurface {
             | SurfaceTarget::SwapChainPanel(_) => {}
         }
 
-        Ok(swapchain1
-            .cast::<IDXGISwapChain3>()
-            .into_device_result("cast IDXGISwapChain3")?)
+        swapchain1.cast::<IDXGISwapChain3>().map_err(|err| {
+            log::error!("Cast to IDXGISwapChain3 failed: {err}");
+            crate::SurfaceError::Other("swapchain cast to version 3")
+        })
     }
 }
 
