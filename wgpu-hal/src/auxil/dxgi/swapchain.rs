@@ -195,15 +195,24 @@ pub(crate) fn surface_capabilities(
     })
     .to_vec();
 
-    let composite_alpha_modes = match target {
-        SurfaceTarget::WndHandle(_) => vec![wgt::CompositeAlphaMode::Opaque],
-        _ => vec![
+    let opaque_only = match target {
+        SurfaceTarget::WndHandle(_) => true,
+        SurfaceTarget::VisualFromWndHandle { .. } => false,
+        #[cfg(dx12)]
+        SurfaceTarget::Visual(_)
+        | SurfaceTarget::SurfaceHandle(_)
+        | SurfaceTarget::SwapChainPanel(_) => false,
+    };
+    let composite_alpha_modes = if opaque_only {
+        vec![wgt::CompositeAlphaMode::Opaque]
+    } else {
+        vec![
             wgt::CompositeAlphaMode::Auto,
             wgt::CompositeAlphaMode::Inherit,
             wgt::CompositeAlphaMode::Opaque,
             wgt::CompositeAlphaMode::PostMultiplied,
             wgt::CompositeAlphaMode::PreMultiplied,
-        ],
+        ]
     };
 
     crate::SurfaceCapabilities {
@@ -226,8 +235,10 @@ fn surface_extent(target: &SurfaceTarget) -> Option<wgt::Extent3d> {
         SurfaceTarget::WndHandle(handle) | SurfaceTarget::VisualFromWndHandle { handle, .. } => {
             *handle
         }
-        #[allow(unreachable_patterns)]
-        _ => return None,
+        #[cfg(dx12)]
+        SurfaceTarget::Visual(_)
+        | SurfaceTarget::SurfaceHandle(_)
+        | SurfaceTarget::SwapChainPanel(_) => return None,
     };
     let mut rect = Default::default();
     if unsafe { WindowsAndMessaging::GetClientRect(handle, &mut rect) }.is_ok() {

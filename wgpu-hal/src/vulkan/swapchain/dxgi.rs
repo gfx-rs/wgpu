@@ -767,8 +767,10 @@ impl Surface for DxgiSurface {
             match self.target {
                 SurfaceTarget::WndHandle(_) => "HWND",
                 SurfaceTarget::VisualFromWndHandle { .. } => "composition visual",
-                #[allow(unreachable_patterns)]
-                _ => "other",
+                #[cfg(dx12)]
+                SurfaceTarget::Visual(_)
+                | SurfaceTarget::SurfaceHandle(_)
+                | SurfaceTarget::SwapChainPanel(_) => "other",
             },
             buffers.len(),
             config.format,
@@ -839,8 +841,10 @@ impl DxgiSurface {
                 .into_device_result("CreateSwapChainForComposition")?
             }
             // The DX12-only external-surface targets are never built by the Vulkan backend.
-            #[allow(unreachable_patterns)]
-            _ => {
+            #[cfg(dx12)]
+            SurfaceTarget::Visual(_)
+            | SurfaceTarget::SurfaceHandle(_)
+            | SurfaceTarget::SwapChainPanel(_) => {
                 return Err(crate::SurfaceError::Other(
                     "unsupported DXGI surface target",
                 ))
@@ -870,8 +874,10 @@ impl DxgiSurface {
                 unsafe { dcomp_state.device.Commit() }
                     .into_device_result("IDCompositionDevice::Commit")?;
             }
-            #[allow(unreachable_patterns)]
-            _ => {}
+            #[cfg(dx12)]
+            SurfaceTarget::Visual(_)
+            | SurfaceTarget::SurfaceHandle(_)
+            | SurfaceTarget::SwapChainPanel(_) => {}
         }
 
         Ok(swapchain1
