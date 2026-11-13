@@ -1267,8 +1267,9 @@ impl crate::Instance for super::Instance {
         }
 
         // When a DXGI swapchain is selected, an adapter that lacks the interop prerequisites
-        // (a valid LUID, timeline semaphores, and both external-memory/semaphore win32 extensions)
-        // cannot present through the DXGI path, and there is no per-surface native fallback.
+        // (a valid LUID, timeline semaphores, both external-memory/semaphore win32 extensions, and
+        // D3D12 fence import) cannot present through the DXGI path, and there is no per-surface
+        // native fallback. Back buffer formats are checked per surface.
         #[cfg(windows)]
         if self.shared.swapchain_kind != wgt::VulkanSwapchainKind::Native {
             for exposed in exposed_adapters.iter_mut() {
@@ -1281,7 +1282,12 @@ impl crate::Instance for super::Instance {
                     && exposed
                         .adapter
                         .phd_capabilities
-                        .supports_extension(khr::external_semaphore_win32::NAME);
+                        .supports_extension(khr::external_semaphore_win32::NAME)
+                    && self.shared.instance_api_version >= vk::API_VERSION_1_1
+                    && super::swapchain::supports_d3d12_fence_import(
+                        &self.shared.raw,
+                        exposed.adapter.raw,
+                    );
                 if !interop_capable {
                     log::warn!(
                         "Presentation is disabled on adapter '{}' because it lacks a DXGI \

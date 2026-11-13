@@ -480,6 +480,62 @@ fn supports_shader_model_6(device: &ID3D12Device) -> bool {
     queried.is_ok() && shader_model.HighestShaderModel.0 >= D3D_SHADER_MODEL_6_0.0
 }
 
+/// Whether `phd` can import a D3D12 fence as a timeline semaphore, as [`SharedFence`] does.
+pub(crate) fn supports_d3d12_fence_import(
+    instance: &ash::Instance,
+    phd: vk::PhysicalDevice,
+) -> bool {
+    let mut type_info =
+        vk::SemaphoreTypeCreateInfo::default().semaphore_type(vk::SemaphoreType::TIMELINE);
+    let info = vk::PhysicalDeviceExternalSemaphoreInfo::default()
+        .handle_type(vk::ExternalSemaphoreHandleTypeFlags::D3D12_FENCE)
+        .push_next(&mut type_info);
+    let mut properties = vk::ExternalSemaphoreProperties::default();
+    unsafe {
+        instance.get_physical_device_external_semaphore_properties(phd, &info, &mut properties)
+    };
+    properties
+        .external_semaphore_features
+        .contains(vk::ExternalSemaphoreFeatureFlags::IMPORTABLE)
+}
+
+/// Whether `adapter` can import a back buffer of `format` with `usage` the way
+/// `DxgiSurface::create_swapchain` does.
+fn supports_back_buffer_import(
+    adapter: &crate::vulkan::Adapter,
+    format: wgt::TextureFormat,
+    usage: wgt::TextureUses,
+) -> bool {
+    let base_format = format.remove_srgb_suffix();
+    let mut flags = vk::ImageCreateFlags::empty();
+    if base_format != base_format.add_srgb_suffix() {
+        // The import uses `MUTABLE_FORMAT` only with an sRGB view format; query that superset.
+        flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
+    }
+    let mut external_info = vk::PhysicalDeviceExternalImageFormatInfo::default()
+        .handle_type(vk::ExternalMemoryHandleTypeFlags::D3D12_RESOURCE);
+    let info = vk::PhysicalDeviceImageFormatInfo2::default()
+        .format(adapter.private_caps.map_texture_format(base_format))
+        .ty(vk::ImageType::TYPE_2D)
+        .tiling(vk::ImageTiling::OPTIMAL)
+        .usage(crate::vulkan::conv::map_texture_usage(usage))
+        .flags(flags)
+        .push_next(&mut external_info);
+    let mut external_properties = vk::ExternalImageFormatProperties::default();
+    let mut properties = vk::ImageFormatProperties2::default().push_next(&mut external_properties);
+    let result = unsafe {
+        adapter
+            .instance
+            .raw
+            .get_physical_device_image_format_properties2(adapter.raw, &info, &mut properties)
+    };
+    result.is_ok()
+        && external_properties
+            .external_memory_properties
+            .external_memory_features
+            .contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE)
+}
+
 /// A D3D12 fence shared with Vulkan, where the same monotonic counter is visible as both an
 /// `ID3D12Fence` (signalled / waited on the D3D12 queue) and a Vulkan timeline semaphore.
 struct SharedFence {
@@ -587,10 +643,14 @@ impl Surface for DxgiSurface {
             return None;
         }
 
-        Some(dxgi::swapchain::surface_capabilities(
+        let mut capabilities = dxgi::swapchain::surface_capabilities(
             &self.target,
             self.dxgi_instance().supports_allow_tearing,
-        ))
+        );
+        capabilities.formats.retain(|format| {
+            supports_back_buffer_import(adapter, format.format, capabilities.usage)
+        });
+        (!capabilities.formats.is_empty()).then_some(capabilities)
     }
 
     fn display_hdr_info(&self) -> Option<wgt::DisplayHdrInfo> {
