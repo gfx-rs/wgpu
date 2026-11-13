@@ -640,7 +640,10 @@ impl Surface for DxgiSurface {
 
         let non_srgb_format = dxgi::conv::map_texture_format_nosrgb(config.format);
 
-        let flags = dxgi::swapchain::swap_chain_flags(dxgi_instance.supports_allow_tearing, true);
+        let mut flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+        if dxgi_instance.supports_allow_tearing {
+            flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+        }
         let buffer_count = (config.maximum_frame_latency + 1).clamp(2, 16);
 
         let swapchain =

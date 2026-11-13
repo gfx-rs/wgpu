@@ -1152,16 +1152,16 @@ impl crate::Surface for Surface {
         device: &Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
-        // Only create the swapchain with the frame-latency waitable object when we will use
-        // it, so `None` honors its documented "no waitable flag" behavior.
-        let frame_latency_waitable = !matches!(
-            device.options.latency_waitable_object,
-            wgt::Dx12UseFrameLatencyWaitableObject::None
-        );
-        let flags = auxil::dxgi::swapchain::swap_chain_flags(
-            self.supports_allow_tearing,
-            frame_latency_waitable,
-        );
+        let mut flags = Dxgi::DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+        // We always set ALLOW_TEARING on the swapchain no matter
+        // what kind of swapchain we want because ResizeBuffers
+        // cannot change the swapchain's ALLOW_TEARING flag.
+        //
+        // This does not change the behavior of the swapchain, just
+        // allow present calls to use tearing.
+        if self.supports_allow_tearing {
+            flags |= Dxgi::DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+        }
 
         // While `configure`s contract ensures that no work on the GPU's main queues
         // are in flight, we still need to wait for the present queue to be idle.
@@ -1342,14 +1342,15 @@ impl crate::Surface for Surface {
             | SurfaceTarget::SwapChainPanel(_) => {}
         }
 
-        // `IDXGISwapChain2::SetMaximumFrameLatency` and `GetFrameLatencyWaitableObject` both
-        // require the swapchain to have been created with the frame-latency waitable flag.
-        let waitable = if frame_latency_waitable {
-            unsafe { swap_chain.SetMaximumFrameLatency(config.maximum_frame_latency) }
-                .into_device_result("SetMaximumFrameLatency")?;
-            Some(unsafe { swap_chain.GetFrameLatencyWaitableObject() })
-        } else {
-            None
+        unsafe { swap_chain.SetMaximumFrameLatency(config.maximum_frame_latency) }
+            .into_device_result("SetMaximumFrameLatency")?;
+
+        let waitable = match device.options.latency_waitable_object {
+            wgt::Dx12UseFrameLatencyWaitableObject::None => None,
+            wgt::Dx12UseFrameLatencyWaitableObject::Wait
+            | wgt::Dx12UseFrameLatencyWaitableObject::DontWait => {
+                Some(unsafe { swap_chain.GetFrameLatencyWaitableObject() })
+            }
         };
 
         let mut resources = Vec::with_capacity(swap_chain_buffer as usize);
