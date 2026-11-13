@@ -7,6 +7,46 @@ use hashbrown::hash_map::Entry;
 const ALLOCATION_GRANULARITY: u32 = 16;
 const DST_IMAGE_LAYOUT: vk::ImageLayout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
 
+/// The layout for `usage`. Identical to [`conv::derive_image_layout`] except that
+/// `TextureUses::PRESENT` is `GENERAL` for [`super::PresentTransition::ReleaseToExternal`]
+/// textures.
+fn barrier_image_layout(texture: &super::Texture, usage: wgt::TextureUses) -> vk::ImageLayout {
+    match (usage, texture.present_transition) {
+        (wgt::TextureUses::PRESENT, super::PresentTransition::ReleaseToExternal) => {
+            vk::ImageLayout::GENERAL
+        }
+        _ => conv::derive_image_layout(usage, texture.format),
+    }
+}
+
+/// The queue family ownership transfer that `usage` implies for `texture`: a release to
+/// `VK_QUEUE_FAMILY_EXTERNAL` on a transition to `PRESENT` and an acquire on a transition from
+/// `PRESENT`, for [`super::PresentTransition::ReleaseToExternal`] textures only.
+fn present_ownership_transfer(
+    texture: &super::Texture,
+    usage: &crate::StateTransition<wgt::TextureUses>,
+    family_index: u32,
+) -> Option<crate::QueueFamilyOwnershipTransfer> {
+    if texture.present_transition != super::PresentTransition::ReleaseToExternal {
+        return None;
+    }
+    let local = crate::QueueFamily::Explicit(family_index);
+    let external = crate::QueueFamily::External;
+    if usage.to == wgt::TextureUses::PRESENT {
+        Some(crate::QueueFamilyOwnershipTransfer {
+            src: local,
+            dst: external,
+        })
+    } else if usage.from == wgt::TextureUses::PRESENT {
+        Some(crate::QueueFamilyOwnershipTransfer {
+            src: external,
+            dst: local,
+        })
+    } else {
+        None
+    }
+}
+
 impl super::Texture {
     fn map_buffer_copies<T>(&self, regions: T) -> impl Iterator<Item = vk::BufferImageCopy>
     where
@@ -268,7 +308,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 self.device.private_caps.store_op_none,
                 self.device.features,
             );
-            let src_layout = conv::derive_image_layout(bar.usage.from, bar.texture.format);
+            let src_layout = barrier_image_layout(bar.texture, bar.usage.from);
             src_stages |= src_stage;
             let (dst_stage, dst_access) = conv::map_texture_usage_to_barrier(
                 bar.usage.to,
@@ -276,15 +316,23 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 self.device.private_caps.store_op_none,
                 self.device.features,
             );
-            let dst_layout = conv::derive_image_layout(bar.usage.to, bar.texture.format);
+            let dst_layout = barrier_image_layout(bar.texture, bar.usage.to);
             dst_stages |= dst_stage;
 
             // Insert a queue family ownership transfer if the caller requested
-            // one (used for textures imported from external memory). When no
-            // transfer is requested, both indices are `QUEUE_FAMILY_IGNORED`,
-            // which the spec treats as "no transfer".
+            // one (used for textures imported from external memory) or the
+            // present transition of the texture implies one. A transfer that
+            // the caller requested takes precedence. When there is no transfer, both
+            // indices are `QUEUE_FAMILY_IGNORED`, which the spec treats as
+            // "no transfer".
+            let present_transfer =
+                present_ownership_transfer(bar.texture, &bar.usage, self.device.family_index);
+            debug_assert!(
+                bar.queue_family_ownership_transfer.is_none() || present_transfer.is_none(),
+                "a caller-set queue family ownership transfer conflicts with the present transition transfer"
+            );
             let (src_queue_family_index, dst_queue_family_index) =
-                match bar.queue_family_ownership_transfer {
+                match bar.queue_family_ownership_transfer.or(present_transfer) {
                     Some(transfer) => (
                         conv::map_queue_family(transfer.src),
                         conv::map_queue_family(transfer.dst),

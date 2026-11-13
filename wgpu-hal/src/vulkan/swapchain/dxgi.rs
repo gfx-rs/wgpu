@@ -1,0 +1,1279 @@
+//! DXGI flip-model interop swapchain for Vulkan on Windows.
+//!
+//! Using an interop D3D12 device LUID-matched to the Vulkan physical device, a DXGI swapchain
+//! is made on the surface, and those buffers are then shared with Vulkan. Vulkan renders
+//! directly onto the buffers, there is no intermediate texture and no copy.
+//!
+//! # Synchronization
+//!
+//! It is helpful to think of the compositor as a separate queue. D3D12 does not expose manual
+//! synchronization between the presentation queue and D3D12 work. It automatically adds this
+//! synchronization when a command list writes or reads a back buffer. To properly synchronize
+//! Vulkan with the presentation queue, we need to create a "ladder" of synchronization between
+//! the presentation and Vulkan queues.
+//!
+//! On acquire:
+//! - We first synchronize the D3D12 queue with the presentation queue, by submitting a command
+//!   list that does a no-op draw onto the current buffer.
+//! - We then use a shared D3D12 fence to signal the completion of the acquire command list, and
+//!   wait on that fence in Vulkan.
+//!
+//! The user can use the buffer in Vulkan. On present:
+//! - We use a second fence to have the D3D12 queue wait for the Vulkan work.
+//! - Then we submit a second D3D12 command list with a no-op draw, which will synchronize the
+//!   D3D12 queue with the presentation queue.
+//!
+//! By using these two stages (acquire and present) we can synchronize Vulkan with the
+//! presentation queue. There is overhead to this approach, in testing it is about 100us per frame,
+//! and this is almost certainly faster than the next best approach of using a texture->texture copy.
+//!
+//! ```text
+//!                             stage 1: acquire                                 stage 2: present
+//!
+//! presentation  ─────release─╮                                                                  ╭─flip─▶
+//!                            │                                                                  │
+//!                            │ (implicit sync)                                  (implicit sync) │
+//!                            ▼                                                                  │
+//! interop queue ─────────────[acquire list]──Signal────────────────────Wait──[present list]──Present
+//!                                               │                       ▲
+//!                              interop_progress │                       │ vulkan_progress
+//!                                               ▼                       │
+//! Vulkan queue  ───────────────────────────────Wait────Vulkan Work────Signal
+//! ```
+
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use core::{
+    any::Any,
+    mem::ManuallyDrop,
+    sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
+};
+
+use ash::vk;
+use scopeguard::{guard, ScopeGuard};
+use wgpu_sync::Mutex;
+use windows::{
+    core::{Interface as _, PCWSTR},
+    Win32::{
+        Foundation::{GENERIC_ALL, LUID, RECT},
+        Graphics::{
+            Direct3D::{D3D_FEATURE_LEVEL_11_0, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST},
+            Direct3D12::*,
+            Dxgi::{Common::*, *},
+        },
+    },
+};
+
+use crate::{
+    auxil::dxgi::{
+        self, d3d12_lib::D3D12Lib, dcomp::DCompLib, device_factory::DeviceFactory,
+        dxgi_lib::DxgiLib, factory::DxgiFactory, handles::OwnedHandle, result::HResult as _,
+        swapchain::SurfaceTarget,
+    },
+    vulkan::{
+        semaphore_list::SemaphoreType,
+        swapchain::{
+            Surface, SurfaceTextureMetadata, Swapchain, SwapchainSubmissionSemaphoreGuard,
+        },
+        DeviceShared, InstanceShared,
+    },
+    Device,
+};
+
+/// Precompiled DXIL for the sync lists' no-op draw. See [`dxgi_sync.hlsl`] for the source and the
+/// `dxc` invocation that regenerates these blobs. The vertex-shader container also carries the
+/// (empty) root signature the pipeline is built against.
+///
+/// [`dxgi_sync.hlsl`]: ./dxgi_sync.hlsl
+static NOOP_DRAW_VS: &[u8] = include_bytes!("dxgi_sync_vs.cso");
+static NOOP_DRAW_PS: &[u8] = include_bytes!("dxgi_sync_ps.cso");
+
+/// Pipeline for the sync lists' no-op draw: a degenerate triangle that covers no pixels, letting
+/// a list reference the back buffer without altering its contents (see module docs).
+struct NoopDrawPipeline {
+    root_signature: ID3D12RootSignature,
+    pipeline_state: ID3D12PipelineState,
+}
+
+impl NoopDrawPipeline {
+    /// Builds the pipeline for back buffers whose render-target view has `format`.
+    fn new(device: &ID3D12Device, format: DXGI_FORMAT) -> Result<Self, crate::DeviceError> {
+        // The vertex-shader container embeds the root signature, so build it straight from the blob.
+        let root_signature: ID3D12RootSignature =
+            unsafe { device.CreateRootSignature(0, NOOP_DRAW_VS) }
+                .into_device_result("ID3D12Device::CreateRootSignature")?;
+
+        // A blend target with valid (blend-disabled) enum values; the degenerate draw writes nothing
+        // regardless, but the runtime still validates these fields.
+        let blend_target = D3D12_RENDER_TARGET_BLEND_DESC {
+            SrcBlend: D3D12_BLEND_ONE,
+            DestBlend: D3D12_BLEND_ZERO,
+            BlendOp: D3D12_BLEND_OP_ADD,
+            SrcBlendAlpha: D3D12_BLEND_ONE,
+            DestBlendAlpha: D3D12_BLEND_ZERO,
+            BlendOpAlpha: D3D12_BLEND_OP_ADD,
+            LogicOp: D3D12_LOGIC_OP_NOOP,
+            RenderTargetWriteMask: D3D12_COLOR_WRITE_ENABLE_ALL.0 as u8,
+            ..Default::default()
+        };
+        let no_stencil = D3D12_DEPTH_STENCILOP_DESC {
+            StencilFailOp: D3D12_STENCIL_OP_KEEP,
+            StencilDepthFailOp: D3D12_STENCIL_OP_KEEP,
+            StencilPassOp: D3D12_STENCIL_OP_KEEP,
+            StencilFunc: D3D12_COMPARISON_FUNC_ALWAYS,
+        };
+
+        let mut rtv_formats = [DXGI_FORMAT_UNKNOWN; 8];
+        rtv_formats[0] = format;
+
+        let desc = D3D12_GRAPHICS_PIPELINE_STATE_DESC {
+            // Non-owning borrow of `root_signature`; `desc` is consumed by the call below, well
+            // before `root_signature` drops.
+            pRootSignature: unsafe { dxgi::borrow_interface_temporarily(&root_signature) },
+            VS: D3D12_SHADER_BYTECODE {
+                pShaderBytecode: NOOP_DRAW_VS.as_ptr().cast(),
+                BytecodeLength: NOOP_DRAW_VS.len(),
+            },
+            PS: D3D12_SHADER_BYTECODE {
+                pShaderBytecode: NOOP_DRAW_PS.as_ptr().cast(),
+                BytecodeLength: NOOP_DRAW_PS.len(),
+            },
+            BlendState: D3D12_BLEND_DESC {
+                RenderTarget: [blend_target; 8],
+                ..Default::default()
+            },
+            SampleMask: u32::MAX,
+            RasterizerState: D3D12_RASTERIZER_DESC {
+                FillMode: D3D12_FILL_MODE_SOLID,
+                CullMode: D3D12_CULL_MODE_NONE,
+                DepthClipEnable: true.into(),
+                ..Default::default()
+            },
+            DepthStencilState: D3D12_DEPTH_STENCIL_DESC {
+                DepthFunc: D3D12_COMPARISON_FUNC_ALWAYS,
+                FrontFace: no_stencil,
+                BackFace: no_stencil,
+                ..Default::default()
+            },
+            PrimitiveTopologyType: D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+            NumRenderTargets: 1,
+            RTVFormats: rtv_formats,
+            SampleDesc: DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
+            ..Default::default()
+        };
+
+        let pipeline_state: ID3D12PipelineState =
+            unsafe { device.CreateGraphicsPipelineState(&desc) }
+                .into_device_result("ID3D12Device::CreateGraphicsPipelineState")?;
+
+        Ok(Self {
+            root_signature,
+            pipeline_state,
+        })
+    }
+}
+
+/// Builds a single-resource transition barrier. `resource` is borrowed without changing its
+/// refcount; the returned barrier is transient and must not outlive `resource`.
+fn transition_barrier(
+    resource: &ID3D12Resource,
+    before: D3D12_RESOURCE_STATES,
+    after: D3D12_RESOURCE_STATES,
+) -> D3D12_RESOURCE_BARRIER {
+    D3D12_RESOURCE_BARRIER {
+        Type: D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        Flags: D3D12_RESOURCE_BARRIER_FLAG_NONE,
+        Anonymous: D3D12_RESOURCE_BARRIER_0 {
+            // `ManuallyDrop` (never dropped) holds a borrowed, non-owning copy of the interface, so
+            // building the barrier does not touch the resource's refcount.
+            Transition: ManuallyDrop::new(D3D12_RESOURCE_TRANSITION_BARRIER {
+                pResource: unsafe { dxgi::borrow_interface_temporarily(resource) },
+                Subresource: D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                StateBefore: before,
+                StateAfter: after,
+            }),
+        },
+    }
+}
+
+/// Encodes and submits the D3D12 command list.
+///
+/// # Safety
+///
+/// - No earlier recording of `allocator` and `list` may still execute on the GPU.
+/// - `resource`, the descriptor heap of `rtv`, and `pipeline` must stay alive until the list
+///   completes on the GPU.
+#[allow(clippy::too_many_arguments)]
+unsafe fn execute_sync_command_list(
+    queue: &ID3D12CommandQueue,
+    allocator: &ID3D12CommandAllocator,
+    list: &ID3D12GraphicsCommandList,
+    resource: &ID3D12Resource,
+    rtv: D3D12_CPU_DESCRIPTOR_HANDLE,
+    pipeline: &NoopDrawPipeline,
+    extent: wgt::Extent3d,
+    final_state: D3D12_RESOURCE_STATES,
+) -> Result<(), crate::DeviceError> {
+    unsafe {
+        allocator
+            .Reset()
+            .into_device_result("ID3D12CommandAllocator::Reset")?;
+        list.Reset(allocator, Some(&pipeline.pipeline_state))
+            .into_device_result("ID3D12GraphicsCommandList::Reset")?;
+
+        let to_rt = transition_barrier(
+            resource,
+            D3D12_RESOURCE_STATE_COMMON,
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+        );
+        list.ResourceBarrier(&[to_rt]);
+
+        // The no-op draw.
+        let viewport = D3D12_VIEWPORT {
+            TopLeftX: 0.0,
+            TopLeftY: 0.0,
+            Width: extent.width as f32,
+            Height: extent.height as f32,
+            MinDepth: 0.0,
+            MaxDepth: 1.0,
+        };
+        let scissor = RECT {
+            left: 0,
+            top: 0,
+            right: extent.width as i32,
+            bottom: extent.height as i32,
+        };
+        list.OMSetRenderTargets(1, Some(core::ptr::from_ref(&rtv)), false, None);
+        list.RSSetViewports(core::slice::from_ref(&viewport));
+        list.RSSetScissorRects(core::slice::from_ref(&scissor));
+        list.SetGraphicsRootSignature(&pipeline.root_signature);
+        list.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        list.DrawInstanced(3, 1, 0, 0);
+
+        let to_final =
+            transition_barrier(resource, D3D12_RESOURCE_STATE_RENDER_TARGET, final_state);
+        list.ResourceBarrier(&[to_final]);
+        list.Close()
+            .into_device_result("ID3D12GraphicsCommandList::Close")?;
+
+        let list: ID3D12CommandList = list.cast().into_device_result("cast ID3D12CommandList")?;
+        queue.ExecuteCommandLists(&[Some(list)]);
+    }
+    Ok(())
+}
+
+/// Instance-wide DXGI/D3D12 state for the interop swapchain, built once at instance creation and
+/// stored on [`InstanceShared`].
+pub(crate) struct DxgiInstance {
+    // The COM objects must drop before the libraries that implement them, so they come first.
+    /// Creates the interop D3D12 device, using an Agility SDK independent device when configured
+    /// (shared with the DX12 backend).
+    device_factory: DeviceFactory,
+    factory: DxgiFactory,
+    /// Runtime-loaded `d3d12.dll` entry points used to create the interop D3D12 device.
+    d3d12_lib: Arc<D3D12Lib>,
+    dcomp_lib: Arc<DCompLib>,
+    /// Keeps `dxgi.dll` loaded for the lifetime of the factory.
+    _lib: DxgiLib,
+    supports_allow_tearing: bool,
+}
+
+/// Tells the user how to select the native Vulkan swapchain.
+pub(crate) const USE_NATIVE_HINT: &str =
+    "select VulkanSwapchainKind::Native (WGPU_VULKAN_SWAPCHAIN_KIND=native)";
+
+/// Resolves the requested swapchain kind at instance creation, building the [`DxgiInstance`] when
+/// a DXGI kind is requested. A requested DXGI kind falls back to `Native` (with a warning) when
+/// DXGI or D3D12 is unavailable.
+pub(crate) fn init_dxgi_instance(
+    kind: wgt::VulkanSwapchainKind,
+    agility_sdk: Option<&wgt::Dx12AgilitySDK>,
+    flags: wgt::InstanceFlags,
+) -> (wgt::VulkanSwapchainKind, Option<DxgiInstance>) {
+    if kind == wgt::VulkanSwapchainKind::Native {
+        log::debug!("Vulkan swapchain kind: {kind:?}");
+        return (kind, None);
+    }
+
+    match dxgi::factory::create_factory(flags) {
+        Ok((lib, factory)) => {
+            let d3d12_lib = match D3D12Lib::new() {
+                Ok(d3d12_lib) => Arc::new(d3d12_lib),
+                Err(err) => {
+                    log::warn!(
+                        "Using the native Vulkan swapchain instead of {kind:?} because d3d12.dll \
+                         did not load ({err}); to silence this, {USE_NATIVE_HINT}"
+                    );
+                    return (wgt::VulkanSwapchainKind::Native, None);
+                }
+            };
+            let device_factory = match DeviceFactory::new(&d3d12_lib, agility_sdk) {
+                Ok(device_factory) => device_factory,
+                Err(err) => {
+                    log::warn!(
+                        "Using the native Vulkan swapchain instead of {kind:?} because D3D12 \
+                         device factory creation failed ({err}); to silence this, \
+                         {USE_NATIVE_HINT}"
+                    );
+                    return (wgt::VulkanSwapchainKind::Native, None);
+                }
+            };
+            device_factory.enable_debug_layer(&d3d12_lib, flags);
+            let supports_allow_tearing = dxgi::swapchain::supports_allow_tearing(&factory);
+            log::debug!(
+                "Vulkan swapchain kind: {kind:?} (DXGI interop, allow_tearing: {supports_allow_tearing})"
+            );
+            (
+                kind,
+                Some(DxgiInstance {
+                    device_factory,
+                    factory,
+                    d3d12_lib,
+                    dcomp_lib: Arc::new(DCompLib::new()),
+                    _lib: lib,
+                    supports_allow_tearing,
+                }),
+            )
+        }
+        Err(err) => {
+            log::warn!(
+                "Using the native Vulkan swapchain instead of {kind:?} because DXGI factory \
+                 creation failed ({err}); to silence this, {USE_NATIVE_HINT}"
+            );
+            (wgt::VulkanSwapchainKind::Native, None)
+        }
+    }
+}
+
+/// The D3D12 device that owns and presents the swapchain, cached on [`DeviceShared`] and shared
+/// by all DXGI surfaces configured against that device. The swapchain is created on `queue`,
+/// which also runs the acquire- and present-time sync lists.
+pub(crate) struct InteropDevice {
+    device: ID3D12Device,
+    queue: ID3D12CommandQueue,
+    /// Keeps `d3d12.dll` loaded until `device` and `queue` drop, also when the instance drops
+    /// first.
+    _d3d12_lib: Arc<D3D12Lib>,
+}
+
+impl InteropDevice {
+    /// Creates a shared D3D12 fence and an NT handle to it for import into Vulkan as a timeline
+    /// semaphore.
+    fn create_shared_fence(&self) -> Result<(ID3D12Fence, OwnedHandle), crate::DeviceError> {
+        let fence: ID3D12Fence = unsafe { self.device.CreateFence(0, D3D12_FENCE_FLAG_SHARED) }
+            .into_device_result("ID3D12Device::CreateFence")?;
+
+        let handle = unsafe {
+            self.device
+                .CreateSharedHandle(&fence, None, GENERIC_ALL.0, PCWSTR::null())
+        }
+        .into_device_result("ID3D12Device::CreateSharedHandle (fence)")?;
+
+        Ok((fence, OwnedHandle(handle)))
+    }
+}
+
+/// Creates the D3D12 device on the DXGI adapter of `device`. When this adapter cannot present
+/// through DXGI, returns [`crate::SurfaceError::Other`], so the Vulkan device is not lost.
+fn create_interop_device(device: &DeviceShared) -> Result<InteropDevice, crate::SurfaceError> {
+    let luid = device.private_caps.device_luid.ok_or_else(|| {
+        log::error!("DXGI swapchain on Vulkan: the Vulkan device does not report a LUID");
+        crate::SurfaceError::Other("no Vulkan device LUID")
+    })?;
+
+    let dxgi_instance = device
+        .instance
+        .dxgi_instance
+        .as_ref()
+        .expect("DxgiSurface created without a DxgiInstance");
+
+    let luid = LUID {
+        LowPart: u32::from_ne_bytes(luid[0..4].try_into().unwrap()),
+        HighPart: i32::from_ne_bytes(luid[4..8].try_into().unwrap()),
+    };
+    let adapter: IDXGIAdapter1 =
+        unsafe { dxgi_instance.factory.EnumAdapterByLuid(luid) }.map_err(|err| {
+            log::error!(
+                "DXGI swapchain on Vulkan: no DXGI adapter has the Vulkan device LUID: {err}"
+            );
+            crate::SurfaceError::Other("no DXGI adapter matches the Vulkan device LUID")
+        })?;
+    let adapter = dxgi::factory::DxgiAdapter::new(adapter);
+
+    // The debug layer (when requested) was already enabled on the factory at instance creation.
+    let d3d_device = dxgi_instance
+        .device_factory
+        .create_device(&dxgi_instance.d3d12_lib, &adapter, D3D_FEATURE_LEVEL_11_0)
+        .map_err(|err| {
+            log::error!("DXGI swapchain on Vulkan: interop D3D12 device creation failed: {err}");
+            crate::SurfaceError::Other("interop D3D12 device creation")
+        })?;
+
+    // The sync lists draw with DXIL (Shader Model 6) shaders, so the interop
+    // device must support Shader Model 6.0. Reject it here rather than at opaque
+    // pipeline-creation time.
+    if !supports_shader_model_6(&d3d_device) {
+        log::error!(
+            "DXGI swapchain on Vulkan: the interop D3D12 device does not support Shader Model 6.0"
+        );
+        return Err(crate::SurfaceError::Other(
+            "interop D3D12 device does not support Shader Model 6.0",
+        ));
+    }
+
+    let queue: ID3D12CommandQueue = unsafe {
+        d3d_device.CreateCommandQueue(&D3D12_COMMAND_QUEUE_DESC {
+            Type: D3D12_COMMAND_LIST_TYPE_DIRECT,
+            Priority: 0,
+            Flags: D3D12_COMMAND_QUEUE_FLAG_NONE,
+            NodeMask: 0,
+        })
+    }
+    .into_device_result("ID3D12Device::CreateCommandQueue")?;
+
+    Ok(InteropDevice {
+        device: d3d_device,
+        queue,
+        _d3d12_lib: Arc::clone(&dxgi_instance.d3d12_lib),
+    })
+}
+
+/// Whether `device` supports Shader Model 6.0 (DXIL). Querying `6_0` clamps the reported model to
+/// the request, so success with `>= 6_0` means the device supports at least 6.0; a runtime too old
+/// to recognize 6.0 fails the query and is likewise treated as unsupported.
+fn supports_shader_model_6(device: &ID3D12Device) -> bool {
+    let mut shader_model = D3D12_FEATURE_DATA_SHADER_MODEL {
+        HighestShaderModel: D3D_SHADER_MODEL_6_0,
+    };
+    let queried = unsafe {
+        device.CheckFeatureSupport(
+            D3D12_FEATURE_SHADER_MODEL,
+            <*mut _>::cast(&mut shader_model),
+            size_of_val(&shader_model) as u32,
+        )
+    };
+    queried.is_ok() && shader_model.HighestShaderModel.0 >= D3D_SHADER_MODEL_6_0.0
+}
+
+/// Whether `phd` can import a D3D12 fence as a timeline semaphore, as [`SharedFence`] does.
+pub(crate) fn supports_d3d12_fence_import(
+    instance: &ash::Instance,
+    phd: vk::PhysicalDevice,
+) -> bool {
+    let mut type_info =
+        vk::SemaphoreTypeCreateInfo::default().semaphore_type(vk::SemaphoreType::TIMELINE);
+    let info = vk::PhysicalDeviceExternalSemaphoreInfo::default()
+        .handle_type(vk::ExternalSemaphoreHandleTypeFlags::D3D12_FENCE)
+        .push_next(&mut type_info);
+    let mut properties = vk::ExternalSemaphoreProperties::default();
+    unsafe {
+        instance.get_physical_device_external_semaphore_properties(phd, &info, &mut properties)
+    };
+    properties
+        .external_semaphore_features
+        .contains(vk::ExternalSemaphoreFeatureFlags::IMPORTABLE)
+}
+
+/// Whether `adapter` can import a back buffer of `format` with `usage` the way
+/// `DxgiSurface::create_swapchain` does.
+fn supports_back_buffer_import(
+    adapter: &crate::vulkan::Adapter,
+    format: wgt::TextureFormat,
+    usage: wgt::TextureUses,
+) -> bool {
+    let base_format = format.remove_srgb_suffix();
+    let mut flags = vk::ImageCreateFlags::empty();
+    if base_format != base_format.add_srgb_suffix() {
+        // The import uses `MUTABLE_FORMAT` only with an sRGB view format; query that superset.
+        flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
+    }
+    let mut external_info = vk::PhysicalDeviceExternalImageFormatInfo::default()
+        .handle_type(vk::ExternalMemoryHandleTypeFlags::D3D12_RESOURCE);
+    let info = vk::PhysicalDeviceImageFormatInfo2::default()
+        .format(adapter.private_caps.map_texture_format(base_format))
+        .ty(vk::ImageType::TYPE_2D)
+        .tiling(vk::ImageTiling::OPTIMAL)
+        .usage(crate::vulkan::conv::map_texture_usage(usage))
+        .flags(flags)
+        .push_next(&mut external_info);
+    let mut external_properties = vk::ExternalImageFormatProperties::default();
+    let mut properties = vk::ImageFormatProperties2::default().push_next(&mut external_properties);
+    let result = unsafe {
+        adapter
+            .instance
+            .raw
+            .get_physical_device_image_format_properties2(adapter.raw, &info, &mut properties)
+    };
+    result.is_ok()
+        && external_properties
+            .external_memory_properties
+            .external_memory_features
+            .contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE)
+}
+
+/// A D3D12 fence shared with Vulkan, where the same monotonic counter is visible as both an
+/// `ID3D12Fence` (signalled / waited on the D3D12 queue) and a Vulkan timeline semaphore.
+struct SharedFence {
+    vk: vk::Semaphore,
+    d3d: ID3D12Fence,
+}
+
+impl SharedFence {
+    fn new(
+        device: &DeviceShared,
+        interop: &InteropDevice,
+        name: &str,
+    ) -> Result<Self, crate::DeviceError> {
+        let (d3d, handle) = interop.create_shared_fence()?;
+        let vk = guard(device.new_timeline_semaphore(name)?, |vk| unsafe {
+            device.raw.destroy_semaphore(vk, None)
+        });
+        unsafe { device.import_timeline_semaphore_d3d12_fence(*vk, handle.0) }?;
+        // The import does not take ownership of `handle`; it closes when it drops here.
+        Ok(Self {
+            vk: ScopeGuard::into_inner(vk),
+            d3d,
+        })
+    }
+
+    unsafe fn destroy(&self, device: &ash::Device) {
+        unsafe { device.destroy_semaphore(self.vk, None) };
+    }
+}
+
+/// Per-back-buffer cross-API synchronization state, shared between the swapchain and the surface
+/// texture metadata of the texture currently in flight for that buffer.
+#[derive(Debug)]
+struct ImageSync {
+    /// `vulkan_progress` value the current frame's Vulkan work signals; read at present so the
+    /// D3D12 queue can wait on it before presenting.
+    vulkan_progress_value: u64,
+    /// `interop_progress` value the interop queue signals after this acquire's gated sync list;
+    /// the first Vulkan submission into the buffer waits on it before writing (stage 1 — see
+    /// module docs). Cleared to 0 once consumed; 0 means there is nothing to wait for.
+    interop_progress_value: u64,
+}
+
+/// One DXGI flip-model back buffer, shared into Vulkan, plus the per-buffer D3D12 state needed to
+/// run the acquire- and present-time sync lists.
+struct BackBuffer {
+    /// The back buffer imported into Vulkan; rendered into directly.
+    texture: crate::vulkan::Texture,
+    /// The same back buffer as a D3D12 resource (owned via `GetBuffer`).
+    resource: ID3D12Resource,
+    /// Render-target view of `resource`, bound by the sync lists' no-op draw. Points into the
+    /// swapchain's `rtv_heap`, which must outlive it.
+    rtv: D3D12_CPU_DESCRIPTOR_HANDLE,
+    /// Allocator + list for this buffer's acquire-time sync list. Kept separate from the present
+    /// pair so each can be reset independently.
+    acquire_allocator: ID3D12CommandAllocator,
+    acquire_list: ID3D12GraphicsCommandList,
+    /// Allocator + list for this buffer's present-time sync list.
+    present_allocator: ID3D12CommandAllocator,
+    present_list: ID3D12GraphicsCommandList,
+    /// `interop_progress` value the last acquire of this buffer signalled; gates resetting
+    /// `acquire_allocator`.
+    acquire_submit: u64,
+    /// `interop_progress` value the last present of this buffer signalled; gates resetting
+    /// `present_allocator`.
+    present_submit: u64,
+    sync: Arc<Mutex<ImageSync>>,
+}
+
+pub(crate) struct DxgiSurface {
+    // `target` holds DirectComposition objects, which must drop before `instance` can unload
+    // `dcomp.dll`.
+    target: SurfaceTarget,
+    hdr_source: dxgi::hdr::DxgiHdrSource,
+    instance: Arc<InstanceShared>,
+}
+
+impl DxgiSurface {
+    pub(crate) fn new(
+        instance: Arc<InstanceShared>,
+        target: SurfaceTarget,
+        hdr_source: dxgi::hdr::DxgiHdrSource,
+    ) -> Self {
+        Self {
+            target,
+            hdr_source,
+            instance,
+        }
+    }
+
+    fn dxgi_instance(&self) -> &DxgiInstance {
+        self.instance
+            .dxgi_instance
+            .as_ref()
+            .expect("DxgiSurface created without a DxgiInstance")
+    }
+}
+
+impl Surface for DxgiSurface {
+    fn surface_capabilities(
+        &self,
+        adapter: &crate::vulkan::Adapter,
+    ) -> Option<crate::SurfaceCapabilities> {
+        if !adapter.private_caps.can_present {
+            return None;
+        }
+
+        let mut capabilities = dxgi::swapchain::surface_capabilities(
+            &self.target,
+            self.dxgi_instance().supports_allow_tearing,
+        );
+        capabilities.formats.retain(|format| {
+            supports_back_buffer_import(adapter, format.format, capabilities.usage)
+        });
+        (!capabilities.formats.is_empty()).then_some(capabilities)
+    }
+
+    fn display_hdr_info(&self) -> Option<wgt::DisplayHdrInfo> {
+        self.hdr_source.display_hdr_info()
+    }
+
+    unsafe fn create_swapchain(
+        &self,
+        device: &crate::vulkan::Device,
+        config: &crate::SurfaceConfiguration,
+        provided_old_swapchain: Option<Box<dyn Swapchain>>,
+    ) -> Result<Box<dyn Swapchain>, crate::SurfaceError> {
+        profiling::scope!("DxgiSurface::create_swapchain");
+
+        // `Surface::configure` already released the resources of the old swapchain. DXGI allows
+        // only one swapchain per window, so the old one must be gone before the new one is created.
+        drop(provided_old_swapchain);
+
+        let dxgi_instance = self.dxgi_instance();
+        let interop = device
+            .shared
+            .dxgi_interop
+            .get_or_try_init(|| create_interop_device(&device.shared))?;
+
+        let non_srgb_format = dxgi::conv::map_texture_format_nosrgb(config.format);
+
+        let mut flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+        if dxgi_instance.supports_allow_tearing {
+            flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+        }
+        let buffer_count = (config.maximum_frame_latency + 1).clamp(2, 16);
+
+        let swapchain =
+            self.create_dxgi_swapchain(config, interop, non_srgb_format, buffer_count, flags)?;
+
+        // Apply the color space unconditionally so reconfiguring away from HDR resets state.
+        unsafe {
+            swapchain.SetColorSpace1(dxgi::swapchain::map_surface_color_space(config.color_space))
+        }
+        .map_err(|err| {
+            log::error!("DXGI swapchain on Vulkan: IDXGISwapChain3::SetColorSpace1 failed: {err}");
+            crate::SurfaceError::Other("IDXGISwapChain3::SetColorSpace1")
+        })?;
+
+        unsafe { swapchain.SetMaximumFrameLatency(config.maximum_frame_latency) }.map_err(
+            |err| {
+                log::error!(
+                    "DXGI swapchain on Vulkan: IDXGISwapChain2::SetMaximumFrameLatency failed: {err}"
+                );
+                crate::SurfaceError::Other("IDXGISwapChain2::SetMaximumFrameLatency")
+            },
+        )?;
+        let waitable = OwnedHandle(unsafe { swapchain.GetFrameLatencyWaitableObject() });
+
+        // The D3D12 back buffers use the non-sRGB format. Vulkan views them as sRGB through
+        // mutable format views.
+        let base_format = config.format.remove_srgb_suffix();
+        let mut view_formats = config.view_formats.clone();
+        if config.format != base_format && !view_formats.contains(&config.format) {
+            view_formats.push(config.format);
+        }
+
+        // Pipeline + descriptor heap for the sync lists' no-op draw. The pipeline targets the
+        // back buffers' (non-sRGB) format; the RTV heap holds one render-target view per buffer.
+        let noop_pipeline = NoopDrawPipeline::new(&interop.device, non_srgb_format)?;
+        let rtv_heap: ID3D12DescriptorHeap = unsafe {
+            interop
+                .device
+                .CreateDescriptorHeap(&D3D12_DESCRIPTOR_HEAP_DESC {
+                    Type: D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                    NumDescriptors: buffer_count,
+                    Flags: D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+                    NodeMask: 0,
+                })
+        }
+        .into_device_result("CreateDescriptorHeap (RTV)")?;
+        let rtv_increment = unsafe {
+            interop
+                .device
+                .GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)
+        } as usize;
+        let rtv_heap_start = unsafe { rtv_heap.GetCPUDescriptorHandleForHeapStart() };
+
+        // The texture import is the last fallible step, so an error leaves no Vulkan object behind.
+        let create_back_buffer = |i: u32| -> Result<BackBuffer, crate::SurfaceError> {
+            let resource: ID3D12Resource = unsafe { swapchain.GetBuffer(i) }
+                .into_device_result("IDXGISwapChain::GetBuffer")?;
+            let handle = unsafe {
+                interop
+                    .device
+                    .CreateSharedHandle(&resource, None, GENERIC_ALL.0, PCWSTR::null())
+            }
+            .into_device_result("ID3D12Device::CreateSharedHandle (back buffer)")?;
+            let handle = OwnedHandle(handle);
+
+            // Generate RTVs so we can render to them.
+            let rtv = D3D12_CPU_DESCRIPTOR_HANDLE {
+                ptr: rtv_heap_start.ptr + i as usize * rtv_increment,
+            };
+            unsafe { interop.device.CreateRenderTargetView(&resource, None, rtv) };
+
+            // One (allocator, list) pair for the acquire-time sync list and one for the
+            // present-time sync list. Created lists start open; close them so each acquire/present
+            // can uniformly reset then record.
+            let make_list = || -> Result<
+                (ID3D12CommandAllocator, ID3D12GraphicsCommandList),
+                crate::DeviceError,
+            > {
+                let allocator: ID3D12CommandAllocator = unsafe {
+                    interop
+                        .device
+                        .CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT)
+                }
+                .into_device_result("CreateCommandAllocator")?;
+                let list: ID3D12GraphicsCommandList = unsafe {
+                    interop.device.CreateCommandList(
+                        0,
+                        D3D12_COMMAND_LIST_TYPE_DIRECT,
+                        &allocator,
+                        None,
+                    )
+                }
+                .into_device_result("CreateCommandList")?;
+                unsafe { list.Close() }.into_device_result("ID3D12GraphicsCommandList::Close")?;
+                Ok((allocator, list))
+            };
+            let (acquire_allocator, acquire_list) = make_list()?;
+            let (present_allocator, present_list) = make_list()?;
+
+            let desc = crate::TextureDescriptor {
+                label: None,
+                size: config.extent,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgt::TextureDimension::D2,
+                format: base_format,
+                usage: config.usage,
+                memory_flags: crate::MemoryFlags::empty(),
+                texture_binding_view_dimension: None,
+                view_formats: view_formats.clone(),
+            };
+            let texture = unsafe {
+                device.texture_from_shared_handle(
+                    handle.0,
+                    vk::ExternalMemoryHandleTypeFlags::D3D12_RESOURCE,
+                    &desc,
+                )
+            }?;
+            // `destroy_back_buffers` uses `destroy_texture`, which decrements the counter.
+            unsafe { device.add_raw_texture(&texture) };
+
+            Ok(BackBuffer {
+                texture,
+                resource,
+                rtv,
+                acquire_allocator,
+                acquire_list,
+                present_allocator,
+                present_list,
+                acquire_submit: 0,
+                present_submit: 0,
+                sync: Arc::new(Mutex::new(ImageSync {
+                    vulkan_progress_value: 0,
+                    interop_progress_value: 0,
+                })),
+            })
+        };
+
+        let mut buffers = guard(
+            Vec::with_capacity(buffer_count as usize),
+            |buffers| unsafe { destroy_back_buffers(device, buffers) },
+        );
+        for i in 0..buffer_count {
+            buffers.push(create_back_buffer(i)?);
+        }
+
+        let vulkan_progress = guard(
+            SharedFence::new(&device.shared, interop, "DXGI swapchain vulkan_progress")?,
+            |fence| unsafe { fence.destroy(&device.shared.raw) },
+        );
+        let interop_progress =
+            SharedFence::new(&device.shared, interop, "DXGI swapchain interop_progress")?;
+        let vulkan_progress = ScopeGuard::into_inner(vulkan_progress);
+        let buffers = ScopeGuard::into_inner(buffers);
+
+        log::debug!(
+            "Configured DXGI interop swapchain: {} back buffers, format {:?}, present mode {:?}",
+            buffers.len(),
+            config.format,
+            config.present_mode,
+        );
+
+        Ok(Box::new(DxgiSwapchain {
+            device: Arc::clone(&device.shared),
+            swapchain,
+            waitable,
+            waited_for_frame: false,
+            config: config.clone(),
+            buffers,
+            noop_pipeline,
+            _rtv_heap: rtv_heap,
+            vulkan_progress,
+            vulkan_progress_counter: Arc::new(AtomicU64::new(0)),
+            queue: interop.queue.clone(),
+            interop_progress,
+            interop_progress_value: 0,
+        }))
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Destroys the Vulkan textures of `buffers`. The D3D12 objects drop with each buffer.
+///
+/// # Safety
+///
+/// The GPU must not use the textures anymore.
+unsafe fn destroy_back_buffers(
+    device: &crate::vulkan::Device,
+    buffers: impl IntoIterator<Item = BackBuffer>,
+) {
+    for buffer in buffers {
+        unsafe { device.destroy_texture(buffer.texture) };
+    }
+}
+
+impl DxgiSurface {
+    fn create_dxgi_swapchain(
+        &self,
+        config: &crate::SurfaceConfiguration,
+        interop: &InteropDevice,
+        non_srgb_format: DXGI_FORMAT,
+        buffer_count: u32,
+        flags: DXGI_SWAP_CHAIN_FLAG,
+    ) -> Result<IDXGISwapChain3, crate::SurfaceError> {
+        let dxgi_instance = self.dxgi_instance();
+        let desc = dxgi::swapchain::swap_chain_descriptor(
+            non_srgb_format,
+            config.extent,
+            buffer_count,
+            dxgi::conv::map_acomposite_alpha_mode(config.composite_alpha_mode),
+            flags,
+        );
+
+        let swapchain1: IDXGISwapChain1 = match &self.target {
+            SurfaceTarget::WndHandle(hwnd) => {
+                profiling::scope!("IDXGIFactory2::CreateSwapChainForHwnd");
+                unsafe {
+                    dxgi_instance.factory.CreateSwapChainForHwnd(
+                        &interop.queue,
+                        *hwnd,
+                        &desc,
+                        None,
+                        None,
+                    )
+                }
+            }
+            SurfaceTarget::VisualFromWndHandle { .. } => {
+                profiling::scope!("IDXGIFactory2::CreateSwapChainForComposition");
+                unsafe {
+                    dxgi_instance
+                        .factory
+                        .CreateSwapChainForComposition(&interop.queue, &desc, None)
+                }
+            }
+            // The DX12-only external-surface targets are never built by the Vulkan backend.
+            #[cfg(dx12)]
+            SurfaceTarget::Visual(_)
+            | SurfaceTarget::SurfaceHandle(_)
+            | SurfaceTarget::SwapChainPanel(_) => {
+                return Err(crate::SurfaceError::Other(
+                    "unsupported DXGI surface target",
+                ))
+            }
+        }
+        .map_err(|err| {
+            log::error!("DXGI swapchain on Vulkan: swapchain creation failed: {err}");
+            crate::SurfaceError::Other("swapchain creation")
+        })?;
+
+        match &self.target {
+            SurfaceTarget::WndHandle(hwnd) => {
+                // Disable DXGI's automatic Alt+Enter fullscreen handling.
+                unsafe {
+                    dxgi_instance.factory.MakeWindowAssociation(
+                        *hwnd,
+                        DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER,
+                    )
+                }
+                .map_err(|err| {
+                    log::error!(
+                        "DXGI swapchain on Vulkan: IDXGIFactory::MakeWindowAssociation failed: \
+                         {err}"
+                    );
+                    crate::SurfaceError::Other("IDXGIFactory::MakeWindowAssociation")
+                })?;
+            }
+            SurfaceTarget::VisualFromWndHandle {
+                handle,
+                dcomp_state,
+            } => {
+                let mut dcomp_state = dcomp_state.lock();
+                let dcomp_state =
+                    unsafe { dcomp_state.get_or_init(&dxgi_instance.dcomp_lib, handle) }?;
+                unsafe { dcomp_state.visual.SetContent(&swapchain1) }.map_err(|err| {
+                    log::error!(
+                        "DXGI swapchain on Vulkan: IDCompositionVisual::SetContent failed: {err}"
+                    );
+                    crate::SurfaceError::Other("IDCompositionVisual::SetContent")
+                })?;
+                unsafe { dcomp_state.device.Commit() }.map_err(|err| {
+                    log::error!(
+                        "DXGI swapchain on Vulkan: IDCompositionDevice::Commit failed: {err}"
+                    );
+                    crate::SurfaceError::Other("IDCompositionDevice::Commit")
+                })?;
+            }
+            #[cfg(dx12)]
+            SurfaceTarget::Visual(_)
+            | SurfaceTarget::SurfaceHandle(_)
+            | SurfaceTarget::SwapChainPanel(_) => {}
+        }
+
+        swapchain1.cast::<IDXGISwapChain3>().map_err(|err| {
+            log::error!("DXGI swapchain on Vulkan: the cast to IDXGISwapChain3 failed: {err}");
+            crate::SurfaceError::Other("swapchain cast to version 3")
+        })
+    }
+}
+
+pub(crate) struct DxgiSwapchain {
+    swapchain: IDXGISwapChain3,
+    waitable: OwnedHandle,
+    /// An acquire waited on `waitable` and no successful present gave that frame back yet. A
+    /// discarded or failed acquire leaves this set, so the next acquire does not wait again.
+    waited_for_frame: bool,
+    config: crate::SurfaceConfiguration,
+
+    buffers: Vec<BackBuffer>,
+    /// Pipeline for the sync lists' no-op draw, shared by every back buffer.
+    noop_pipeline: NoopDrawPipeline,
+    /// Non-shader-visible RTV heap backing every [`BackBuffer::rtv`]; kept alive here for their sake.
+    _rtv_heap: ID3D12DescriptorHeap,
+
+    /// Shared fence Vulkan signals as each frame's rendering completes; the interop queue waits
+    /// on it before presenting (stage 2 — see module docs).
+    vulkan_progress: SharedFence,
+    /// Allocates monotonically increasing `vulkan_progress` values; shared with each in-flight
+    /// texture's metadata so the submission can stamp the value it signals.
+    vulkan_progress_counter: Arc<AtomicU64>,
+
+    /// The interop D3D12 queue (clone of [`InteropDevice::queue`]) that owns the swapchain and
+    /// runs the sync lists.
+    queue: ID3D12CommandQueue,
+    /// Shared fence the interop queue signals (with the monotonically increasing
+    /// `interop_progress_value`) after every sync list it runs. CPU-side it gates allocator reuse
+    /// and teardown via [`DxgiSwapchain::wait_for_value`]; GPU-side, the value signalled after an
+    /// acquire's gated list is what Vulkan waits on before rendering (stage 1 — see module docs).
+    /// Vulkan never waits on the interleaved present-list values; those merely advance the fence.
+    interop_progress: SharedFence,
+    interop_progress_value: u64,
+
+    // Last, so that the COM objects above drop before this can release the last reference to
+    // `d3d12.dll`.
+    device: Arc<DeviceShared>,
+}
+
+impl Drop for DxgiSwapchain {
+    fn drop(&mut self) {
+        debug_assert!(
+            self.buffers.is_empty(),
+            "DxgiSwapchain dropped without release_resources"
+        );
+    }
+}
+
+/// The longest time to wait for the interop queue. Equal to the surface acquire timeout of
+/// wgpu-core.
+const INTEROP_WAIT_TIMEOUT: Duration = Duration::from_secs(1);
+
+impl DxgiSwapchain {
+    /// Blocks until the interop queue has reached `value` on `interop_progress`. Returns
+    /// [`crate::DeviceError::Lost`] after [`INTEROP_WAIT_TIMEOUT`].
+    fn wait_for_value(&self, value: u64) -> Result<(), crate::DeviceError> {
+        use windows::Win32::{Foundation, System::Threading};
+
+        let fence = &self.interop_progress.d3d;
+        if unsafe { fence.GetCompletedValue() } >= value {
+            return Ok(());
+        }
+        let event = unsafe { Threading::CreateEventW(None, false, false, PCWSTR::null()) }
+            .into_device_result("CreateEventW")?;
+        let event = OwnedHandle(event);
+        unsafe { fence.SetEventOnCompletion(value, event.0) }
+            .into_device_result("SetEventOnCompletion")?;
+        match unsafe {
+            Threading::WaitForSingleObject(event.0, INTEROP_WAIT_TIMEOUT.as_millis() as u32)
+        } {
+            Foundation::WAIT_OBJECT_0 => Ok(()),
+            status => {
+                log::error!(
+                    "DXGI swapchain on Vulkan: the wait for interop fence value {value} failed \
+                     (timeout {INTEROP_WAIT_TIMEOUT:?}): {status:?}"
+                );
+                Err(crate::DeviceError::Lost)
+            }
+        }
+    }
+}
+
+impl Swapchain for DxgiSwapchain {
+    unsafe fn release_resources(&mut self, device: &crate::vulkan::Device) {
+        profiling::scope!("DxgiSwapchain::release_resources");
+
+        // Wait for both APIs to fully drain before releasing the shared back buffers. The interop
+        // queue signals `interop_progress` after `Present` and after every sync list it runs, so
+        // waiting for `interop_progress_value` also waits out the last in-flight present.
+        let _ = unsafe { device.shared.raw.device_wait_idle() };
+        // A failed submit or a device loss can leave `vulkan_progress` values that Vulkan never
+        // signals, and the interop queue waits for them. Vulkan is idle, so signal them here.
+        let vulkan_progress_value = self.vulkan_progress_counter.load(Ordering::Relaxed);
+        if unsafe { self.vulkan_progress.d3d.GetCompletedValue() } < vulkan_progress_value {
+            if let Err(err) = unsafe { self.vulkan_progress.d3d.Signal(vulkan_progress_value) } {
+                log::error!(
+                    "DXGI swapchain on Vulkan: the CPU signal of the Vulkan progress fence failed: \
+                     {err}"
+                );
+            }
+        }
+        let _ = self.wait_for_value(self.interop_progress_value);
+
+        unsafe { destroy_back_buffers(device, self.buffers.drain(..)) };
+        unsafe {
+            self.vulkan_progress.destroy(&device.shared.raw);
+            self.interop_progress.destroy(&device.shared.raw);
+        }
+    }
+
+    unsafe fn acquire(
+        &mut self,
+        timeout: Option<Duration>,
+        _fence: &crate::vulkan::Fence,
+    ) -> Result<crate::AcquiredSurfaceTexture<crate::api::Vulkan>, crate::SurfaceError> {
+        if !self.waited_for_frame {
+            if !dxgi::swapchain::wait_for_waitable(Some(self.waitable.0), timeout)? {
+                return Err(crate::SurfaceError::Timeout);
+            }
+            self.waited_for_frame = true;
+        }
+
+        let index = unsafe { self.swapchain.GetCurrentBackBufferIndex() } as usize;
+
+        // Make sure this buffer's previous acquire list has retired before reusing its allocator.
+        self.wait_for_value(self.buffers[index].acquire_submit)?;
+
+        // Run the acquire sync list, then signal the interop fence.
+        let buffer = &self.buffers[index];
+        // SAFETY: `wait_for_value` above retired the previous acquire list of this buffer.
+        // `release_resources` waits for the interop queue before it drops the buffer, the RTV
+        // heap and the pipeline, unless that wait times out.
+        unsafe {
+            execute_sync_command_list(
+                &self.queue,
+                &buffer.acquire_allocator,
+                &buffer.acquire_list,
+                &buffer.resource,
+                buffer.rtv,
+                &self.noop_pipeline,
+                self.config.extent,
+                D3D12_RESOURCE_STATE_COMMON,
+            )
+        }?;
+        let acquire_value = self.interop_progress_value + 1;
+        unsafe { self.queue.Signal(&self.interop_progress.d3d, acquire_value) }
+            .into_device_result("ID3D12CommandQueue::Signal")?;
+        self.interop_progress_value = acquire_value;
+        self.buffers[index].acquire_submit = acquire_value;
+
+        {
+            let mut sync = self.buffers[index].sync.lock();
+            // Clear the `vulkan_progress` value from any prior acquisition; the submission that
+            // renders this frame stamps the real value through the semaphore guard. If no work is
+            // submitted, present waits on 0, which is always satisfied.
+            sync.vulkan_progress_value = 0;
+            // The first Vulkan submission into this buffer waits on this value before writing.
+            sync.interop_progress_value = acquire_value;
+        }
+
+        let buffer = &self.buffers[index];
+        let identity = self.device.texture_identity_factory.next();
+        let texture = crate::vulkan::SurfaceTexture {
+            index: index as u32,
+            texture: crate::vulkan::Texture {
+                raw: buffer.texture.raw,
+                drop_guard: None,
+                memory: crate::vulkan::TextureMemory::External,
+                format: self.config.format,
+                copy_size: buffer.texture.copy_size,
+                identity,
+                // D3D12 interop needs to happen through `COMMON` in D3D12 and `GENERAL` in Vulkan.
+                present_transition: crate::vulkan::PresentTransition::ReleaseToExternal,
+            },
+            metadata: Box::new(DxgiSurfaceTextureMetadata {
+                vulkan_progress: self.vulkan_progress.vk,
+                interop_progress: self.interop_progress.vk,
+                vulkan_progress_counter: Arc::clone(&self.vulkan_progress_counter),
+                sync: Arc::clone(&buffer.sync),
+            }),
+        };
+
+        Ok(crate::AcquiredSurfaceTexture {
+            texture,
+            suboptimal: false,
+        })
+    }
+
+    unsafe fn discard_texture(
+        &mut self,
+        _texture: crate::vulkan::SurfaceTexture,
+    ) -> Result<(), crate::SurfaceError> {
+        // No-op: This is almost certainly not right, but is a longstanding issue with a lot of backends.
+        // See https://github.com/gfx-rs/wgpu/issues/5723
+        Ok(())
+    }
+
+    unsafe fn present(
+        &mut self,
+        _queue: &crate::vulkan::Queue,
+        texture: crate::vulkan::SurfaceTexture,
+    ) -> Result<(), crate::SurfaceError> {
+        let index = texture.index as usize;
+        let vulkan_progress_value = self.buffers[index].sync.lock().vulkan_progress_value;
+        let (sync_interval, present_flags_value) =
+            dxgi::swapchain::present_flags(self.config.present_mode);
+
+        // Ensure this back buffer's present allocator from its previous present is free to reset.
+        self.wait_for_value(self.buffers[index].present_submit)?;
+
+        // Order the present list (and thus the present) after this frame's Vulkan rendering.
+        unsafe {
+            self.queue
+                .Wait(&self.vulkan_progress.d3d, vulkan_progress_value)
+                .into_device_result("ID3D12CommandQueue::Wait")?;
+        }
+        // Run the present sync list, ending the buffer in `PRESENT` so we can present it.
+        let buffer = &self.buffers[index];
+        // SAFETY: `wait_for_value` above retired the previous present list of this buffer.
+        // `release_resources` waits for the interop queue before it drops the buffer, the RTV
+        // heap and the pipeline, unless that wait times out.
+        unsafe {
+            execute_sync_command_list(
+                &self.queue,
+                &buffer.present_allocator,
+                &buffer.present_list,
+                &buffer.resource,
+                buffer.rtv,
+                &self.noop_pipeline,
+                self.config.extent,
+                D3D12_RESOURCE_STATE_PRESENT,
+            )
+        }?;
+
+        let present_result = unsafe { self.swapchain.Present(sync_interval, present_flags_value) }
+            .ok()
+            .into_device_result("IDXGISwapChain::Present");
+        if present_result.is_ok() {
+            self.waited_for_frame = false;
+        }
+
+        // This `Signal` tracks the present list's GPU completion, not the flip (no fence observes
+        // the flip itself). It is what allocator reuse and `release_resources` wait on; releasing
+        // the back buffer before it trips D3D12 #921 (OBJECT_DELETED_WHILE_STILL_IN_USE).
+        // The present list is on the queue also when `Present` fails, so signal in both cases.
+        let present_value = self.interop_progress_value + 1;
+        unsafe { self.queue.Signal(&self.interop_progress.d3d, present_value) }
+            .into_device_result("ID3D12CommandQueue::Signal")?;
+        self.interop_progress_value = present_value;
+        self.buffers[index].present_submit = present_value;
+
+        present_result?;
+        Ok(())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+#[derive(Debug)]
+struct DxgiSurfaceTextureMetadata {
+    /// The Vulkan semaphore that the Vulkan submission signals when it finishes rendering into this back buffer.
+    vulkan_progress: vk::Semaphore,
+    /// The Vulkan semaphore that the Vulkan submission waits on before rendering into this back buffer.
+    interop_progress: vk::Semaphore,
+    vulkan_progress_counter: Arc<AtomicU64>,
+    sync: Arc<Mutex<ImageSync>>,
+}
+
+impl SurfaceTextureMetadata for DxgiSurfaceTextureMetadata {
+    fn get_semaphore_guard(&self) -> Box<dyn SwapchainSubmissionSemaphoreGuard + '_> {
+        Box::new(DxgiSwapchainSubmissionSemaphoreGuard {
+            vulkan_progress: self.vulkan_progress,
+            interop_progress: self.interop_progress,
+            vulkan_progress_counter: &self.vulkan_progress_counter,
+            sync: self.sync.lock(),
+        })
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+struct DxgiSwapchainSubmissionSemaphoreGuard<'a> {
+    vulkan_progress: vk::Semaphore,
+    interop_progress: vk::Semaphore,
+    vulkan_progress_counter: &'a AtomicU64,
+    sync: wgpu_sync::MutexGuard<'a, ImageSync>,
+}
+
+impl SwapchainSubmissionSemaphoreGuard for DxgiSwapchainSubmissionSemaphoreGuard<'_> {
+    fn set_used_fence_value(&mut self, _value: u64) {
+        // Unused: the DXGI path does not gate back-buffer reuse on the device fence.
+    }
+
+    fn get_acquire_wait_semaphore(&mut self) -> Option<SemaphoreType> {
+        // Stage 1's cross-API wait (see module docs). Consume the value so only the first
+        // submission of the frame waits; later submissions are ordered after it by the relay
+        // semaphores.
+        let value = core::mem::take(&mut self.sync.interop_progress_value);
+        (value != 0).then_some(SemaphoreType::Timeline(self.interop_progress, value))
+    }
+
+    fn get_submit_signal_semaphore(
+        &mut self,
+        _device: &DeviceShared,
+    ) -> Result<SemaphoreType, crate::DeviceError> {
+        let value = self.vulkan_progress_counter.fetch_add(1, Ordering::Relaxed) + 1;
+        self.sync.vulkan_progress_value = value;
+        Ok(SemaphoreType::Timeline(self.vulkan_progress, value))
+    }
+}

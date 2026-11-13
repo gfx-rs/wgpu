@@ -130,6 +130,30 @@ Example for a cube map:
 
 By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
+#### DXGI swapchain for Vulkan on Windows
+
+The Vulkan backend can now present via a DXGI swapchain on Windows. DXGI swapchains generally perform more consistently, give more control over frame pacing, and may use optimizations that are not available to native vulkan swapchains. For now this is a default-off feature, though in the future it may be enabled by default.
+
+Turn it on at instance creation, or if your program is using wgpu environment variables set `WGPU_VULKAN_SWAPCHAIN_KIND` to `native`, `dxgi-hwnd`, or `dxgi-visual`:
+
+```diff
+  let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+      backends: wgpu::Backends::VULKAN,
++     backend_options: wgpu::BackendOptions {
++         vulkan: wgpu::VulkanBackendOptions {
++             swapchain_kind: wgpu::VulkanSwapchainKind::DxgiFromHwnd,
++             ..Default::default()
++         },
++         ..Default::default()
++     },
+      ..Default::default()
+  });
+```
+
+Nsight and Radeon GPU Profiler should work normally, and all graphics debuggers should still broadly function, but RenderDoc will only capture the D3D12 work, unless you explicitly use `Device::start_graphics_debugger_capture` on the wgpu device to capture the vulkan work. RenderDoc does not support DirectComposition, so it does not work with `DxgiFromVisual`. The interop D3D12 device honors the same Agility SDK configuration as the DX12 backend, via `VulkanBackendOptions::agility_sdk`.
+
+By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
+
 ### Added/New Features
 
 #### General
@@ -263,6 +287,8 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Removed the `VULKAN_GOOGLE_DISPLAY_TIMING`, `VULKAN_EXTERNAL_MEMORY_WIN32`, `VULKAN_EXTERNAL_MEMORY_FD`, and `VULKAN_EXTERNAL_MEMORY_DMA_BUF` features. wgpu enables the corresponding Vulkan extensions whenever the adapter supports them. To check for support, use `Adapter::as_hal::<wgpu::hal::api::Vulkan>()` and call `physical_device_capabilities().supports_extension()` with the extension name. By @andyleiserson in [#10635](https://github.com/gfx-rs/wgpu/pull/10635).
 - Sub-allocate `wgpu_hal::MemoryFlags::TRANSIENT` buffers and acceleration structure build scratch from a separate Vulkan memory pool, so short-lived allocations no longer pin memory blocks shared with long-lived resources. By @stuartparmenter in [#10232](https://github.com/gfx-rs/wgpu/pull/10232).
 - Allocate acceleration structures created with `AccelerationStructureFlags::ALLOW_COMPACTION` from the transient Vulkan memory pool, since they are usually replaced by their compacted copies. By @stuartparmenter in [#10233](https://github.com/gfx-rs/wgpu/pull/10233).
+- Renamed `wgpu_hal::vulkan::Device::texture_from_d3d11_shared_handle` to `texture_from_shared_handle`. It has a new `handle_type` argument: pass `vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE` for the previous behavior, or `D3D12_RESOURCE` for an `ID3D12Resource` shared handle. By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
+- `wgpu_hal::vulkan::Instance::from_raw` has new `swapchain_kind` and `agility_sdk` arguments. Pass `VulkanSwapchainKind::Native` and `None` for the previous behavior. By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 
 ### Bug Fixes
 

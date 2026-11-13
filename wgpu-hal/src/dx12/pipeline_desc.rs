@@ -19,7 +19,7 @@ use windows::Win32::Graphics::Direct3D12::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
 use windows_core::Interface;
 
-use crate::dx12::borrow_interface_temporarily;
+use crate::auxil::dxgi::borrow_interface_temporarily;
 
 // Wrapper newtypes for various pipeline subobjects which
 // use complicated or non-unique representations.

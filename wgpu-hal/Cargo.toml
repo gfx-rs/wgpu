@@ -100,6 +100,7 @@ vulkan = [
     "dep:ordered-float",
     "dep:profiling",
     "dep:raw-window-metal",
+    "dep:scopeguard",
     "dep:smallvec",
     "dep:windows",
     "dep:windows-core",
@@ -110,6 +111,12 @@ vulkan = [
     "windows/Win32_Graphics_Dxgi",
     "windows/Win32_Graphics_Dxgi_Common",
     "windows/Win32_Graphics_Gdi",
+    "windows/Win32_Graphics_Direct3D",
+    "windows/Win32_Graphics_Direct3D12",
+    "windows/Win32_Graphics_DirectComposition",
+    "windows/Win32_Security",
+    "windows/Win32_System_Threading",
+    "windows/Win32_UI_WindowsAndMessaging",
 ]
 gles = [
     "dep:arrayvec",
@@ -226,6 +233,7 @@ bytemuck = { workspace = true, optional = true, features = ["derive"] }
 hashbrown = { workspace = true }
 ordered-float = { workspace = true, optional = true }
 profiling = { workspace = true, optional = true, default-features = false }
+scopeguard = { workspace = true, optional = true }
 static_assertions = { workspace = true }
 
 # Backend: GLES
