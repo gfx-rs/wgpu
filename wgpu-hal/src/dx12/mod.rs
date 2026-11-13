@@ -90,7 +90,7 @@ mod suballocation;
 mod view;
 
 use alloc::{borrow::ToOwned as _, string::String, sync::Arc, vec::Vec};
-use core::{ffi, fmt, mem, ops::Deref};
+use core::{ffi, fmt, ops::Deref};
 
 use arrayvec::ArrayVec;
 use hashbrown::HashMap;
@@ -129,33 +129,8 @@ use crate::auxil::{
 // `wgpu_hal::dx12::CreateDeviceError` stable.
 pub use crate::auxil::dxgi::d3d12_lib::CreateDeviceError;
 
-/// Create a temporary "owned" copy inside a [`mem::ManuallyDrop`] without increasing the refcount or
-/// moving away the source variable.
-///
-/// This is a common pattern when needing to pass interface pointers ("borrows") into Windows
-/// structs.  Moving/cloning ownership is impossible/inconvenient because:
-///
-/// - The caller does _not_ assume ownership (and decrement the refcount at a later time);
-/// - Unnecessarily increasing and decrementing the refcount;
-/// - [`Drop`] destructors cannot run inside `union` structures (when the created structure is
-///   implicitly dropped after a call).
-///
-/// See also <https://github.com/microsoft/windows-rs/pull/2361#discussion_r1150799401> and
-/// <https://github.com/microsoft/windows-rs/issues/2386>.
-///
-/// # Safety
-/// Performs a [`mem::transmute_copy()`] on a refcounted [`Interface`] type.  The returned
-/// [`mem::ManuallyDrop`] should _not_ be dropped.
-pub unsafe fn borrow_interface_temporarily<I: Interface>(src: &I) -> mem::ManuallyDrop<Option<I>> {
-    unsafe { mem::transmute_copy(src) }
-}
-
-/// See [`borrow_interface_temporarily()`]
-pub unsafe fn borrow_optional_interface_temporarily<I: Interface>(
-    src: &Option<I>,
-) -> mem::ManuallyDrop<Option<I>> {
-    unsafe { mem::transmute_copy(src) }
-}
+// Shared with the Vulkan DXGI swapchain; re-exported to keep the DX12 public API.
+pub use crate::auxil::dxgi::{borrow_interface_temporarily, borrow_optional_interface_temporarily};
 
 struct D3DBlob(Direct3D::ID3DBlob);
 
