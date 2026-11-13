@@ -23,7 +23,6 @@ pub(crate) struct D3D12Lib {
     debug_interface_fn: OnceCell<Direct3D12::PFN_D3D12_GET_DEBUG_INTERFACE>,
     #[cfg(dx12)]
     serialize_root_signature_fn: OnceCell<Direct3D12::PFN_D3D12_SERIALIZE_ROOT_SIGNATURE>,
-    #[cfg(dxgi)]
     get_interface_fn: OnceCell<Direct3D12::PFN_D3D12_GET_INTERFACE>,
 }
 
@@ -36,7 +35,6 @@ impl D3D12Lib {
                 debug_interface_fn: OnceCell::new(),
                 #[cfg(dx12)]
                 serialize_root_signature_fn: OnceCell::new(),
-                #[cfg(dxgi)]
                 get_interface_fn: OnceCell::new(),
             })
         }
@@ -162,7 +160,6 @@ impl D3D12Lib {
     /// Calls D3D12GetInterface to obtain a COM interface by CLSID and IID.
     ///
     /// This is used by the Independent Devices API to obtain `ID3D12SDKConfiguration1`.
-    #[cfg(dxgi)]
     pub(crate) fn get_interface<T: windows_core::Interface>(
         &self,
         clsid: &windows_core::GUID,
@@ -202,7 +199,6 @@ impl fmt::Display for CreateDeviceError {
 
 impl Error for CreateDeviceError {}
 
-#[cfg(dxgi)]
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum GetInterfaceError {
     GetProcAddress,
@@ -210,7 +206,6 @@ pub(crate) enum GetInterfaceError {
     RetIsNull,
 }
 
-#[cfg(dxgi)]
 impl fmt::Display for GetInterfaceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -221,5 +216,4 @@ impl fmt::Display for GetInterfaceError {
     }
 }
 
-#[cfg(dxgi)]
 impl Error for GetInterfaceError {}
