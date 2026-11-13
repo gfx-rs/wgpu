@@ -66,9 +66,8 @@ impl D3D12Lib {
             .map_err(|_| CreateDeviceError::GetProcAddress)?
             .ok_or(CreateDeviceError::GetProcAddress)?;
 
-        // `Ref<IUnknown>` is a `repr(transparent)` non-owning borrow of the COM pointer (it does not
-        // touch the refcount); the adapter outlives this synchronous call.
-        let adapter: Ref<IUnknown> = unsafe { core::mem::transmute(adapter.as_raw()) };
+        let adapter: &IUnknown = (&**adapter).into();
+        let adapter = Ref::from(adapter);
 
         let mut result__: Option<Direct3D12::ID3D12Device> = None;
         let res = unsafe {
@@ -117,17 +116,17 @@ impl D3D12Lib {
             .into_device_result("Root signature serialization")?;
 
         if let Some(error) = error {
-            let message = unsafe {
-                let slice = core::slice::from_raw_parts(
+            let slice = unsafe {
+                core::slice::from_raw_parts(
                     error.GetBufferPointer().cast::<u8>(),
                     error.GetBufferSize(),
-                );
-                ffi::CStr::from_bytes_until_nul(slice)
+                )
             };
-            log::error!(
-                "Root signature serialization error: {:?}",
-                message.unwrap().to_str().unwrap()
-            );
+            let message = match ffi::CStr::from_bytes_until_nul(slice) {
+                Ok(message) => message.to_string_lossy(),
+                Err(_) => alloc::string::String::from_utf8_lossy(slice),
+            };
+            log::error!("Root signature serialization error: {message:?}");
             return Err(crate::DeviceError::Unexpected); // could be hal_usage_error or hal_internal_error
         }
 
