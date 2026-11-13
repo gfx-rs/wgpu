@@ -287,15 +287,16 @@ unsafe fn execute_sync_command_list(
 /// Instance-wide DXGI/D3D12 state for the interop swapchain, built once at instance creation and
 /// stored on [`InstanceShared`].
 pub(crate) struct DxgiInstance {
-    /// Keeps `dxgi.dll` loaded for the lifetime of the factory.
-    _lib: DxgiLib,
-    /// Runtime-loaded `d3d12.dll` entry points used to create the interop D3D12 device.
-    d3d12_lib: Arc<D3D12Lib>,
+    // The COM objects must drop before the libraries that implement them, so they come first.
     /// Creates the interop D3D12 device, using an Agility SDK independent device when configured
     /// (shared with the DX12 backend).
     device_factory: DeviceFactory,
     factory: DxgiFactory,
+    /// Runtime-loaded `d3d12.dll` entry points used to create the interop D3D12 device.
+    d3d12_lib: Arc<D3D12Lib>,
     dcomp_lib: Arc<DCompLib>,
+    /// Keeps `dxgi.dll` loaded for the lifetime of the factory.
+    _lib: DxgiLib,
     supports_allow_tearing: bool,
 }
 
@@ -346,11 +347,11 @@ pub(crate) fn init_dxgi_instance(
             (
                 kind,
                 Some(DxgiInstance {
-                    _lib: lib,
-                    d3d12_lib,
                     device_factory,
                     factory,
+                    d3d12_lib,
                     dcomp_lib: Arc::new(DCompLib::new()),
+                    _lib: lib,
                     supports_allow_tearing,
                 }),
             )
@@ -371,6 +372,9 @@ pub(crate) fn init_dxgi_instance(
 pub(crate) struct InteropDevice {
     device: ID3D12Device,
     queue: ID3D12CommandQueue,
+    /// Keeps `d3d12.dll` loaded until `device` and `queue` drop, also when the instance drops
+    /// first.
+    _d3d12_lib: Arc<D3D12Lib>,
 }
 
 // COM objects; the D3D12 device and command queue are free-threaded.
@@ -453,6 +457,7 @@ fn create_interop_device(device: &DeviceShared) -> Result<InteropDevice, crate::
     Ok(InteropDevice {
         device: d3d_device,
         queue,
+        _d3d12_lib: Arc::clone(&dxgi_instance.d3d12_lib),
     })
 }
 
@@ -553,9 +558,11 @@ struct BackBuffer {
 }
 
 pub(crate) struct DxgiSurface {
-    instance: Arc<InstanceShared>,
+    // `target` holds DirectComposition objects, which must drop before `instance` can unload
+    // `dcomp.dll`.
     target: SurfaceTarget,
     hdr_source: dxgi::hdr::DxgiHdrSource,
+    instance: Arc<InstanceShared>,
 }
 
 // `SurfaceTarget` holds an HWND / COM dcomp state; the surface is only used under wgpu's surface
@@ -570,9 +577,9 @@ impl DxgiSurface {
         hdr_source: dxgi::hdr::DxgiHdrSource,
     ) -> Self {
         Self {
-            instance,
             target,
             hdr_source,
+            instance,
         }
     }
 
@@ -942,7 +949,6 @@ impl DxgiSurface {
 }
 
 pub(crate) struct DxgiSwapchain {
-    device: Arc<DeviceShared>,
     swapchain: IDXGISwapChain3,
     waitable: OwnedHandle,
     present_mode: wgt::PresentMode,
@@ -971,6 +977,10 @@ pub(crate) struct DxgiSwapchain {
     /// Vulkan never waits on the interleaved present-list values; those merely advance the fence.
     interop_progress: SharedFence,
     interop_progress_value: u64,
+
+    // Last, so that the COM objects above drop before this can release the last reference to
+    // `d3d12.dll`.
+    device: Arc<DeviceShared>,
 }
 
 // Holds COM objects and Vulkan handles; only used under wgpu's surface locking.
