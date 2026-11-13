@@ -54,7 +54,7 @@ use wgpu_sync::Mutex;
 use windows::{
     core::{Interface as _, PCWSTR},
     Win32::{
-        Foundation::{GENERIC_ALL, HANDLE, LUID, RECT},
+        Foundation::{GENERIC_ALL, LUID, RECT},
         Graphics::{
             Direct3D::{D3D_FEATURE_LEVEL_11_0, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST},
             Direct3D12::*,
@@ -935,20 +935,40 @@ pub(crate) struct DxgiSwapchain {
 unsafe impl Send for DxgiSwapchain {}
 unsafe impl Sync for DxgiSwapchain {}
 
+/// The longest time to wait for the interop queue. Equal to the surface acquire timeout of
+/// wgpu-core.
+const INTEROP_WAIT_TIMEOUT: Duration = Duration::from_secs(1);
+
 impl DxgiSwapchain {
-    /// Blocks until the interop queue has reached `value` on `interop_progress`.
+    /// Blocks until the interop queue has reached `value` on `interop_progress`. Returns
+    /// [`crate::DeviceError::Lost`] after [`INTEROP_WAIT_TIMEOUT`].
     fn wait_for_value(&self, value: u64) -> Result<(), crate::DeviceError> {
-        if value == 0 {
+        use windows::Win32::{Foundation, System::Threading};
+
+        let fence = &self.interop_progress.d3d;
+        if unsafe { fence.GetCompletedValue() } >= value {
             return Ok(());
         }
-        // A null event handle makes `SetEventOnCompletion` block until the fence reaches `value`.
-        unsafe {
-            self.interop_progress
-                .d3d
-                .SetEventOnCompletion(value, HANDLE::default())
+        let event = unsafe { Threading::CreateEventW(None, false, false, PCWSTR::null()) }
+            .into_device_result("CreateEventW")?;
+        let event = OwnedHandle(event);
+        unsafe { fence.SetEventOnCompletion(value, event.0) }
+            .into_device_result("SetEventOnCompletion")?;
+        match unsafe {
+            Threading::WaitForSingleObject(event.0, INTEROP_WAIT_TIMEOUT.as_millis() as u32)
+        } {
+            Foundation::WAIT_OBJECT_0 => Ok(()),
+            Foundation::WAIT_TIMEOUT => {
+                log::error!(
+                    "DXGI interop queue did not reach fence value {value} within {INTEROP_WAIT_TIMEOUT:?}; reporting the device as lost"
+                );
+                Err(crate::DeviceError::Lost)
+            }
+            other => {
+                log::error!("WaitForSingleObject on the DXGI interop fence failed: {other:?}");
+                Err(crate::DeviceError::Lost)
+            }
         }
-        .into_device_result("SetEventOnCompletion")?;
-        Ok(())
     }
 }
 
@@ -960,6 +980,14 @@ impl Swapchain for DxgiSwapchain {
         // queue signals `interop_progress` after `Present` and after every sync list it runs, so
         // waiting for `interop_progress_value` also waits out the last in-flight present.
         let _ = unsafe { device.shared.raw.device_wait_idle() };
+        // A failed submission or a lost device leaves `vulkan_progress` values that Vulkan never
+        // signals, and the interop queue waits for them. Vulkan is idle now, so signal them here.
+        let vulkan_progress_value = self.vulkan_progress_counter.load(Ordering::Relaxed);
+        if unsafe { self.vulkan_progress.d3d.GetCompletedValue() } < vulkan_progress_value {
+            if let Err(err) = unsafe { self.vulkan_progress.d3d.Signal(vulkan_progress_value) } {
+                log::error!("ID3D12Fence::Signal failed: {err}");
+            }
+        }
         let _ = self.wait_for_value(self.interop_progress_value);
 
         for buffer in self.buffers.drain(..) {
@@ -1000,10 +1028,10 @@ impl Swapchain for DxgiSwapchain {
                 D3D12_RESOURCE_STATE_COMMON,
             )
         }?;
-        self.interop_progress_value += 1;
-        let acquire_value = self.interop_progress_value;
+        let acquire_value = self.interop_progress_value + 1;
         unsafe { self.queue.Signal(&self.interop_progress.d3d, acquire_value) }
             .into_device_result("ID3D12CommandQueue::Signal")?;
+        self.interop_progress_value = acquire_value;
         self.buffers[index].acquire_submit = acquire_value;
 
         {
@@ -1087,21 +1115,21 @@ impl Swapchain for DxgiSwapchain {
             )
         }?;
 
-        unsafe { self.swapchain.Present(sync_interval, present_flags_value) }
+        let present_result = unsafe { self.swapchain.Present(sync_interval, present_flags_value) }
             .ok()
-            .into_device_result("IDXGISwapChain::Present")?;
+            .into_device_result("IDXGISwapChain::Present");
 
         // This `Signal` tracks the present list's GPU completion, not the flip (no fence observes
         // the flip itself). It is what allocator reuse and `release_resources` wait on; releasing
         // the back buffer before it trips D3D12 #921 (OBJECT_DELETED_WHILE_STILL_IN_USE).
-        self.interop_progress_value += 1;
-        unsafe {
-            self.queue
-                .Signal(&self.interop_progress.d3d, self.interop_progress_value)
-        }
-        .into_device_result("ID3D12CommandQueue::Signal")?;
-        self.buffers[index].present_submit = self.interop_progress_value;
+        // The present list is on the queue also when `Present` fails, so signal in both cases.
+        let present_value = self.interop_progress_value + 1;
+        unsafe { self.queue.Signal(&self.interop_progress.d3d, present_value) }
+            .into_device_result("ID3D12CommandQueue::Signal")?;
+        self.interop_progress_value = present_value;
+        self.buffers[index].present_submit = present_value;
 
+        present_result?;
         Ok(())
     }
 
