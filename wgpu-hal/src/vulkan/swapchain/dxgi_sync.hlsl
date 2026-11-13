@@ -6,9 +6,7 @@
 //
 // The compiled DXIL is checked in next to this file as `dxgi_sync_vs.cso` / `dxgi_sync_ps.cso` and
 // embedded via `include_bytes!`. The blobs are only byte-reproducible with the exact DXC that CI's
-// `install-dxc` action pins (currently release v1.8.2505.1); a unit test in `dxgi.rs` recompiles
-// this file with that compiler and byte-compares against the checked-in blobs. Regenerate both
-// after editing:
+// `install-dxc` action pins. Regenerate both after editing:
 //
 //   dxc -T vs_6_0 -E vs_main -HV 2018 -Qstrip_debug -Qstrip_reflect -Fo dxgi_sync_vs.cso dxgi_sync.hlsl
 //   dxc -T ps_6_0 -E ps_main -HV 2018 -Qstrip_debug -Qstrip_reflect -Fo dxgi_sync_ps.cso dxgi_sync.hlsl
