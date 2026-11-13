@@ -7,6 +7,11 @@ use crate::front::wgsl::parse::ast;
 use crate::front::wgsl::{Error, Result};
 use crate::{Handle, Span};
 
+/// <https://www.w3.org/TR/WGSL/#limits>
+///
+/// Maximum number of elements in value constructor expression of array type 2047
+const MAX_ARRAY_CONSTRUCTOR_ELEMENTS: usize = 2047;
+
 /// A [`constructor built-in function`].
 ///
 /// WGSL has two types of such functions:
@@ -113,6 +118,20 @@ impl<'source> Lowerer<'source, '_> {
         ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, Handle<crate::Expression>> {
         use crate::proc::TypeResolution as Tr;
+
+        let is_array_constructor = match constructor {
+            Constructor::PartialArray => true,
+            Constructor::Type(ty) => {
+                matches!(&ctx.module.types[ty].inner, crate::TypeInner::Array { .. })
+            }
+            _ => false,
+        };
+        if is_array_constructor && components.len() > MAX_ARRAY_CONSTRUCTOR_ELEMENTS {
+            let span = ctx
+                .ast_expressions
+                .get_span(components[MAX_ARRAY_CONSTRUCTOR_ELEMENTS]);
+            return Err(Box::new(Error::ArrayConstructorTooManyElements(span)));
+        }
 
         let components = match *components {
             [] => Components::None,

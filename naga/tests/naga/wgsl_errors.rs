@@ -5306,6 +5306,33 @@ fn max_type_size_array_constructor_with_oversize_type() {
 }
 
 #[test]
+fn array_constructor_element_limit() {
+    for (typed, len, success) in [
+        (true, 2047, true),
+        (false, 2047, true),
+        (true, 2048, false),
+        (false, 2048, false),
+    ] {
+        let ty = if typed {
+            format!("<i32, {len}>")
+        } else {
+            String::new()
+        };
+        let input = format!(
+            "fn f() {{ let a = array{ty}({}); }}",
+            core::iter::repeat_n("0", len)
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        if success {
+            check_success(&input);
+        } else {
+            check_error_matches(&input, "maximum of 2047 elements");
+        }
+    }
+}
+
+#[test]
 fn max_type_size_concretize_with_oversize_type() {
     // Concretizing an abstract array (here, indexing it with a non-constant
     // index forces concretization to a concrete element type) invokes the
