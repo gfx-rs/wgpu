@@ -725,7 +725,13 @@ impl super::CapabilitiesQuery {
         let version = NSProcessInfo::processInfo().operatingSystemVersion();
         let os_type = super::OsType::new(version, device);
 
-        let family_check = available!(macos = 10.15, ios = 13.0, tvos = 13.0, visionos = 1.0);
+        let family_check = available!(
+            macos = 10.15,
+            ios = 13.0,
+            tvos = 13.0,
+            watchos = 10.0,
+            visionos = 1.0
+        );
         let metal3 = family_check && device.supportsFamily(MTLGPUFamily::Metal3);
         let metal4 = family_check && device.supportsFamily(MTLGPUFamily::Metal4);
         let mut sample_count_mask = crate::TextureFormatCapabilities::MULTISAMPLE_X4; // 1 and 4 samples are supported on all devices
@@ -739,8 +745,13 @@ impl super::CapabilitiesQuery {
             sample_count_mask |= crate::TextureFormatCapabilities::MULTISAMPLE_X16;
         }
 
-        let rw_texture_tier = if available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0)
-        {
+        let rw_texture_tier = if available!(
+            macos = 10.13,
+            ios = 11.0,
+            tvos = 11.0,
+            watchos = 10.0,
+            visionos = 1.0
+        ) {
             device.readWriteTextureSupport()
         } else if available!(macos = 10.12) {
             if Self::supports_any(device, &[MTLFeatureSet::macOS_ReadWriteTextureTier2]) {
@@ -753,8 +764,13 @@ impl super::CapabilitiesQuery {
         };
 
         let mut timestamp_query_support = TimestampQuerySupport::empty();
-        if available!(macos = 11.0, ios = 14.0, tvos = 14.0, visionos = 1.0)
-            && device.supportsCounterSampling(MTLCounterSamplingPoint::AtStageBoundary)
+        if available!(
+            macos = 11.0,
+            ios = 14.0,
+            tvos = 14.0,
+            watchos = 10.0,
+            visionos = 1.0
+        ) && device.supportsCounterSampling(MTLCounterSamplingPoint::AtStageBoundary)
         {
             // If we don't support at stage boundary, don't support anything else.
             timestamp_query_support.insert(TimestampQuerySupport::STAGE_BOUNDARIES);
@@ -771,14 +787,38 @@ impl super::CapabilitiesQuery {
             // `TimestampQuerySupport::INSIDE_WGPU_PASSES` emerges from the other flags.
         }
 
-        let argument_buffers = available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0)
-            .then(|| device.argumentBuffersSupport());
+        let argument_buffers = available!(
+            macos = 10.13,
+            ios = 11.0,
+            tvos = 11.0,
+            watchos = 10.0,
+            visionos = 1.0
+        )
+        .then(|| device.argumentBuffersSupport());
 
-        let msl_version = if available!(macos = 26.0, ios = 26.0, tvos = 26.0, visionos = 26.0) {
+        let msl_version = if available!(
+            macos = 26.0,
+            ios = 26.0,
+            tvos = 26.0,
+            watchos = 26.0,
+            visionos = 26.0
+        ) {
             MTLLanguageVersion::Version4_0
-        } else if available!(macos = 15.0, ios = 18.0, tvos = 18.0, visionos = 2.0) {
+        } else if available!(
+            macos = 15.0,
+            ios = 18.0,
+            tvos = 18.0,
+            watchos = 11.0,
+            visionos = 2.0
+        ) {
             MTLLanguageVersion::Version3_2
-        } else if available!(macos = 14.0, ios = 17.0, tvos = 17.0, visionos = 1.0) {
+        } else if available!(
+            macos = 14.0,
+            ios = 17.0,
+            tvos = 17.0,
+            watchos = 10.0,
+            visionos = 1.0
+        ) {
             MTLLanguageVersion::Version3_1
         } else if available!(macos = 13.0, ios = 16.0, tvos = 16.0, visionos = 1.0) {
             MTLLanguageVersion::Version3_0
@@ -823,14 +863,14 @@ impl super::CapabilitiesQuery {
         // only means they keep taking the per-draw indirect loop. The probe
         // chooses a lowering, never a capability.
         //
-        // Apple's paravirtual device is excluded up front because its driver
-        // aborts the process instead of failing the probe.
+        // Paravirtual devices and 32-bit watchOS abort instead of failing the probe.
         let indirect_command_buffers_rendering = !is_virtual
+            && !cfg!(all(target_os = "watchos", target_pointer_width = "32"))
             && available!(
                 macos = 10.15,
                 ios = 13.0,
                 tvos = 13.0,
-                watchos = 6.0,
+                watchos = 11.0,
                 visionos = 1.0
             )
             && device_class_responds_to(
@@ -858,6 +898,11 @@ impl super::CapabilitiesQuery {
         let indirect_command_buffers_optimize =
             !(family_check && device.supportsFamily(MTLGPUFamily::Apple4));
 
+        // The feature set tables have no watchOS entries. S8-class watches on
+        // watchOS 11 are the verified floor for indirect drawing.
+        let watchos_indirect_drawing =
+            available!(watchos = 11.0) && device.supportsFamily(MTLGPUFamily::Apple5);
+
         let mesh_shaders = family_check
                 && (device.supportsFamily(MTLGPUFamily::Metal3)
                     || device.supportsFamily(MTLGPUFamily::Apple7)
@@ -868,7 +913,13 @@ impl super::CapabilitiesQuery {
         Self {
             msl_version,
             // macOS 10.11 doesn't support read-write resources
-            fragment_rw_storage: available!(macos = 10.12, ios = 8.0, tvos = 8.0, visionos = 1.0),
+            fragment_rw_storage: available!(
+                macos = 10.12,
+                ios = 8.0,
+                tvos = 8.0,
+                watchos = 10.0,
+                visionos = 1.0
+            ),
             read_write_texture_tier: rw_texture_tier,
             msaa_desktop: os_type == super::OsType::Macos,
             msaa_apple3: (family_check && device.supportsFamily(MTLGPUFamily::Apple3))
@@ -882,6 +933,7 @@ impl super::CapabilitiesQuery {
             ),
             sampler_clamp_to_border: Self::supports_any(device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
             indirect_draw_dispatch: Self::supports_any(device, INDIRECT_DRAW_DISPATCH_SUPPORT)
+                || watchos_indirect_drawing
                 || cfg!(target_abi = "sim"),
             indirect_command_buffers_rendering,
             indirect_command_buffers_mesh,
@@ -889,7 +941,7 @@ impl super::CapabilitiesQuery {
             base_vertex_first_instance_drawing: Self::supports_any(
                 device,
                 BASE_VERTEX_FIRST_INSTANCE_SUPPORT,
-            ),
+            ) || watchos_indirect_drawing,
             dual_source_blending: Self::supports_any(device, DUAL_SOURCE_BLEND_SUPPORT),
             low_power: os_type != super::OsType::Macos || device.isLowPower(),
             headless: os_type == super::OsType::Macos && device.isHeadless(),
