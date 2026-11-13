@@ -622,13 +622,8 @@ impl Surface for DxgiSurface {
     ) -> Result<Box<dyn Swapchain>, crate::SurfaceError> {
         profiling::scope!("DxgiSurface::create_swapchain");
 
-        // `old`'s resources were already released by `Surface::configure`. Reclaim its DXGI
-        // swapchain (a cloned COM ref keeps it alive past the drop below) so we can `ResizeBuffers`
-        // instead of creating a second swapchain on the same HWND.
-        let reused = provided_old_swapchain
-            .as_ref()
-            .and_then(|old| old.as_any().downcast_ref::<DxgiSwapchain>())
-            .map(|old| old.swapchain.clone());
+        // `Surface::configure` already released the resources of the old swapchain. DXGI allows
+        // only one swapchain per window, so the old one must be gone before the new one is created.
         drop(provided_old_swapchain);
 
         let dxgi_instance = self.dxgi_instance();
@@ -642,27 +637,8 @@ impl Surface for DxgiSurface {
         let flags = dxgi::swapchain::swap_chain_flags(dxgi_instance.supports_allow_tearing, true);
         let buffer_count = (config.maximum_frame_latency + 1).clamp(2, 16);
 
-        let swapchain = match reused {
-            Some(swapchain) => {
-                unsafe {
-                    swapchain.ResizeBuffers(
-                        buffer_count,
-                        config.extent.width,
-                        config.extent.height,
-                        non_srgb_format,
-                        flags,
-                    )
-                }
-                .map_err(|err| {
-                    log::error!("ResizeBuffers failed: {err}");
-                    crate::SurfaceError::Other("window is in use")
-                })?;
-                swapchain
-            }
-            None => {
-                self.create_dxgi_swapchain(config, interop, non_srgb_format, buffer_count, flags)?
-            }
-        };
+        let swapchain =
+            self.create_dxgi_swapchain(config, interop, non_srgb_format, buffer_count, flags)?;
 
         // Apply the color space unconditionally so reconfiguring away from HDR resets state.
         unsafe {
