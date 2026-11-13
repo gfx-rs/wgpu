@@ -2370,6 +2370,12 @@ impl super::Instance {
                 super::Workarounds::FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16,
                 phd_capabilities.properties.vendor_id == db::nvidia::VENDOR,
             );
+            // Matched by driver ID rather than vendor ID: Mesa's PanVK also reports Arm's
+            // vendor ID and is not affected.
+            workarounds.set(
+                super::Workarounds::DISABLE_TIMELINE_SEMAPHORES,
+                phd_capabilities.is_driver(vk::DriverId::ARM_PROPRIETARY),
+            );
         };
 
         if let Some(driver) = phd_capabilities.driver {
@@ -2462,6 +2468,7 @@ impl super::Instance {
             // semaphores but crashes in `vkQueueSubmit` when wgpu uses them. It reports
             // `VK_DRIVER_ID_MESA_RADV` as its driver ID, so only the vendor ID identifies it.
             timeline_semaphores: phd_capabilities.properties.vendor_id != db::verisilicon::VENDOR
+                && !workarounds.contains(super::Workarounds::DISABLE_TIMELINE_SEMAPHORES)
                 && match phd_features.timeline_semaphore {
                     Some(features) => features.timeline_semaphore == vk::TRUE,
                     None => phd_features

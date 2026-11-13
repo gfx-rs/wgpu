@@ -4828,6 +4828,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-bug-repro-03-arm-timeline-semaphore-leak"
+version = "0.0.0"
+dependencies = [
+ "ash",
+ "pollster",
+ "wgpu",
+]
+
+[[package]]
 name = "wgpu-core"
 version = "30.0.0"
 dependencies = [
