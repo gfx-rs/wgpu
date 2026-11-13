@@ -303,10 +303,6 @@ pub(crate) struct DxgiInstance {
     supports_allow_tearing: bool,
 }
 
-// COM objects; the instance serializes access where required.
-unsafe impl Send for DxgiInstance {}
-unsafe impl Sync for DxgiInstance {}
-
 /// Tells the user how to select the native Vulkan swapchain.
 pub(crate) const USE_NATIVE_HINT: &str =
     "select VulkanSwapchainKind::Native (WGPU_VULKAN_SWAPCHAIN_KIND=native)";
@@ -384,10 +380,6 @@ pub(crate) struct InteropDevice {
     /// first.
     _d3d12_lib: Arc<D3D12Lib>,
 }
-
-// COM objects; the D3D12 device and command queue are free-threaded.
-unsafe impl Send for InteropDevice {}
-unsafe impl Sync for InteropDevice {}
 
 impl InteropDevice {
     /// Creates a shared D3D12 fence and an NT handle to it for import into Vulkan as a timeline
@@ -564,11 +556,6 @@ pub(crate) struct DxgiSurface {
     hdr_source: dxgi::hdr::DxgiHdrSource,
     instance: Arc<InstanceShared>,
 }
-
-// `SurfaceTarget` holds an HWND / COM dcomp state; the surface is only used under wgpu's surface
-// locking.
-unsafe impl Send for DxgiSurface {}
-unsafe impl Sync for DxgiSurface {}
 
 impl DxgiSurface {
     pub(crate) fn new(
@@ -982,10 +969,6 @@ pub(crate) struct DxgiSwapchain {
     // `d3d12.dll`.
     device: Arc<DeviceShared>,
 }
-
-// Holds COM objects and Vulkan handles; only used under wgpu's surface locking.
-unsafe impl Send for DxgiSwapchain {}
-unsafe impl Sync for DxgiSwapchain {}
 
 impl Drop for DxgiSwapchain {
     fn drop(&mut self) {

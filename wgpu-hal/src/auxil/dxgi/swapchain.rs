@@ -28,6 +28,12 @@ pub(crate) enum SurfaceTarget {
     SwapChainPanel(crate::auxil::dxgi::types::ISwapChainPanelNative),
 }
 
+// SAFETY: `HWND` and `HANDLE` are identifiers that any thread can use, and any thread can call
+// DirectComposition. `ISwapChainPanelNative` is not free-threaded. The DX12 backend has always
+// treated it as `Send` and `Sync`, and the caller must use such a surface on the panel's UI thread.
+unsafe impl Send for SurfaceTarget {}
+unsafe impl Sync for SurfaceTarget {}
+
 /// Whether `factory` reports support for `DXGI_PRESENT_ALLOW_TEARING`.
 pub(crate) fn supports_allow_tearing(factory: &DxgiFactory) -> bool {
     let Some(factory5) = factory.as_factory5() else {
