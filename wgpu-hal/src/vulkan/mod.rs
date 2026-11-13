@@ -978,6 +978,15 @@ pub enum TextureMemory {
     External,
 }
 
+/// What a transition of a [`Texture`] to `TextureUses::PRESENT` does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PresentTransition {
+    /// Transitions to `PRESENT_SRC_KHR`. Used by all textures except DXGI back buffers.
+    PresentSrc,
+    /// Releases to `VK_QUEUE_FAMILY_EXTERNAL` in `GENERAL`; the transition back acquires it.
+    ReleaseToExternal,
+}
+
 #[derive(Debug)]
 pub struct Texture {
     raw: vk::Image,
@@ -985,10 +994,8 @@ pub struct Texture {
     format: wgt::TextureFormat,
     copy_size: crate::CopyExtent,
     identity: ResourceIdentity<vk::Image>,
-    /// Layout to transition to for `TextureUses::PRESENT`: `PRESENT_SRC_KHR` for native
-    /// `VK_KHR_swapchain` images, `GENERAL` for DXGI interop images, whose D3D12 consumer does
-    /// not observe Vulkan image layouts.
-    present_layout: vk::ImageLayout,
+    /// What a transition of this texture to `TextureUses::PRESENT` does.
+    present_transition: PresentTransition,
 
     // The `drop_guard` field must be the last field of this struct so it is dropped last.
     // Do not add new fields after it.
