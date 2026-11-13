@@ -525,22 +525,33 @@ impl super::Device {
             import_memory_info.p_next = <*const _>::cast(&mut dedicated_allocate_info);
         }
 
-        let mem_type_index = self
-            .find_memory_type_index(
-                image.requirements.memory_type_bits,
-                vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            )
-            .ok_or(crate::DeviceError::Unexpected)?;
+        let Some(mem_type_index) = self.find_memory_type_index(
+            image.requirements.memory_type_bits,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        ) else {
+            unsafe { self.shared.raw.destroy_image(image.raw, None) };
+            return Err(crate::DeviceError::Unexpected);
+        };
 
         let memory_allocate_info = vk::MemoryAllocateInfo::default()
             .allocation_size(image.requirements.size)
             .memory_type_index(mem_type_index as _)
             .push_next(&mut import_memory_info);
-        let memory = unsafe { self.shared.raw.allocate_memory(&memory_allocate_info, None) }
-            .map_err(super::map_host_device_oom_err)?;
+        let memory = match unsafe { self.shared.raw.allocate_memory(&memory_allocate_info, None) } {
+            Ok(memory) => memory,
+            Err(err) => {
+                unsafe { self.shared.raw.destroy_image(image.raw, None) };
+                return Err(super::map_host_device_oom_err(err));
+            }
+        };
 
-        unsafe { self.shared.raw.bind_image_memory(image.raw, memory, 0) }
-            .map_err(super::map_host_device_oom_err)?;
+        if let Err(err) = unsafe { self.shared.raw.bind_image_memory(image.raw, memory, 0) } {
+            unsafe {
+                self.shared.raw.destroy_image(image.raw, None);
+                self.shared.raw.free_memory(memory, None);
+            }
+            return Err(super::map_host_device_oom_err(err));
+        }
 
         Ok(unsafe {
             self.texture_from_raw(

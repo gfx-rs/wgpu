@@ -496,7 +496,10 @@ impl SharedFence {
     ) -> Result<Self, crate::DeviceError> {
         let (d3d, handle) = interop.create_shared_fence()?;
         let vk = device.new_timeline_semaphore(0, name)?;
-        unsafe { device.import_timeline_semaphore_d3d12_fence(vk, handle.0)? };
+        if let Err(err) = unsafe { device.import_timeline_semaphore_d3d12_fence(vk, handle.0) } {
+            unsafe { device.raw.destroy_semaphore(vk, None) };
+            return Err(err);
+        }
         Ok(Self {
             vk,
             d3d,
@@ -686,8 +689,8 @@ impl Surface for DxgiSurface {
         } as usize;
         let rtv_heap_start = unsafe { rtv_heap.GetCPUDescriptorHandleForHeapStart() };
 
-        let mut buffers = Vec::with_capacity(buffer_count as usize);
-        for i in 0..buffer_count {
+        // The texture import is the last fallible step, so an error leaves no Vulkan object behind.
+        let create_back_buffer = |i: u32| -> Result<BackBuffer, crate::SurfaceError> {
             let resource: ID3D12Resource = unsafe { swapchain.GetBuffer(i) }
                 .into_device_result("IDXGISwapChain::GetBuffer")?;
             let handle = unsafe {
@@ -697,26 +700,6 @@ impl Surface for DxgiSurface {
             }
             .into_device_result("ID3D12Device::CreateSharedHandle (back buffer)")?;
             let handle = OwnedHandle(handle);
-
-            let desc = crate::TextureDescriptor {
-                label: None,
-                size: config.extent,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgt::TextureDimension::D2,
-                format: base_format,
-                usage: config.usage,
-                memory_flags: crate::MemoryFlags::empty(),
-                texture_binding_view_dimension: None,
-                view_formats: view_formats.clone(),
-            };
-            let texture = unsafe {
-                device.texture_from_shared_handle(
-                    handle.0,
-                    vk::ExternalMemoryHandleTypeFlags::D3D12_RESOURCE,
-                    &desc,
-                )
-            }?;
 
             // Generate RTVs so we can render to them.
             let rtv = D3D12_CPU_DESCRIPTOR_HANDLE {
@@ -752,7 +735,27 @@ impl Surface for DxgiSurface {
             let (acquire_allocator, acquire_list) = make_list()?;
             let (present_allocator, present_list) = make_list()?;
 
-            buffers.push(BackBuffer {
+            let desc = crate::TextureDescriptor {
+                label: None,
+                size: config.extent,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgt::TextureDimension::D2,
+                format: base_format,
+                usage: config.usage,
+                memory_flags: crate::MemoryFlags::empty(),
+                texture_binding_view_dimension: None,
+                view_formats: view_formats.clone(),
+            };
+            let texture = unsafe {
+                device.texture_from_shared_handle(
+                    handle.0,
+                    vk::ExternalMemoryHandleTypeFlags::D3D12_RESOURCE,
+                    &desc,
+                )
+            }?;
+
+            Ok(BackBuffer {
                 texture,
                 resource,
                 _shared_handle: handle,
@@ -767,13 +770,37 @@ impl Surface for DxgiSurface {
                     vulkan_progress_value: 0,
                     interop_progress_value: 0,
                 })),
-            });
+            })
+        };
+
+        let mut buffers = Vec::with_capacity(buffer_count as usize);
+        for i in 0..buffer_count {
+            match create_back_buffer(i) {
+                Ok(buffer) => buffers.push(buffer),
+                Err(err) => {
+                    unsafe { destroy_back_buffers(device, buffers) };
+                    return Err(err);
+                }
+            }
         }
 
-        let vulkan_progress =
-            SharedFence::new(&device.shared, interop, "DXGI swapchain vulkan_progress")?;
-        let interop_progress =
-            SharedFence::new(&device.shared, interop, "DXGI swapchain interop_progress")?;
+        let fences = SharedFence::new(&device.shared, interop, "DXGI swapchain vulkan_progress")
+            .and_then(|vulkan_progress| {
+                match SharedFence::new(&device.shared, interop, "DXGI swapchain interop_progress") {
+                    Ok(interop_progress) => Ok((vulkan_progress, interop_progress)),
+                    Err(err) => {
+                        unsafe { vulkan_progress.destroy(&device.shared.raw) };
+                        Err(err)
+                    }
+                }
+            });
+        let (vulkan_progress, interop_progress) = match fences {
+            Ok(fences) => fences,
+            Err(err) => {
+                unsafe { destroy_back_buffers(device, buffers) };
+                return Err(err.into());
+            }
+        };
 
         log::debug!(
             "Configured DXGI interop swapchain: target {}, {} back buffers, format {:?}, present mode {:?}",
@@ -809,6 +836,21 @@ impl Surface for DxgiSurface {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+/// Destroys the Vulkan textures of `buffers`. The D3D12 objects and the shared handles drop with
+/// each buffer.
+///
+/// # Safety
+///
+/// The GPU must not use the textures anymore.
+unsafe fn destroy_back_buffers(
+    device: &crate::vulkan::Device,
+    buffers: impl IntoIterator<Item = BackBuffer>,
+) {
+    for buffer in buffers {
+        unsafe { device.destroy_texture(buffer.texture) };
     }
 }
 
@@ -990,10 +1032,7 @@ impl Swapchain for DxgiSwapchain {
         }
         let _ = self.wait_for_value(self.interop_progress_value);
 
-        for buffer in self.buffers.drain(..) {
-            unsafe { device.destroy_texture(buffer.texture) };
-            // `buffer.resource`, its command allocators/lists, and `_shared_handle` drop here.
-        }
+        unsafe { destroy_back_buffers(device, self.buffers.drain(..)) };
         unsafe {
             self.vulkan_progress.destroy(&device.shared.raw);
             self.interop_progress.destroy(&device.shared.raw);
