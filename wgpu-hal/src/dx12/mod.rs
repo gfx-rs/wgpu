@@ -291,6 +291,7 @@ impl Instance {
     }
 }
 
+// `compiler_container` is not `Send`/`Sync`.
 unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
@@ -322,6 +323,7 @@ pub struct Surface {
     hdr_source: Option<auxil::dxgi::hdr::DxgiHdrSource>,
 }
 
+// `SwapChain::waitable` is not `Send`/`Sync`.
 unsafe impl Send for Surface {}
 unsafe impl Sync for Surface {}
 
