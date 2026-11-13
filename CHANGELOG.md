@@ -190,6 +190,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Add `wgpu_hal::vulkan::AccelerationStructure::raw_handle`, which returns the underlying `VkAccelerationStructureKHR`. Use it with `Adapter::open_with_callback` to record acceleration structure commands from extensions wgpu doesn't support, such as [VK_NV_cluster_acceleration_structure](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_cluster_acceleration_structure.html). Mark the result with `CommandEncoder::mark_acceleration_structures_built`. By @stuartparmenter in [#10187](https://github.com/gfx-rs/wgpu/pull/10187).
 - Add `wgpu_hal::vulkan::Surface::set_next_swapchain_create_chain` and `wgpu_hal::vulkan::Queue::set_next_submit_chain`. The first attaches a caller-provided `pNext` chain to the `VkSwapchainCreateInfoKHR` of the surface's next configuration. The second attaches one to the `VkSubmitInfo` of the queue's next submission. Together with `set_next_present_chain` and the existing raw-handle accessors, this makes [VK_NV_low_latency2](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_low_latency2.html) usable on a wgpu swapchain. That extension is the Vulkan interface for NVIDIA Reflex. By @stuartparmenter in [#10095](https://github.com/gfx-rs/wgpu/pull/10095).
 - Add `wgpu_hal::dx12::Adapter::device_from_raw` to create a device from an existing `ID3D12Device` and `ID3D12CommandQueue`. By @rdeioris in [#10662](https://github.com/gfx-rs/wgpu/pull/10662).
+- Add `wgpu_hal::metal::Buffer::raw_handle`, returning the underlying `MTLBuffer`, mirroring `Texture::raw_handle`. By @jf--- in [#10924](https://github.com/gfx-rs/wgpu/pull/10924).
 
 #### DX12
 
@@ -197,7 +198,6 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 #### Metal
 
-- Add `wgpu_hal::metal::Buffer::raw_handle`, returning the underlying `MTLBuffer`, mirroring `Texture::raw_handle`. By @jf--- in [#10924](https://github.com/gfx-rs/wgpu/pull/10924).
 - Support `Features::SHADER_EARLY_DEPTH_TEST` on Metal. Naga's MSL backend now emits `[[early_fragment_tests]]` for `@early_depth_test(force)`, `depth(greater)`/`depth(less)` for `@early_depth_test(greater_equal/less_equal)`, and discards the depth output for `@early_depth_test(unchanged)` and `@early_depth_test(force)`. By @DouglasDwyer in [#10625](https://github.com/gfx-rs/wgpu/pull/10625).
 - Fix Naga's Metal backend crashing when a storage texture was used as a function argument. By @ErichDonGubler in [#9867](https://github.com/gfx-rs/wgpu/pull/9867).
 - Metal now runs fixed-count multi-draws of 512 or more draws through GPU-generated indirect command buffers, instead of one indirect draw per command on the CPU. This is off with `InstanceFlags::STRICT_WEBGPU_COMPLIANCE`. The memory they hold is reported as `HalCounters::indirect_command_buffer_memory`, and pooled ones unused for two seconds are released. By @matthargett in [#9640](https://github.com/gfx-rs/wgpu/pull/9640).
