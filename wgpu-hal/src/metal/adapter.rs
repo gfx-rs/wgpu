@@ -40,7 +40,7 @@ fn render_icb_probe_allowed(
 ) -> bool {
     let tier1_mac =
         os_type == super::OsType::Macos && argument_buffers == Some(MTLArgumentBuffersTier::Tier1);
-    !(is_virtual || tier1_mac)
+    !is_virtual && !tier1_mac
 }
 
 /// Maximum number of command buffers for `MTLCommandQueue`s that we create.
