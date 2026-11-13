@@ -780,7 +780,7 @@ impl Surface for DxgiSurface {
         Ok(Box::new(DxgiSwapchain {
             device: Arc::clone(&device.shared),
             swapchain,
-            waitable: Some(waitable),
+            waitable,
             present_mode: config.present_mode,
             config: config.clone(),
             buffers,
@@ -889,7 +889,7 @@ impl DxgiSurface {
 pub(crate) struct DxgiSwapchain {
     device: Arc<DeviceShared>,
     swapchain: IDXGISwapChain3,
-    waitable: Option<OwnedHandle>,
+    waitable: OwnedHandle,
     present_mode: wgt::PresentMode,
     config: crate::SurfaceConfiguration,
 
@@ -964,7 +964,7 @@ impl Swapchain for DxgiSwapchain {
         timeout: Option<Duration>,
         _fence: &crate::vulkan::Fence,
     ) -> Result<crate::AcquiredSurfaceTexture<crate::api::Vulkan>, crate::SurfaceError> {
-        if !dxgi::swapchain::wait_for_waitable(self.waitable.as_ref().map(|h| h.0), timeout)? {
+        if !dxgi::swapchain::wait_for_waitable(Some(self.waitable.0), timeout)? {
             return Err(crate::SurfaceError::Timeout);
         }
 
