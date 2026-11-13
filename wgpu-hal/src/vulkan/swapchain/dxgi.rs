@@ -746,6 +746,8 @@ impl Surface for DxgiSurface {
                     &desc,
                 )
             }?;
+            // `destroy_back_buffers` uses `destroy_texture`, which decrements the counter.
+            unsafe { device.add_raw_texture(&texture) };
 
             Ok(BackBuffer {
                 texture,
@@ -979,6 +981,15 @@ pub(crate) struct DxgiSwapchain {
 // Holds COM objects and Vulkan handles; only used under wgpu's surface locking.
 unsafe impl Send for DxgiSwapchain {}
 unsafe impl Sync for DxgiSwapchain {}
+
+impl Drop for DxgiSwapchain {
+    fn drop(&mut self) {
+        debug_assert!(
+            self.buffers.is_empty(),
+            "DxgiSwapchain dropped without release_resources"
+        );
+    }
+}
 
 /// The longest time to wait for the interop queue. Equal to the surface acquire timeout of
 /// wgpu-core.
