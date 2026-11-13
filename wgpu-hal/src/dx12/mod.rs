@@ -129,9 +129,6 @@ use crate::auxil::{
 // `wgpu_hal::dx12::CreateDeviceError` stable.
 pub use crate::auxil::dxgi::d3d12_lib::CreateDeviceError;
 
-// Shared with the Vulkan DXGI swapchain; re-exported to keep the DX12 public API.
-pub use crate::auxil::dxgi::{borrow_interface_temporarily, borrow_optional_interface_temporarily};
-
 struct D3DBlob(Direct3D::ID3DBlob);
 
 impl Deref for D3DBlob {

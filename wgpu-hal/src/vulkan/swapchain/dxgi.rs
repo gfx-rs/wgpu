@@ -130,7 +130,7 @@ impl NoopDrawPipeline {
         let desc = D3D12_GRAPHICS_PIPELINE_STATE_DESC {
             // Non-owning borrow of `root_signature`; `desc` is consumed by the call below, well
             // before `root_signature` drops.
-            pRootSignature: unsafe { core::mem::transmute_copy(&root_signature) },
+            pRootSignature: unsafe { dxgi::borrow_interface_temporarily(&root_signature) },
             VS: D3D12_SHADER_BYTECODE {
                 pShaderBytecode: NOOP_DRAW_VS.as_ptr().cast(),
                 BytecodeLength: NOOP_DRAW_VS.len(),
@@ -212,7 +212,7 @@ fn transition_barrier(
             // `ManuallyDrop` (never dropped) holds a borrowed, non-owning copy of the interface, so
             // building the barrier does not touch the resource's refcount.
             Transition: ManuallyDrop::new(D3D12_RESOURCE_TRANSITION_BARRIER {
-                pResource: unsafe { core::mem::transmute_copy(resource) },
+                pResource: unsafe { dxgi::borrow_interface_temporarily(resource) },
                 Subresource: D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
                 StateBefore: before,
                 StateAfter: after,

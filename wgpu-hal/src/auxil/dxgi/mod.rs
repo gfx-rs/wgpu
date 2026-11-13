@@ -1,7 +1,5 @@
-#[cfg(dx12)]
 use core::mem;
 
-#[cfg(dx12)]
 use windows::core::Interface;
 
 // Everything here is shared between DX12 and the Windows Vulkan backend's
@@ -41,17 +39,18 @@ pub mod types;
 /// <https://github.com/microsoft/windows-rs/issues/2386>.
 ///
 /// # Safety
-/// Performs a [`mem::transmute_copy()`] on a refcounted [`Interface`] type.  The returned
-/// [`mem::ManuallyDrop`] should _not_ be dropped.
-#[cfg(dx12)]
-pub unsafe fn borrow_interface_temporarily<I: Interface>(src: &I) -> mem::ManuallyDrop<Option<I>> {
-    unsafe { mem::transmute_copy(src) }
+/// The returned value holds the pointer of `src` without a reference of its own. It must not be
+/// dropped, and must not be used after `src` is released.
+pub(crate) unsafe fn borrow_interface_temporarily<I: Interface>(
+    src: &I,
+) -> mem::ManuallyDrop<Option<I>> {
+    mem::ManuallyDrop::new(Some(unsafe { I::from_raw(src.as_raw()) }))
 }
 
 /// See [`borrow_interface_temporarily()`]
 #[cfg(dx12)]
-pub unsafe fn borrow_optional_interface_temporarily<I: Interface>(
+pub(crate) unsafe fn borrow_optional_interface_temporarily<I: Interface>(
     src: &Option<I>,
 ) -> mem::ManuallyDrop<Option<I>> {
-    unsafe { mem::transmute_copy(src) }
+    mem::ManuallyDrop::new(src.as_ref().map(|src| unsafe { I::from_raw(src.as_raw()) }))
 }
