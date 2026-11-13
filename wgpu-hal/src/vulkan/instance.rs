@@ -1284,8 +1284,12 @@ impl crate::Instance for super::Instance {
                         .supports_extension(khr::external_semaphore_win32::NAME);
                 if !interop_capable {
                     log::warn!(
-                        "Disabling presentation on '{}': missing DXGI interop prerequisites",
-                        exposed.info.name
+                        "Presentation is disabled on adapter '{}' because it lacks a DXGI \
+                         swapchain requirement (LUID, timeline semaphores, \
+                         VK_KHR_external_memory_win32, VK_KHR_external_semaphore_win32, Vulkan \
+                         1.1 or D3D12 fence import); to present, {}",
+                        exposed.info.name,
+                        super::swapchain::USE_NATIVE_HINT
                     );
                     exposed.adapter.private_caps.can_present = false;
                 }
