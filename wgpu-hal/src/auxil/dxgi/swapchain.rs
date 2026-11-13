@@ -50,26 +50,6 @@ pub(crate) fn supports_allow_tearing(factory: &DxgiFactory) -> bool {
     }
 }
 
-/// The swapchain creation flags.
-///
-/// `ALLOW_TEARING` must be baked in at creation (it cannot be changed by `ResizeBuffers`) so it
-/// is always set when supported, regardless of present mode. `FRAME_LATENCY_WAITABLE_OBJECT` is
-/// set only when the caller will actually use the waitable object — pairing the flag with the
-/// waitable keeps the two consistent.
-pub(crate) fn swap_chain_flags(
-    supports_allow_tearing: bool,
-    frame_latency_waitable: bool,
-) -> Dxgi::DXGI_SWAP_CHAIN_FLAG {
-    let mut flags = Dxgi::DXGI_SWAP_CHAIN_FLAG::default();
-    if supports_allow_tearing {
-        flags |= Dxgi::DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-    }
-    if frame_latency_waitable {
-        flags |= Dxgi::DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
-    }
-    flags
-}
-
 /// Builds the flip-model `DXGI_SWAP_CHAIN_DESC1`.
 pub(crate) fn swap_chain_descriptor(
     format: Dxgi::Common::DXGI_FORMAT,
