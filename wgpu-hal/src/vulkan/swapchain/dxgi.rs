@@ -814,6 +814,7 @@ impl Surface for DxgiSurface {
             device: Arc::clone(&device.shared),
             swapchain,
             waitable,
+            waited_for_frame: false,
             present_mode: config.present_mode,
             config: config.clone(),
             buffers,
@@ -946,6 +947,9 @@ impl DxgiSurface {
 pub(crate) struct DxgiSwapchain {
     swapchain: IDXGISwapChain3,
     waitable: OwnedHandle,
+    /// An acquire waited on `waitable` and no successful present gave that frame back yet. A
+    /// discarded or failed acquire leaves this set, so the next acquire does not wait again.
+    waited_for_frame: bool,
     present_mode: wgt::PresentMode,
     config: crate::SurfaceConfiguration,
 
@@ -1058,8 +1062,11 @@ impl Swapchain for DxgiSwapchain {
         timeout: Option<Duration>,
         _fence: &crate::vulkan::Fence,
     ) -> Result<crate::AcquiredSurfaceTexture<crate::api::Vulkan>, crate::SurfaceError> {
-        if !dxgi::swapchain::wait_for_waitable(Some(self.waitable.0), timeout)? {
-            return Err(crate::SurfaceError::Timeout);
+        if !self.waited_for_frame {
+            if !dxgi::swapchain::wait_for_waitable(Some(self.waitable.0), timeout)? {
+                return Err(crate::SurfaceError::Timeout);
+            }
+            self.waited_for_frame = true;
         }
 
         let index = unsafe { self.swapchain.GetCurrentBackBufferIndex() } as usize;
@@ -1171,6 +1178,9 @@ impl Swapchain for DxgiSwapchain {
         let present_result = unsafe { self.swapchain.Present(sync_interval, present_flags_value) }
             .ok()
             .into_device_result("IDXGISwapChain::Present");
+        if present_result.is_ok() {
+            self.waited_for_frame = false;
+        }
 
         // This `Signal` tracks the present list's GPU completion, not the flip (no fence observes
         // the flip itself). It is what allocator reuse and `release_resources` wait on; releasing

@@ -330,6 +330,8 @@ struct SwapChain {
     resources: Vec<Direct3D12::ID3D12Resource>,
     /// Handle is freed in [`Self::release_resources()`]
     waitable: Option<Foundation::HANDLE>,
+    /// An acquire waited on `waitable` and no successful present gave that frame back yet.
+    waited_for_frame: bool,
     acquired_count: usize,
     present_mode: wgt::PresentMode,
     format: wgt::TextureFormat,
@@ -1362,6 +1364,7 @@ impl crate::Surface for Surface {
             raw: swap_chain,
             resources,
             waitable,
+            waited_for_frame: false,
             acquired_count: 0,
             present_mode: config.present_mode,
             format: config.format,
@@ -1399,7 +1402,10 @@ impl crate::Surface for Surface {
             wgt::Dx12UseFrameLatencyWaitableObject::None
             | wgt::Dx12UseFrameLatencyWaitableObject::DontWait => {}
             wgt::Dx12UseFrameLatencyWaitableObject::Wait => {
-                auxil::dxgi::swapchain::wait_for_waitable(sc.waitable, timeout)?;
+                if !sc.waited_for_frame {
+                    sc.waited_for_frame =
+                        auxil::dxgi::swapchain::wait_for_waitable(sc.waitable, timeout)?;
+                }
             }
         }
 
@@ -1500,6 +1506,7 @@ impl crate::Queue for Queue {
         unsafe { sc.raw.Present(interval, flags) }
             .ok()
             .into_device_result("Present")?;
+        sc.waited_for_frame = false;
 
         Ok(())
     }
