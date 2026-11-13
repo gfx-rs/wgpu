@@ -106,8 +106,6 @@ impl NoopDrawPipeline {
         // A blend target with valid (blend-disabled) enum values; the degenerate draw writes nothing
         // regardless, but the runtime still validates these fields.
         let blend_target = D3D12_RENDER_TARGET_BLEND_DESC {
-            BlendEnable: false.into(),
-            LogicOpEnable: false.into(),
             SrcBlend: D3D12_BLEND_ONE,
             DestBlend: D3D12_BLEND_ZERO,
             BlendOp: D3D12_BLEND_OP_ADD,
@@ -116,6 +114,7 @@ impl NoopDrawPipeline {
             BlendOpAlpha: D3D12_BLEND_OP_ADD,
             LogicOp: D3D12_LOGIC_OP_NOOP,
             RenderTargetWriteMask: D3D12_COLOR_WRITE_ENABLE_ALL.0 as u8,
+            ..Default::default()
         };
         let no_stencil = D3D12_DEPTH_STENCILOP_DESC {
             StencilFailOp: D3D12_STENCIL_OP_KEEP,
@@ -139,52 +138,31 @@ impl NoopDrawPipeline {
                 pShaderBytecode: NOOP_DRAW_PS.as_ptr().cast(),
                 BytecodeLength: NOOP_DRAW_PS.len(),
             },
-            DS: D3D12_SHADER_BYTECODE::default(),
-            HS: D3D12_SHADER_BYTECODE::default(),
-            GS: D3D12_SHADER_BYTECODE::default(),
-            StreamOutput: D3D12_STREAM_OUTPUT_DESC::default(),
             BlendState: D3D12_BLEND_DESC {
-                AlphaToCoverageEnable: false.into(),
-                IndependentBlendEnable: false.into(),
                 RenderTarget: [blend_target; 8],
+                ..Default::default()
             },
             SampleMask: u32::MAX,
             RasterizerState: D3D12_RASTERIZER_DESC {
                 FillMode: D3D12_FILL_MODE_SOLID,
                 CullMode: D3D12_CULL_MODE_NONE,
-                FrontCounterClockwise: false.into(),
-                DepthBias: 0,
-                DepthBiasClamp: 0.0,
-                SlopeScaledDepthBias: 0.0,
                 DepthClipEnable: true.into(),
-                MultisampleEnable: false.into(),
-                AntialiasedLineEnable: false.into(),
-                ForcedSampleCount: 0,
-                ConservativeRaster: D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
+                ..Default::default()
             },
             DepthStencilState: D3D12_DEPTH_STENCIL_DESC {
-                DepthEnable: false.into(),
-                DepthWriteMask: D3D12_DEPTH_WRITE_MASK_ZERO,
                 DepthFunc: D3D12_COMPARISON_FUNC_ALWAYS,
-                StencilEnable: false.into(),
-                StencilReadMask: 0,
-                StencilWriteMask: 0,
                 FrontFace: no_stencil,
                 BackFace: no_stencil,
+                ..Default::default()
             },
-            InputLayout: D3D12_INPUT_LAYOUT_DESC::default(),
-            IBStripCutValue: D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
             PrimitiveTopologyType: D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
             NumRenderTargets: 1,
             RTVFormats: rtv_formats,
-            DSVFormat: DXGI_FORMAT_UNKNOWN,
             SampleDesc: DXGI_SAMPLE_DESC {
                 Count: 1,
                 Quality: 0,
             },
-            NodeMask: 0,
-            CachedPSO: D3D12_CACHED_PIPELINE_STATE::default(),
-            Flags: D3D12_PIPELINE_STATE_FLAG_NONE,
+            ..Default::default()
         };
 
         let pipeline_state: ID3D12PipelineState =
@@ -410,7 +388,7 @@ fn create_interop_device(device: &DeviceShared) -> Result<InteropDevice, crate::
         .instance
         .dxgi_instance
         .as_ref()
-        .ok_or(crate::SurfaceError::Other("no DXGI instance"))?;
+        .expect("DxgiSurface created without a DxgiInstance");
 
     let luid = LUID {
         LowPart: u32::from_ne_bytes(luid[0..4].try_into().unwrap()),
@@ -550,7 +528,7 @@ impl SharedFence {
         name: &str,
     ) -> Result<Self, crate::DeviceError> {
         let (d3d, handle) = interop.create_shared_fence()?;
-        let vk = guard(device.new_timeline_semaphore(0, name)?, |vk| unsafe {
+        let vk = guard(device.new_timeline_semaphore(name)?, |vk| unsafe {
             device.raw.destroy_semaphore(vk, None)
         });
         unsafe { device.import_timeline_semaphore_d3d12_fence(*vk, handle.0) }?;
@@ -705,8 +683,8 @@ impl Surface for DxgiSurface {
         )?;
         let waitable = OwnedHandle(unsafe { swapchain.GetFrameLatencyWaitableObject() });
 
-        // Vulkan will view the back buffers as SRGB through mutable format views and D3D12 backbuffers
-        // are always created as typeless.
+        // The D3D12 back buffers use the non-sRGB format. Vulkan views them as sRGB through
+        // mutable format views.
         let base_format = config.format.remove_srgb_suffix();
         let mut view_formats = config.view_formats.clone();
         if config.format != base_format && !view_formats.contains(&config.format) {
@@ -837,15 +815,7 @@ impl Surface for DxgiSurface {
         let buffers = ScopeGuard::into_inner(buffers);
 
         log::debug!(
-            "Configured DXGI interop swapchain: target {}, {} back buffers, format {:?}, present mode {:?}",
-            match self.target {
-                SurfaceTarget::WndHandle(_) => "HWND",
-                SurfaceTarget::VisualFromWndHandle { .. } => "composition visual",
-                #[cfg(dx12)]
-                SurfaceTarget::Visual(_)
-                | SurfaceTarget::SurfaceHandle(_)
-                | SurfaceTarget::SwapChainPanel(_) => "other",
-            },
+            "Configured DXGI interop swapchain: {} back buffers, format {:?}, present mode {:?}",
             buffers.len(),
             config.format,
             config.present_mode,
@@ -856,7 +826,6 @@ impl Surface for DxgiSurface {
             swapchain,
             waitable,
             waited_for_frame: false,
-            present_mode: config.present_mode,
             config: config.clone(),
             buffers,
             noop_pipeline,
@@ -998,7 +967,6 @@ pub(crate) struct DxgiSwapchain {
     /// An acquire waited on `waitable` and no successful present gave that frame back yet. A
     /// discarded or failed acquire leaves this set, so the next acquire does not wait again.
     waited_for_frame: bool,
-    present_mode: wgt::PresentMode,
     config: crate::SurfaceConfiguration,
 
     buffers: Vec<BackBuffer>,
@@ -1062,19 +1030,10 @@ impl DxgiSwapchain {
             Threading::WaitForSingleObject(event.0, INTEROP_WAIT_TIMEOUT.as_millis() as u32)
         } {
             Foundation::WAIT_OBJECT_0 => Ok(()),
-            Foundation::WAIT_TIMEOUT => {
+            status => {
                 log::error!(
-                    "DXGI swapchain on Vulkan: the interop queue did not reach fence value {value} \
-                     in {INTEROP_WAIT_TIMEOUT:?}; the device is reported as lost. Recreate the \
-                     device; if this continues, update the GPU driver or {USE_NATIVE_HINT}"
-                );
-                Err(crate::DeviceError::Lost)
-            }
-            other => {
-                log::error!(
-                    "DXGI swapchain on Vulkan: the wait for the interop fence failed ({other:?}); \
-                     the device is reported as lost. Recreate the device; if this continues, \
-                     update the GPU driver or {USE_NATIVE_HINT}"
+                    "DXGI swapchain on Vulkan: the wait for interop fence value {value} failed \
+                     (timeout {INTEROP_WAIT_TIMEOUT:?}): {status:?}"
                 );
                 Err(crate::DeviceError::Lost)
             }
@@ -1090,8 +1049,8 @@ impl Swapchain for DxgiSwapchain {
         // queue signals `interop_progress` after `Present` and after every sync list it runs, so
         // waiting for `interop_progress_value` also waits out the last in-flight present.
         let _ = unsafe { device.shared.raw.device_wait_idle() };
-        // A failed submission or a lost device leaves `vulkan_progress` values that Vulkan never
-        // signals, and the interop queue waits for them. Vulkan is idle now, so signal them here.
+        // A failed submit or a device loss can leave `vulkan_progress` values that Vulkan never
+        // signals, and the interop queue waits for them. Vulkan is idle, so signal them here.
         let vulkan_progress_value = self.vulkan_progress_counter.load(Ordering::Relaxed);
         if unsafe { self.vulkan_progress.d3d.GetCompletedValue() } < vulkan_progress_value {
             if let Err(err) = unsafe { self.vulkan_progress.d3d.Signal(vulkan_progress_value) } {
@@ -1205,7 +1164,7 @@ impl Swapchain for DxgiSwapchain {
         let index = texture.index as usize;
         let vulkan_progress_value = self.buffers[index].sync.lock().vulkan_progress_value;
         let (sync_interval, present_flags_value) =
-            dxgi::swapchain::present_flags(self.present_mode);
+            dxgi::swapchain::present_flags(self.config.present_mode);
 
         // Ensure this back buffer's present allocator from its previous present is free to reset.
         self.wait_for_value(self.buffers[index].present_submit)?;

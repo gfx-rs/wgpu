@@ -70,8 +70,7 @@ impl DxgiAdapter {
         }
     }
 
-    // Only the DX12 backend queries video memory; the Vulkan DXGI path uses adapters for LUID
-    // matching only.
+    // Only the DX12 backend queries video memory.
     #[cfg(dx12)]
     pub fn query_video_memory_info(
         &self,

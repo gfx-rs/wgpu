@@ -415,7 +415,7 @@ impl super::Instance {
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
         has_nv_optimus: bool,
         swapchain_kind: wgt::VulkanSwapchainKind,
-        agility_sdk: Option<wgt::Dx12AgilitySDK>,
+        #[cfg_attr(not(windows), allow(unused))] agility_sdk: Option<wgt::Dx12AgilitySDK>,
         drop_callback: Option<crate::DropCallback>,
     ) -> Result<Self, crate::InstanceError> {
         log::debug!("Instance version: 0x{instance_api_version:x}");
@@ -466,7 +466,6 @@ impl super::Instance {
             super::swapchain::init_dxgi_instance(swapchain_kind, agility_sdk.as_ref(), flags);
         #[cfg(not(windows))]
         let swapchain_kind = if swapchain_kind == wgt::VulkanSwapchainKind::Native {
-            let _ = &agility_sdk;
             swapchain_kind
         } else {
             log::warn!(

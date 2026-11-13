@@ -2741,7 +2741,7 @@ impl crate::Device for super::Device {
         Ok(if self.shared.private_caps.timeline_semaphores {
             let raw = self
                 .shared
-                .new_timeline_semaphore(0, "wgpu-hal device fence")?;
+                .new_timeline_semaphore("wgpu-hal device fence")?;
             super::Fence::TimelineSemaphore(raw)
         } else {
             super::Fence::FencePool(RwLock::new(super::FencePool {
@@ -3231,15 +3231,13 @@ impl super::DeviceShared {
         }
     }
 
-    /// Creates a timeline semaphore with the given initial value.
+    /// Creates a timeline semaphore with an initial value of 0.
     pub(super) fn new_timeline_semaphore(
         &self,
-        initial_value: u64,
         name: &str,
     ) -> Result<vk::Semaphore, crate::DeviceError> {
-        let mut type_info = vk::SemaphoreTypeCreateInfo::default()
-            .semaphore_type(vk::SemaphoreType::TIMELINE)
-            .initial_value(initial_value);
+        let mut type_info =
+            vk::SemaphoreTypeCreateInfo::default().semaphore_type(vk::SemaphoreType::TIMELINE);
         let info = vk::SemaphoreCreateInfo::default().push_next(&mut type_info);
         let semaphore = unsafe { self.raw.create_semaphore(&info, None) }
             .map_err(super::map_host_device_oom_err)?;
