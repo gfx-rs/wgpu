@@ -494,7 +494,6 @@ fn supports_shader_model_6(device: &ID3D12Device) -> bool {
 struct SharedFence {
     vk: vk::Semaphore,
     d3d: ID3D12Fence,
-    _handle: OwnedHandle,
 }
 
 impl SharedFence {
@@ -509,11 +508,8 @@ impl SharedFence {
             unsafe { device.raw.destroy_semaphore(vk, None) };
             return Err(err);
         }
-        Ok(Self {
-            vk,
-            d3d,
-            _handle: handle,
-        })
+        // The import does not take ownership of `handle`; it closes when it drops here.
+        Ok(Self { vk, d3d })
     }
 
     unsafe fn destroy(&self, device: &ash::Device) {
@@ -541,7 +537,6 @@ struct BackBuffer {
     texture: crate::vulkan::Texture,
     /// The same back buffer as a D3D12 resource (owned via `GetBuffer`).
     resource: ID3D12Resource,
-    _shared_handle: OwnedHandle,
     /// Render-target view of `resource`, bound by the sync lists' no-op draw. Points into the
     /// swapchain's `rtv_heap`, which must outlive it.
     rtv: D3D12_CPU_DESCRIPTOR_HANDLE,
@@ -755,7 +750,6 @@ impl Surface for DxgiSurface {
             Ok(BackBuffer {
                 texture,
                 resource,
-                _shared_handle: handle,
                 rtv,
                 acquire_allocator,
                 acquire_list,
@@ -836,8 +830,7 @@ impl Surface for DxgiSurface {
     }
 }
 
-/// Destroys the Vulkan textures of `buffers`. The D3D12 objects and the shared handles drop with
-/// each buffer.
+/// Destroys the Vulkan textures of `buffers`. The D3D12 objects drop with each buffer.
 ///
 /// # Safety
 ///
