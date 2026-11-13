@@ -2209,6 +2209,7 @@ async fn check_multiplanar_render_attachment_zero_init(
         format,
         usage: TextureUsages::COPY_SRC | TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let readback_buffers = ReadbackBuffers::new(&ctx.device, &texture);
