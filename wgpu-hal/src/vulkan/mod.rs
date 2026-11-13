@@ -432,6 +432,8 @@ struct DeviceExtensionFunctions {
     #[cfg_attr(not(unix), allow(dead_code))]
     external_memory_fd: Option<khr::external_memory_fd::Device>,
     #[cfg_attr(not(windows), allow(dead_code))]
+    external_memory_win32: Option<khr::external_memory_win32::Device>,
+    #[cfg_attr(not(windows), allow(dead_code))]
     external_semaphore_win32: Option<khr::external_semaphore_win32::Device>,
 }
 

@@ -2780,6 +2780,15 @@ impl super::Adapter {
         } else {
             None
         };
+        let external_memory_win32_fn =
+            if enabled_extensions.contains(&khr::external_memory_win32::NAME) {
+                Some(khr::external_memory_win32::Device::new(
+                    &self.instance.raw,
+                    &raw_device,
+                ))
+            } else {
+                None
+            };
         let external_semaphore_win32_fn =
             if enabled_extensions.contains(&khr::external_semaphore_win32::NAME) {
                 Some(khr::external_semaphore_win32::Device::new(
@@ -3054,6 +3063,7 @@ impl super::Adapter {
                 ray_tracing_pipelines: ray_tracing_pipeline_fns,
                 mesh_shading: mesh_shading_fns,
                 external_memory_fd: external_memory_fd_fn,
+                external_memory_win32: external_memory_win32_fn,
                 external_semaphore_win32: external_semaphore_win32_fn,
             },
             pipeline_cache_validation_key,

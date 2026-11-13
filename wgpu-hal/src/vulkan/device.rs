@@ -496,13 +496,29 @@ impl super::Device {
         handle_type: vk::ExternalMemoryHandleTypeFlags,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
-        if !self
+        let ext = self
             .shared
-            .enabled_extensions
-            .contains(&ash::khr::external_memory_win32::NAME)
-        {
-            log::error!("Vulkan driver does not support VK_KHR_external_memory_win32");
-            return Err(crate::DeviceError::Unexpected);
+            .extension_fns
+            .external_memory_win32
+            .as_ref()
+            .ok_or_else(|| {
+                log::error!("Vulkan driver does not support VK_KHR_external_memory_win32");
+                crate::DeviceError::Unexpected
+            })?;
+
+        // A handle from outside Vulkan can only be imported as one of the memory types that
+        // `vkGetMemoryWin32HandlePropertiesKHR` reports. That call does not accept opaque handles.
+        let mut handle_memory_type_bits = u32::MAX;
+        if !handle_type.intersects(
+            vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32
+                | vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32_KMT,
+        ) {
+            let mut properties = vk::MemoryWin32HandlePropertiesKHR::default();
+            unsafe {
+                ext.get_memory_win32_handle_properties(handle_type, handle.0 as _, &mut properties)
+            }
+            .map_err(super::map_host_oom_err)?;
+            handle_memory_type_bits = properties.memory_type_bits;
         }
 
         let mut external_memory_image_info =
@@ -529,7 +545,7 @@ impl super::Device {
         }
 
         let Some(mem_type_index) = self.find_memory_type_index(
-            image.requirements.memory_type_bits,
+            image.requirements.memory_type_bits & handle_memory_type_bits,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         ) else {
             return Err(crate::DeviceError::Unexpected);
