@@ -1129,7 +1129,7 @@ impl Swapchain for DxgiSwapchain {
                 copy_size: buffer.texture.copy_size,
                 identity,
                 // D3D12 interop needs to happen through `COMMON` in D3D12 and `GENERAL` in Vulkan.
-                present_layout: vk::ImageLayout::GENERAL,
+                present_transition: crate::vulkan::PresentTransition::ReleaseToExternal,
             },
             metadata: Box::new(DxgiSurfaceTextureMetadata {
                 vulkan_progress: self.vulkan_progress.vk,

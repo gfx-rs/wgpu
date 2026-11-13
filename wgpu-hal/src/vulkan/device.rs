@@ -330,7 +330,7 @@ impl super::Device {
             format: desc.format,
             copy_size: desc.copy_extent(),
             identity,
-            present_layout: vk::ImageLayout::PRESENT_SRC_KHR,
+            present_transition: super::PresentTransition::PresentSrc,
         }
     }
 
