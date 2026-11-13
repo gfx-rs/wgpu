@@ -304,6 +304,10 @@ pub(crate) struct DxgiInstance {
 unsafe impl Send for DxgiInstance {}
 unsafe impl Sync for DxgiInstance {}
 
+/// Tells the user how to select the native Vulkan swapchain.
+pub(crate) const USE_NATIVE_HINT: &str =
+    "select VulkanSwapchainKind::Native (WGPU_VULKAN_SWAPCHAIN_KIND=native)";
+
 /// Resolves the requested swapchain kind at instance creation, building the [`DxgiInstance`] when
 /// a DXGI kind is requested. A requested DXGI kind falls back to `Native` (with a warning) when
 /// DXGI or D3D12 is unavailable.
@@ -323,8 +327,8 @@ pub(crate) fn init_dxgi_instance(
                 Ok(d3d12_lib) => Arc::new(d3d12_lib),
                 Err(err) => {
                     log::warn!(
-                        "Vulkan swapchain kind: {kind:?} requested but d3d12.dll is unavailable \
-                         ({err}); falling back to Native"
+                        "Using the native Vulkan swapchain instead of {kind:?} because d3d12.dll \
+                         did not load ({err}); to silence this, {USE_NATIVE_HINT}"
                     );
                     return (wgt::VulkanSwapchainKind::Native, None);
                 }
@@ -333,8 +337,9 @@ pub(crate) fn init_dxgi_instance(
                 Ok(device_factory) => device_factory,
                 Err(err) => {
                     log::warn!(
-                        "Vulkan swapchain kind: {kind:?} requested but the D3D12 device factory \
-                         could not be created ({err}); falling back to Native"
+                        "Using the native Vulkan swapchain instead of {kind:?} because D3D12 \
+                         device factory creation failed ({err}); to silence this, \
+                         {USE_NATIVE_HINT}"
                     );
                     return (wgt::VulkanSwapchainKind::Native, None);
                 }
@@ -358,8 +363,8 @@ pub(crate) fn init_dxgi_instance(
         }
         Err(err) => {
             log::warn!(
-                "Vulkan swapchain kind: {kind:?} requested but DXGI is unavailable ({err}); \
-                 falling back to Native"
+                "Using the native Vulkan swapchain instead of {kind:?} because DXGI factory \
+                 creation failed ({err}); to silence this, {USE_NATIVE_HINT}"
             );
             (wgt::VulkanSwapchainKind::Native, None)
         }
@@ -402,7 +407,7 @@ impl InteropDevice {
 /// through DXGI, returns [`crate::SurfaceError::Other`], so the Vulkan device is not lost.
 fn create_interop_device(device: &DeviceShared) -> Result<InteropDevice, crate::SurfaceError> {
     let luid = device.private_caps.device_luid.ok_or_else(|| {
-        log::error!("Vulkan physical device does not report a LUID; cannot match a DXGI adapter");
+        log::error!("DXGI swapchain on Vulkan: the Vulkan device does not report a LUID");
         crate::SurfaceError::Other("no Vulkan device LUID")
     })?;
 
@@ -422,7 +427,11 @@ fn create_interop_device(device: &DeviceShared) -> Result<InteropDevice, crate::
             luid == luid_bytes(desc.AdapterLuid)
         })
         .ok_or_else(|| {
-            log::error!("No DXGI adapter matches the Vulkan device LUID");
+            log::error!(
+                "DXGI swapchain on Vulkan: no DXGI adapter has the LUID of the Vulkan device; \
+                 presentation is not available on this adapter. Update the GPU driver, or \
+                 {USE_NATIVE_HINT}"
+            );
             crate::SurfaceError::Other("no DXGI adapter matches the Vulkan device LUID")
         })?;
 
@@ -431,7 +440,7 @@ fn create_interop_device(device: &DeviceShared) -> Result<InteropDevice, crate::
         .device_factory
         .create_device(&dxgi_instance.d3d12_lib, &adapter, D3D_FEATURE_LEVEL_11_0)
         .map_err(|err| {
-            log::error!("Failed to create the interop D3D12 device: {err}");
+            log::error!("DXGI swapchain on Vulkan: interop D3D12 device creation failed: {err}");
             crate::SurfaceError::Other("interop D3D12 device creation")
         })?;
 
@@ -440,8 +449,7 @@ fn create_interop_device(device: &DeviceShared) -> Result<InteropDevice, crate::
     // pipeline-creation time.
     if !supports_shader_model_6(&d3d_device) {
         log::error!(
-            "The interop D3D12 device does not support Shader Model 6.0 (DXIL), which the DXGI \
-             interop swapchain requires"
+            "DXGI swapchain on Vulkan: the interop D3D12 device does not support Shader Model 6.0"
         );
         return Err(crate::SurfaceError::Other(
             "interop D3D12 device does not support Shader Model 6.0",
@@ -640,13 +648,15 @@ impl Surface for DxgiSurface {
             swapchain.SetColorSpace1(dxgi::swapchain::map_surface_color_space(config.color_space))
         }
         .map_err(|err| {
-            log::error!("IDXGISwapChain3::SetColorSpace1 failed: {err}");
+            log::error!("DXGI swapchain on Vulkan: IDXGISwapChain3::SetColorSpace1 failed: {err}");
             crate::SurfaceError::Other("IDXGISwapChain3::SetColorSpace1")
         })?;
 
         unsafe { swapchain.SetMaximumFrameLatency(config.maximum_frame_latency) }.map_err(
             |err| {
-                log::error!("IDXGISwapChain2::SetMaximumFrameLatency failed: {err}");
+                log::error!(
+                    "DXGI swapchain on Vulkan: IDXGISwapChain2::SetMaximumFrameLatency failed: {err}"
+                );
                 crate::SurfaceError::Other("IDXGISwapChain2::SetMaximumFrameLatency")
             },
         )?;
@@ -897,7 +907,7 @@ impl DxgiSurface {
             }
         }
         .map_err(|err| {
-            log::error!("SwapChain creation error: {err}");
+            log::error!("DXGI swapchain on Vulkan: swapchain creation failed: {err}");
             crate::SurfaceError::Other("swapchain creation")
         })?;
 
@@ -911,7 +921,10 @@ impl DxgiSurface {
                     )
                 }
                 .map_err(|err| {
-                    log::error!("IDXGIFactory::MakeWindowAssociation failed: {err}");
+                    log::error!(
+                        "DXGI swapchain on Vulkan: IDXGIFactory::MakeWindowAssociation failed: \
+                         {err}"
+                    );
                     crate::SurfaceError::Other("IDXGIFactory::MakeWindowAssociation")
                 })?;
             }
@@ -923,11 +936,15 @@ impl DxgiSurface {
                 let dcomp_state =
                     unsafe { dcomp_state.get_or_init(&dxgi_instance.dcomp_lib, handle) }?;
                 unsafe { dcomp_state.visual.SetContent(&swapchain1) }.map_err(|err| {
-                    log::error!("IDCompositionVisual::SetContent failed: {err}");
+                    log::error!(
+                        "DXGI swapchain on Vulkan: IDCompositionVisual::SetContent failed: {err}"
+                    );
                     crate::SurfaceError::Other("IDCompositionVisual::SetContent")
                 })?;
                 unsafe { dcomp_state.device.Commit() }.map_err(|err| {
-                    log::error!("IDCompositionDevice::Commit failed: {err}");
+                    log::error!(
+                        "DXGI swapchain on Vulkan: IDCompositionDevice::Commit failed: {err}"
+                    );
                     crate::SurfaceError::Other("IDCompositionDevice::Commit")
                 })?;
             }
@@ -938,7 +955,7 @@ impl DxgiSurface {
         }
 
         swapchain1.cast::<IDXGISwapChain3>().map_err(|err| {
-            log::error!("Cast to IDXGISwapChain3 failed: {err}");
+            log::error!("DXGI swapchain on Vulkan: the cast to IDXGISwapChain3 failed: {err}");
             crate::SurfaceError::Other("swapchain cast to version 3")
         })
     }
@@ -1020,12 +1037,18 @@ impl DxgiSwapchain {
             Foundation::WAIT_OBJECT_0 => Ok(()),
             Foundation::WAIT_TIMEOUT => {
                 log::error!(
-                    "DXGI interop queue did not reach fence value {value} within {INTEROP_WAIT_TIMEOUT:?}; reporting the device as lost"
+                    "DXGI swapchain on Vulkan: the interop queue did not reach fence value {value} \
+                     in {INTEROP_WAIT_TIMEOUT:?}; the device is reported as lost. Recreate the \
+                     device; if this continues, update the GPU driver or {USE_NATIVE_HINT}"
                 );
                 Err(crate::DeviceError::Lost)
             }
             other => {
-                log::error!("WaitForSingleObject on the DXGI interop fence failed: {other:?}");
+                log::error!(
+                    "DXGI swapchain on Vulkan: the wait for the interop fence failed ({other:?}); \
+                     the device is reported as lost. Recreate the device; if this continues, \
+                     update the GPU driver or {USE_NATIVE_HINT}"
+                );
                 Err(crate::DeviceError::Lost)
             }
         }
@@ -1045,7 +1068,10 @@ impl Swapchain for DxgiSwapchain {
         let vulkan_progress_value = self.vulkan_progress_counter.load(Ordering::Relaxed);
         if unsafe { self.vulkan_progress.d3d.GetCompletedValue() } < vulkan_progress_value {
             if let Err(err) = unsafe { self.vulkan_progress.d3d.Signal(vulkan_progress_value) } {
-                log::error!("ID3D12Fence::Signal failed: {err}");
+                log::error!(
+                    "DXGI swapchain on Vulkan: the CPU signal of the Vulkan progress fence failed: \
+                     {err}"
+                );
             }
         }
         let _ = self.wait_for_value(self.interop_progress_value);
