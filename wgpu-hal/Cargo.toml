@@ -100,6 +100,7 @@ vulkan = [
     "dep:ordered-float",
     "dep:profiling",
     "dep:raw-window-metal",
+    "dep:scopeguard",
     "dep:smallvec",
     "dep:windows",
     "dep:windows-core",
@@ -232,6 +233,7 @@ bytemuck = { workspace = true, optional = true, features = ["derive"] }
 hashbrown = { workspace = true }
 ordered-float = { workspace = true, optional = true }
 profiling = { workspace = true, optional = true, default-features = false }
+scopeguard = { workspace = true, optional = true }
 static_assertions = { workspace = true }
 
 # Backend: GLES
