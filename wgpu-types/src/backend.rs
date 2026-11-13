@@ -1001,6 +1001,9 @@ impl FromStr for Dx12Compiler {
 }
 
 /// Whether and how to use a waitable handle obtained from `GetFrameLatencyWaitableObject`.
+///
+/// Only the DX12 backend uses this option. The DXGI swapchain of the Vulkan backend always waits
+/// for the waitable handle.
 #[derive(Clone, Debug, Eq, PartialEq, ConstDefault!)]
 pub enum Dx12UseFrameLatencyWaitableObject {
     /// Do not obtain a waitable handle and do not wait for it. The swapchain will
