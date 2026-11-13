@@ -510,6 +510,9 @@ impl super::Device {
 
         let image =
             self.create_image_without_memory(desc, Some(&mut external_memory_image_info))?;
+        let raw_image = scopeguard::guard(image.raw, |raw| unsafe {
+            self.shared.raw.destroy_image(raw, None)
+        });
 
         // Some external memory types require dedicated allocation
         // https://docs.vulkan.org/guide/latest/extensions/external.html#_importing_memory
@@ -529,7 +532,6 @@ impl super::Device {
             image.requirements.memory_type_bits,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         ) else {
-            unsafe { self.shared.raw.destroy_image(image.raw, None) };
             return Err(crate::DeviceError::Unexpected);
         };
 
@@ -537,25 +539,20 @@ impl super::Device {
             .allocation_size(image.requirements.size)
             .memory_type_index(mem_type_index as _)
             .push_next(&mut import_memory_info);
-        let memory = match unsafe { self.shared.raw.allocate_memory(&memory_allocate_info, None) } {
-            Ok(memory) => memory,
-            Err(err) => {
-                unsafe { self.shared.raw.destroy_image(image.raw, None) };
-                return Err(super::map_host_device_oom_err(err));
-            }
-        };
+        let memory = unsafe { self.shared.raw.allocate_memory(&memory_allocate_info, None) }
+            .map_err(super::map_host_device_oom_err)?;
+        let memory = scopeguard::guard(memory, |memory| unsafe {
+            self.shared.raw.free_memory(memory, None)
+        });
 
-        if let Err(err) = unsafe { self.shared.raw.bind_image_memory(image.raw, memory, 0) } {
-            unsafe {
-                self.shared.raw.destroy_image(image.raw, None);
-                self.shared.raw.free_memory(memory, None);
-            }
-            return Err(super::map_host_device_oom_err(err));
-        }
+        unsafe { self.shared.raw.bind_image_memory(*raw_image, *memory, 0) }
+            .map_err(super::map_host_device_oom_err)?;
 
+        let memory = scopeguard::ScopeGuard::into_inner(memory);
+        let raw_image = scopeguard::ScopeGuard::into_inner(raw_image);
         Ok(unsafe {
             self.texture_from_raw(
-                image.raw,
+                raw_image,
                 desc,
                 None,
                 super::TextureMemory::Dedicated(memory),

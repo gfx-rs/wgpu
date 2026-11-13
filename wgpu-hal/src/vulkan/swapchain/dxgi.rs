@@ -50,6 +50,7 @@ use core::{
 };
 
 use ash::vk;
+use scopeguard::{guard, ScopeGuard};
 use wgpu_sync::Mutex;
 use windows::{
     core::{Interface as _, PCWSTR},
@@ -511,13 +512,15 @@ impl SharedFence {
         name: &str,
     ) -> Result<Self, crate::DeviceError> {
         let (d3d, handle) = interop.create_shared_fence()?;
-        let vk = device.new_timeline_semaphore(0, name)?;
-        if let Err(err) = unsafe { device.import_timeline_semaphore_d3d12_fence(vk, handle.0) } {
-            unsafe { device.raw.destroy_semaphore(vk, None) };
-            return Err(err);
-        }
+        let vk = guard(device.new_timeline_semaphore(0, name)?, |vk| unsafe {
+            device.raw.destroy_semaphore(vk, None)
+        });
+        unsafe { device.import_timeline_semaphore_d3d12_fence(*vk, handle.0) }?;
         // The import does not take ownership of `handle`; it closes when it drops here.
-        Ok(Self { vk, d3d })
+        Ok(Self {
+            vk: ScopeGuard::into_inner(vk),
+            d3d,
+        })
     }
 
     unsafe fn destroy(&self, device: &ash::Device) {
@@ -776,34 +779,22 @@ impl Surface for DxgiSurface {
             })
         };
 
-        let mut buffers = Vec::with_capacity(buffer_count as usize);
+        let mut buffers = guard(
+            Vec::with_capacity(buffer_count as usize),
+            |buffers| unsafe { destroy_back_buffers(device, buffers) },
+        );
         for i in 0..buffer_count {
-            match create_back_buffer(i) {
-                Ok(buffer) => buffers.push(buffer),
-                Err(err) => {
-                    unsafe { destroy_back_buffers(device, buffers) };
-                    return Err(err);
-                }
-            }
+            buffers.push(create_back_buffer(i)?);
         }
 
-        let fences = SharedFence::new(&device.shared, interop, "DXGI swapchain vulkan_progress")
-            .and_then(|vulkan_progress| {
-                match SharedFence::new(&device.shared, interop, "DXGI swapchain interop_progress") {
-                    Ok(interop_progress) => Ok((vulkan_progress, interop_progress)),
-                    Err(err) => {
-                        unsafe { vulkan_progress.destroy(&device.shared.raw) };
-                        Err(err)
-                    }
-                }
-            });
-        let (vulkan_progress, interop_progress) = match fences {
-            Ok(fences) => fences,
-            Err(err) => {
-                unsafe { destroy_back_buffers(device, buffers) };
-                return Err(err.into());
-            }
-        };
+        let vulkan_progress = guard(
+            SharedFence::new(&device.shared, interop, "DXGI swapchain vulkan_progress")?,
+            |fence| unsafe { fence.destroy(&device.shared.raw) },
+        );
+        let interop_progress =
+            SharedFence::new(&device.shared, interop, "DXGI swapchain interop_progress")?;
+        let vulkan_progress = ScopeGuard::into_inner(vulkan_progress);
+        let buffers = ScopeGuard::into_inner(buffers);
 
         log::debug!(
             "Configured DXGI interop swapchain: target {}, {} back buffers, format {:?}, present mode {:?}",
