@@ -729,6 +729,7 @@ impl super::Instance {
                     inner: Box::new(super::swapchain::DxgiSurface::new(
                         Arc::clone(&self.shared),
                         target,
+                        crate::auxil::dxgi::hdr::DxgiHdrSource::new(hwnd),
                     )),
                 });
             }

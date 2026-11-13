@@ -552,6 +552,7 @@ struct BackBuffer {
 pub(crate) struct DxgiSurface {
     instance: Arc<InstanceShared>,
     target: SurfaceTarget,
+    hdr_source: dxgi::hdr::DxgiHdrSource,
 }
 
 // `SurfaceTarget` holds an HWND / COM dcomp state; the surface is only used under wgpu's surface
@@ -560,8 +561,16 @@ unsafe impl Send for DxgiSurface {}
 unsafe impl Sync for DxgiSurface {}
 
 impl DxgiSurface {
-    pub(crate) fn new(instance: Arc<InstanceShared>, target: SurfaceTarget) -> Self {
-        Self { instance, target }
+    pub(crate) fn new(
+        instance: Arc<InstanceShared>,
+        target: SurfaceTarget,
+        hdr_source: dxgi::hdr::DxgiHdrSource,
+    ) -> Self {
+        Self {
+            instance,
+            target,
+            hdr_source,
+        }
     }
 
     fn dxgi_instance(&self) -> &DxgiInstance {
@@ -585,6 +594,10 @@ impl Surface for DxgiSurface {
             &self.target,
             self.dxgi_instance().supports_allow_tearing,
         ))
+    }
+
+    fn display_hdr_info(&self) -> Option<wgt::DisplayHdrInfo> {
+        self.hdr_source.display_hdr_info()
     }
 
     unsafe fn create_swapchain(
