@@ -18,7 +18,6 @@ use std::{
     fs::{read_to_string, File},
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
-    slice,
     sync::Arc,
 };
 use wgc::{command::PointerReferences, device::trace::DiskTraceLoader};
@@ -55,7 +54,7 @@ struct Test<'a> {
     actions: Vec<wgc::device::trace::Action<'a, PointerReferences>>,
 }
 
-fn map_callback(status: Result<(), wgc::resource::BufferAccessError>) {
+fn map_callback(status: Result<wgt::MapMode, wgc::resource::BufferAccessError>) {
     if let Err(e) = status {
         panic!("Buffer map error: {e}");
     }
@@ -98,12 +97,10 @@ impl Test<'_> {
             player
                 .resolve_buffer_id(expect.buffer)
                 .map_async(
+                    wgt::MapMode::Read,
                     expect.offset,
                     Some(expect.data.len() as u64),
-                    wgc::resource::BufferMapOperation {
-                        mode: wgt::MapMode::Read,
-                        callback: Some(Box::new(map_callback)),
-                    },
+                    Some(Box::new(map_callback)),
                 )
                 .unwrap();
         }
@@ -118,11 +115,10 @@ impl Test<'_> {
 
         for expect in self.expectations {
             println!("\t\t\tChecking {}", expect.name);
-            let (ptr, size) = player
+            let mapping = player
                 .resolve_buffer_id(expect.buffer)
                 .get_mapped_range(expect.offset, Some(expect.data.len() as wgt::BufferAddress))
                 .unwrap();
-            let contents = unsafe { slice::from_raw_parts(ptr.as_ptr(), size as usize) };
             let expected_data = match expect.data {
                 ExpectedData::Raw(vec) => vec,
                 ExpectedData::File(name, size) => {
@@ -139,11 +135,13 @@ impl Test<'_> {
                     .collect::<Vec<u8>>(),
             };
 
-            if &expected_data[..] != contents {
+            let contents = mapping.read_slice().to_vec();
+            if expected_data[..] != contents {
                 panic!(
                     "Test expectation is not met!\nBuffer content was:\n{contents:?}\nbut expected:\n{expected_data:?}"
                 );
             }
+            drop(mapping);
         }
     }
 }
@@ -209,11 +207,17 @@ impl Corpus {
     }
 }
 
-#[cfg_attr(miri, ignore)]
-#[test]
-fn test_api() {
-    // Millisecond timestamps; see <https://github.com/gfx-rs/wgpu/issues/9248>.
-    env_logger::builder().format_timestamp_millis().init();
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[cfg_attr(miri, ignore)]
+    #[test]
+    fn test_api() {
+        // Millisecond timestamps; see <https://github.com/gfx-rs/wgpu/issues/9248>.
+        env_logger::builder().format_timestamp_millis().init();
 
-    Corpus::run_from(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/player/data/all.ron"))
+        Corpus::run_from(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/player/data/all.ron"),
+        )
+    }
 }

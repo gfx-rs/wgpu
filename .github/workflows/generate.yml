@@ -29,7 +29,7 @@ jobs:
 
     timeout-minutes: 5
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     name: "Discover Standalone Examples"
 
@@ -58,7 +58,7 @@ jobs:
 
     timeout-minutes: 5
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     needs: discover-standalone-examples
 
@@ -91,14 +91,14 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: cargo-generate-${{ matrix.name }}
           env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Install `cargo-generate`
-        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+        uses: taiki-e/install-action@b80e2bb2635f28eb98b9fce1e2f0887e1535c6b2 # v2.90.0
         with:
           tool: cargo-generate
 

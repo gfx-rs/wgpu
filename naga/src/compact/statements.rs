@@ -7,17 +7,41 @@ use crate::compact::handle_set_map::HandleMap;
 
 impl FunctionTracer<'_> {
     pub fn trace_block(&mut self, block: &[crate::Statement]) {
+        self.trace_block_impl(block, false)
+    }
+
+    /// Like [`Self::trace_block`], but also mark every [`Emit`]ted expression
+    /// as used, whether or not anything needs its value.
+    ///
+    /// Compaction only keeps values something actually needs, so
+    /// `trace_block` ignores `Emit` statements. A consumer that has to account
+    /// for every expression the generated code *mentions*, rather than every
+    /// expression it needs, wants this instead: the MSL backend does no dead
+    /// code elimination, so it writes out a definition for each expression it
+    /// bakes whether or not anything reads it, and that definition refers to
+    /// the expression's operands.
+    ///
+    /// [`Emit`]: crate::Statement::Emit
+    #[cfg(msl_out)]
+    pub fn trace_block_including_emits(&mut self, block: &[crate::Statement]) {
+        self.trace_block_impl(block, true)
+    }
+
+    fn trace_block_impl(&mut self, block: &[crate::Statement], emits_are_used: bool) {
         let mut worklist: Vec<&[crate::Statement]> = vec![block];
         while let Some(last) = worklist.pop() {
             for stmt in last {
                 use crate::Statement as St;
                 match *stmt {
-                    St::Emit(ref _range) => {
+                    St::Emit(ref range) => {
                         // If we come across a statement that actually uses an
                         // expression in this range, it'll get traced from
                         // there. But since evaluating expressions has no
                         // effect, we don't need to assume that everything
-                        // emitted is live.
+                        // emitted is live - unless our caller says otherwise.
+                        if emits_are_used {
+                            self.expressions_used.insert_iter(range.clone());
+                        }
                     }
                     St::Block(ref block) => worklist.push(block),
                     St::If {
@@ -167,7 +191,18 @@ impl FunctionTracer<'_> {
                             self.expressions_used.insert(descriptor);
                             self.expressions_used.insert(payload);
                         }
+                        crate::RayPipelineFunction::ReorderThread { hint, bits } => {
+                            self.expressions_used.insert(hint);
+                            self.expressions_used.insert(bits);
+                        }
                     },
+                    St::HitObject {
+                        hit_object,
+                        ref fun,
+                    } => {
+                        self.expressions_used.insert(hit_object);
+                        self.trace_hit_object_function(fun);
+                    }
                     St::DebugPrintf {
                         format: _,
                         ref arguments,
@@ -205,6 +240,41 @@ impl FunctionTracer<'_> {
             | Af::InclusiveOr
             | Af::Min
             | Af::Max => {}
+        }
+    }
+
+    fn trace_hit_object_function(&mut self, fun: &crate::HitObjectFunction) {
+        use crate::HitObjectFunction as Hf;
+        match *fun {
+            Hf::TraceRay {
+                acceleration_structure,
+                descriptor,
+                payload,
+            } => {
+                self.expressions_used.insert(acceleration_structure);
+                self.expressions_used.insert(descriptor);
+                self.expressions_used.insert(payload);
+            }
+            Hf::RecordMiss { descriptor } => {
+                self.expressions_used.insert(descriptor);
+            }
+            Hf::RecordFromQuery { query } => {
+                self.expressions_used.insert(query);
+            }
+            Hf::RecordEmpty => {}
+            Hf::ExecuteShader { payload } => {
+                self.expressions_used.insert(payload);
+            }
+            Hf::Reorder { hint } => {
+                self.trace_reorder_hint(hint);
+            }
+        }
+    }
+
+    fn trace_reorder_hint(&mut self, hint: Option<crate::ReorderHint>) {
+        if let Some(crate::ReorderHint { hint, bits }) = hint {
+            self.expressions_used.insert(hint);
+            self.expressions_used.insert(bits);
         }
     }
 
@@ -414,7 +484,21 @@ impl FunctionMap {
                             adjust(descriptor);
                             adjust(payload);
                         }
+                        crate::RayPipelineFunction::ReorderThread {
+                            ref mut hint,
+                            ref mut bits,
+                        } => {
+                            adjust(hint);
+                            adjust(bits);
+                        }
                     },
+                    St::HitObject {
+                        ref mut hit_object,
+                        ref mut fun,
+                    } => {
+                        adjust(hit_object);
+                        self.adjust_hit_object_function(fun);
+                    }
                     St::DebugPrintf {
                         format: _,
                         ref mut arguments,
@@ -452,6 +536,45 @@ impl FunctionMap {
             | Af::InclusiveOr
             | Af::Min
             | Af::Max => {}
+        }
+    }
+
+    fn adjust_hit_object_function(&self, fun: &mut crate::HitObjectFunction) {
+        use crate::HitObjectFunction as Hf;
+        match *fun {
+            Hf::TraceRay {
+                ref mut acceleration_structure,
+                ref mut descriptor,
+                ref mut payload,
+            } => {
+                self.expressions.adjust(acceleration_structure);
+                self.expressions.adjust(descriptor);
+                self.expressions.adjust(payload);
+            }
+            Hf::RecordMiss { ref mut descriptor } => {
+                self.expressions.adjust(descriptor);
+            }
+            Hf::RecordFromQuery { ref mut query } => {
+                self.expressions.adjust(query);
+            }
+            Hf::RecordEmpty => {}
+            Hf::ExecuteShader { ref mut payload } => {
+                self.expressions.adjust(payload);
+            }
+            Hf::Reorder { ref mut hint } => {
+                self.adjust_reorder_hint(hint);
+            }
+        }
+    }
+
+    fn adjust_reorder_hint(&self, hint: &mut Option<crate::ReorderHint>) {
+        if let Some(crate::ReorderHint {
+            ref mut hint,
+            ref mut bits,
+        }) = *hint
+        {
+            self.expressions.adjust(hint);
+            self.expressions.adjust(bits);
         }
     }
 

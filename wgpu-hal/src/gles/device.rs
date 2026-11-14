@@ -63,7 +63,7 @@ impl CompilationContext<'_> {
             log::trace!(
                 "Rebind buffer: {:?} -> {}, register={:?}, slot={}",
                 var.name.as_ref(),
-                &name,
+                name,
                 register,
                 slot
             );
@@ -1224,7 +1224,7 @@ impl crate::Device for super::Device {
     ) -> Result<super::TextureView, crate::DeviceError> {
         self.counters.texture_views.add(1);
         Ok(super::TextureView {
-            //TODO: use `conv::map_view_dimension(desc.dimension)`?
+            //TODO: use `super::Texture::target_for_view_dimension(desc.dimension)`?
             inner: texture.inner.clone(),
             aspects: crate::FormatAspects::new(texture.format, desc.range.aspect),
             mip_levels: desc.range.mip_range(texture.mip_level_count),
@@ -1290,10 +1290,10 @@ impl crate::Device for super::Device {
         // If clamp is not 1, we know anisotropy is supported up to 16x
         if desc.anisotropy_clamp != 1 {
             unsafe {
-                gl.sampler_parameter_i32(
+                gl.sampler_parameter_f32(
                     raw,
                     glow::TEXTURE_MAX_ANISOTROPY,
-                    desc.anisotropy_clamp as i32,
+                    f32::from(desc.anisotropy_clamp),
                 )
             };
         }
@@ -1509,7 +1509,12 @@ impl crate::Device for super::Device {
                     }
                     let (raw, target) = view.inner.as_native();
 
-                    super::Texture::log_failing_target_heuristics(view_dimension, target);
+                    // GLES adapters should always have a valid binding view dimension specified,
+                    // validated at the core layer.
+                    debug_assert_eq!(
+                        target,
+                        super::Texture::target_for_view_dimension(view_dimension)
+                    );
 
                     super::RawBinding::Texture {
                         raw,

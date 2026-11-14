@@ -12,7 +12,7 @@ env:
   # Keep in sync with ci.yml
   #
 
-  REPO_MSRV: "1.95"
+  REPO_MSRV: "1.96.1"
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
@@ -54,7 +54,7 @@ jobs:
 
           # Windows
           - platform: Windows x86_64
-            os: windows-2022
+            os: windows-2025
             target: x86_64-pc-windows-msvc
             backend: dx12
             shell: bash
@@ -64,14 +64,14 @@ jobs:
           # ancient MacOS bash. `zsh` is a non-standard shell in GitHub
           # actions, so must be specified as a command string.
           - platform: Mac aarch64
-            os: macos-14
+            os: macos-26
             target: x86_64-apple-darwin
             backend: metal
             shell: zsh {0}
 
           # Linux
           - platform: Linux x86_64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: x86_64-unknown-linux-gnu
             backend: vulkan
             shell: bash
@@ -99,12 +99,12 @@ jobs:
           cargo -V
 
       - name: Install `cargo-llvm-cov`
-        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+        uses: taiki-e/install-action@b80e2bb2635f28eb98b9fce1e2f0887e1535c6b2 # v2.90.0
         with:
           tool: cargo-llvm-cov
 
       - name: caching
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           # The version number can be incremented for cache busting.
           prefix-key: v3-rust-${{ hashFiles('cts_runner/revision.txt') }}
@@ -141,19 +141,19 @@ jobs:
           done
 
       - name: (Windows) Install DXC
-        if: matrix.os == 'windows-2022'
+        if: matrix.os == 'windows-2025'
         uses: $/.github/actions/install-dxc
 
       # Note: `target-dir` is intentionally different from other jobs.
       # See note above about `llvm-cov show-env`.
       - name: (Windows) Install WARP
-        if: matrix.os == 'windows-2022'
+        if: matrix.os == 'windows-2025'
         uses: $/.github/actions/install-warp
         with:
           target-dir: "target/debug"
 
       - name: (Linux) Install Mesa
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'ubuntu-26.04'
         uses: $/.github/actions/install-mesa
         with:
           target-dir: "target/debug"

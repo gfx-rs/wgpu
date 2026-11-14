@@ -200,6 +200,128 @@ fn bad_type_cast() {
 }
 
 #[test]
+fn bitcast_overloads() {
+    let bitcast = |source: &str, dest: &str| {
+        format!("enable f16; fn f(x: {source}) -> {dest} {{ return bitcast<{dest}>(x); }}")
+    };
+
+    for (source, dest) in [
+        ("i32", "u32"),
+        ("u32", "f32"),
+        ("vec3<f32>", "vec3<i32>"),
+        ("f16", "f16"),
+        ("vec2<f16>", "vec2<f16>"),
+        ("vec2<f16>", "i32"),
+        ("vec2<f16>", "u32"),
+        ("vec2<f16>", "f32"),
+        ("vec4<f16>", "vec2<i32>"),
+        ("vec4<f16>", "vec2<u32>"),
+        ("vec4<f16>", "vec2<f32>"),
+        ("vec2<i32>", "vec4<f16>"),
+        ("vec2<u32>", "vec4<f16>"),
+        ("vec2<f32>", "vec4<f16>"),
+        ("i32", "vec2<f16>"),
+        ("u32", "vec2<f16>"),
+        ("f32", "vec2<f16>"),
+    ] {
+        check_success(&bitcast(source, dest));
+    }
+
+    for (source, dest) in [
+        ("bool", "u32"),
+        ("u32", "bool"),
+        ("f16", "u32"),
+        ("u32", "f16"),
+        ("vec3<f16>", "vec3<u32>"),
+        ("vec2<f16>", "vec2<u32>"),
+        ("vec2<f16>", "vec4<f16>"),
+        ("vec4<f16>", "u32"),
+        ("vec2<u32>", "vec3<u32>"),
+        ("vec3<u32>", "vec4<f16>"),
+        ("f32", "vec2<f32>"),
+        ("array<u32, 2>", "u32"),
+        ("u32", "array<u32, 1>"),
+    ] {
+        check_error_matches(&bitcast(source, dest), "cannot cast");
+    }
+}
+
+#[test]
+fn bitcast_int16() {
+    let bitcast = |source: &str, dest: &str| {
+        format!(
+            "enable f16; enable wgpu_int16; \
+             fn f(x: {source}) -> {dest} {{ return bitcast<{dest}>(x); }}"
+        )
+    };
+
+    for (source, dest) in [
+        ("f16", "i16"),
+        ("f16", "u16"),
+        ("i16", "f16"),
+        ("u16", "f16"),
+        ("i16", "u16"),
+        ("vec2<f16>", "vec2<i16>"),
+        ("vec3<f16>", "vec3<u16>"),
+        ("vec4<i16>", "vec4<f16>"),
+        ("vec4<u16>", "vec4<f16>"),
+    ] {
+        no_validation_error(
+            &bitcast(source, dest),
+            Capabilities::SHADER_FLOAT16 | Capabilities::SHADER_INT16,
+        );
+    }
+
+    for (source, dest) in [
+        ("f16", "i32"),
+        ("i16", "f32"),
+        ("i16", "bool"),
+        ("vec2<f16>", "i16"),
+        ("vec2<i16>", "vec3<f16>"),
+        ("vec2<i16>", "vec4<f16>"),
+    ] {
+        check_error_matches(&bitcast(source, dest), "cannot cast");
+    }
+}
+
+#[test]
+fn bitcast_abstract_operand() {
+    for (value, dest) in [
+        ("4294967295", "u32"),
+        ("4294967295", "vec2<u32>"),
+        ("1", "i32"),
+        ("1", "f32"),
+        ("1.0", "f32"),
+        ("1.0", "i32"),
+        ("1.0", "u32"),
+    ] {
+        let dest_value = if dest.starts_with("vec") {
+            format!("{dest}({value})")
+        } else {
+            value.to_string()
+        };
+        check_success(&format!(
+            "fn f() -> {dest} {{ return bitcast<{dest}>({dest_value}); }}"
+        ));
+    }
+
+    check_success("enable f16; fn f() -> vec2<f16> { return bitcast<vec2<f16>>(1); }");
+    check_success("enable f16; fn f() -> vec2<f16> { return bitcast<vec2<f16>>(1.0); }");
+    check_success("enable f16; fn f() -> f16 { return bitcast<f16>(1.0); }");
+    check_success("enable f16; fn f() -> f16 { return bitcast<f16>(1); }");
+    check_success("fn f() -> vec2<u32> { return bitcast<vec2<u32>>(vec2(4294967295, 1)); }");
+    check_success("fn f() -> vec2<f32> { return bitcast<vec2<f32>>(vec2(1, 2)); }");
+    check_success("fn f() -> vec2<i32> { return bitcast<vec2<i32>>(vec2(1.0, 2.0)); }");
+    check_success("enable f16; fn f() -> vec2<f16> { return bitcast<vec2<f16>>(vec2(1, 2)); }");
+    check_success("enable f16; fn f() -> vec2<f16> { return bitcast<vec2<f16>>(vec2(1.0, 2.0)); }");
+    check_success("enable f16; fn f() -> vec4<f16> { return bitcast<vec4<f16>>(vec2(1, 2)); }");
+    check_error_matches(
+        "fn f() -> u32 { return bitcast<u32>(4294967296); }",
+        "cannot",
+    );
+}
+
+#[test]
 fn cross_vec2() {
     check(
         r#"
@@ -2089,7 +2211,7 @@ fn invalid_functions() {
         if function_name == "return_pointer"
     }
 
-    check_validation! {
+    check_error_matches(
         "
         struct Atom {
             a: atomic<u32>
@@ -2100,14 +2222,72 @@ fn invalid_functions() {
         fn return_atomic() -> Atom {
            return atom;
         }
-        ":
-        Err(naga::valid::ValidationError::Function {
-            name: function_name,
-            source: naga::valid::FunctionError::NonConstructibleReturnType,
-            ..
-        })
-        if function_name == "return_atomic"
-    }
+        ",
+        "direct access to atomic variable is not allowed",
+    );
+}
+
+/// Regression test for <https://github.com/gfx-rs/wgpu/issues/10046>.
+///
+/// Loading a value whose type contains an atomic, even nested inside a
+/// struct or array, must be rejected by the front end. It used to reach the
+/// backends, where the HLSL writer panicked.
+#[test]
+fn load_type_containing_atomic() {
+    check(
+        "
+        struct Inner { a: atomic<u32> }
+        struct Outer { inner: Inner }
+        @group(0) @binding(0) var<storage, read_write> s: Outer;
+        fn f() {
+            let x = s;
+        }
+        ",
+        r#"error: direct access to atomic variable is not allowed
+  ┌─ wgsl:6:21
+  │
+6 │             let x = s;
+  │                     ^ atomic variables cannot be accessed directly; use atomic built-in functions
+
+"#,
+    );
+
+    check_error_matches(
+        "
+        struct S { a: atomic<u32> }
+        @group(0) @binding(0) var<storage, read_write> s: S;
+        fn f() {
+            _ = s;
+        }
+        ",
+        "direct access to atomic variable is not allowed",
+    );
+
+    check_error_matches(
+        "
+        struct S { a: array<atomic<u32>, 2> }
+        @group(0) @binding(0) var<storage, read_write> s: S;
+        fn f() {
+            let x = s.a;
+        }
+        ",
+        "direct access to atomic variable is not allowed",
+    );
+
+    // Accessing the atomic through the built-in functions is still fine.
+    check_success(
+        "
+        struct Inner { a: atomic<u32> }
+        struct Outer { inner: Inner, arr: array<atomic<u32>, 2> }
+        @group(0) @binding(0) var<storage, read_write> s: Outer;
+        fn f() -> u32 {
+            atomicStore(&s.inner.a, 1u);
+            atomicAdd(&s.arr[1], 1u);
+            let p = &s.inner;
+            return atomicLoad(&(*p).a);
+        }
+        ",
+    );
 }
 
 #[test]
@@ -5844,11 +6024,79 @@ fn main() {
 }
 "#: Err(naga::valid::ValidationError::EntryPoint {
             source: naga::valid::EntryPointError::Function(
-                naga::valid::FunctionError::InvalidDebugPrintfArgument(_)
+                naga::valid::FunctionError::InvalidDebugPrintfSpecifier(_)
             ),
             ..
         }),
         Capabilities::DEBUG_PRINTF
+    }
+}
+
+#[test]
+fn debug_printf_accepts_width_and_precision() {
+    no_validation_error(
+        r#"enable wgpu_debug_printf;
+
+@compute @workgroup_size(1)
+fn main() {
+    debugPrintf("values: %8d %.2f %1.f %1.2f %%", 1i, 2.0f, 3.0f, 4.0f);
+}
+"#,
+        Capabilities::DEBUG_PRINTF,
+    );
+}
+
+#[test]
+fn debug_printf_rejects_malformed_width_and_precision() {
+    for specifier in ["%", "%2", "%2.", "%2.3", "%#x", "%1..f"] {
+        check_one_validation!(
+            &format!(
+                "enable wgpu_debug_printf;
+@compute @workgroup_size(1)
+fn main() {{
+    debugPrintf(\"{specifier}\");
+}}"
+            ),
+            Err(naga::valid::ValidationError::EntryPoint {
+                source: naga::valid::EntryPointError::Function(
+                    naga::valid::FunctionError::InvalidDebugPrintfSpecifier(_)
+                ),
+                ..
+            }),
+            Capabilities::DEBUG_PRINTF
+        );
+    }
+}
+
+#[test]
+fn debug_printf_rejects_wrong_specifier_type() {
+    for (format, value, expected_actual) in [
+        ("%f", "1u", "u32"),
+        ("%.2g", "1u", "u32"),
+        ("%d", "2.4f", "f32"),
+        ("%lu", "1u", "u32"),
+        ("%x", "vec2u(1)", "vec2<u32>"),
+    ] {
+        check_one_validation!(
+            &format!(
+                "enable wgpu_debug_printf;
+@compute @workgroup_size(1)
+fn main() {{
+    debugPrintf(\"{format}\", {value});
+}}"
+            ),
+            Err(naga::valid::ValidationError::EntryPoint {
+                source: naga::valid::EntryPointError::Function(
+                    naga::valid::FunctionError::InvalidDebugPrintfArgument {
+                        specifier,
+                        actual,
+                        ..
+                    }
+                ),
+                ..
+            }) if specifier == &format[1..] && actual == expected_actual,
+            Capabilities::DEBUG_PRINTF
+        );
     }
 }
 
@@ -6284,5 +6532,550 @@ fn ray_query_let() {
             }
         ",
         "Ray query with initialize",
+    );
+}
+
+#[test]
+fn ray_query_as_binding() {
+    // ray queries cannot be in bindings
+    check_validation! {
+        r#"
+            enable wgpu_ray_query;
+
+            @group(0) @binding(0)
+            var rq: ray_query;
+
+            @compute @workgroup_size(1)
+            fn main() {
+                _=rq;
+            }
+        "#:
+        Err(naga::valid::ValidationError::GlobalVariable {  source: naga::valid::GlobalVariableError::InvalidBinding, ..}),
+        Capabilities::RAY_QUERY
+    }
+}
+
+/// The `hit_object` type requires the `wgpu_ray_tracing_invocation_reorder`
+/// enable extension and the matching capability.
+#[test]
+fn check_ray_tracing_invocation_reorder_hit_object_type() {
+    check_extension_validation!(
+        Capabilities::RAY_TRACING_INVOCATION_REORDER,
+        r#"fn f() {
+    var ho: hit_object;
+}
+"#,
+        r#"error: the `wgpu_ray_tracing_invocation_reorder` enable extension is not enabled
+  ┌─ wgsl:2:13
+  │
+2 │     var ho: hit_object;
+  │             ^^^^^^^^^^ the `wgpu_ray_tracing_invocation_reorder` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_tracing_invocation_reorder;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::MissingCapability(
+                Capabilities::RAY_TRACING_INVOCATION_REORDER
+            ),
+            ..
+        })
+    );
+}
+
+/// `reorderThread` requires the `wgpu_ray_tracing_invocation_reorder` enable
+/// extension, even in the form that takes no hit object.
+#[test]
+fn check_ray_tracing_invocation_reorder_reorder_thread() {
+    check_extension_validation!(
+        Capabilities::RAY_TRACING_INVOCATION_REORDER,
+        r#"enable wgpu_ray_tracing_pipeline;
+
+@ray_generation
+fn main() {
+    reorderThread(1u, 2u);
+}
+"#,
+        r#"error: the `wgpu_ray_tracing_invocation_reorder` enable extension is not enabled
+  ┌─ wgsl:5:5
+  │
+5 │     reorderThread(1u, 2u);
+  │     ^^^^^^^^^^^^^ the `wgpu_ray_tracing_invocation_reorder` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_tracing_invocation_reorder;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::MissingCapability(
+                    Capabilities::RAY_TRACING_INVOCATION_REORDER
+                ),
+            ),
+            ..
+        })
+    );
+}
+
+/// Every hit object built-in is rejected without the enable extension, because
+/// the `hit_object` type it operates on is itself gated by that extension.
+#[test]
+fn check_ray_tracing_invocation_reorder_builtins_need_extension() {
+    for call in [
+        "hitObjectTraceRay(&ho, acc_struct, desc, &payload)",
+        "hitObjectRecordMiss(&ho, desc)",
+        "hitObjectRecordEmpty(&ho)",
+        "hitObjectExecuteShader(&ho, &payload)",
+        "_ = hitObjectIsEmpty(&ho)",
+        "_ = hitObjectIsHit(&ho)",
+        "_ = hitObjectIsMiss(&ho)",
+        "_ = hitObjectGetIntersection(&ho)",
+        "hitObjectRecordFromQuery(&ho, &rq)",
+        "reorderThread(&ho)",
+        "reorderThread(&ho, 1u, 2u)",
+    ] {
+        check(
+            &format!(
+                r#"enable wgpu_ray_tracing_pipeline;
+enable wgpu_ray_query;
+@group(0) @binding(0) var acc_struct: acceleration_structure;
+var<ray_payload> payload: u32;
+
+@ray_generation
+fn main() {{
+    var ho: hit_object;
+    var rq: ray_query;
+    let desc = RayDesc(0u, 0xffu, 0.1, 100.0, vec3(0.0), vec3(0.0, 1.0, 0.0));
+    {call};
+}}
+"#
+            ),
+            r#"error: the `wgpu_ray_tracing_invocation_reorder` enable extension is not enabled
+  ┌─ wgsl:8:13
+  │
+8 │     var ho: hit_object;
+  │             ^^^^^^^^^^ the `wgpu_ray_tracing_invocation_reorder` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_tracing_invocation_reorder;` at the top of the shader, before any other items.
+
+"#,
+        );
+    }
+}
+
+/// `hitObjectRecordFromQuery` requires a pointer to a ray query, not to
+/// anything else.
+#[test]
+fn check_ray_tracing_invocation_reorder_record_from_query_wrong_pointer() {
+    check(
+        "enable wgpu_ray_tracing_pipeline;
+enable wgpu_ray_tracing_invocation_reorder;
+
+@ray_generation
+fn main() {
+    var ho: hit_object;
+    hitObjectRecordFromQuery(&ho, &ho);
+}
+",
+        "error: ray query operation is done on a pointer to a non-ray-query
+  ┌─ wgsl:7:35
+  │
+7 │     hitObjectRecordFromQuery(&ho, &ho);
+  │                                   ^^^ ray query pointer is invalid
+
+",
+    );
+}
+
+/// Reordering by a hit object is only allowed in the ray generation stage.
+#[test]
+fn check_ray_tracing_invocation_reorder_hit_object_reorder_stage() {
+    for call in ["reorderThread(&ho)", "reorderThread(&ho, 1u, 2u)"] {
+        check_one_validation!(
+            &format!(
+                r#"
+                    enable wgpu_ray_tracing_pipeline;
+                    enable wgpu_ray_tracing_invocation_reorder;
+
+                    var<incoming_ray_payload> incoming: u32;
+
+                    @closest_hit @incoming_payload(incoming)
+                    fn main() {{
+                        var ho: hit_object;
+                        {call};
+                    }}
+                "#
+            ),
+            Err(naga::valid::ValidationError::EntryPoint {
+                source: naga::valid::EntryPointError::ForbiddenStageOperations,
+                ..
+            }),
+            Capabilities::RAY_TRACING_PIPELINE | Capabilities::RAY_TRACING_INVOCATION_REORDER
+        );
+    }
+}
+
+/// Hit object variables cannot have initializers.
+#[test]
+fn check_ray_tracing_invocation_reorder_initializer() {
+    check_validation! {
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            @ray_generation
+            fn main() {
+                var ho: hit_object = hit_object();
+            }
+        "#:
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::RayGeneration,
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::LocalVariable {
+                    source: naga::valid::LocalVariableError::HitObjectWithInitializeExpression,
+                    ..
+                },
+            ),
+            ..
+        }),
+        Capabilities::RAY_TRACING_PIPELINE | Capabilities::RAY_TRACING_INVOCATION_REORDER
+    }
+}
+
+/// `hit_object()` is not a value that can be constructed, even where the
+/// result is discarded: the SPIR-V type has no null constant.
+#[test]
+fn check_ray_tracing_invocation_reorder_zero_value() {
+    check_validation! {
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            @ray_generation
+            fn main() {
+                _ = hit_object();
+            }
+        "#:
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::RayGeneration,
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::Expression {
+                    source: naga::valid::ExpressionError::InvalidZeroValue(_),
+                    ..
+                },
+            ),
+            ..
+        }),
+        Capabilities::RAY_TRACING_PIPELINE | Capabilities::RAY_TRACING_INVOCATION_REORDER
+    }
+}
+
+/// Hit objects cannot be loaded, even though they are declared with `var`. This
+/// also prevents copying one hit object to another.
+#[test]
+fn check_ray_tracing_invocation_reorder_load() {
+    check_validation! {
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            @ray_generation
+            fn main() {
+                var ho: hit_object;
+                var ho_2: hit_object;
+                ho = ho_2;
+            }
+        "#,
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            @ray_generation
+            fn main() {
+                var ho: hit_object;
+                _ = ho;
+            }
+        "#:
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::RayGeneration,
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::Expression {
+                    source: naga::valid::ExpressionError::InvalidPointerType(_),
+                    ..
+                },
+            ),
+            ..
+        }),
+        Capabilities::RAY_TRACING_PIPELINE | Capabilities::RAY_TRACING_INVOCATION_REORDER
+    }
+}
+
+/// Functions cannot return hit objects.
+#[test]
+fn check_ray_tracing_invocation_reorder_return() {
+    check_validation! {
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            fn make() -> hit_object {
+                var ho: hit_object;
+                return ho;
+            }
+
+            @ray_generation
+            fn main() {
+                _ = make();
+            }
+        "#:
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::NonConstructibleReturnType,
+            ..
+        }),
+        Capabilities::RAY_TRACING_PIPELINE | Capabilities::RAY_TRACING_INVOCATION_REORDER
+    }
+}
+
+/// Hit objects cannot be array elements or struct members, in any address
+/// space or stage.
+#[test]
+fn check_ray_tracing_invocation_reorder_composite() {
+    check_validation! {
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            @ray_generation
+            fn main() {
+                var a: array<hit_object, 2>;
+                _ = hitObjectIsHit(&a[0]);
+            }
+        "#,
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            struct S {
+                ho: hit_object,
+            }
+
+            @ray_generation
+            fn main() {
+                var s: S;
+            }
+        "#,
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            var<private> a: array<hit_object, 2>;
+
+            @ray_generation
+            fn main() {}
+        "#,
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            struct S {
+                ho: hit_object,
+            }
+
+            var<workgroup> s: S;
+
+            @ray_generation
+            fn main() {}
+        "#,
+        r#"
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            @compute @workgroup_size(1)
+            fn main() {
+                let a = array<hit_object, 1>();
+            }
+        "#:
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::InvalidArrayBaseType(_)
+                | naga::valid::TypeError::InvalidData(_),
+            ..
+        }),
+        Capabilities::RAY_TRACING_PIPELINE | Capabilities::RAY_TRACING_INVOCATION_REORDER
+    }
+}
+
+/// A `let` binding of a hit object is rejected, since a `let` requires an
+/// initializer.
+#[test]
+fn check_ray_tracing_invocation_reorder_let() {
+    check_error_matches(
+        "
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            @ray_generation
+            fn main() {
+                var ho: hit_object;
+                let _ho_1 = ho;
+            }
+        ",
+        "Hit object with initialize",
+    );
+}
+
+/// Merely declaring a hit object variable is only allowed in the ray tracing
+/// pipeline stages that can hold a hit, whether the declaration is in the
+/// entry point itself or in a function it calls. Otherwise a SPIR-V module for
+/// an unrelated stage would demand the invocation reorder capability.
+#[test]
+fn check_ray_tracing_invocation_reorder_local_variable_stage() {
+    for body in ["var ho: hit_object;", "declare();"] {
+        check_one_validation!(
+            &format!(
+                r#"
+                    enable wgpu_ray_tracing_invocation_reorder;
+
+                    fn declare() {{
+                        var ho: hit_object;
+                    }}
+
+                    @compute @workgroup_size(1)
+                    fn main() {{
+                        {body}
+                    }}
+                "#
+            ),
+            Err(naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Compute,
+                source: naga::valid::EntryPointError::ForbiddenStageOperations,
+                ..
+            }),
+            Capabilities::RAY_TRACING_INVOCATION_REORDER
+        );
+    }
+}
+
+/// `reorderThread` is only allowed in the ray generation stage.
+#[test]
+fn check_ray_tracing_invocation_reorder_reorder_thread_stage() {
+    check_one_validation!(
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            var<incoming_ray_payload> incoming: u32;
+
+            @closest_hit @incoming_payload(incoming)
+            fn main() {
+                reorderThread(1u, 2u);
+            }
+        "#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::ForbiddenStageOperations,
+            ..
+        }),
+        Capabilities::RAY_TRACING_PIPELINE | Capabilities::RAY_TRACING_INVOCATION_REORDER
+    );
+}
+
+/// Hit object operations are only allowed in the ray tracing pipeline stages
+/// that can have a hit.
+#[test]
+fn check_ray_tracing_invocation_reorder_hit_object_stage() {
+    check_one_validation!(
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            @group(0) @binding(0) var acc_struct: acceleration_structure;
+            var<ray_payload> payload: u32;
+
+            @compute @workgroup_size(1)
+            fn main() {
+                var ho: hit_object;
+                let desc = RayDesc(0u, 0xffu, 0.1, 100.0, vec3(0.0), vec3(0.0, 1.0, 0.0));
+                hitObjectTraceRay(&ho, acc_struct, desc, &payload);
+            }
+        "#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::ForbiddenStageOperations,
+            ..
+        }),
+        Capabilities::RAY_TRACING_PIPELINE | Capabilities::RAY_TRACING_INVOCATION_REORDER
+    );
+}
+
+/// All ray tracing pipeline payloads in a module must have the same type,
+/// including the ones passed to hit object operations.
+#[test]
+fn check_ray_tracing_invocation_reorder_mismatched_payload() {
+    check_one_validation!(
+        r#"
+            enable wgpu_ray_tracing_pipeline;
+            enable wgpu_ray_tracing_invocation_reorder;
+
+            @group(0) @binding(0) var acc_struct: acceleration_structure;
+            var<ray_payload> payload: u32;
+            var<ray_payload> other_payload: f32;
+
+            @ray_generation
+            fn main() {
+                var ho: hit_object;
+                let desc = RayDesc(0u, 0xffu, 0.1, 100.0, vec3(0.0), vec3(0.0, 1.0, 0.0));
+                traceRay(acc_struct, desc, &payload);
+                hitObjectExecuteShader(&ho, &other_payload);
+            }
+        "#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::MismatchedPayloadType(_, _),
+            ),
+            ..
+        }),
+        Capabilities::RAY_TRACING_PIPELINE | Capabilities::RAY_TRACING_INVOCATION_REORDER
+    );
+}
+
+/// The operands of `reorderThread` are `u32`, so anything that does not
+/// automatically convert to `u32` is rejected.
+#[test]
+fn check_ray_tracing_invocation_reorder_non_u32_hint() {
+    check(
+        "enable wgpu_ray_tracing_pipeline;
+enable wgpu_ray_tracing_invocation_reorder;
+
+@ray_generation
+fn main() {
+    reorderThread(1.0, 2u);
+}
+",
+        "error: automatic conversions cannot convert elements of `{AbstractFloat}` to `u32`
+  ┌─ wgsl:6:19
+  │
+6 │     reorderThread(1.0, 2u);
+  │                   ^^^ this expression has type {AbstractFloat}
+
+",
+    );
+}
+
+/// Hit object built-ins reject pointers to anything but a hit object.
+#[test]
+fn check_ray_tracing_invocation_reorder_wrong_pointer() {
+    check(
+        "enable wgpu_ray_query;
+enable wgpu_ray_tracing_invocation_reorder;
+
+@compute @workgroup_size(1)
+fn main() {
+    var rq: ray_query;
+    _ = hitObjectIsHit(&rq);
+}
+",
+        "error: hit object operation is done on a pointer to a non-hit-object
+  ┌─ wgsl:7:24
+  │
+7 │     _ = hitObjectIsHit(&rq);
+  │                        ^^^ hit object pointer is invalid
+
+",
     );
 }

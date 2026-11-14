@@ -581,6 +581,14 @@ impl PrivateCapabilities {
             D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT.into()
         }
     }
+
+    fn texture_data_pitch_alignment(&self) -> u32 {
+        if self.unrestricted_buffer_texture_copy_pitch_supported {
+            1
+        } else {
+            Direct3D12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT
+        }
+    }
 }
 
 #[derive(Default, Debug, Copy, Clone)]
@@ -1249,28 +1257,22 @@ pub(super) struct ShaderCacheValue {
     shader: CompiledShader,
 }
 
+/// Owned bytecode, never the compiler's blob: the shader cache shares it across threads, and the
+/// reference count of FXC's `ID3DBlob` is not thread-safe.
 #[derive(Clone)]
-pub(super) enum CompiledShader {
-    Dxc(Direct3D::Dxc::IDxcBlob),
-    Fxc(Direct3D::ID3DBlob),
-    Precompiled(Vec<u8>),
+pub(super) struct CompiledShader(Arc<[u8]>);
+
+impl From<&[u8]> for CompiledShader {
+    fn from(bytecode: &[u8]) -> Self {
+        Self(Arc::from(bytecode))
+    }
 }
 
 impl CompiledShader {
     fn create_native_shader(&self) -> Direct3D12::D3D12_SHADER_BYTECODE {
-        match self {
-            CompiledShader::Dxc(shader) => Direct3D12::D3D12_SHADER_BYTECODE {
-                pShaderBytecode: unsafe { shader.GetBufferPointer() },
-                BytecodeLength: unsafe { shader.GetBufferSize() },
-            },
-            CompiledShader::Fxc(shader) => Direct3D12::D3D12_SHADER_BYTECODE {
-                pShaderBytecode: unsafe { shader.GetBufferPointer() },
-                BytecodeLength: unsafe { shader.GetBufferSize() },
-            },
-            CompiledShader::Precompiled(shader) => Direct3D12::D3D12_SHADER_BYTECODE {
-                pShaderBytecode: shader.as_ptr().cast(),
-                BytecodeLength: shader.len(),
-            },
+        Direct3D12::D3D12_SHADER_BYTECODE {
+            pShaderBytecode: self.0.as_ptr().cast(),
+            BytecodeLength: self.0.len(),
         }
     }
 }
