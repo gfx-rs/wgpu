@@ -1,0 +1,8 @@
+capabilities = "SHADER_INT64"
+targets = "METAL"
+
+[msl]
+fake_missing_bindings = true
+lang_version = [2, 3]
+spirv_cross_compatibility = false
+zero_initialize_workgroup_memory = true
