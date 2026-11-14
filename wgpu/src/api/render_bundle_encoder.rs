@@ -80,7 +80,7 @@ impl<'a> RenderBundleEncoder<'a> {
     /// Sets the active render pipeline.
     ///
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
-    pub fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) {
+    pub fn set_pipeline(&mut self, pipeline: &RenderPipeline) {
         self.inner.set_pipeline(&pipeline.inner);
     }
 
@@ -92,7 +92,7 @@ impl<'a> RenderBundleEncoder<'a> {
     /// # Panics
     ///
     /// - If the buffer slice length is 0.
-    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) {
+    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'_>, index_format: IndexFormat) {
         self.inner.set_index_buffer(
             &buffer_slice.buffer.inner,
             index_format,
@@ -201,7 +201,7 @@ impl<'a> RenderBundleEncoder<'a> {
     /// The active vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
-    pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
+    pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
         self.inner
             .draw_indirect(&indirect_buffer.inner, indirect_offset);
     }
@@ -215,7 +215,7 @@ impl<'a> RenderBundleEncoder<'a> {
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     pub fn draw_indexed_indirect(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
     ) {
         self.inner
