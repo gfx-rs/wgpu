@@ -42,6 +42,8 @@ Derivate = "Derivate"
 inout = "inout"
 Ect = "Ect"
 bve = "bve"
+# DXC's strictness flag (-Ges).
+Ges = "Ges"
 
 [type.wgsl]
 extend-glob = ["*.wgsl"]

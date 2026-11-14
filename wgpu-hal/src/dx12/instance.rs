@@ -48,6 +48,18 @@ impl crate::Instance for super::Instance {
             }
         }
 
+        if desc.backend_options.dx12.dxc_denormal_mode.is_some()
+            && matches!(
+                desc.backend_options.dx12.shader_compiler,
+                wgt::Dx12Compiler::StaticDxc
+            )
+            && !cfg!(static_dxc)
+        {
+            return Err(crate::InstanceError::new(String::from(
+                "An explicit DXC denormal mode requires DXC; static-dxc is not enabled",
+            )));
+        }
+
         // Initialize the shader compiler
         let compiler_container = match desc.backend_options.dx12.shader_compiler.clone() {
             wgt::Dx12Compiler::DynamicDxc { dxc_path } => {
@@ -95,6 +107,9 @@ impl crate::Instance for super::Instance {
                 }
             }
         };
+
+        let compiler_container =
+            compiler_container.with_denormal_mode(desc.backend_options.dx12.dxc_denormal_mode)?;
 
         match compiler_container {
             CompilerContainer::DynamicDxc(..) => {

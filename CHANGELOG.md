@@ -194,6 +194,9 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 #### DX12
 
+- Add `Dx12BackendOptions::dxc_denormal_mode` to explicitly select DXC's f32
+  denormal behavior for a shader cohort. The default leaves compiler arguments
+  unchanged; explicit modes require DXC and shader model 6.2 or later.
 - Support `Features::SHADER_EARLY_DEPTH_TEST` on DX12. Naga's HLSL backend now emits `[earlydepthstencil]` for `@early_depth_test(force)`, `SV_DepthGreaterEqual`/`SV_DepthLessEqual` for `@early_depth_test(greater_equal/less_equal)` on pipelines that are not multisampled, and discards the depth output for `@early_depth_test(unchanged)`. Callers of Naga's HLSL backend can set the new `naga::back::hlsl::PipelineOptions::multisampled`. By @DouglasDwyer in [#10624](https://github.com/gfx-rs/wgpu/pull/10624).
 
 #### Metal
