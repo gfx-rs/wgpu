@@ -281,18 +281,20 @@ impl super::Device {
                 return Err(ImportTextureError::UnsupportedTextureDescriptor);
             }
 
-            let width =
-                i32::try_from(desc.size.width).map_err(|_| ImportTextureError::ParameterOutOfRange("width"))?;
+            let width = i32::try_from(desc.size.width)
+                .map_err(|_| ImportTextureError::ParameterOutOfRange("width"))?;
 
             let height = i32::try_from(desc.size.height)
                 .map_err(|_| ImportTextureError::ParameterOutOfRange("height"))?;
 
-            let stride = i32::try_from(stride).map_err(|_| ImportTextureError::ParameterOutOfRange("stride"))?;
+            let stride = i32::try_from(stride)
+                .map_err(|_| ImportTextureError::ParameterOutOfRange("stride"))?;
 
-            let offset = i32::try_from(offset).map_err(|_| ImportTextureError::ParameterOutOfRange("offset"))?;
+            let offset = i32::try_from(offset)
+                .map_err(|_| ImportTextureError::ParameterOutOfRange("offset"))?;
 
-            let drm_format =
-                i32::try_from(drm_format).map_err(|_| ImportTextureError::ParameterOutOfRange("drm_format"))?;
+            let drm_format = i32::try_from(drm_format)
+                .map_err(|_| ImportTextureError::ParameterOutOfRange("drm_format"))?;
 
             let egl = context
                 .egl_instance()
