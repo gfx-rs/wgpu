@@ -5,12 +5,12 @@
   "prConcurrentLimit": 20,
   "prHourlyLimit": 200,
   "prCreation": "immediate",
+  "rebaseWhen": "conflicted",
   "internalChecksFilter": "strict",
   "labels": ["dependencies"],
   "lockFileMaintenance": {
     "enabled": true,
     "recreateWhen": "always",
-    "rebaseWhen": "behind-base-branch",
     "branchTopic": "Cargo.lock update",
     "commitMessageAction": "Update Cargo.lock",
     "schedule": ["before 4am on monday"],
