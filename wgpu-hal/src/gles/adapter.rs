@@ -650,11 +650,11 @@ impl super::Adapter {
                 if let Ok(extensions) = egl.query_string(Some(*display), khronos_egl::EXTENSIONS) {
                     for extension in extensions.to_string_lossy().split_ascii_whitespace() {
                         match extension {
-                            super::dmabuf::EXT_IMAGE_DMA_BUF_IMPORT => {
+                            "EGL_EXT_image_dma_buf_import" => {
                                 private_caps
                                     .insert(super::PrivateCapabilities::EGL_IMAGE_DMA_BUF_IMPORT);
                             }
-                            super::dmabuf::EXT_IMAGE_DMA_BUF_IMPORT_MODIFIERS => {
+                            "EGL_EXT_image_dma_buf_import_modifiers" => {
                                 private_caps.insert(
                                     super::PrivateCapabilities::EGL_IMAGE_DMA_BUF_IMPORT_MODIFIERS,
                                 );
