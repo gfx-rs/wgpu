@@ -85,6 +85,13 @@ mod adapter;
 mod command;
 mod conv;
 mod device;
+
+#[cfg(all(unix, native))]
+pub use device::ImportTextureError;
+
+#[cfg(all(unix, native))]
+mod dmabuf;
+
 ///cbindgen:ignore
 #[cfg(all(not(webgl), any(not(windows), windows_angle)))]
 mod egl;
@@ -244,6 +251,12 @@ bitflags::bitflags! {
         /// `GL_ARB_shader_image_load_store`; GLES needs `GL_NV_image_formats`
         /// (which itself depends on `GL_EXT_texture_norm16`).
         const TEXTURE_FORMAT_NORM16_STORAGE = 1 << 20;
+        /// Supports importing DMA-BUFs as EGL images via `EGL_EXT_image_dma_buf_import`.
+        #[cfg(all(unix, native))]
+        const EGL_IMAGE_DMA_BUF_IMPORT = 1 << 21;
+        /// Supports explicit DRM format modifiers via `EGL_EXT_image_dma_buf_import_modifiers`.
+        #[cfg(all(unix, native))]
+        const EGL_IMAGE_DMA_BUF_IMPORT_MODIFIERS = 1 << 22;
     }
 }
 
