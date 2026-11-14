@@ -456,7 +456,11 @@ fn process_function(
             expr = Expression::Constant(override_map[h]);
         }
         adjust_expr(&adjusted_local_expressions, &mut expr);
-        let h = evaluator.try_eval_and_append(expr, span)?;
+        let h = if function.expression_controls.contains_key(&old_h) {
+            evaluator.append_runtime(expr, span)?
+        } else {
+            evaluator.try_eval_and_append(expr, span)?
+        };
         adjusted_local_expressions.insert(old_h, h);
     }
 
@@ -478,6 +482,13 @@ fn process_function(
         function
             .named_expressions
             .insert(adjusted_local_expressions[expr_h], name);
+    }
+
+    let controls = mem::take(&mut function.expression_controls);
+    for (expr_h, control) in controls {
+        function
+            .expression_controls
+            .insert(adjusted_local_expressions[expr_h], control);
     }
 
     Ok(())

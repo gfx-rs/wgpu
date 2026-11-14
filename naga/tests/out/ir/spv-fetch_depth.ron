@@ -230,6 +230,7 @@
                 ),
             ],
             named_expressions: {},
+            expression_controls: {},
             body: [
                 Emit((
                     start: 5,
@@ -260,6 +261,7 @@
                 local_variables: [],
                 expressions: [],
                 named_expressions: {},
+                expression_controls: {},
                 body: [
                     Call(
                         function: 0,

@@ -51,7 +51,31 @@ use crate::{
 use convert::*;
 use function::*;
 
+/// The only `FPFastMathDefault` mask the frontend accepts.
+///
+/// These are the flags Vulkan assumes for an instruction without
+/// `NoContraction` in a module that does not specify its floating-point
+/// environment, which is what an expression without an
+/// [`ArithmeticControl`](crate::ArithmeticControl) means. Every other valid
+/// mask withholds at least one of them, and the IR cannot carry that.
+const FP_FAST_MATH_DEFAULT: u32 = spirv::FPFastMathMode::NOT_NAN.bits()
+    | spirv::FPFastMathMode::NOT_INF.bits()
+    | spirv::FPFastMathMode::NSZ.bits()
+    | spirv::FPFastMathMode::ALLOW_RECIP.bits()
+    | spirv::FPFastMathMode::ALLOW_CONTRACT.bits()
+    | spirv::FPFastMathMode::ALLOW_REASSOC.bits()
+    | spirv::FPFastMathMode::ALLOW_TRANSFORM.bits();
+
+/// The `FPFastMathMode` mask read as
+/// [`ArithmeticControl::NoContraction`](crate::ArithmeticControl::NoContraction).
+///
+/// It is what Vulkan assumes for an instruction decorated `NoContraction`.
+const FP_FAST_MATH_NO_CONTRACTION: u32 = spirv::FPFastMathMode::NOT_NAN.bits()
+    | spirv::FPFastMathMode::NOT_INF.bits()
+    | spirv::FPFastMathMode::NSZ.bits();
+
 pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
+    spirv::Capability::FloatControls2,
     spirv::Capability::Shader,
     spirv::Capability::VulkanMemoryModel,
     spirv::Capability::ClipDistance,
@@ -90,6 +114,7 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::StorageBufferArrayDynamicIndexing,
 ];
 pub const SUPPORTED_EXTENSIONS: &[&str] = &[
+    "SPV_KHR_float_controls2",
     "SPV_KHR_storage_buffer_storage_class",
     "SPV_KHR_vulkan_memory_model",
     "SPV_KHR_multiview",
@@ -239,6 +264,10 @@ struct Decoration {
     matrix_stride: Option<NonZeroU32>,
     matrix_major: Option<Majority>,
     invariant: bool,
+    no_contraction: bool,
+    exp2_control: bool,
+    /// `FPFastMathMode` [`FP_FAST_MATH_NO_CONTRACTION`].
+    fp_no_contraction: bool,
     interpolation: Option<crate::Interpolation>,
     sampling: Option<crate::Sampling>,
     flags: DecorationFlags,
@@ -595,6 +624,8 @@ struct BlockContext<'function> {
     function_id: spirv::Word,
     /// Expression arena of the function currently being processed
     expressions: &'function mut Arena<crate::Expression>,
+    expression_controls:
+        &'function mut FastIndexMap<Handle<crate::Expression>, crate::ArithmeticControl>,
     /// Local variables arena of the function currently being processed
     local_arena: &'function mut Arena<crate::LocalVariable>,
     /// Arguments of the function currently being processed
@@ -657,6 +688,16 @@ pub struct Frontend<I> {
         core::hash::BuildHasherDefault<rustc_hash::FxHasher>,
     >,
     options: Options,
+    pending_no_contraction: FastHashSet<spirv::Word>,
+    pending_exp2: FastHashSet<spirv::Word>,
+    /// `(entry point, target type, mask)` ids of the `FPFastMathDefault`
+    /// execution modes, checked once types and constants are known.
+    fp_fast_math_defaults: Vec<(spirv::Word, spirv::Word, spirv::Word)>,
+    entry_point_ids: Vec<spirv::Word>,
+    has_no_contraction: bool,
+    input_version: u32,
+    float_controls2_cap: bool,
+    float_controls2_ext: bool,
 
     /// Maps for a switch from a case target to the respective body and associated literals that
     /// use that target block id.
@@ -686,6 +727,14 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             ext_glsl_id: None,
             ext_non_semantic_id: None,
             future_decor: FastHashMap::default(),
+            pending_no_contraction: FastHashSet::default(),
+            pending_exp2: FastHashSet::default(),
+            fp_fast_math_defaults: Vec::new(),
+            entry_point_ids: Vec::new(),
+            has_no_contraction: false,
+            input_version: 0,
+            float_controls2_cap: false,
+            float_controls2_ext: false,
             future_member_decor: FastHashMap::default(),
             handle_sampling: FastHashMap::default(),
             lookup_member: FastHashMap::default(),
@@ -802,6 +851,22 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             spirv::Decoration::MatrixStride => {
                 inst.expect(base_words + 2)?;
                 dec.matrix_stride = NonZeroU32::new(self.next()?);
+            }
+            spirv::Decoration::FPFastMathMode => {
+                inst.expect(base_words + 2)?;
+                let flags = self.next()?;
+                if dec.exp2_control || dec.fp_no_contraction {
+                    return Err(Error::UnsupportedExp2Control(0));
+                }
+                match flags {
+                    0 => dec.exp2_control = true,
+                    FP_FAST_MATH_NO_CONTRACTION => dec.fp_no_contraction = true,
+                    _ => return Err(Error::UnsupportedExp2Control(0)),
+                }
+            }
+            spirv::Decoration::NoContraction => {
+                inst.expect(base_words + 1)?;
+                dec.no_contraction = true;
             }
             spirv::Decoration::Invariant => {
                 dec.invariant = true;
@@ -1023,6 +1088,33 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         Ok(())
     }
 
+    fn register_arithmetic_control(
+        &mut self,
+        ctx: &mut BlockContext,
+        id: spirv::Word,
+        handle: Handle<crate::Expression>,
+    ) -> Result<(), Error> {
+        if self.pending_no_contraction.remove(&id) {
+            if !matches!(
+                ctx.expressions[handle],
+                crate::Expression::Binary {
+                    op: crate::BinaryOperator::Add
+                        | crate::BinaryOperator::Subtract
+                        | crate::BinaryOperator::Multiply,
+                    ..
+                } | crate::Expression::Math {
+                    fun: crate::MathFunction::Dot,
+                    ..
+                }
+            ) {
+                return Err(Error::UnsupportedNoContraction(id));
+            }
+            ctx.expression_controls
+                .insert(handle, crate::ArithmeticControl::NoContraction);
+        }
+        Ok(())
+    }
+
     fn parse_expr_binary_op(
         &mut self,
         ctx: &mut BlockContext,
@@ -1044,10 +1136,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let right = self.get_expr_handle(p2_id, p2_lexp, ctx, emitter, block, body_idx);
 
         let expr = crate::Expression::Binary { op, left, right };
+        let handle = ctx.expressions.append(expr, self.span_from_with_op(start));
+        self.register_arithmetic_control(ctx, result_id, handle)?;
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: ctx.expressions.append(expr, self.span_from_with_op(start)),
+                handle,
                 type_id: result_type_id,
                 block_id,
             },
@@ -1162,10 +1256,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             },
         };
 
+        let handle = ctx.expressions.append(expr, span);
+        self.register_arithmetic_control(ctx, result_id, handle)?;
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: ctx.expressions.append(expr, span),
+                handle,
                 type_id: result_type_id,
                 block_id,
             },
@@ -1707,6 +1803,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 return Err(Error::InvalidHeader);
             }
             let version_raw = self.next()?;
+            self.input_version = version_raw;
             let generator = self.next()?;
             let _bound = self.next()?;
             let _schema = self.next()?;
@@ -1736,6 +1833,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 Op::MemoryModel => self.parse_memory_model(inst),
                 Op::EntryPoint => self.parse_entry_point(inst),
                 Op::ExecutionMode => self.parse_execution_mode(inst),
+                Op::ExecutionModeId => self.parse_execution_mode_id(inst),
                 Op::String => self.parse_string(inst),
                 Op::Source => self.parse_source(inst),
                 Op::SourceExtension => self.parse_source_extension(inst),
@@ -1853,7 +1951,60 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             self.future_member_decor.clear();
         }
 
+        if let Some(&id) = self.pending_no_contraction.iter().next() {
+            return Err(Error::UnsupportedNoContraction(id));
+        }
+        if let Some(&id) = self.pending_exp2.iter().next() {
+            return Err(Error::UnsupportedExp2Control(id));
+        }
+        self.check_fp_fast_math_defaults(&module)?;
         Ok(module)
+    }
+
+    /// Accept `FPFastMathDefault` only where dropping it loses nothing.
+    ///
+    /// Once an entry point sets any default, an undecorated instruction has
+    /// exactly the flags set for its floating-point width, and none if that
+    /// width has no default. Expressions without a control can only stand for
+    /// [`FP_FAST_MATH_DEFAULT`], so every entry point must set that mask for
+    /// every floating-point width the module declares.
+    fn check_fp_fast_math_defaults(&self, module: &crate::Module) -> Result<(), Error> {
+        let Some(&(first, _, _)) = self.fp_fast_math_defaults.first() else {
+            return Ok(());
+        };
+        // SPIR-V does not allow both in one entry point.
+        if self.has_no_contraction {
+            return Err(Error::UnsupportedFPFastMathDefault(first));
+        }
+        let float_width = |ty: &LookupType| match module.types[ty.handle].inner {
+            crate::TypeInner::Scalar(crate::Scalar {
+                kind: crate::ScalarKind::Float,
+                width,
+            }) => Some(width),
+            _ => None,
+        };
+        let mut set = FastHashSet::default();
+        for &(entry_point, type_id, mask_id) in &self.fp_fast_math_defaults {
+            let width = self.lookup_type.get(&type_id).and_then(float_width);
+            let mask = self
+                .lookup_constant
+                .get(&mask_id)
+                .and_then(|constant| resolve_constant(module.to_ctx(), &constant.inner));
+            let (Some(width), Some(FP_FAST_MATH_DEFAULT)) = (width, mask) else {
+                return Err(Error::UnsupportedFPFastMathDefault(entry_point));
+            };
+            if !set.insert((entry_point, width)) {
+                return Err(Error::UnsupportedFPFastMathDefault(entry_point));
+            }
+        }
+        for &entry_point in &self.entry_point_ids {
+            for width in self.lookup_type.values().filter_map(float_width) {
+                if !set.contains(&(entry_point, width)) {
+                    return Err(Error::UnsupportedFPFastMathDefault(entry_point));
+                }
+            }
+        }
+        Ok(())
     }
 
     fn parse_capability(&mut self, inst: Instruction) -> Result<(), Error> {
@@ -1862,6 +2013,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let capability = self.next()?;
         let cap =
             spirv::Capability::from_u32(capability).ok_or(Error::UnknownCapability(capability))?;
+        if cap == spirv::Capability::FloatControls2 {
+            self.float_controls2_cap = true;
+        }
         if !SUPPORTED_CAPABILITIES.contains(&cap) {
             if self.options.strict_capabilities {
                 return Err(Error::UnsupportedCapability(cap));
@@ -1878,6 +2032,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let (name, left) = self.next_string(inst.wc - 1)?;
         if left != 0 {
             return Err(Error::InvalidOperand);
+        }
+        if name == "SPV_KHR_float_controls2" {
+            self.float_controls2_ext = true;
         }
         if !SUPPORTED_EXTENSIONS.contains(&name.as_str()) {
             return Err(Error::UnsupportedExtension(name));
@@ -1922,6 +2079,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let exec_model = spirv::ExecutionModel::from_u32(exec_model)
             .ok_or(Error::UnsupportedExecutionModel(exec_model))?;
         let function_id = self.next()?;
+        self.entry_point_ids.push(function_id);
         let (name, left) = self.next_string(inst.wc - 3)?;
         let ep = EntryPoint {
             stage: match exec_model {
@@ -1938,6 +2096,28 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             variable_ids: self.data.by_ref().take(left as usize).collect(),
         };
         self.lookup_entry_point.insert(function_id, ep);
+        Ok(())
+    }
+
+    fn parse_execution_mode_id(&mut self, inst: Instruction) -> Result<(), Error> {
+        self.switch(ModuleState::ExecutionMode, inst.op)?;
+        inst.expect_at_least(3)?;
+        let entry_point = self.next()?;
+        let mode = self.next()?;
+        if mode != spirv::ExecutionMode::FPFastMathDefault as u32 {
+            return Err(Error::UnsupportedExecutionMode(mode));
+        }
+        inst.expect(5)?;
+        let type_id = self.next()?;
+        let mask_id = self.next()?;
+        if !self.entry_point_ids.contains(&entry_point) {
+            return Err(Error::InvalidId(entry_point));
+        }
+        if self.input_version < 0x10200 || !self.float_controls2_cap || !self.float_controls2_ext {
+            return Err(Error::UnsupportedFPFastMathDefault(entry_point));
+        }
+        self.fp_fast_math_defaults
+            .push((entry_point, type_id, mask_id));
         Ok(())
     }
 
@@ -2090,6 +2270,24 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let id = self.next()?;
         let mut dec = self.future_decor.remove(&id).unwrap_or_default();
         self.next_decoration(inst, 2, &mut dec)?;
+        if dec.no_contraction {
+            self.has_no_contraction = true;
+            self.pending_no_contraction.insert(id);
+        }
+        if dec.exp2_control || dec.fp_no_contraction {
+            if dec.no_contraction
+                || self.input_version < 0x10200
+                || !self.float_controls2_cap
+                || !self.float_controls2_ext
+            {
+                return Err(Error::UnsupportedExp2Control(id));
+            }
+            if dec.exp2_control {
+                self.pending_exp2.insert(id);
+            } else {
+                self.pending_no_contraction.insert(id);
+            }
+        }
         self.future_decor.insert(id, dec);
         Ok(())
     }
@@ -2105,6 +2303,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             .remove(&(id, member))
             .unwrap_or_default();
         self.next_decoration(inst, 3, &mut dec)?;
+        if dec.exp2_control || dec.fp_no_contraction {
+            return Err(Error::UnsupportedExp2Control(id));
+        }
+        if dec.no_contraction {
+            return Err(Error::UnsupportedNoContraction(id));
+        }
         self.future_member_decor.insert((id, member), dec);
         Ok(())
     }

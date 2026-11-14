@@ -43,6 +43,7 @@
                 local_variables: [],
                 expressions: [],
                 named_expressions: {},
+                expression_controls: {},
                 body: [
                     Emit((
                         start: 0,

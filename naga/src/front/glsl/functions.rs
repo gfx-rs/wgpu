@@ -1066,6 +1066,7 @@ impl Frontend {
             local_variables: locals,
             expressions,
             named_expressions: crate::NamedExpressions::default(),
+            expression_controls: Default::default(),
             body,
             diagnostic_filter_leaf: None,
         };

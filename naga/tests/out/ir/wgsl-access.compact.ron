@@ -817,6 +817,7 @@
                 33: "l5",
                 40: "l6",
             },
+            expression_controls: {},
             body: [
                 Emit((
                     start: 3,
@@ -1358,6 +1359,7 @@
                 42: "l6",
                 50: "l7",
             },
+            expression_controls: {},
             body: [
                 Emit((
                     start: 3,
@@ -1624,6 +1626,7 @@
             named_expressions: {
                 0: "foo",
             },
+            expression_controls: {},
             body: [
                 Emit((
                     start: 1,
@@ -1663,6 +1666,7 @@
             named_expressions: {
                 0: "a",
             },
+            expression_controls: {},
             body: [
                 Emit((
                     start: 1,
@@ -1696,6 +1700,7 @@
             named_expressions: {
                 0: "p",
             },
+            expression_controls: {},
             body: [
                 Store(
                     pointer: 0,
@@ -1741,6 +1746,7 @@
             named_expressions: {
                 0: "foo",
             },
+            expression_controls: {},
             body: [
                 Emit((
                     start: 0,
@@ -1807,6 +1813,7 @@
                 LocalVariable(1),
             ],
             named_expressions: {},
+            expression_controls: {},
             body: [
                 Call(
                     function: 4,
@@ -1871,6 +1878,7 @@
             named_expressions: {
                 0: "p",
             },
+            expression_controls: {},
             body: [
                 Emit((
                     start: 1,
@@ -1904,6 +1912,7 @@
             named_expressions: {
                 0: "p",
             },
+            expression_controls: {},
             body: [
                 Emit((
                     start: 1,
@@ -1946,6 +1955,7 @@
             named_expressions: {
                 0: "p",
             },
+            expression_controls: {},
             body: [
                 Emit((
                     start: 1,
@@ -1979,6 +1989,7 @@
             named_expressions: {
                 0: "p",
             },
+            expression_controls: {},
             body: [
                 Emit((
                     start: 1,
@@ -2017,6 +2028,7 @@
                 CallResult(9),
             ],
             named_expressions: {},
+            expression_controls: {},
             body: [
                 Call(
                     function: 8,
@@ -2093,6 +2105,7 @@
                 0: "value",
                 2: "p",
             },
+            expression_controls: {},
             body: [
                 Emit((
                     start: 1,
@@ -2146,6 +2159,7 @@
             named_expressions: {
                 2: "p",
             },
+            expression_controls: {},
             body: [
                 Emit((
                     start: 1,
@@ -2209,6 +2223,7 @@
                 1: "inner",
                 2: "delishus",
             },
+            expression_controls: {},
             body: [
                 Emit((
                     start: 1,
@@ -2315,6 +2330,7 @@
                 ),
             ],
             named_expressions: {},
+            expression_controls: {},
             body: [
                 Emit((
                     start: 2,
@@ -2557,6 +2573,7 @@
                     35: "foo_value",
                     47: "value",
                 },
+                expression_controls: {},
                 body: [
                     Emit((
                         start: 3,
@@ -2786,6 +2803,7 @@
                     ),
                 ],
                 named_expressions: {},
+                expression_controls: {},
                 body: [
                     Emit((
                         start: 1,
@@ -2888,6 +2906,7 @@
                     CallResult(15),
                 ],
                 named_expressions: {},
+                expression_controls: {},
                 body: [
                     Call(
                         function: 6,

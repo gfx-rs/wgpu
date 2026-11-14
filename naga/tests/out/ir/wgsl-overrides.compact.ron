@@ -188,6 +188,7 @@
                     15: "phony",
                     16: "phony",
                 },
+                expression_controls: {},
                 body: [
                     Emit((
                         start: 2,

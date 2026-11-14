@@ -2288,6 +2288,39 @@ impl BlockContext<'_> {
             }
         };
 
+        match self
+            .ir_function
+            .expression_controls
+            .get(&expr_handle)
+            .copied()
+        {
+            Some(crate::ArithmeticControl::NoContraction) => {
+                let is_float = self.fun_info[expr_handle]
+                    .ty
+                    .inner_with(&self.ir_module.types)
+                    .scalar_kind()
+                    == Some(crate::ScalarKind::Float);
+                self.writer.decorate_no_contraction(id, is_float);
+            }
+            Some(crate::ArithmeticControl::Exp2F32NoRefactoringV1) => {
+                // The caller's allowed capability set is the target environment
+                // contract. None retains the existing unrestricted writer API.
+                if self.writer.physical_layout.version < 0x10200 {
+                    return Err(Error::UnsupportedVersion(
+                        1,
+                        (self.writer.physical_layout.version >> 8) as u8,
+                    ));
+                }
+                self.writer.require_any(
+                    "scalar Exp2 permissions",
+                    &[spirv::Capability::FloatControls2],
+                )?;
+                self.writer.use_extension("SPV_KHR_float_controls2");
+                self.writer
+                    .decorate(id, spirv::Decoration::FPFastMathMode, &[0]);
+            }
+            None => {}
+        }
         self.cached[expr_handle] = id;
         Ok(())
     }

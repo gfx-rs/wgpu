@@ -398,7 +398,11 @@ impl<W: Write> super::Writer<'_, W> {
         let base_level = level;
         write!(self.out, "{level}")?;
         let name = Baked(result).to_string();
-        writeln!(self.out, "bool {name} = false;")?;
+        if self.hoisted_loop_expressions.contains_key(&result) {
+            writeln!(self.out, "{name} = false;")?;
+        } else {
+            writeln!(self.out, "bool {name} = false;")?;
+        }
         // This prevents variables flowing down a level and causing compile errors.
         if self.options.ray_query_initialization_tracking {
             writeln!(self.out, "{level}{{")?;

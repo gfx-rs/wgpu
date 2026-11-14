@@ -89,6 +89,8 @@ impl Writer {
             debug_strings: vec![],
             debugs: vec![],
             annotations: vec![],
+            no_contraction_annotations: vec![],
+            entry_point_ids: vec![],
             flags: options.flags,
             bounds_check_policies: options.bounds_check_policies,
             zero_initialize_workgroup_memory: options.zero_initialize_workgroup_memory,
@@ -199,6 +201,8 @@ impl Writer {
             debug_strings: take(&mut self.debug_strings).reclaim(),
             debugs: take(&mut self.debugs).reclaim(),
             annotations: take(&mut self.annotations).reclaim(),
+            no_contraction_annotations: take(&mut self.no_contraction_annotations).reclaim(),
+            entry_point_ids: take(&mut self.entry_point_ids).reclaim(),
             lookup_type: take(&mut self.lookup_type).reclaim(),
             lookup_function: take(&mut self.lookup_function).reclaim(),
             lookup_function_type: take(&mut self.lookup_function_type).reclaim(),
@@ -513,6 +517,112 @@ impl Writer {
     pub(super) fn decorate(&mut self, id: Word, decoration: spirv::Decoration, operands: &[Word]) {
         self.annotations
             .push(Instruction::decorate(id, decoration, operands));
+    }
+
+    /// Decorate `id`, the result of an arithmetic instruction, as
+    /// `NoContraction`.
+    ///
+    /// `is_float` says whether the instruction has a floating-point type.
+    /// [`Writer::finish_float_controls`] may rewrite the decoration.
+    pub(super) fn decorate_no_contraction(&mut self, id: Word, is_float: bool) {
+        self.no_contraction_annotations
+            .push((self.annotations.len(), id, is_float));
+        self.decorate(id, spirv::Decoration::NoContraction, &[]);
+    }
+
+    /// Put the module in the explicit `SPV_KHR_float_controls2` form, if it
+    /// declares `FloatControls2`.
+    ///
+    /// A module that does not use the capability is left as it is. Otherwise:
+    ///
+    /// - Every entry point gets an `FPFastMathDefault` execution mode for each
+    ///   floating-point width the module declares, set to
+    ///   [`FP_FAST_MATH_DEFAULT`]. The extension leaves the flags of an
+    ///   undecorated instruction to the client API only while an entry point
+    ///   sets no default at all. Once any default is set, a width without one
+    ///   has no flags.
+    ///
+    /// - `NoContraction` on a floating-point instruction becomes
+    ///   `FPFastMathMode` [`FP_FAST_MATH_NO_CONTRACTION`]. The extension
+    ///   forbids `NoContraction` in an entry point that sets
+    ///   `FPFastMathDefault`.
+    ///
+    /// - `NoContraction` on an integer instruction is removed.
+    ///   `FPFastMathMode` is only valid on instructions that use a
+    ///   floating-point type. Wrapping integer addition, subtraction and
+    ///   multiplication are exact, so no contraction or reassociation of them
+    ///   can change a result.
+    ///
+    /// Both masks spell out what Vulkan assumes for a module that says nothing
+    /// ("Precision and Operation of SPIR-V Instructions" in the Vulkan
+    /// specification), so the rewrite does not change the meaning of any
+    /// instruction. The writer never emits `SignedZeroInfNanPreserve`, hence
+    /// `NotNaN`, `NotInf` and `NSZ` in both.
+    ///
+    /// The result does not depend on how an implementation treats
+    /// `NoContraction` in a module that declares `FloatControls2` without
+    /// `FPFastMathDefault`.
+    ///
+    /// [`FP_FAST_MATH_DEFAULT`]: super::FP_FAST_MATH_DEFAULT
+    /// [`FP_FAST_MATH_NO_CONTRACTION`]: super::FP_FAST_MATH_NO_CONTRACTION
+    fn finish_float_controls(&mut self) {
+        if !self
+            .capabilities_used
+            .contains(&spirv::Capability::FloatControls2)
+        {
+            return;
+        }
+
+        let mut pending = core::mem::take(&mut self.no_contraction_annotations)
+            .into_iter()
+            .peekable();
+        let mut index = 0;
+        self.annotations.retain_mut(|annotation| {
+            let rewrite = pending.next_if(|&(at, _, _)| at == index);
+            index += 1;
+            match rewrite {
+                Some((_, id, true)) => {
+                    *annotation = Instruction::decorate(
+                        id,
+                        spirv::Decoration::FPFastMathMode,
+                        &[super::FP_FAST_MATH_NO_CONTRACTION.bits()],
+                    );
+                    true
+                }
+                Some((_, _, false)) => false,
+                None => true,
+            }
+        });
+
+        let mut widths: Vec<crate::Bytes> = self
+            .lookup_type
+            .keys()
+            .filter_map(|ty| match *ty {
+                LookupType::Local(LocalType::Numeric(NumericType::Scalar(crate::Scalar {
+                    kind: crate::ScalarKind::Float,
+                    width,
+                }))) => Some(width),
+                _ => None,
+            })
+            .collect();
+        widths.sort_unstable();
+        widths.dedup();
+
+        let mask_id =
+            self.get_constant_scalar(crate::Literal::U32(super::FP_FAST_MATH_DEFAULT.bits()));
+        for index in 0..self.entry_point_ids.len() {
+            let entry_point_id = self.entry_point_ids[index];
+            for &width in &widths {
+                let type_id =
+                    self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::float(width)));
+                Instruction::execution_mode_id(
+                    entry_point_id,
+                    spirv::ExecutionMode::FPFastMathDefault,
+                    &[type_id, mask_id],
+                )
+                .to_words(&mut self.logical_layout.execution_modes);
+            }
+        }
     }
 
     /// Return `inner` as a `LocalType`, if that's possible.
@@ -1897,6 +2007,7 @@ impl Writer {
             }),
             debug_info,
         )?;
+        self.entry_point_ids.push(function_id);
 
         let exec_model = match entry_point.stage {
             crate::ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
@@ -4008,6 +4119,8 @@ impl Writer {
                 self.write_entry_point(ir_ep, info, ir_module, &debug_info_inner)?;
             ep_instruction.to_words(&mut self.logical_layout.entry_points);
         }
+
+        self.finish_float_controls();
 
         for capability in self.capabilities_used.iter() {
             Instruction::capability(*capability).to_words(&mut self.logical_layout.capabilities);

@@ -2496,6 +2496,33 @@ pub struct FunctionResult {
     pub binding: Option<Binding>,
 }
 
+/// Restrictions on optimizations of one arithmetic expression result.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum ArithmeticControl {
+    /// The operation must not contract with another operation or reassociate.
+    ///
+    /// This applies only to the decorated producer, not recursively to its
+    /// operands or consumers. It does not specify a rounding mode, denormal
+    /// handling, or the internal evaluation order of a dot product.
+    NoContraction,
+    /// Revision 1 transport permissions for exactly scalar-f32 Math(Exp2).
+    /// Withhold all FPFastMathMode permissions (including reassociation,
+    /// contraction, reciprocal/transform and NaN/Inf/signed-zero assumptions)
+    /// on this producer. DXC lowers it to an isolated precise Exp2 intrinsic.
+    /// SPIR-V requires version 1.2 and FloatControls2. HLSL requires shader
+    /// model 6 or later; the caller must select a qualified DXC compiler, since
+    /// the shader model does not authenticate compiler identity. Other output
+    /// languages reject this control.
+    /// Mutually exclusive with NoContraction via this single tagged map value.
+    /// Does not recursively control arguments/consumers, guarantee numerical
+    /// accuracy/flush behavior, or establish D3D source provenance. The caller
+    /// must qualify those separately, including the protected consumer graph.
+    Exp2F32NoRefactoringV1,
+}
+
 /// A function defined in the module.
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -2541,6 +2568,19 @@ pub struct Function {
     pub expressions: Arena<Expression>,
     /// Map of expressions that have associated variable names
     pub named_expressions: NamedExpressions,
+    /// Optimization restrictions attached to producing arithmetic expressions.
+    ///
+    /// Controls are supported on scalar or equal-shaped vector addition,
+    /// subtraction, and multiplication, and on floating-point dot products, for
+    /// `NoContraction`; or on one-input scalar-f32 `Math(Exp2)` for
+    /// `Exp2F32NoRefactoringV1`.
+    /// Backends must reject controls they cannot preserve. These entries do not
+    /// keep otherwise unused expressions alive during compaction.
+    /// Controlled expressions and their consumers are runtime expressions: they
+    /// cannot be used as constant-or-override local variable initializers. Use
+    /// an emitted expression and a store for runtime initialization instead.
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub expression_controls: FastIndexMap<Handle<Expression>, ArithmeticControl>,
     /// Block of instructions comprising the body of the function.
     pub body: Block,
     /// The leaf of all diagnostic filter rules tree (stored in [`Module::diagnostic_filters`])

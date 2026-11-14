@@ -62,6 +62,7 @@
             local_variables: [],
             expressions: [],
             named_expressions: {},
+            expression_controls: {},
             body: [
                 Emit((
                     start: 0,
@@ -88,6 +89,7 @@
                 local_variables: [],
                 expressions: [],
                 named_expressions: {},
+                expression_controls: {},
                 body: [
                     Call(
                         function: 0,
