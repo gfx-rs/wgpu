@@ -28,21 +28,9 @@ pub enum ImportTextureError {
     /// The descriptor requests an unsupported texture configuration.
     #[error("DMA-BUF GLES import supports only a single-layer, single-sampled 2D texture with one mip level")]
     UnsupportedTextureDescriptor,
-    /// The texture width cannot be represented as an EGL integer.
-    #[error("DMA-BUF width does not fit EGLint")]
-    WidthOutOfRange,
-    /// The texture height cannot be represented as an EGL integer.
-    #[error("DMA-BUF height does not fit EGLint")]
-    HeightOutOfRange,
-    /// The plane stride cannot be represented as an EGL integer.
-    #[error("DMA-BUF stride does not fit EGLint")]
-    StrideOutOfRange,
-    /// The plane offset cannot be represented as an EGL integer.
-    #[error("DMA-BUF offset does not fit EGLint")]
-    OffsetOutOfRange,
-    /// The DRM FourCC cannot be represented as an EGL integer.
-    #[error("DRM FourCC does not fit EGLint")]
-    DrmFormatOutOfRange,
+    /// An import parameter cannot be represented as EGLint.
+    #[error("Import parameter {0} does not fit EGLint")]
+    ParameterOutOfRange(&'static str),
     /// The device was not created from an EGL context.
     #[error("GLES device was not created from an EGL context")]
     MissingEglContext,
@@ -294,17 +282,17 @@ impl super::Device {
             }
 
             let width =
-                i32::try_from(desc.size.width).map_err(|_| ImportTextureError::WidthOutOfRange)?;
+                i32::try_from(desc.size.width).map_err(|_| ImportTextureError::ParameterOutOfRange("width"))?;
 
             let height = i32::try_from(desc.size.height)
-                .map_err(|_| ImportTextureError::HeightOutOfRange)?;
+                .map_err(|_| ImportTextureError::ParameterOutOfRange("height"))?;
 
-            let stride = i32::try_from(stride).map_err(|_| ImportTextureError::StrideOutOfRange)?;
+            let stride = i32::try_from(stride).map_err(|_| ImportTextureError::ParameterOutOfRange("stride"))?;
 
-            let offset = i32::try_from(offset).map_err(|_| ImportTextureError::OffsetOutOfRange)?;
+            let offset = i32::try_from(offset).map_err(|_| ImportTextureError::ParameterOutOfRange("offset"))?;
 
             let drm_format =
-                i32::try_from(drm_format).map_err(|_| ImportTextureError::DrmFormatOutOfRange)?;
+                i32::try_from(drm_format).map_err(|_| ImportTextureError::ParameterOutOfRange("drm_format"))?;
 
             let egl = context
                 .egl_instance()
