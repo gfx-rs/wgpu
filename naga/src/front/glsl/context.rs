@@ -1436,8 +1436,7 @@ impl<'a> Context<'a> {
         *expr = self.add_expression(
             Expression::As {
                 expr: *expr,
-                kind: scalar.kind,
-                convert: Some(scalar.width),
+                target: scalar,
             },
             meta,
         )?;

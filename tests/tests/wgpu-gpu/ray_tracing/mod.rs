@@ -16,6 +16,7 @@ mod as_build;
 mod as_create;
 mod as_use_after_free;
 mod limits;
+mod pipelines;
 mod scene;
 mod shader;
 
@@ -27,6 +28,7 @@ pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
     limits::all_tests(tests);
     scene::all_tests(tests);
     shader::all_tests(tests);
+    pipelines::all_tests(tests);
 }
 
 fn acceleration_structure_limits() -> wgpu::Limits {
@@ -79,12 +81,7 @@ impl AsBuildContext {
             update_mode: AccelerationStructureUpdateMode::Build,
         });
 
-        tlas[0] = Some(TlasInstance::new(
-            &blas,
-            [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
-            0,
-            0xFF,
-        ));
+        tlas[0] = Some(TlasInstance::from_blas_untransformed(&blas));
 
         Self {
             vertices,

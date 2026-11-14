@@ -132,6 +132,10 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
+    fn queue(&self) -> DispatchQueue {
+        unimplemented!()
+    }
+
     fn create_shader_module(
         &self,
         desc: wgpu::ShaderModuleDescriptor<'_>,
@@ -189,6 +193,13 @@ impl DeviceInterface for CustomDevice {
     ) -> wgpu::custom::DispatchComputePipeline {
         let module = desc.module.as_custom::<CustomShaderModule>().unwrap();
         wgpu::custom::DispatchComputePipeline::custom(CustomComputePipeline(module.0.clone()))
+    }
+
+    fn create_ray_tracing_pipeline(
+        &self,
+        _desc: &wgpu::RayTracingPipelineDescriptor<'_>,
+    ) -> wgpu::custom::DispatchRayTracingPipeline {
+        unimplemented!()
     }
 
     unsafe fn create_pipeline_cache(

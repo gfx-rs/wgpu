@@ -132,6 +132,7 @@ cargo_metadata = "0.23"
 cfg_aliases = "0.2.2"
 cfg-if = "1"
 codespan-reporting = { version = "0.13", default-features = false }
+concurrent-queue = { version = "2.5.0", default-features = false }
 diff = "0.1"
 document-features = "0.2.10"
 encase = "0.13"
@@ -162,7 +163,7 @@ libloading = "0.8"
 libm = { version = "0.2.6", default-features = false }
 libtest-mimic = "0.8"
 # Minimum version supported by parking_lot 0.12.3
-lock_api = { version = "0.4.6", default-features = false }
+lock_api = { version = ">=0.4.6, <0.6.0", default-features = false }
 log = "0.4.29"
 macro_rules_attribute = "0.2"
 nanoserde = "0.2"
@@ -177,7 +178,7 @@ obj = "0.10"
 once_cell = { version = "1.21", default-features = false }
 # Firefox has 3.4.0 vendored, so we allow that version in our dependencies
 ordered-float = { version = ">=3, <6.0", default-features = false }
-parking_lot = "0.12.3"
+parking_lot = ">=0.12.3, <0.14.0"
 paste = "1.0.15"
 petgraph = { version = "0.8", default-features = false }
 pico-args = { version = "0.5", features = [
@@ -253,6 +254,7 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
     "MTLCommandBuffer",
     "MTLCommandEncoder",
     "MTLCommandQueue",
+    "MTLArgumentEncoder",
     "MTLComputeCommandEncoder",
     "MTLComputePass",
     "MTLComputePipeline",
@@ -261,6 +263,8 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
     "MTLDevice",
     "MTLDrawable",
     "MTLEvent",
+    "MTLIndirectCommandBuffer",
+    "MTLIndirectCommandEncoder",
     "MTLLibrary",
     "MTLPipeline",
     "MTLPixelFormat",

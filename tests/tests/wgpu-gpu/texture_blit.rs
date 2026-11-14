@@ -29,6 +29,7 @@ static TEXTURE_BLIT_WITH_LINEAR_FILTER_TEST: GpuTestConfiguration = GpuTestConfi
             format: wgpu::TextureFormat::Rgba16Float,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         let target = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -44,6 +45,7 @@ static TEXTURE_BLIT_WITH_LINEAR_FILTER_TEST: GpuTestConfiguration = GpuTestConfi
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         let blitter = wgpu::util::TextureBlitterBuilder::new(
@@ -81,6 +83,7 @@ static TEXTURE_BLIT_WITH_NEAREST_FILTER_TEST: GpuTestConfiguration = GpuTestConf
             format: wgpu::TextureFormat::Rgba16Float,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         let target = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -96,6 +99,7 @@ static TEXTURE_BLIT_WITH_NEAREST_FILTER_TEST: GpuTestConfiguration = GpuTestConf
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         let blitter = wgpu::util::TextureBlitterBuilder::new(
@@ -133,6 +137,7 @@ async fn downsample_red_channel(ctx: &TestingContext, filter: wgpu::FilterMode) 
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let column = [[0, 0, 0, 255], [255, 255, 255, 255]];
@@ -161,6 +166,7 @@ async fn downsample_red_channel(ctx: &TestingContext, filter: wgpu::FilterMode) 
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let blitter =
