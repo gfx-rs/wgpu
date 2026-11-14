@@ -155,11 +155,11 @@ impl GPUDevice {
 
   #[reentrant]
   #[required(1)]
-  #[cppgc]
-  fn create_buffer(
+  fn create_buffer<'a>(
     &self,
+    scope: &mut v8::HandleScope<'a>,
     #[webidl] descriptor: super::buffer::GPUBufferDescriptor,
-  ) -> Result<GPUBuffer, JsErrorBox> {
+  ) -> Result<v8::Local<'a, v8::Object>, JsErrorBox> {
     // wgpu-core would also check this, but it needs to be reported via a JS
     // error, not a validation error. (WebGPU specifies this check on the
     // content timeline.)
@@ -190,8 +190,7 @@ impl GPUDevice {
 
     let wgpu_buffer = self.wgpu_device.create_buffer(&wgpu_descriptor);
 
-    Ok(GPUBuffer {
-      wgpu_buffer,
+    let gpu_buffer = GPUBuffer {
       wgpu_device: self.wgpu_device.clone(),
       usage: descriptor.usage,
       map_state: RefCell::new(if descriptor.mapped_at_creation {
@@ -221,16 +220,51 @@ impl GPUDevice {
           None
         },
       ),
+      wgpu_buffer,
+      weak: std::sync::OnceLock::new(),
+    };
+
+    let external_memory_size = (if gpu_buffer.data.borrow().is_some() {
+      descriptor.size
+    } else {
+      0
     })
+    .saturating_add(if gpu_buffer.wgpu_buffer.check_is_valid().is_ok() {
+      descriptor.size
+    } else {
+      0
+    })
+    .min(i64::MAX as u64) as i64;
+
+    scope.adjust_amount_of_external_allocated_memory(external_memory_size);
+
+    let obj = make_cppgc_object(scope, gpu_buffer);
+
+    let finalizer = v8::Weak::with_finalizer(
+      scope,
+      obj,
+      Box::new(move |isolate: &mut v8::Isolate| {
+        isolate
+          .adjust_amount_of_external_allocated_memory(-external_memory_size);
+      }),
+    );
+
+    deno_core::cppgc::try_unwrap_cppgc_object::<GPUBuffer>(scope, obj.into())
+      .unwrap()
+      .weak
+      .set(finalizer)
+      .unwrap();
+
+    Ok(obj)
   }
 
   #[reentrant]
   #[required(1)]
-  #[cppgc]
-  fn create_texture(
+  fn create_texture<'a>(
     &self,
+    scope: &mut v8::HandleScope<'a>,
     #[webidl] descriptor: super::texture::GPUTextureDescriptor,
-  ) -> Result<GPUTexture, JsErrorBox> {
+  ) -> Result<v8::Local<'a, v8::Object>, JsErrorBox> {
     // Validation of the usage needs to happen on the device timeline, so
     // don't raise an error immediately if it isn't valid. wgpu will
     // reject `TextureUsages::empty()`.
@@ -265,13 +299,43 @@ impl GPUDevice {
 
     let wgpu_texture = self.wgpu_device.create_texture(&wgpu_descriptor);
 
-    Ok(GPUTexture {
+    let external_memory_size = if wgpu_texture.check_valid().is_ok() {
+      wgpu_descriptor
+        .theoretical_memory_footprint()
+        .min(i64::MAX as u64) as i64
+    } else {
+      0
+    };
+
+    let gpu_texture = GPUTexture {
       wgpu_texture,
       default_view: Default::default(),
       dimension: descriptor.dimension,
       format: descriptor.format,
       usage: GPUTextureUsageFlags(usage),
-    })
+      weak: std::sync::OnceLock::new(),
+    };
+
+    scope.adjust_amount_of_external_allocated_memory(external_memory_size);
+
+    let obj = make_cppgc_object(scope, gpu_texture);
+
+    let finalizer = v8::Weak::with_finalizer(
+      scope,
+      obj,
+      Box::new(move |isolate: &mut v8::Isolate| {
+        isolate
+          .adjust_amount_of_external_allocated_memory(-external_memory_size);
+      }),
+    );
+
+    deno_core::cppgc::try_unwrap_cppgc_object::<GPUTexture>(scope, obj.into())
+      .unwrap()
+      .weak
+      .set(finalizer)
+      .unwrap();
+
+    Ok(obj)
   }
 
   #[reentrant]
