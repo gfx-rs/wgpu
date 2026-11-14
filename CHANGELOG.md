@@ -305,6 +305,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix `@builtin(position).w` in fragment shaders on DX12. The HLSL backend now provides 1/w of the clip-space position, as WGSL specifies and the other backends already do, instead of w. By @abdymazhit in [#10733](https://github.com/gfx-rs/wgpu/pull/10733).
 - Fix GLSL output for WGSL vector `select` with integer or boolean values on WebGL 2 and older OpenGL. By @arcusbuilds in [#10457](https://github.com/gfx-rs/wgpu/pull/10457).
 - Generate correct SPIR-V for nested structs containing two-row matrices. By @jimblandy in [#10846](https://github.com/gfx-rs/wgpu/pull/10846)
+- Fix ambiguous `metal::select` calls in the Metal backend's division/remainder zero guards for 64-bit integers: the guards now emit `L`/`uL` suffixed literals (e.g. `metal::select(rhs, 1uL, rhs == 0uL)`) so MSL generated for `i64`/`u64` `/` and `%` compiles. By @Statesman-forge in [#10278](https://github.com/gfx-rs/wgpu/pull/10278).
 
 #### Validation
 
