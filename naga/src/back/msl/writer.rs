@@ -4719,9 +4719,7 @@ impl<W: Write> Writer<W> {
                     }
 
                     write!(self.out, "{level}")?;
-                    let name = self.namer.call("");
-                    self.start_baking_expression(result, &context.expression, &name)?;
-                    self.named_expressions.insert(result, name);
+                    self.write_result_assignment(result, &context.expression)?;
                     self.put_ballot_find_bit(&words, order, 3)?;
                     writeln!(self.out, ";")?;
                 }
