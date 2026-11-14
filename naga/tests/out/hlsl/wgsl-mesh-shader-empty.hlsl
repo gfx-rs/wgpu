@@ -34,7 +34,7 @@ uint3 _ts_main(uint local_invocation_index : SV_GroupIndex)
 [numthreads(64, 1, 1)]
 void ts_main(uint local_invocation_index : SV_GroupIndex) {
     if (local_invocation_index == 0) {
-        taskPayload = (TaskPayload)0;
+        taskPayload.dummy = (uint)0;
     }
     GroupMemoryBarrierWithGroupSync();
     uint3 gridSize = _ts_main(local_invocation_index);
@@ -58,8 +58,21 @@ void _ms_main(in TaskPayload taskPayload, uint local_invocation_index_1 : SV_Gro
 [numthreads(64, 1, 1)]
 [outputtopology("triangle")]
 void ms_main(uint local_invocation_index_1 : SV_GroupIndex, out indices uint3 triangleIndices[1], out vertices MeshVertexOutput_ms_main vertices_[3], out primitives MeshPrimitiveOutput_ms_main primitives_[1], in payload TaskPayload taskPayload) {
+    [loop]
+    for (uint zero_flat_index = local_invocation_index_1; zero_flat_index < 3u; zero_flat_index += 64u) {
+        uint zero_index = zero_flat_index;
+        mesh_output.vertices_[zero_index].position = (float4)0;
+    }
+    [loop]
+    for (uint zero_flat_index_1 = local_invocation_index_1; zero_flat_index_1 < 1u; zero_flat_index_1 += 64u) {
+        uint zero_index_1 = zero_flat_index_1;
+        mesh_output.primitives_[zero_index_1].indices_ = (uint3)0;
+    }
     if (local_invocation_index_1 == 0) {
-        mesh_output = (MeshOutput)0;
+        mesh_output.vertex_count = (uint)0;
+    }
+    if (local_invocation_index_1 == 0) {
+        mesh_output.primitive_count = (uint)0;
     }
     GroupMemoryBarrierWithGroupSync();
     _ms_main(taskPayload, local_invocation_index_1);

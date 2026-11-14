@@ -21,9 +21,9 @@ kernel void test_workgroupUniformLoad(
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    int unnamed = arr_i32_.inner[workgroup_id.x];
+    int _e4 = arr_i32_.inner[workgroup_id.x];
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    if (unnamed > 10) {
+    if (_e4 > 10) {
         metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
         return;
     } else {

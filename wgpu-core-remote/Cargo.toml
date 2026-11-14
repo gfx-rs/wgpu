@@ -27,10 +27,6 @@ targets = [
 [lints]
 workspace = true
 
-[features]
-## Enables serialization via `serde` on common wgpu types.
-serde = ["dep:serde", "wgpu-types/serde", "wgpu-core/serde"]
-
 [dependencies]
 raw-window-handle.workspace = true
 serde = { workspace = true, optional = true }

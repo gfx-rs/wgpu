@@ -2185,8 +2185,10 @@
                 ),
                 As(
                     expr: 2,
-                    kind: Uint,
-                    convert: Some(4),
+                    target: (
+                        kind: Uint,
+                        width: 4,
+                    ),
                 ),
                 Binary(
                     op: NotEqual,
@@ -2290,8 +2292,10 @@
                 ),
                 As(
                     expr: 10,
-                    kind: Uint,
-                    convert: Some(4),
+                    target: (
+                        kind: Uint,
+                        width: 4,
+                    ),
                 ),
                 Binary(
                     op: NotEqual,
@@ -2475,8 +2479,10 @@
                     CallResult(2),
                     As(
                         expr: 18,
-                        kind: Sint,
-                        convert: Some(4),
+                        target: (
+                            kind: Sint,
+                            width: 4,
+                        ),
                     ),
                     Literal(I32(3)),
                     Literal(I32(4)),
@@ -2518,8 +2524,10 @@
                     ),
                     As(
                         expr: 50,
-                        kind: Float,
-                        convert: Some(4),
+                        target: (
+                            kind: Float,
+                            width: 4,
+                        ),
                     ),
                     Binary(
                         op: Multiply,

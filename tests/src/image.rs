@@ -319,13 +319,14 @@ impl MipLayout {
     }
 }
 
-/// Whether the readable aspect of `format` has to be read with a compute shader because it
-/// cannot be the source of a `copy_texture_to_buffer`.
-fn needs_compute_readback(format: TextureFormat) -> bool {
-    matches!(
-        format,
-        TextureFormat::Depth24Plus | TextureFormat::Depth24PlusStencil8
-    )
+/// Whether `aspect` of `format` has to be read with a compute shader because it cannot be
+/// the source of a `copy_texture_to_buffer`.
+fn needs_compute_readback(format: TextureFormat, aspect: TextureAspect) -> bool {
+    aspect != TextureAspect::StencilOnly
+        && matches!(
+            format,
+            TextureFormat::Depth24Plus | TextureFormat::Depth24PlusStencil8
+        )
 }
 
 /// Compute the layout of every mip level of one aspect of `texture`.
@@ -333,16 +334,18 @@ fn needs_compute_readback(format: TextureFormat) -> bool {
 /// When `dense_rows` is `true`, computes a layout with tightly packed rows for
 /// the compute shader path. When false, computes a layout with padding to
 /// `COPY_BYTES_PER_ROW_ALIGNMENT` for `copy_texture_to_buffer`.
-fn mip_layouts(
-    texture: &Texture,
-    aspect: Option<TextureAspect>,
-    dense_rows: bool,
-) -> Vec<MipLayout> {
+fn mip_layouts(texture: &Texture, aspect: TextureAspect, dense_rows: bool) -> Vec<MipLayout> {
     let format = texture.format();
-    let (block_width, block_height) = format.block_dimensions();
+    let aspect_format = format.aspect_specific_format(aspect).unwrap_or(format);
+    let (w_subsampling, h_subsampling) = if format.is_multi_planar_format() {
+        format.subsampling_factors(aspect.to_plane())
+    } else {
+        (1, 1)
+    };
+    let (block_width, block_height) = aspect_format.block_dimensions();
     // `block_copy_size` returns `None` for the aspects that are read with a compute
     // shader, which writes one `f32` or `u32` per texel.
-    let block_size = format.block_copy_size(aspect).unwrap_or(4);
+    let block_size = format.block_copy_size(Some(aspect)).unwrap_or(4);
 
     let mut offset = 0;
     (0..texture.mip_level_count())
@@ -350,10 +353,12 @@ fn mip_layouts(
             // The physical size is what a copy of a whole mip level must use, and it is
             // what the buffer has to hold: for a compressed format, the last row or
             // column of blocks extends past the logical size.
-            let size = texture
+            let mut size = texture
                 .size()
-                .mip_level_size(mip_level, texture.dimension())
-                .physical_size(format);
+                .mip_level_size(mip_level, texture.dimension());
+            size.width /= w_subsampling;
+            size.height /= h_subsampling;
+            let size = size.physical_size(aspect_format);
             let unpadded_bytes_per_row = (size.width / block_width) * block_size;
             let bytes_per_row = if dense_rows {
                 unpadded_bytes_per_row
@@ -552,88 +557,88 @@ fn copy_texture_to_buffer_with_aspect(
 pub struct ReadbackBuffers {
     /// format of the texture this was created for
     texture_format: TextureFormat,
-    /// buffer for color or depth aspects
+    /// One readback per aspect: `All` for most formats, depth and stencil for combined
+    /// depth-stencil formats, and one per plane for multi-planar formats.
+    aspects: Vec<AspectReadback>,
+}
+
+struct AspectReadback {
+    aspect: TextureAspect,
     buffer: Buffer,
     /// layout of `buffer`, one entry per mip level
     layouts: Vec<MipLayout>,
-    /// buffer for stencil aspect
-    buffer_stencil: Option<Buffer>,
-    /// layout of `buffer_stencil`, empty if there is none
-    stencil_layouts: Vec<MipLayout>,
 }
 
 impl ReadbackBuffers {
     pub fn new(device: &Device, texture: &Texture) -> Self {
         let texture_format = texture.format();
-        let combined = texture_format.is_combined_depth_stencil_format();
 
-        // When using the compute shader path (`depth24plus` and
-        // `depth24plus-stencil8`), rows are packed tightly instead of padded to
-        // `COPY_BYTES_PER_ROW_ALIGNMENT`.
-        let layouts = mip_layouts(
-            texture,
-            combined.then_some(TextureAspect::DepthOnly),
-            needs_compute_readback(texture_format),
-        );
-        let buffer = create_readback_buffer(device, "Texture Readback", &layouts);
-
-        let (buffer_stencil, stencil_layouts) = if combined {
-            let layouts = mip_layouts(texture, Some(TextureAspect::StencilOnly), false);
-            let buffer =
-                create_readback_buffer(device, "Texture Stencil-Aspect Readback", &layouts);
-            (Some(buffer), layouts)
+        let aspects: Vec<TextureAspect> = if let Some(planes) = texture_format.planes() {
+            (0..planes)
+                .map(|plane| TextureAspect::from_plane(plane).unwrap())
+                .collect()
+        } else if texture_format.is_combined_depth_stencil_format() {
+            vec![TextureAspect::DepthOnly, TextureAspect::StencilOnly]
         } else {
-            (None, Vec::new())
+            vec![TextureAspect::All]
         };
+
+        let aspects = aspects
+            .into_iter()
+            .map(|aspect| {
+                // When using the compute shader path (`depth24plus` and
+                // `depth24plus-stencil8`), rows are packed tightly instead of padded to
+                // `COPY_BYTES_PER_ROW_ALIGNMENT`.
+                let layouts = mip_layouts(
+                    texture,
+                    aspect,
+                    needs_compute_readback(texture_format, aspect),
+                );
+                let buffer = create_readback_buffer(
+                    device,
+                    &format!("Texture Readback ({aspect:?})"),
+                    &layouts,
+                );
+                AspectReadback {
+                    aspect,
+                    buffer,
+                    layouts,
+                }
+            })
+            .collect();
 
         ReadbackBuffers {
             texture_format,
-            buffer,
-            layouts,
-            buffer_stencil,
-            stencil_layouts,
+            aspects,
         }
     }
 
     pub fn copy_from(&self, device: &Device, encoder: &mut CommandEncoder, texture: &Texture) {
         assert_eq!(
             (texture.format(), texture.mip_level_count() as usize),
-            (self.texture_format, self.layouts.len()),
+            (self.texture_format, self.aspects[0].layouts.len()),
             "texture does not match the one this `ReadbackBuffers` was created for"
         );
 
-        if needs_compute_readback(self.texture_format) {
-            copy_via_compute(
-                device,
-                encoder,
-                texture,
-                &self.buffer,
-                &self.layouts,
-                TextureAspect::DepthOnly,
-            );
-        } else {
-            let aspect = if self.buffer_stencil.is_some() {
-                TextureAspect::DepthOnly
+        for readback in &self.aspects {
+            if needs_compute_readback(self.texture_format, readback.aspect) {
+                copy_via_compute(
+                    device,
+                    encoder,
+                    texture,
+                    &readback.buffer,
+                    &readback.layouts,
+                    TextureAspect::DepthOnly,
+                );
             } else {
-                TextureAspect::All
-            };
-            copy_texture_to_buffer_with_aspect(
-                encoder,
-                texture,
-                &self.buffer,
-                &self.layouts,
-                aspect,
-            );
-        }
-
-        if let Some(buffer_stencil) = &self.buffer_stencil {
-            copy_texture_to_buffer_with_aspect(
-                encoder,
-                texture,
-                buffer_stencil,
-                &self.stencil_layouts,
-                TextureAspect::StencilOnly,
-            );
+                copy_texture_to_buffer_with_aspect(
+                    encoder,
+                    texture,
+                    &readback.buffer,
+                    &readback.layouts,
+                    readback.aspect,
+                );
+            }
         }
     }
 
@@ -666,18 +671,22 @@ impl ReadbackBuffers {
 
     /// Read back one aspect of the texture.
     ///
-    /// Reads the stencil buffer if `aspect` is [`TextureAspect::StencilOnly`] and the
-    /// texture has a separate stencil aspect, and the color or depth buffer otherwise.
+    /// Reads the buffer for `aspect` if the texture has a separate readback for it (the
+    /// stencil aspect of a combined depth-stencil format, or a plane of a multi-planar
+    /// format), and the color or depth buffer otherwise.
     pub async fn retrieve(&self, ctx: &TestingContext, aspect: TextureAspect) -> ReadbackData {
-        let (buffer, layouts) = match (aspect, &self.buffer_stencil) {
-            (TextureAspect::StencilOnly, Some(buffer)) => (buffer, &self.stencil_layouts),
-            _ => (&self.buffer, &self.layouts),
-        };
-        let data = self.retrieve_buffer(ctx, buffer, layouts).await;
-        buffer.unmap();
+        let readback = self
+            .aspects
+            .iter()
+            .find(|readback| readback.aspect == aspect)
+            .unwrap_or(&self.aspects[0]);
+        let data = self
+            .retrieve_buffer(ctx, &readback.buffer, &readback.layouts)
+            .await;
+        readback.buffer.unmap();
         ReadbackData {
             data,
-            layouts: layouts.clone(),
+            layouts: readback.layouts.clone(),
         }
     }
 
@@ -692,12 +701,11 @@ impl ReadbackBuffers {
     }
 
     pub async fn are_zero(&self, ctx: &TestingContext) -> bool {
-        let buffer_zero = self.is_zero(ctx, &self.buffer, &self.layouts).await;
-        let mut stencil_buffer_zero = true;
-        if let Some(buffer) = &self.buffer_stencil {
-            stencil_buffer_zero = self.is_zero(ctx, buffer, &self.stencil_layouts).await;
-        };
-        buffer_zero && stencil_buffer_zero
+        let mut all_zero = true;
+        for readback in &self.aspects {
+            all_zero &= self.is_zero(ctx, &readback.buffer, &readback.layouts).await;
+        }
+        all_zero
     }
 
     /// Assert that the color or depth aspect starts with `expected_data`.
@@ -715,7 +723,10 @@ impl ReadbackBuffers {
         expected_data: &[u8],
         max_diff: u8,
     ) {
-        let result_buffer = self.retrieve_buffer(ctx, &self.buffer, &self.layouts).await;
+        let readback = &self.aspects[0];
+        let result_buffer = self
+            .retrieve_buffer(ctx, &readback.buffer, &readback.layouts)
+            .await;
         assert!(
             result_buffer.len() >= expected_data.len(),
             "Result buffer ({}) smaller than expected buffer ({})",
@@ -727,7 +738,7 @@ impl ReadbackBuffers {
             .iter()
             .zip(expected_data)
             .all(|(a, b)| a.abs_diff(*b) <= max_diff));
-        self.buffer.unmap();
+        readback.buffer.unmap();
     }
 }
 

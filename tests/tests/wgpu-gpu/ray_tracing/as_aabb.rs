@@ -81,12 +81,7 @@ fn aabb_blas_build_and_trace(ctx: TestingContext) {
         flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
         update_mode: AccelerationStructureUpdateMode::Build,
     });
-    tlas[0] = Some(TlasInstance::new(
-        &blas,
-        [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
-        0,
-        0xFF,
-    ));
+    tlas[0] = Some(TlasInstance::from_blas_untransformed(&blas));
 
     let mut encoder = ctx
         .device

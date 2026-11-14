@@ -362,14 +362,10 @@ pub struct Limits {
     /// The maximum total number (`x*y*z`) of rays able to be dispatched by a trace rays call in a ray
     /// tracing pass. Requesting more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`]
     /// is enabled.
-    ///
-    /// Currently only affects wgpu-hal
     pub max_ray_dispatch_count: u32,
     /// The maximum number that one can pass into a ray tracing pipeline creation to be the maximum ray
     /// recursion depth. (the maximum of the max ray recursion depth) Requesting more than 0 during device
     /// creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`] is enabled.
-    ///
-    /// Currently only affects wgpu-hal
     pub max_ray_recursion_depth: u32,
 }
 
@@ -1302,6 +1298,20 @@ bitflags::bitflags! {
         /// GLSL ES has no `noperspective` qualifier, so the GLES backend only supports this
         /// on desktop OpenGL, not on GLES/WebGL2.
         const LINEAR_INTERPOLATION = 1 << 26;
+
+        /// Texture views used for bindings can have any `dimension` compatible with the texture.
+        ///
+        /// When this is not present:
+        /// - Texture views used for bindings must specify the same `dimension` as the
+        ///   `texture_binding_view_dimension` inferred/specified when creating the texture.
+        /// - If `texture_binding_view_dimension` is not specified, it will be inferred from the
+        ///   texture dimension and array layer count.
+        /// - `texture_binding_view_dimension` can only be `cube-array` if
+        ///   [`CUBE_ARRAY_TEXTURES`](Self::CUBE_ARRAY_TEXTURES) is supported, and the array
+        ///   layer count must then be a multiple of 6.
+        ///
+        /// See <https://gpuweb.github.io/gpuweb/#dom-gpudevice-createtexture>
+        const ARBITRARY_BINDING_VIEW_DIMENSIONS = 1 << 27;
     }
 }
 
