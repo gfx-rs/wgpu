@@ -308,13 +308,18 @@ impl Surface {
     pub(crate) fn present_inner(&self) -> Result<Status, SurfaceError> {
         profiling::scope!("Surface::present");
 
-        let presentation = self.presentation.lock();
-        let present = match presentation.as_ref() {
+        let mut presentation = self.presentation.lock();
+        let present = match presentation.as_mut() {
             Some(present) => present,
             None => return Err(SurfaceError::NotConfigured),
         };
 
-        present.device.check_is_valid()?;
+        if let Err(e) = present.device.check_is_valid() {
+            // A lost device will never present this texture, so release it.
+            // Otherwise the surface can't be reconfigured or dropped.
+            present.acquired_texture = None;
+            return Err(e.into());
+        }
         let queue = present
             .device
             .get_queue()
@@ -423,9 +428,12 @@ impl Surface {
             None => return Err(SurfaceError::NotConfigured),
         };
 
-        let device = &present.device;
+        if let Err(e) = present.device.check_is_valid() {
+            present.acquired_texture = None;
+            return Err(e.into());
+        }
 
-        device.check_is_valid()?;
+        let device = &present.device;
 
         let texture = present
             .acquired_texture
