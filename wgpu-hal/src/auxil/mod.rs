@@ -234,6 +234,27 @@ pub(crate) fn adjust_raw_limits(mut limits: wgt::Limits) -> wgt::Limits {
     limits
 }
 
+#[cfg_attr(not(any_backend), allow(dead_code))]
+pub(crate) fn supports_core_features_and_limits(
+    limits: &wgt::Limits,
+    downlevel: &wgt::DownlevelCapabilities,
+) -> bool {
+    // Check "All alignment-class limits must be powers of 2."
+    let min_uniform_buffer_offset_alignment = limits.min_uniform_buffer_offset_alignment;
+    if !min_uniform_buffer_offset_alignment.is_power_of_two() {
+        return false;
+    }
+    let min_storage_buffer_offset_alignment = limits.min_storage_buffer_offset_alignment;
+    if !min_storage_buffer_offset_alignment.is_power_of_two() {
+        return false;
+    }
+
+    let mut min_limits = wgt::Limits::defaults();
+    min_limits.zero_native_only();
+
+    min_limits.check_limits(limits) && downlevel.is_webgpu_compliant()
+}
+
 /// Evenly allocates space to each limit,
 /// capping them only if strictly necessary.
 pub fn cap_limits_to_be_under_the_sum_limit<const N: usize>(
@@ -255,6 +276,70 @@ pub fn cap_limits_to_be_under_the_sum_limit<const N: usize>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn compliant_downlevel() -> wgt::DownlevelCapabilities {
+        wgt::DownlevelCapabilities {
+            flags: wgt::DownlevelFlags::compliant(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn non_power_of_two_uniform_alignment_always_rejected() {
+        let limits = wgt::Limits {
+            min_uniform_buffer_offset_alignment: 3,
+            ..wgt::Limits::defaults()
+        };
+        assert!(!supports_core_features_and_limits(
+            &limits,
+            &compliant_downlevel()
+        ));
+    }
+
+    #[test]
+    fn non_power_of_two_storage_alignment_always_rejected() {
+        let limits = wgt::Limits {
+            min_storage_buffer_offset_alignment: 96,
+            ..wgt::Limits::defaults()
+        };
+        assert!(!supports_core_features_and_limits(
+            &limits,
+            &compliant_downlevel()
+        ));
+    }
+
+    #[test]
+    fn core_features_and_limits_require_default_limits_and_compliant_downlevel() {
+        let downlevel = compliant_downlevel();
+        assert!(supports_core_features_and_limits(
+            &wgt::Limits::defaults(),
+            &downlevel
+        ));
+
+        let downlevel = wgt::DownlevelCapabilities {
+            flags: wgt::DownlevelFlags::compliant() - wgt::DownlevelFlags::SURFACE_VIEW_FORMATS,
+            ..Default::default()
+        };
+        assert!(supports_core_features_and_limits(
+            &wgt::Limits::defaults(),
+            &downlevel
+        ));
+
+        let limits = wgt::Limits {
+            max_texture_dimension_1d: 1,
+            ..wgt::Limits::defaults()
+        };
+        assert!(!supports_core_features_and_limits(&limits, &downlevel));
+
+        let downlevel = wgt::DownlevelCapabilities {
+            flags: wgt::DownlevelFlags::empty(),
+            ..Default::default()
+        };
+        assert!(!supports_core_features_and_limits(
+            &wgt::Limits::defaults(),
+            &downlevel
+        ));
+    }
 
     #[test]
     fn test_cap_limits_to_be_under_the_sum_limit() {

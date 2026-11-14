@@ -843,7 +843,42 @@ impl BlockContext<'_> {
 
         let sampler_id = self.get_handle_id(sampler);
 
-        let coordinates = self.write_image_coordinates(coordinate, array_index, block)?;
+        let mut coordinates = self.write_image_coordinates(coordinate, array_index, block)?;
+        let is_cube = matches!(
+            self.ir_module.types[image_type].inner,
+            crate::TypeInner::Image {
+                dim: crate::ImageDimension::Cube,
+                ..
+            }
+        );
+        if is_cube {
+            // Replace NaN components of the direction with zero so that cube
+            // face selection behaves consistently across drivers.
+            let size = coordinates
+                .size
+                .ok_or(Error::Validation("cube coordinate type"))?;
+            let bool_type_id = self.get_numeric_type_id(NumericType::Vector {
+                size,
+                scalar: crate::Scalar::BOOL,
+            });
+            let is_nan_id = self.gen_id();
+            block.body.push(Instruction::relational(
+                spirv::Op::IsNan,
+                bool_type_id,
+                is_nan_id,
+                coordinates.value_id,
+            ));
+            let zero_id = self.writer.get_constant_null(coordinates.type_id);
+            let sanitized_id = self.gen_id();
+            block.body.push(Instruction::select(
+                coordinates.type_id,
+                sanitized_id,
+                is_nan_id,
+                zero_id,
+                coordinates.value_id,
+            ));
+            coordinates.value_id = sanitized_id;
+        }
         let coordinates_id = if clamp_to_edge {
             self.writer.require_any(
                 "clamp sample coordinates to edge",

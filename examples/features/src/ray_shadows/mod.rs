@@ -218,12 +218,7 @@ impl crate::framework::Example for Example {
             cache: None,
         });
 
-        tlas[0] = Some(wgpu::TlasInstance::new(
-            &blas,
-            [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
-            0,
-            0xFF,
-        ));
+        tlas[0] = Some(wgpu::TlasInstance::from_blas_untransformed(&blas));
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });

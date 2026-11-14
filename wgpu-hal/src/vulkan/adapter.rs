@@ -683,9 +683,11 @@ impl PhysicalDeviceFeatures {
             | F::PIPELINE_CACHE
             | F::SHADER_EARLY_DEPTH_TEST
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | F::TEXTURE_ATOMIC;
+            | F::TEXTURE_ATOMIC
+            | F::UNRESTRICTED_BYTES_PER_ROW;
 
         let mut dl_flags = Df::empty()
+            | Df::ARBITRARY_BINDING_VIEW_DIMENSIONS
             | Df::BASE_VERTEX
             | Df::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED
             | Df::COMPARISON_SAMPLERS
@@ -2369,10 +2371,12 @@ impl super::Instance {
                 phd_capabilities.properties.vendor_id == db::nvidia::VENDOR,
             );
             workarounds.set(
+                super::Workarounds::POLYFILL_MESH_TASK_WORKGROUP_ZERO_INIT,
+                phd_capabilities.is_driver(vk::DriverId::AMD_PROPRIETARY),
+            );
+            workarounds.set(
                 super::Workarounds::PAD_TIMELINE_SEMAPHORE_VALUES,
-                phd_capabilities.driver.as_ref().is_some_and(|driver| {
-                    driver.driver_id == vk::DriverId::IMAGINATION_PROPRIETARY
-                }),
+                phd_capabilities.is_driver(vk::DriverId::IMAGINATION_PROPRIETARY),
             );
         };
 
@@ -2536,6 +2540,7 @@ impl super::Instance {
                 .map(|maintenance_5| maintenance_5.depth_stencil_swizzle_one_support == vk::TRUE)
                 .unwrap_or(false),
             ray_tracing_pipeline_group_data_size: alignments.ray_tracing_pipeline_group_data_size,
+            shader_binding_table_alignment: alignments.ray_tracing_pipeline_data_offset_alignment,
             store_op_none: phd_capabilities.device_api_version >= vk::API_VERSION_1_3
                 || (phd_capabilities.device_api_version >= vk::API_VERSION_1_2
                     && phd_capabilities.supports_extension(khr::dynamic_rendering::NAME))
@@ -2568,6 +2573,15 @@ impl super::Instance {
             downlevel_flags,
             private_caps,
             workarounds,
+        };
+
+        let available_features = if crate::auxil::supports_core_features_and_limits(
+            &capabilities.limits,
+            &capabilities.downlevel,
+        ) {
+            available_features | wgt::Features::CORE_FEATURES_AND_LIMITS
+        } else {
+            available_features
         };
 
         Some(crate::ExposedAdapter {
