@@ -14,8 +14,8 @@ struct test_workgroupUniformLoadInput {
 kernel void test_workgroupUniformLoad(
   metal::uint3 workgroup_id [[threadgroup_position_in_grid]]
 , uint __local_invocation_index [[thread_index_in_threadgroup]]
-, threadgroup type_2& arr_i32_
 ) {
+    threadgroup type_2 arr_i32_;
     if (__local_invocation_index == 0u) {
         arr_i32_ = {};
     }

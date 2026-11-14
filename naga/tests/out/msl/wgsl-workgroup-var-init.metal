@@ -21,9 +21,9 @@ struct WStruct {
 
 kernel void main_(
   uint __local_invocation_index [[thread_index_in_threadgroup]]
-, threadgroup WStruct& w_mem
 , device type_1& output [[buffer(0)]]
 ) {
+    threadgroup WStruct w_mem;
     if (__local_invocation_index == 0u) {
         w_mem.arr = {};
         metal::atomic_store_explicit(&w_mem.atom, 0, metal::memory_order_relaxed);

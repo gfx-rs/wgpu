@@ -61,8 +61,6 @@ void test_msl_packed_vec3_(
 
 kernel void main_(
   uint __local_invocation_index [[thread_index_in_threadgroup]]
-, threadgroup type_2& wg
-, threadgroup metal::atomic_uint& at_1
 , device FooStruct& alignment [[user(fake0)]]
 , device type_6 const& dummy [[user(fake0)]]
 , constant type_8& float_vecs [[user(fake0)]]
@@ -72,6 +70,8 @@ kernel void main_(
 , constant type_15& global_nested_arrays_of_matrices_4x2_ [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
+    threadgroup type_2 wg;
+    threadgroup metal::atomic_uint at_1;
     if (__local_invocation_index == 0u) {
         wg = {};
         metal::atomic_store_explicit(&at_1, 0, metal::memory_order_relaxed);

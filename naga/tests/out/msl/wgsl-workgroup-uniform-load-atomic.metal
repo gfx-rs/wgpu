@@ -18,10 +18,10 @@ kernel void test_atomic_workgroup_uniform_load(
   metal::uint3 workgroup_id [[threadgroup_position_in_grid]]
 , metal::uint3 local_id [[thread_position_in_threadgroup]]
 , uint __local_invocation_index [[thread_index_in_threadgroup]]
-, threadgroup metal::atomic_uint& wg_scalar
-, threadgroup metal::atomic_int& wg_signed
-, threadgroup AtomicStruct& wg_struct
 ) {
+    threadgroup metal::atomic_uint wg_scalar;
+    threadgroup metal::atomic_int wg_signed;
+    threadgroup AtomicStruct wg_struct;
     if (__local_invocation_index == 0u) {
         metal::atomic_store_explicit(&wg_scalar, 0, metal::memory_order_relaxed);
         metal::atomic_store_explicit(&wg_signed, 0, metal::memory_order_relaxed);

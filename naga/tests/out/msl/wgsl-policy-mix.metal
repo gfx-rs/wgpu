@@ -57,8 +57,8 @@ kernel void main_(
 , device InStorage const& in_storage [[user(fake0)]]
 , constant InUniform& in_uniform [[user(fake0)]]
 , metal::texture2d_array<float, metal::access::sample> image_2d_array [[user(fake0)]]
-, threadgroup type_5& in_workgroup
 ) {
+    threadgroup type_5 in_workgroup;
     type_6 in_private = {};
     if (__local_invocation_index == 0u) {
         in_workgroup = {};
