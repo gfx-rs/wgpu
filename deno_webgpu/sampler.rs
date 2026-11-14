@@ -6,12 +6,12 @@ use deno_core::op2;
 use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
+use wgpu_core::resource::Labeled;
 
 use crate::error::GPUGenericError;
 
 pub struct GPUSampler {
   pub wgpu_sampler: Arc<wgpu_core::resource::Sampler>,
-  pub label: String,
 }
 
 impl WebIdlInterfaceConverter for GPUSampler {
@@ -35,7 +35,7 @@ impl GPUSampler {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_sampler.label().to_string()
   }
   #[setter]
   #[string]

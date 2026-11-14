@@ -30,7 +30,10 @@ ignored = ["cfg_aliases"]
 
 [lints.rust]
 missing_debug_implementations = "warn"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wgpu_validate_locks)'] }
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(wgpu_validate_locks)',
+    'cfg(wgpu_validate_locks_debug)',
+] }
 
 [lib]
 
@@ -175,7 +178,7 @@ wgpu-core-deps-emscripten = { workspace = true, optional = true }
 [target.'cfg(all(target_family = "wasm", not(target_os = "emscripten")))'.dependencies]
 wgpu-core-deps-wasm = { workspace = true, optional = true }
 
-[target.'cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))'.dependencies]
+[target.'cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd", target_os = "netbsd"))'.dependencies]
 wgpu-core-deps-linux-android-bsd = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]

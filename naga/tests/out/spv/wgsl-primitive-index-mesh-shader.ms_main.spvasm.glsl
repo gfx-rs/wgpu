@@ -24,7 +24,7 @@ struct _13
 
 shared _13 _14;
 
-void _30()
+void _31()
 {
     if (gl_LocalInvocationIndex == 0u)
     {
@@ -42,19 +42,19 @@ void _30()
 
 void main()
 {
-    _30();
+    _31();
     barrier();
-    uint _75 = min(_14._m2, 3u);
-    uint _78 = min(_14._m3, 1u);
-    SetMeshOutputsEXT(_75, _78);
-    for (uint _68 = gl_LocalInvocationIndex; _68 < _75; _68++)
+    uint _74 = min(_14._m2, 3u);
+    uint _77 = min(_14._m3, 1u);
+    SetMeshOutputsEXT(_74, _77);
+    for (uint _67 = gl_LocalInvocationIndex; _67 < _74; _67++)
     {
-        gl_MeshVerticesEXT[_68].gl_Position = _14._m0[_68]._m0;
+        gl_MeshVerticesEXT[_67].gl_Position = _14._m0[_67]._m0;
     }
-    for (uint _69 = gl_LocalInvocationIndex; _69 < _78; _69++)
+    for (uint _68 = gl_LocalInvocationIndex; _68 < _77; _68++)
     {
-        gl_PrimitiveTriangleIndicesEXT[_69] = _14._m1[_69]._m0;
-        gl_MeshPrimitivesEXT[_69].gl_PrimitiveID = _14._m1[_69]._m1;
+        gl_PrimitiveTriangleIndicesEXT[_68] = _14._m1[_68]._m0;
+        gl_MeshPrimitivesEXT[_68].gl_PrimitiveID = _14._m1[_68]._m1;
     }
 }
 

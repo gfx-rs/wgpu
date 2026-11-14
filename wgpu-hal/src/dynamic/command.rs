@@ -101,14 +101,14 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: BufferBinding<'a, dyn DynBuffer>,
+        binding: BufferBinding<'a, dyn DynBuffer, wgt::BufferAddress>,
         format: wgt::IndexFormat,
     );
 
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
-        binding: BufferBinding<'a, dyn DynBuffer>,
+        binding: BufferBinding<'a, dyn DynBuffer, wgt::BufferAddress>,
     );
     unsafe fn set_viewport(&mut self, rect: &Rect<f32>, depth_range: Range<f32>);
     unsafe fn set_scissor_rect(&mut self, rect: &Rect<u32>);
@@ -178,6 +178,7 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     );
+    unsafe fn encode_deferred_multi_draws(&mut self);
 
     unsafe fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<dyn DynQuerySet>);
     unsafe fn end_compute_pass(&mut self);
@@ -605,6 +606,10 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
         };
     }
 
+    unsafe fn encode_deferred_multi_draws(&mut self) {
+        unsafe { C::encode_deferred_multi_draws(self) };
+    }
+
     unsafe fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<dyn DynQuerySet>) {
         let desc = ComputePassDescriptor {
             label: desc.label,
@@ -645,7 +650,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: BufferBinding<'a, dyn DynBuffer>,
+        binding: BufferBinding<'a, dyn DynBuffer, wgt::BufferAddress>,
         format: wgt::IndexFormat,
     ) {
         let binding = binding.expect_downcast();
@@ -655,7 +660,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
-        binding: BufferBinding<'a, dyn DynBuffer>,
+        binding: BufferBinding<'a, dyn DynBuffer, wgt::BufferAddress>,
     ) {
         let binding = binding.expect_downcast();
         unsafe { self.set_vertex_buffer(index, binding) };

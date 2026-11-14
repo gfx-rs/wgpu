@@ -29,14 +29,14 @@
 
 use core::num::NonZeroU64;
 
-use alloc::{boxed::Box, string::String, string::ToString, sync::Arc};
+use alloc::{boxed::Box, string::String, sync::Arc};
 
 use hashbrown::HashMap;
 
 use crate::{
     device::{Device, DeviceError},
     hal_label,
-    pipeline::{CreateComputePipelineError, CreateShaderModuleError},
+    pipeline::{CreatePipelineError, CreateShaderModuleError},
     resource::Buffer,
     snatch::SnatchGuard,
     track::BufferTracker,
@@ -65,7 +65,7 @@ pub enum TimestampNormalizerInitError {
     #[error("Failed to create pipeline layout")]
     PipelineLayout(#[source] DeviceError),
     #[error("Failed to create compute pipeline")]
-    ComputePipeline(#[from] CreateComputePipelineError),
+    ComputePipeline(#[from] CreatePipelineError),
 }
 
 /// Normalizes GPU timestamps to have a consistent 1GHz period.
@@ -226,20 +226,7 @@ impl TimestampNormalizer {
             let pipeline = device
                 .raw()
                 .create_compute_pipeline(&pipeline_desc)
-                .map_err(|err| match err {
-                    hal::PipelineError::Device(error) => {
-                        CreateComputePipelineError::Device(device.handle_hal_error(error))
-                    }
-                    hal::PipelineError::Linkage(_stages, msg) => {
-                        CreateComputePipelineError::Internal(msg)
-                    }
-                    hal::PipelineError::EntryPoint(_stage) => CreateComputePipelineError::Internal(
-                        crate::device::ENTRYPOINT_FAILURE_ERROR.to_string(),
-                    ),
-                    hal::PipelineError::PipelineConstants(_, error) => {
-                        CreateComputePipelineError::PipelineConstants(error)
-                    }
-                })?;
+                .map_err(|error| device.handle_hal_pipeline_error(error))?;
 
             Ok(Self {
                 state: Some(InternalState {
@@ -253,8 +240,16 @@ impl TimestampNormalizer {
 
     /// Create a bind group for normalizing timestamps in `buffer`.
     ///
-    /// This function is unsafe because it does not know that `buffer_size` is
-    /// the true size of the buffer.
+    /// `buffer_size` must be 4B-aligned, so that it is valid as a storage binding,
+    /// must be the same or more than the application-visible buffer size, and must
+    /// not overrun the buffer. This function is unsafe because it does not know and
+    /// cannot check whether `buffer_size` meets these requirements.
+    ///
+    /// The buffer size passed here is used to construct a binding that must be
+    /// able to access the full application-visible range of the buffer. It is
+    /// not used to check the destination range of query resolution requests. That
+    /// uses the application-requested buffer size, obtained from the `wgpu_core`
+    /// `Buffer`.
     pub unsafe fn create_normalization_bind_group(
         &self,
         device: &Device,

@@ -127,6 +127,7 @@ fn texture_sample() -> @location(0) vec4<f32> {
     a += textureSampleLevel(image_2d, sampler_reg, tc, level);
     a += textureSampleLevel(image_2d, sampler_reg, tc, level, offset);
     a += textureSampleBias(image_2d, sampler_reg, tc, 2.0, offset);
+    a += textureSampleGrad(image_2d, sampler_reg, tc, tc, tc);
     a += textureSampleBaseClampToEdge(image_2d, sampler_reg, tc);
     a += textureSample(image_2d_array, sampler_reg, tc, 0u);
     a += textureSample(image_2d_array, sampler_reg, tc, 0u, offset);
@@ -138,12 +139,16 @@ fn texture_sample() -> @location(0) vec4<f32> {
     a += textureSampleLevel(image_2d_array, sampler_reg, tc, 0, level);
     a += textureSampleLevel(image_2d_array, sampler_reg, tc, 0, level, offset);
     a += textureSampleBias(image_2d_array, sampler_reg, tc, 0, 2.0, offset);
+    a += textureSampleGrad(image_cube, sampler_reg, tc3, tc3, tc3);
     a += textureSample(image_cube_array, sampler_reg, tc3, 0u);
     a += textureSampleLevel(image_cube_array, sampler_reg, tc3, 0u, level);
     a += textureSampleBias(image_cube_array, sampler_reg, tc3, 0u, 2.0);
+    a += textureSampleGrad(image_cube_array, sampler_reg, tc3, 0u, tc3, tc3);
     a += textureSample(image_cube_array, sampler_reg, tc3, 0);
     a += textureSampleLevel(image_cube_array, sampler_reg, tc3, 0, level);
     a += textureSampleBias(image_cube_array, sampler_reg, tc3, 0, 2.0);
+    a += textureSampleGrad(image_cube_array, sampler_reg, tc3, 0, tc3, tc3);
+    a += textureSampleGrad(image_3d, sampler_reg, tc3, tc3, tc3);
     return a;
 }
 

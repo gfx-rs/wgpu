@@ -5,7 +5,7 @@ use crate::{
     binding_model,
     ray_tracing::BlasCompactReadyPendingClosure,
     resource::{
-        Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, Labeled,
+        Buffer, BufferAccessError, BufferAccessResult, BufferMapCallback, Labeled,
         RawResourceAccess, ResourceErrorIdent,
     },
     snatch::SnatchGuard,
@@ -17,7 +17,7 @@ use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
-    BufferAddress, DeviceLostReason, TextureFormat,
+    BufferAddress, DeviceLostReason, MapMode, TextureFormat,
 };
 
 pub(crate) mod bgl;
@@ -25,6 +25,7 @@ mod life;
 pub mod queue;
 pub mod ray_tracing;
 pub mod resource;
+mod stage_compiler;
 pub(crate) mod surface_config;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
@@ -39,14 +40,6 @@ pub(crate) const ENTRYPOINT_FAILURE_ERROR: &str = "The given EntryPoint is Inval
 
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 pub type QueueDescriptor<'a> = wgt::QueueDescriptor<Label<'a>>;
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum HostMap {
-    Read,
-    Write,
-}
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -171,8 +164,9 @@ impl RenderPassContext {
     }
 }
 
-pub type BufferMapPendingClosure = (BufferMapOperation, BufferAccessResult);
+pub type BufferMapPendingClosure = (Option<BufferMapCallback>, BufferAccessResult);
 
+#[must_use]
 #[derive(Default)]
 pub struct UserClosures {
     pub mappings: Vec<BufferMapPendingClosure>,
@@ -196,8 +190,8 @@ impl UserClosures {
 
         // Mappings _must_ be fired before submissions, as the spec requires all mapping callbacks that are registered before
         // a on_submitted_work_done callback to be fired before the on_submitted_work_done callback.
-        for (mut operation, status) in self.mappings {
-            if let Some(callback) = operation.callback.take() {
+        for (mut callback, status) in self.mappings {
+            if let Some(callback) = callback.take() {
                 callback(status);
             }
         }
@@ -230,7 +224,7 @@ pub(crate) fn map_buffer(
     buffer: &Buffer,
     offset: BufferAddress,
     size: BufferAddress,
-    kind: HostMap,
+    kind: MapMode,
     snatch_guard: &SnatchGuard,
 ) -> Result<hal::BufferMapping, BufferAccessError> {
     let raw_device = buffer.device.raw();
@@ -241,7 +235,7 @@ pub(crate) fn map_buffer(
             .map_err(|e| buffer.device.handle_hal_error(e))?
     };
 
-    if !mapping.is_coherent && kind == HostMap::Read {
+    if !mapping.is_coherent && kind == MapMode::Read {
         #[allow(clippy::single_range_in_vec_init)]
         unsafe {
             raw_device.invalidate_mapped_ranges(raw_buffer, &[offset..offset + size]);
@@ -268,7 +262,7 @@ pub(crate) fn map_buffer(
 
     // We can't call flush_mapped_ranges in this case, so we can't drain the uninitialized ranges either
     if !mapping.is_coherent
-        && kind == HostMap::Read
+        && kind == MapMode::Read
         && !buffer.usage.contains(wgt::BufferUsages::MAP_WRITE)
     {
         for uninitialized in buffer
@@ -296,7 +290,7 @@ pub(crate) fn map_buffer(
 
             // NOTE: This is only possible when MAPPABLE_PRIMARY_BUFFERS is enabled.
             if !mapping.is_coherent
-                && kind == HostMap::Read
+                && kind == MapMode::Read
                 && buffer.usage.contains(wgt::BufferUsages::MAP_WRITE)
             {
                 unsafe { raw_device.flush_mapped_ranges(raw_buffer, &[uninitialized]) };

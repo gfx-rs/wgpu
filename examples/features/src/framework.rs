@@ -76,6 +76,9 @@ fn init_logger() {
             // of these default filters.
             env_logger::builder()
                 .filter_level(log::LevelFilter::Info)
+                // Millisecond timestamps; see
+                // <https://github.com/gfx-rs/wgpu/issues/9248>.
+                .format_timestamp_millis()
                 .parse_default_env()
                 .init();
         }
@@ -675,6 +678,7 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
                     format,
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 });
 
                 let dst_view = dst_texture.create_view(&wgpu::TextureViewDescriptor::default());

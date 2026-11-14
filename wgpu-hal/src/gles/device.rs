@@ -63,7 +63,7 @@ impl CompilationContext<'_> {
             log::trace!(
                 "Rebind buffer: {:?} -> {}, register={:?}, slot={}",
                 var.name.as_ref(),
-                &name,
+                name,
                 register,
                 slot
             );
@@ -301,7 +301,6 @@ impl super::Device {
         super::Buffer {
             raw: Some(glow::NativeBuffer(name)),
             target,
-            size: desc.size,
             map_flags,
             map_state: Arc::new(Mutex::new(super::BufferMapState {
                 mapped: false,
@@ -685,7 +684,7 @@ impl crate::Device for super::Device {
     unsafe fn create_buffer(
         &self,
         desc: &crate::BufferDescriptor,
-    ) -> Result<super::Buffer, crate::DeviceError> {
+    ) -> Result<(super::Buffer, wgt::BufferAddress), crate::DeviceError> {
         let target = if desc.usage.contains(wgt::BufferUses::INDEX) {
             glow::ELEMENT_ARRAY_BUFFER
         } else {
@@ -702,18 +701,20 @@ impl crate::Device for super::Device {
                 .contains(PrivateCapabilities::BUFFER_ALLOCATION);
 
         if emulate_map && desc.usage.intersects(wgt::BufferUses::MAP_WRITE) {
-            return Ok(super::Buffer {
-                raw: None,
-                target,
-                size: desc.size,
-                map_flags: 0,
-                map_state: Arc::new(Mutex::new(super::BufferMapState {
-                    mapped: false,
-                    data: Some(vec![0; desc.size as usize]),
-                    offset_of_current_mapping: 0,
-                })),
-                drop_guard: None,
-            });
+            return Ok((
+                super::Buffer {
+                    raw: None,
+                    target,
+                    map_flags: 0,
+                    map_state: Arc::new(Mutex::new(super::BufferMapState {
+                        mapped: false,
+                        data: Some(vec![0; desc.size as usize]),
+                        offset_of_current_mapping: 0,
+                    })),
+                    drop_guard: None,
+                },
+                desc.size,
+            ));
         }
 
         let gl = &self.shared.context.lock();
@@ -806,18 +807,20 @@ impl crate::Device for super::Device {
 
         self.counters.buffers.add(1);
 
-        Ok(super::Buffer {
-            raw,
-            target,
-            size: desc.size,
-            map_flags,
-            map_state: Arc::new(Mutex::new(super::BufferMapState {
-                mapped: false,
-                data,
-                offset_of_current_mapping: 0,
-            })),
-            drop_guard: None,
-        })
+        Ok((
+            super::Buffer {
+                raw,
+                target,
+                map_flags,
+                map_state: Arc::new(Mutex::new(super::BufferMapState {
+                    mapped: false,
+                    data,
+                    offset_of_current_mapping: 0,
+                })),
+                drop_guard: None,
+            },
+            desc.size,
+        ))
     }
 
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
@@ -1221,7 +1224,7 @@ impl crate::Device for super::Device {
     ) -> Result<super::TextureView, crate::DeviceError> {
         self.counters.texture_views.add(1);
         Ok(super::TextureView {
-            //TODO: use `conv::map_view_dimension(desc.dimension)`?
+            //TODO: use `super::Texture::target_for_view_dimension(desc.dimension)`?
             inner: texture.inner.clone(),
             aspects: crate::FormatAspects::new(texture.format, desc.range.aspect),
             mip_levels: desc.range.mip_range(texture.mip_level_count),
@@ -1287,10 +1290,10 @@ impl crate::Device for super::Device {
         // If clamp is not 1, we know anisotropy is supported up to 16x
         if desc.anisotropy_clamp != 1 {
             unsafe {
-                gl.sampler_parameter_i32(
+                gl.sampler_parameter_f32(
                     raw,
                     glow::TEXTURE_MAX_ANISOTROPY,
-                    desc.anisotropy_clamp as i32,
+                    f32::from(desc.anisotropy_clamp),
                 )
             };
         }
@@ -1491,10 +1494,7 @@ impl crate::Device for super::Device {
                     super::RawBinding::Buffer {
                         raw: bb.buffer.raw.unwrap(),
                         offset: bb.offset as i32,
-                        size: match bb.size {
-                            Some(s) => s.get() as i32,
-                            None => (bb.buffer.size - bb.offset) as i32,
-                        },
+                        size: bb.size.get() as i32,
                     }
                 }
                 wgt::BindingType::Sampler { .. } => {
@@ -1509,7 +1509,12 @@ impl crate::Device for super::Device {
                     }
                     let (raw, target) = view.inner.as_native();
 
-                    super::Texture::log_failing_target_heuristics(view_dimension, target);
+                    // GLES adapters should always have a valid binding view dimension specified,
+                    // validated at the core layer.
+                    debug_assert_eq!(
+                        target,
+                        super::Texture::target_for_view_dimension(view_dimension)
+                    );
 
                     super::RawBinding::Texture {
                         raw,

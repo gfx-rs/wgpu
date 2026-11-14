@@ -73,6 +73,7 @@ layout(location = 0) out vec4 _105;
 
 void main()
 {
-    _105 = texture(samplerCube(_17, _19), _6(gl_FragCoord, _102)._m1);
+    vec3 _110 = _6(gl_FragCoord, _102)._m1;
+    _105 = texture(samplerCube(_17, _19), mix(_110, vec3(0.0), isnan(_110)));
 }
 

@@ -1162,6 +1162,7 @@ impl Surface {
         unsafe { gl.color_mask(true, true, true, true) };
 
         unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None) };
+        unsafe { gl.draw_buffers(&[glow::BACK]) };
         unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(sc.framebuffer)) };
 
         if !matches!(self.srgb_kind, SrgbFrameBufferKind::None) {

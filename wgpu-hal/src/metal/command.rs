@@ -1,6 +1,7 @@
 use objc2::{
     rc::{autoreleasepool, Retained},
     runtime::ProtocolObject,
+    Message as _,
 };
 use objc2_foundation::{NSRange, NSString, NSUInteger};
 use objc2_metal::{
@@ -15,14 +16,12 @@ use objc2_metal::{
 
 use super::{
     adapter::{self, MAX_BUFFERS},
-    conv, TimestampQuerySupport,
+    conv,
+    icb::IcbDrawKind,
+    TimestampQuerySupport,
 };
 use crate::CommandEncoder as _;
-use alloc::{
-    borrow::{Cow, ToOwned as _},
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
 use core::{ops::Range, ptr::NonNull};
 use smallvec::SmallVec;
 use wgpu_sync::atomic;
@@ -37,6 +36,8 @@ impl Default for super::CommandState {
             acceleration_structure_builder: None,
             render: None,
             compute: None,
+            render_pipeline: None,
+            render_pipeline_icb: None,
             raw_primitive_type: MTLPrimitiveType::Point,
             index: None,
             stage_infos: Default::default(),
@@ -158,7 +159,7 @@ impl super::CommandEncoder {
         self.raw_cmd_buf.as_deref()
     }
 
-    fn enter_blit(&mut self) -> Retained<ProtocolObject<dyn MTLBlitCommandEncoder>> {
+    pub(super) fn enter_blit(&mut self) -> Retained<ProtocolObject<dyn MTLBlitCommandEncoder>> {
         if self.state.blit.is_none() {
             self.leave_acceleration_structure_builder();
             debug_assert!(self.state.render.is_none() && self.state.compute.is_none());
@@ -431,6 +432,8 @@ impl super::CommandEncoder {
 
 impl super::CommandState {
     fn reset(&mut self) {
+        self.render_pipeline = None;
+        self.render_pipeline_icb = None;
         self.storage_buffer_length_map.clear();
         self.vertex_buffer_size_map.clear();
         self.stage_infos.vs.clear();
@@ -457,12 +460,13 @@ impl super::CommandState {
                 .unwrap_or_default()
         }));
 
-        // Extend with the sizes of the mapped vertex buffers, in the order
-        // they were added to the map.
+        // Extend with the sizes of the mapped vertex buffers, in the order they were added
+        // to the map. Note that zeros in the sizes buffer can be for either an unused
+        // binding index (no entry in map) or a zero-size binding (map entry that is zero).
         result_sizes.extend(stage_info.vertex_buffer_mappings.iter().map(|vbm| {
             self.vertex_buffer_size_map
                 .get(&vbm.id)
-                .map(|size| u32::try_from(size.get()).unwrap_or(u32::MAX))
+                .map(|&size| u32::try_from(size).unwrap_or(u32::MAX))
                 .unwrap_or_default()
         }));
 
@@ -543,6 +547,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
             encoder.endEncoding();
         }
         self.state.pending_timer_queries.clear();
+        self.deferred_multi_draws.clear();
+        self.deferred_multi_draw_resources.clear();
         let had_command_buffer = self.raw_cmd_buf.is_some();
         // Clear the Option first so the underlying `metal::CommandBuffer` is
         // dropped before we update the counter.
@@ -570,6 +576,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         Ok(super::CommandBuffer {
             raw: self.raw_cmd_buf.take().unwrap(),
             queue_shared: Arc::clone(&self.queue_shared),
+            _icb_resources: core::mem::take(&mut self.deferred_multi_draw_resources),
         })
     }
 
@@ -577,7 +584,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
     where
         I: Iterator<Item = super::CommandBuffer>,
     {
-        //do nothing
+        // Multi-draw work queued for a pre-pass that was never recorded (say
+        // wgpu-core failed to begin it) must not leak into the next user of
+        // this encoder. `begin_encoding` can't clear it: the pre-pass of a
+        // pass begins its own command buffer before encoding that pass's work.
+        self.deferred_multi_draws.clear();
+        self.deferred_multi_draw_resources.clear();
     }
 
     unsafe fn transition_buffers<'a, T>(&mut self, _barriers: T)
@@ -628,31 +640,50 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::TextureCopy>,
     {
-        let dst_texture = if src.format != dst.format {
-            let raw_format = self
-                .shared
-                .private_texture_format_caps
-                .map_format(src.format);
-            Cow::Owned(autoreleasepool(|_| {
-                dst.raw.newTextureViewWithPixelFormat(raw_format).unwrap()
-            }))
-        } else {
-            Cow::Borrowed(&dst.raw)
-        };
+        let mut reinterpreted_dst = None;
         let encoder = self.enter_blit();
         for copy in regions {
             let src_origin = conv::map_origin(&copy.src_base.origin);
             let dst_origin = conv::map_origin(&copy.dst_base.origin);
             // no clamping is done: Metal expects physical sizes here
             let extent = conv::map_copy_extent(&copy.size);
+
+            let src_raw = src.raw_plane(copy.src_base.aspect);
+            let dst_raw = dst.raw_plane(copy.dst_base.aspect);
+            // The [`copyFromTexture` docs][1] say that the source and destination must have
+            // "the same pixel format", and `MTLPixelFormat` includes sRGB-ness, although it's
+            // not clear whether the requirement is actually intended to extend to sRGB-ness,
+            // or whether this view creation is necessary under some other reasoning to achieve
+            // WebGPU behavior.
+            //
+            // The view includes all layers and mips, so once created, we can use it for additional
+            // regions.
+            //
+            // [1]: https://developer.apple.com/documentation/metal/mtlblitcommandencoder/copy%28from:to:%29
+            let dst_raw = if src_raw.pixelFormat() != dst_raw.pixelFormat() {
+                assert_eq!(copy.dst_base.aspect, crate::FormatAspects::COLOR);
+                assert_eq!(
+                    src.format.remove_srgb_suffix(),
+                    dst.format.remove_srgb_suffix()
+                );
+                reinterpreted_dst.get_or_insert_with(|| {
+                    autoreleasepool(|_| {
+                        dst_raw
+                            .newTextureViewWithPixelFormat(src_raw.pixelFormat())
+                            .unwrap()
+                    })
+                })
+            } else {
+                dst_raw
+            };
             unsafe {
                 encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toTexture_destinationSlice_destinationLevel_destinationOrigin(
-                    &src.raw,
+                    src_raw,
                     copy.src_base.array_layer as usize,
                     copy.src_base.mip_level as usize,
                     src_origin,
                     extent,
-                    &dst_texture,
+                    dst_raw,
                     copy.dst_base.array_layer as usize,
                     copy.dst_base.mip_level as usize,
                     dst_origin,
@@ -695,7 +726,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     bytes_per_row as usize,
                     image_byte_stride as usize,
                     conv::map_copy_extent(&extent),
-                    &dst.raw,
+                    dst.raw_plane(copy.texture_base.aspect),
                     copy.texture_base.array_layer as usize,
                     copy.texture_base.mip_level as usize,
                     dst_origin,
@@ -729,7 +760,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 .map_or(0, |v| v as u64 * bytes_per_row);
             unsafe {
                 encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage_options(
-                    &src.raw,
+                    src.raw_plane(copy.texture_base.aspect),
                     copy.texture_base.array_layer as usize,
                     copy.texture_base.mip_level as usize,
                     src_origin,
@@ -1288,6 +1319,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         self.state.raw_primitive_type = pipeline.raw_primitive_type;
+        self.state.render_pipeline = Some(pipeline.raw.clone());
+        self.state.render_pipeline_icb = pipeline.icb_raw.clone();
         match pipeline.vs_info {
             Some(ref info) => self.state.stage_infos.vs.assign_from(info),
             None => self.state.stage_infos.vs.clear(),
@@ -1408,7 +1441,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: crate::BufferBinding<'a, super::Buffer>,
+        binding: crate::BufferBinding<'a, super::Buffer, wgt::BufferAddress>,
         format: wgt::IndexFormat,
     ) {
         let (stride, raw_type) = conv::map_index_format(format);
@@ -1423,7 +1456,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
-        binding: crate::BufferBinding<'a, super::Buffer>,
+        binding: crate::BufferBinding<'a, super::Buffer, wgt::BufferAddress>,
     ) {
         let buffer_index = MAX_BUFFERS - 1 - index;
         let encoder = self.state.render.as_ref().unwrap();
@@ -1435,15 +1468,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
             )
         };
 
-        let buffer_size = binding.resolve_size();
-        if buffer_size > 0 {
-            self.state.vertex_buffer_size_map.insert(
-                buffer_index,
-                core::num::NonZeroU64::new(buffer_size).unwrap(),
-            );
-        } else {
-            self.state.vertex_buffer_size_map.remove(&buffer_index);
-        }
+        self.state
+            .vertex_buffer_size_map
+            .insert(buffer_index, binding.size);
 
         if let Some((index, sizes)) = self
             .state
@@ -1606,6 +1633,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
         mut offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
+        if unsafe { self.defer_multi_draw_via_icb(IcbDrawKind::Draw, buffer, offset, draw_count) } {
+            return;
+        }
         let encoder = self.state.render.as_ref().unwrap();
         for _ in 0..draw_count {
             unsafe {
@@ -1625,6 +1655,17 @@ impl crate::CommandEncoder for super::CommandEncoder {
         mut offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
+        let kind = {
+            let index = self.state.index.as_ref().unwrap();
+            IcbDrawKind::DrawIndexed {
+                index_buffer: unsafe { index.buffer_ptr.as_ref() }.retain(),
+                index_offset: index.offset,
+                raw_index_type: index.raw_type,
+            }
+        };
+        if unsafe { self.defer_multi_draw_via_icb(kind, buffer, offset, draw_count) } {
+            return;
+        }
         let encoder = self.state.render.as_ref().unwrap();
         let index = self.state.index.as_ref().unwrap();
         for _ in 0..draw_count {
@@ -1648,6 +1689,23 @@ impl crate::CommandEncoder for super::CommandEncoder {
         mut offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
+        let kind = {
+            let ts = self.state.stage_infos.ts.raw_wg_size;
+            let ms = self.state.stage_infos.ms.raw_wg_size;
+            IcbDrawKind::DrawMeshTasks {
+                threadgroup_sizes: [
+                    ts.width as u32,
+                    ts.height as u32,
+                    ts.depth as u32,
+                    ms.width as u32,
+                    ms.height as u32,
+                    ms.depth as u32,
+                ],
+            }
+        };
+        if unsafe { self.defer_multi_draw_via_icb(kind, buffer, offset, draw_count) } {
+            return;
+        }
         let encoder = self.state.render.as_ref().unwrap();
         for _ in 0..draw_count {
             unsafe {
@@ -1692,6 +1750,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         _max_count: u32,
     ) {
         unreachable!()
+    }
+
+    unsafe fn encode_deferred_multi_draws(&mut self) {
+        unsafe { self.encode_deferred_icb_generation() }
     }
 
     // compute

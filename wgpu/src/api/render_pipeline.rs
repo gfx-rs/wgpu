@@ -36,6 +36,28 @@ impl RenderPipeline {
     }
 }
 
+#[cfg(wgpu_core)]
+impl RenderPipeline {
+    /// Create a new render pipeline of wgpu from a wgpu-core render pipeline.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_render_pipeline` - wgpu-core render pipeline.
+    pub fn from_core(
+        core_render_pipeline: alloc::sync::Arc<wgc::pipeline::RenderPipeline>,
+    ) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreRenderPipeline::from_core(core_render_pipeline)
+                .into(),
+        }
+    }
+
+    /// Returns the underlying wgpu-core render pipeline if this `RenderPipeline` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::pipeline::RenderPipeline>> {
+        self.inner.as_core_opt().map(|rp| rp.as_core())
+    }
+}
+
 /// Specifies an interpretation of the bytes of a vertex buffer as vertex attributes.
 ///
 /// Use this in a [`RenderPipelineDescriptor`] to describe the format of the vertex buffers that
@@ -102,6 +124,7 @@ pub struct VertexState<'a> {
     /// selected.
     // NOTE: keep phrasing in sync. with `ComputePipelineDescriptor::entry_point`
     // NOTE: keep phrasing in sync. with `FragmentState::entry_point`
+    // NOTE: keep phrasing in sync. with `RayTracingStage::entry_point`
     pub entry_point: Option<&'a str>,
     /// Advanced options for when this pipeline is compiled
     ///

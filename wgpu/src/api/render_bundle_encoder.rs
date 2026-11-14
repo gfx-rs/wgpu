@@ -97,8 +97,7 @@ impl<'a> RenderBundleEncoder<'a> {
             &buffer_slice.buffer.inner,
             index_format,
             buffer_slice.offset,
-            // TODO(https://github.com/gfx-rs/wgpu/issues/3170): Empty slices should be supported here
-            Some(buffer_slice.size_expect_nonzero()),
+            Some(buffer_slice.size),
         );
     }
 
@@ -126,12 +125,28 @@ impl<'a> RenderBundleEncoder<'a> {
                 slot,
                 Some(&buffer_slice.buffer.inner),
                 buffer_slice.offset,
-                // TODO(https://github.com/gfx-rs/wgpu/issues/3170): Empty slices should be supported here
-                Some(buffer_slice.size_expect_nonzero()),
+                Some(buffer_slice.size),
             );
         } else {
             self.inner.set_vertex_buffer(slot, None, 0, None);
         }
+    }
+
+    /// Inserts a debug marker into the recorded commands.
+    pub fn insert_debug_marker(&mut self, label: &str) {
+        self.inner.insert_debug_marker(label);
+    }
+
+    /// Begins a debug group for the recorded commands.
+    ///
+    /// All debug groups must be popped before calling [`Self::finish`].
+    pub fn push_debug_group(&mut self, label: &str) {
+        self.inner.push_debug_group(label);
+    }
+
+    /// Ends the most recently pushed debug group.
+    pub fn pop_debug_group(&mut self) {
+        self.inner.pop_debug_group();
     }
 
     /// Draws primitives from the active vertex buffer(s).

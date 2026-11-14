@@ -157,6 +157,7 @@ impl crate::framework::Example for Example {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::STORAGE_BINDING,
             view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
+            texture_binding_view_dimension: None,
         });
 
         let rt_view = rt_target.create_view(&wgpu::TextureViewDescriptor {
@@ -184,8 +185,9 @@ impl crate::framework::Example for Example {
         });
 
         let uniforms = {
-            let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 2.5), Vec3::ZERO, Vec3::Y);
-            let proj = Mat4::perspective_rh(
+            let view =
+                glam::camera::rh::view::look_at_mat4(Vec3::new(0.0, 0.0, 2.5), Vec3::ZERO, Vec3::Y);
+            let proj = glam::camera::rh::proj::directx::perspective(
                 59.0_f32.to_radians(),
                 config.width as f32 / config.height as f32,
                 0.001,
@@ -330,19 +332,18 @@ impl crate::framework::Example for Example {
 
         for x in 0..side_count {
             for y in 0..side_count {
-                tlas[(x + y * side_count) as usize] = Some(wgpu::TlasInstance::new(
-                    &blas,
-                    affine_to_rows(&Affine3A::from_rotation_translation(
-                        Quat::from_rotation_y(45.9_f32.to_radians()),
-                        Vec3 {
-                            x: x as f32 * dist,
-                            y: y as f32 * dist,
-                            z: -30.0,
-                        },
-                    )),
-                    0,
-                    0xff,
-                ));
+                tlas[(x + y * side_count) as usize] =
+                    Some(wgpu::TlasInstance::from_blas_transformed(
+                        &blas,
+                        affine_to_rows(&Affine3A::from_rotation_translation(
+                            Quat::from_rotation_y(45.9_f32.to_radians()),
+                            Vec3 {
+                                x: x as f32 * dist,
+                                y: y as f32 * dist,
+                                z: -30.0,
+                            },
+                        )),
+                    ));
             }
         }
 

@@ -1,11 +1,11 @@
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::ops::Deref;
-use core::ptr::NonNull;
 use wgpu_core_remote_types::{
     encoders::{RenderBundleDescriptor, RenderBundleEncoderDescriptor},
     pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
-    BufferDescriptor, ExternalTextureDescriptor, PipelineLayoutDescriptor, QuerySetDescriptor,
-    SamplerDescriptor, ShaderModuleDescriptor, TextureDescriptor, TextureViewDescriptor,
+    BufferDescriptor, ExternalTextureDescriptor, MapMode, PipelineError, PipelineLayoutDescriptor,
+    QuerySetDescriptor, SamplerDescriptor, ShaderModuleDescriptor, TextureDescriptor,
+    TextureViewDescriptor,
 };
 
 use wgpu_core::{
@@ -17,7 +17,7 @@ use wgpu_core::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
         ResolvedGeneralRenderPipelineDescriptor,
     },
-    resource::{self, BufferAccessError, BufferMapOperation, CreateBufferError},
+    resource::{self, BufferAccessError, BufferMapCallback, BufferMapping, CreateBufferError},
     Label, LabelHelpers, SubmissionIndex,
 };
 
@@ -70,7 +70,17 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let buffer = device.create_buffer(desc);
+        let desc = resource::BufferDescriptor {
+            label: desc.label.as_ref().map(|s| Cow::Borrowed(s.deref())),
+            size: desc.size,
+            usage: wgt::BufferUsages::from_internal_flags(
+                desc.usage,
+                wgt::BufferUsagesWGPU::empty(),
+            ),
+            mapped_at_creation: desc.mapped_at_creation,
+        };
+
+        let buffer = device.create_buffer(&desc);
 
         buffers.assign(id_in, buffer);
     }
@@ -114,7 +124,16 @@ impl Global {
             buffers, devices, ..
         } = &mut *hub;
         let device = devices.get(device_id);
-        buffers.assign(id_in, resource::Buffer::invalid(device, desc));
+        let desc = resource::BufferDescriptor {
+            label: desc.label.as_ref().map(|s| Cow::Borrowed(s.deref())),
+            size: desc.size,
+            usage: wgt::BufferUsages::from_internal_flags(
+                desc.usage,
+                wgt::BufferUsagesWGPU::empty(),
+            ),
+            mapped_at_creation: desc.mapped_at_creation,
+        };
+        buffers.assign(id_in, resource::Buffer::invalid(device, &desc));
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -144,14 +163,14 @@ impl Global {
         device_id: DeviceId,
         id_in: id::TextureId,
         desc: &TextureDescriptor,
-    ) -> id::TextureId {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             textures, devices, ..
         } = &mut *hub;
         let device = devices.get(device_id);
         let texture = device.create_texture_error(desc);
-        textures.assign(id_in, texture)
+        textures.assign(id_in, texture);
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -295,7 +314,17 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let (buffer, err) = unsafe { device.create_buffer_from_hal(Box::new(hal_buffer), desc) };
+        let desc = resource::BufferDescriptor {
+            label: desc.label.as_ref().map(|s| Cow::Borrowed(s.deref())),
+            size: desc.size,
+            usage: wgt::BufferUsages::from_internal_flags(
+                desc.usage,
+                wgt::BufferUsagesWGPU::empty(),
+            ),
+            mapped_at_creation: desc.mapped_at_creation,
+        };
+
+        let (buffer, err) = unsafe { device.create_buffer_from_hal(Box::new(hal_buffer), &desc) };
 
         let id = buffers.assign(id_in, buffer);
 
@@ -461,11 +490,80 @@ impl Global {
 
         let device = devices.get(device_id);
 
+        /// Wrapper for [`BindGroupLayoutEntry`] to implement conversions to [`binding_model::BindGroupLayoutEntry`].
+        #[repr(transparent)]
+        #[derive(Clone, Copy, Debug)]
+        struct BindGroupLayoutEntryWrapper(BindGroupLayoutEntry);
+
+        impl TryFrom<BindGroupLayoutEntryWrapper> for wgt::BindGroupLayoutEntry {
+            type Error = binding_model::CreateBindGroupLayoutError;
+
+            fn try_from(
+                value: BindGroupLayoutEntryWrapper,
+            ) -> Result<wgt::BindGroupLayoutEntry, Self::Error> {
+                binding_model::BindGroupLayoutEntry::from(value).try_into()
+            }
+        }
+
+        impl From<BindGroupLayoutEntryWrapper> for binding_model::BindGroupLayoutEntry {
+            fn from(entry: BindGroupLayoutEntryWrapper) -> Self {
+                let BindGroupLayoutEntryWrapper(BindGroupLayoutEntry {
+                    binding,
+                    visibility,
+                    buffer,
+                    sampler,
+                    texture,
+                    storage_texture,
+                    external_texture,
+                }) = entry;
+                binding_model::BindGroupLayoutEntry {
+                    binding,
+                    visibility: wgt::ShaderStages::from_internal_flags(
+                        visibility,
+                        wgt::ShaderStagesWGPU::empty(),
+                    ),
+                    buffer: buffer.to_std().map(|b| binding_model::BufferBindingLayout {
+                        ty: b.ty,
+                        has_dynamic_offset: b.has_dynamic_offset,
+                        min_binding_size: b.min_binding_size,
+                    }),
+                    sampler: sampler
+                        .to_std()
+                        .map(|s| binding_model::SamplerBindingLayout { ty: s.ty }),
+                    texture: texture
+                        .to_std()
+                        .map(|t| binding_model::TextureBindingLayout {
+                            sample_type: t.sample_type,
+                            view_dimension: t.view_dimension,
+                            multisampled: t.multisampled,
+                        }),
+                    storage_texture: storage_texture.to_std().map(|s| {
+                        binding_model::StorageTextureBindingLayout {
+                            access: s.access,
+                            format: s.format,
+                            view_dimension: s.view_dimension,
+                        }
+                    }),
+                    external_texture: if external_texture {
+                        Some(binding_model::ExternalTextureBindingLayout {})
+                    } else {
+                        None
+                    },
+                    acceleration_structure: None,
+                    count: None,
+                }
+            }
+        }
+
         let desc = binding_model::BindGroupLayoutDescriptor {
             label: desc.label.as_ref().map(|l| Cow::Borrowed(l.as_ref())),
-            entries: Cow::Borrowed(&desc.entries),
+            // SAFETY: The `BindGroupLayoutEntry` type is `repr(transparent)` over the remote type.
+            entries: Cow::Borrowed(unsafe {
+                core::mem::transmute::<&[BindGroupLayoutEntry], &[BindGroupLayoutEntryWrapper]>(
+                    desc.entries.as_ref(),
+                )
+            }),
         };
-
         let bgl = device.create_bind_group_layout(&desc);
 
         bind_group_layouts.assign(id_in, bgl);
@@ -895,12 +993,12 @@ impl Global {
     /// Returns an error if the pipeline creation fails instead of handling error in device.
     ///
     /// Id is assigned to the pipeline only if the creation succeeds.
-    pub fn create_render_pipeline_or_error(
+    pub fn device_create_render_pipeline_or_error(
         &self,
         device_id: DeviceId,
         desc: &RenderPipelineDescriptor,
         id_in: id::RenderPipelineId,
-    ) -> Result<(), pipeline::CreateRenderPipelineError> {
+    ) -> Result<(), PipelineError> {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             render_pipelines,
@@ -919,7 +1017,10 @@ impl Global {
                 render_pipelines.assign(id_in, pipeline);
                 Ok(())
             }
-            Err(e) => Err(e),
+            Err(e) if e.webgpu_error_type() == wgt::error::ErrorType::Validation => {
+                Err(PipelineError::Validation(e.to_string()))
+            }
+            Err(e) => Err(PipelineError::Internal(e.to_string())),
         }
     }
 
@@ -1004,7 +1105,7 @@ impl Global {
         device_id: DeviceId,
         desc: &ComputePipelineDescriptor,
         id_in: id::ComputePipelineId,
-    ) -> Result<(), pipeline::CreateComputePipelineError> {
+    ) -> Result<(), PipelineError> {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             compute_pipelines,
@@ -1039,7 +1140,10 @@ impl Global {
                 compute_pipelines.assign(id_in, pipeline);
                 Ok(())
             }
-            Err(e) => Err(e),
+            Err(e) if e.webgpu_error_type() == wgt::error::ErrorType::Validation => {
+                Err(PipelineError::Validation(e.to_string()))
+            }
+            Err(e) => Err(PipelineError::Internal(e.to_string())),
         }
     }
 
@@ -1169,15 +1273,21 @@ impl Global {
     pub fn buffer_map_async(
         &self,
         buffer_id: id::BufferId,
+        mode: MapMode,
         offset: BufferAddress,
         size: Option<BufferAddress>,
-        op: BufferMapOperation,
+        callback: Option<BufferMapCallback>,
     ) -> Option<SubmissionIndex> {
         let hub = self.hub.borrow();
 
         let buffer = hub.buffers.get(buffer_id);
 
-        buffer.map_async(offset, size, op)
+        buffer.map_async(
+            resource::MapModeFlags::from_bits_retain(mode.bits()),
+            offset,
+            size,
+            callback,
+        )
     }
 
     pub fn buffer_get_mapped_range(
@@ -1185,7 +1295,7 @@ impl Global {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         size: Option<BufferAddress>,
-    ) -> Result<(NonNull<u8>, u64), BufferAccessError> {
+    ) -> Result<BufferMapping, BufferAccessError> {
         let hub = self.hub.borrow();
 
         let buffer = hub.buffers.get(buffer_id);

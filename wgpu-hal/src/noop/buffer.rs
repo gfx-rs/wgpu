@@ -8,12 +8,6 @@ pub struct Buffer {
     /// This data is potentially accessed mutably in arbitrary non-overlapping slices,
     /// so we must store it in `UnsafeCell` to avoid making any too-strong no-aliasing claims.
     storage: Arc<UnsafeCell<[u8]>>,
-
-    /// Size of the allocation.
-    ///
-    /// This is redundant with `storage.get().len()`, but that method is not
-    /// available until our MSRV is 1.79 or greater.
-    size: usize,
 }
 
 /// SAFETY:
@@ -24,7 +18,9 @@ unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
 
 impl Buffer {
-    pub(super) fn new(desc: &crate::BufferDescriptor) -> Result<Self, crate::DeviceError> {
+    pub(super) fn new(
+        desc: &crate::BufferDescriptor,
+    ) -> Result<(Self, wgt::BufferAddress), crate::DeviceError> {
         let &crate::BufferDescriptor {
             label: _,
             size,
@@ -48,7 +44,7 @@ impl Buffer {
         let storage: Arc<UnsafeCell<[u8]>> =
             unsafe { Arc::from_raw(Arc::into_raw(storage) as *mut UnsafeCell<[u8]>) };
 
-        Ok(Buffer { storage, size })
+        Ok((Buffer { storage }, desc.size))
     }
 
     /// Returns a pointer to the memory owned by this buffer within the given `range`.
@@ -58,7 +54,7 @@ impl Buffer {
     /// to a reference.
     pub(super) fn get_slice_ptr(&self, range: crate::MemoryRange) -> *mut [u8] {
         let base_ptr = self.storage.get();
-        let range = range_to_usize(range, self.size);
+        let range = range_to_usize(range, self.storage.get().len());
 
         // We must obtain a slice pointer without ever creating a slice reference
         // that could alias with another slice.

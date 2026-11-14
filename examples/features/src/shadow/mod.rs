@@ -105,8 +105,8 @@ struct LightRaw {
 
 impl Light {
     fn to_raw(&self) -> LightRaw {
-        let view = glam::Mat4::look_at_rh(self.pos, glam::Vec3::ZERO, glam::Vec3::Z);
-        let projection = glam::Mat4::perspective_rh(
+        let view = glam::camera::rh::view::look_at_mat4(self.pos, glam::Vec3::ZERO, glam::Vec3::Z);
+        let projection = glam::camera::rh::proj::directx::perspective(
             self.fov * consts::PI / 180.,
             1.0,
             self.depth.start,
@@ -169,8 +169,13 @@ impl Example {
     const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
     fn generate_matrix(aspect_ratio: f32) -> glam::Mat4 {
-        let projection = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect_ratio, 1.0, 20.0);
-        let view = glam::Mat4::look_at_rh(
+        let projection = glam::camera::rh::proj::directx::perspective(
+            consts::FRAC_PI_4,
+            aspect_ratio,
+            1.0,
+            20.0,
+        );
+        let view = glam::camera::rh::view::look_at_mat4(
             glam::Vec3::new(3.0f32, -10.0, 6.0),
             glam::Vec3::new(0f32, 0.0, 0.0),
             glam::Vec3::Z,
@@ -196,6 +201,7 @@ impl Example {
                 | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
             label: None,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
@@ -381,6 +387,7 @@ impl crate::framework::Example for Example {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             label: None,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let shadow_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor::default());
 

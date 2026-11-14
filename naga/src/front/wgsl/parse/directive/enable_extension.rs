@@ -14,6 +14,7 @@ pub(crate) struct EnableExtensions {
     wgpu_ray_query: bool,
     wgpu_ray_query_vertex_return: bool,
     wgpu_ray_tracing_pipeline: bool,
+    wgpu_ray_tracing_invocation_reorder: bool,
     dual_source_blending: bool,
     /// Whether `enable f16;` was written earlier in the shader module.
     f16: bool,
@@ -25,6 +26,7 @@ pub(crate) struct EnableExtensions {
     primitive_index: bool,
     per_vertex: bool,
     wgpu_binding_array: bool,
+    debug_printf: bool,
 }
 
 impl EnableExtensions {
@@ -34,6 +36,7 @@ impl EnableExtensions {
             wgpu_ray_query: false,
             wgpu_ray_query_vertex_return: false,
             wgpu_ray_tracing_pipeline: false,
+            wgpu_ray_tracing_invocation_reorder: false,
             f16: false,
             wgpu_int16: false,
             dual_source_blending: false,
@@ -43,6 +46,7 @@ impl EnableExtensions {
             primitive_index: false,
             per_vertex: false,
             wgpu_binding_array: false,
+            debug_printf: false,
         }
     }
 
@@ -57,6 +61,9 @@ impl EnableExtensions {
             ImplementedEnableExtension::WgpuRayTracingPipeline => {
                 &mut self.wgpu_ray_tracing_pipeline
             }
+            ImplementedEnableExtension::WgpuRayTracingInvocationReorder => {
+                &mut self.wgpu_ray_tracing_invocation_reorder
+            }
             ImplementedEnableExtension::DualSourceBlending => &mut self.dual_source_blending,
             ImplementedEnableExtension::F16 => &mut self.f16,
             ImplementedEnableExtension::WgpuInt16 => &mut self.wgpu_int16,
@@ -66,6 +73,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::PrimitiveIndex => &mut self.primitive_index,
             ImplementedEnableExtension::WgpuPerVertex => &mut self.per_vertex,
             ImplementedEnableExtension::WgpuBindingArray => &mut self.wgpu_binding_array,
+            ImplementedEnableExtension::WgpuDebugPrintf => &mut self.debug_printf,
         };
         *field = true;
     }
@@ -79,6 +87,9 @@ impl EnableExtensions {
                 self.wgpu_ray_query_vertex_return
             }
             ImplementedEnableExtension::WgpuRayTracingPipeline => self.wgpu_ray_tracing_pipeline,
+            ImplementedEnableExtension::WgpuRayTracingInvocationReorder => {
+                self.wgpu_ray_tracing_invocation_reorder
+            }
             ImplementedEnableExtension::DualSourceBlending => self.dual_source_blending,
             ImplementedEnableExtension::F16 => self.f16,
             ImplementedEnableExtension::WgpuInt16 => self.wgpu_int16,
@@ -88,6 +99,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::PrimitiveIndex => self.primitive_index,
             ImplementedEnableExtension::WgpuPerVertex => self.per_vertex,
             ImplementedEnableExtension::WgpuBindingArray => self.wgpu_binding_array,
+            ImplementedEnableExtension::WgpuDebugPrintf => self.debug_printf,
         }
     }
 
@@ -136,6 +148,7 @@ impl EnableExtension {
     const RAY_QUERY: &'static str = "wgpu_ray_query";
     const RAY_QUERY_VERTEX_RETURN: &'static str = "wgpu_ray_query_vertex_return";
     const RAY_TRACING_PIPELINE: &'static str = "wgpu_ray_tracing_pipeline";
+    const RAY_TRACING_INVOCATION_REORDER: &'static str = "wgpu_ray_tracing_invocation_reorder";
     const COOPERATIVE_MATRIX: &'static str = "wgpu_cooperative_matrix";
     const SUBGROUPS: &'static str = "subgroups";
     const PRIMITIVE_INDEX: &'static str = "primitive_index";
@@ -143,6 +156,7 @@ impl EnableExtension {
     const PER_VERTEX: &'static str = "wgpu_per_vertex";
     const BINDING_ARRAY: &'static str = "wgpu_binding_array";
     const INT16: &'static str = "wgpu_int16";
+    const DEBUG_PRINTF: &'static str = "wgpu_debug_printf";
 
     /// Convert from a sentinel word in WGSL into its associated [`EnableExtension`], if possible.
     pub(crate) fn from_ident(word: &str, span: Span) -> Result<'_, Self> {
@@ -160,6 +174,9 @@ impl EnableExtension {
             Self::RAY_TRACING_PIPELINE => {
                 Self::Implemented(ImplementedEnableExtension::WgpuRayTracingPipeline)
             }
+            Self::RAY_TRACING_INVOCATION_REORDER => {
+                Self::Implemented(ImplementedEnableExtension::WgpuRayTracingInvocationReorder)
+            }
             Self::COOPERATIVE_MATRIX => {
                 Self::Implemented(ImplementedEnableExtension::WgpuCooperativeMatrix)
             }
@@ -169,6 +186,7 @@ impl EnableExtension {
             Self::PER_VERTEX => Self::Implemented(ImplementedEnableExtension::WgpuPerVertex),
             Self::BINDING_ARRAY => Self::Implemented(ImplementedEnableExtension::WgpuBindingArray),
             Self::INT16 => Self::Implemented(ImplementedEnableExtension::WgpuInt16),
+            Self::DEBUG_PRINTF => Self::Implemented(ImplementedEnableExtension::WgpuDebugPrintf),
             _ => return Err(Box::new(Error::UnknownEnableExtension(span, word))),
         })
     }
@@ -189,9 +207,13 @@ impl EnableExtension {
                 ImplementedEnableExtension::DrawIndex => Self::DRAW_INDEX,
                 ImplementedEnableExtension::PrimitiveIndex => Self::PRIMITIVE_INDEX,
                 ImplementedEnableExtension::WgpuRayTracingPipeline => Self::RAY_TRACING_PIPELINE,
+                ImplementedEnableExtension::WgpuRayTracingInvocationReorder => {
+                    Self::RAY_TRACING_INVOCATION_REORDER
+                }
                 ImplementedEnableExtension::WgpuPerVertex => Self::PER_VERTEX,
                 ImplementedEnableExtension::WgpuBindingArray => Self::BINDING_ARRAY,
                 ImplementedEnableExtension::WgpuInt16 => Self::INT16,
+                ImplementedEnableExtension::WgpuDebugPrintf => Self::DEBUG_PRINTF,
             },
             Self::Unimplemented(kind) => match kind {
                 UnimplementedEnableExtension::Subgroups => Self::SUBGROUPS,
@@ -230,6 +252,11 @@ pub enum ImplementedEnableExtension {
     WgpuRayQueryVertexReturn,
     /// Enables the `wgpu_ray_tracing_pipeline` extension, native only.
     WgpuRayTracingPipeline,
+    /// Enables the `wgpu_ray_tracing_invocation_reorder` extension, native only.
+    ///
+    /// This provides the `hit_object` type, the `hitObject*` built-in functions,
+    /// and `reorderThread`.
+    WgpuRayTracingInvocationReorder,
     /// Enables the `wgpu_cooperative_matrix` extension, native only.
     WgpuCooperativeMatrix,
     /// Enables the `draw_index` builtin. Not currently part of the WGSL spec but probably will be at some point.
@@ -246,6 +273,8 @@ pub enum ImplementedEnableExtension {
     WgpuBindingArray,
     /// Enables `i16`/`u16` 16-bit integer support in WGSL, native only.
     WgpuInt16,
+    /// Enables the `wgpu_debug_printf` extension, allows using `debugPrintf`, native only.
+    WgpuDebugPrintf,
 }
 
 impl ImplementedEnableExtension {
@@ -258,12 +287,14 @@ impl ImplementedEnableExtension {
         Self::WgpuRayQuery,
         Self::WgpuRayQueryVertexReturn,
         Self::WgpuRayTracingPipeline,
+        Self::WgpuRayTracingInvocationReorder,
         Self::WgpuCooperativeMatrix,
         Self::DrawIndex,
         Self::PrimitiveIndex,
         Self::WgpuPerVertex,
         Self::WgpuBindingArray,
         Self::WgpuInt16,
+        Self::WgpuDebugPrintf,
     ];
 
     /// Returns slice of all variants of [`ImplementedEnableExtension`].
@@ -283,6 +314,7 @@ impl ImplementedEnableExtension {
             Self::WgpuRayQueryVertexReturn => C::RAY_HIT_VERTEX_POSITION,
             Self::WgpuCooperativeMatrix => C::COOPERATIVE_MATRIX,
             Self::WgpuRayTracingPipeline => C::RAY_TRACING_PIPELINE,
+            Self::WgpuRayTracingInvocationReorder => C::RAY_TRACING_INVOCATION_REORDER,
             Self::DrawIndex => C::DRAW_INDEX,
             Self::PrimitiveIndex => C::PRIMITIVE_INDEX,
             Self::WgpuPerVertex => C::PER_VERTEX,
@@ -296,6 +328,7 @@ impl ImplementedEnableExtension {
                 .union(C::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING)
                 .union(C::ACCELERATION_STRUCTURE_BINDING_ARRAY),
             Self::WgpuInt16 => C::SHADER_INT16,
+            Self::WgpuDebugPrintf => C::DEBUG_PRINTF,
         }
     }
 }

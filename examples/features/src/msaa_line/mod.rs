@@ -116,6 +116,7 @@ impl Example {
                 | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
             label: None,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         };
 
         device
@@ -229,17 +230,13 @@ impl crate::framework::Example for Example {
             } => match logical_key {
                 // TODO: Switch back to full scans of possible options when we expose
                 //       supported sample counts to the user.
-                Key::Named(NamedKey::ArrowLeft) => {
-                    if self.sample_count == self.max_sample_count {
-                        self.sample_count = 1;
-                        self.rebuild_bundle = true;
-                    }
+                Key::Named(NamedKey::ArrowLeft) if self.sample_count == self.max_sample_count => {
+                    self.sample_count = 1;
+                    self.rebuild_bundle = true;
                 }
-                Key::Named(NamedKey::ArrowRight) => {
-                    if self.sample_count == 1 {
-                        self.sample_count = self.max_sample_count;
-                        self.rebuild_bundle = true;
-                    }
+                Key::Named(NamedKey::ArrowRight) if self.sample_count == 1 => {
+                    self.sample_count = self.max_sample_count;
+                    self.rebuild_bundle = true;
                 }
                 _ => {}
             },

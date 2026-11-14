@@ -244,6 +244,7 @@ async fn single_texture_clear_test(
         format,
         usage: wgpu::TextureUsages::COPY_SRC | extra_usages,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut encoder = ctx
         .device
@@ -275,7 +276,7 @@ async fn clear_texture_tests(ctx: TestingContext, formats: &'static [wgpu::Textu
     for &format in formats {
         let (block_width, block_height) = format.block_dimensions();
         let rounded_width = block_width * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-        let rounded_height = block_height * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let rounded_height = block_height * 4;
 
         let is_compressed_or_depth_stencil_format =
             format.is_compressed() || format.is_depth_stencil_format();

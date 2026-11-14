@@ -24,22 +24,21 @@ webgpu:shader,execution,expression,call,builtin,textureSampleLevel:sampled_1d_co
 webgpu:shader,execution,expression,call,builtin,textureSampleLevel:sampled_2d_coords:* // slow, https://github.com/gfx-rs/wgpu/issues/9229
 webgpu:shader,execution,expression,call,builtin,textureSampleLevel:sampled_3d_coords:* // slow, https://github.com/gfx-rs/wgpu/issues/9229
 
-webgpu:shader,validation,decl,immediate:* // WGSL language extension 'immediate_address_space' isn't added, https://github.com/gfx-rs/wgpu/issues/8556
 webgpu:shader,validation,expression,call,builtin,atomicStoreMinMax:* // device feature 'atomic-vec2u-min-max' isn't implemented
 webgpu:shader,validation,expression,call,builtin,bufferArrayView:* // buffer_view feature
-webgpu:shader,validation,expression,call,builtin,bufferLength:* // ibid.
-webgpu:shader,validation,expression,call,builtin,bufferView:* // ibid.
+webgpu:shader,validation,expression,call,builtin,bufferLength:* // buffer_view feature
+webgpu:shader,validation,expression,call,builtin,bufferView:* // buffer_view feature
 webgpu:shader,validation,expression,call,builtin,quadBroadcast:* // subgroups, https://github.com/gfx-rs/wgpu/issues/8722
-webgpu:shader,validation,expression,call,builtin,quadSwap:* // ibid.
-webgpu:shader,validation,expression,call,builtin,subgroupAdd:* // ibid.
-webgpu:shader,validation,expression,call,builtin,subgroupAnyAll:* // ibid.
-webgpu:shader,validation,expression,call,builtin,subgroupBallot:* // ibid.
-webgpu:shader,validation,expression,call,builtin,subgroupBitwise:* // ibid.
-webgpu:shader,validation,expression,call,builtin,subgroupBroadcast:* // ibid.
-webgpu:shader,validation,expression,call,builtin,subgroupBroadcastFirst:* // ibid.
-webgpu:shader,validation,expression,call,builtin,subgroupElect:* // ibid.
-webgpu:shader,validation,expression,call,builtin,subgroupMinMax:* // ibid.
-webgpu:shader,validation,expression,call,builtin,subgroupMul:* // ibid.
-webgpu:shader,validation,expression,call,builtin,subgroupShuffle:* // ibid.
+webgpu:shader,validation,expression,call,builtin,quadSwap:* // subgroups, https://github.com/gfx-rs/wgpu/issues/8722
+webgpu:shader,validation,expression,call,builtin,subgroupAdd:* // subgroups, https://github.com/gfx-rs/wgpu/issues/8722
+webgpu:shader,validation,expression,call,builtin,subgroupAnyAll:* // subgroups, https://github.com/gfx-rs/wgpu/issues/8722
+webgpu:shader,validation,expression,call,builtin,subgroupBallot:* // subgroups, https://github.com/gfx-rs/wgpu/issues/8722
+webgpu:shader,validation,expression,call,builtin,subgroupBitwise:* // subgroups, https://github.com/gfx-rs/wgpu/issues/8722
+webgpu:shader,validation,expression,call,builtin,subgroupBroadcast:* // subgroups, https://github.com/gfx-rs/wgpu/issues/8722
+webgpu:shader,validation,expression,call,builtin,subgroupBroadcastFirst:* // subgroups, https://github.com/gfx-rs/wgpu/issues/8722
+webgpu:shader,validation,expression,call,builtin,subgroupElect:* // subgroups, https://github.com/gfx-rs/wgpu/issues/8722
+webgpu:shader,validation,expression,call,builtin,subgroupMinMax:* // subgroups, https://github.com/gfx-rs/wgpu/issues/8722
+webgpu:shader,validation,expression,call,builtin,subgroupMul:* // subgroups, https://github.com/gfx-rs/wgpu/issues/8722
+webgpu:shader,validation,expression,call,builtin,subgroupShuffle:* // subgroups, https://github.com/gfx-rs/wgpu/issues/8722
 webgpu:shader,validation,extension,subgroup_size_control:* // device feature 'subgroup-size-control' isn't implemented
 webgpu:shader,validation,statement,swizzle_assignment:* // swizzle assignment, https://github.com/gfx-rs/wgpu/issues/9159

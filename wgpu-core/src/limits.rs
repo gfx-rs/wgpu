@@ -332,7 +332,8 @@ const UPLEVEL: Bucket = Bucket {
         subgroup_min_size: 4,
         subgroup_max_size: 128,
     },
-    features: Features::DEPTH_CLIP_CONTROL
+    features: Features::CORE_FEATURES_AND_LIMITS
+        .union(Features::DEPTH_CLIP_CONTROL)
         .union(Features::DEPTH32FLOAT_STENCIL8)
         // omit TEXTURE_COMPRESSION_ASTC
         // omit TEXTURE_COMPRESSION_ASTC_SLICED_3D
@@ -536,7 +537,7 @@ const BUCKET_DEFAULT: Bucket = Bucket {
     name: "default",
     limits: Limits::defaults(),
     info: BucketedAdapterInfo::defaults(),
-    features: Features::empty(),
+    features: Features::CORE_FEATURES_AND_LIMITS,
 };
 
 // WebGPU default limits, is a fallback adapter
@@ -547,7 +548,7 @@ const BUCKET_FALLBACK: Bucket = Bucket {
         is_fallback_adapter: true,
         ..BucketedAdapterInfo::defaults()
     },
-    features: Features::empty(),
+    features: Features::CORE_FEATURES_AND_LIMITS,
 };
 
 #[cfg(test)]
@@ -558,7 +559,8 @@ mod tests {
     #[test]
     fn enumerate_webgpu_features() {
         let difference = Features::all_webgpu_mask().difference(
-            Features::DEPTH_CLIP_CONTROL
+            Features::CORE_FEATURES_AND_LIMITS
+                .union(Features::DEPTH_CLIP_CONTROL)
                 .union(Features::DEPTH32FLOAT_STENCIL8)
                 .union(Features::TEXTURE_COMPRESSION_ASTC)
                 .union(Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D)
@@ -579,7 +581,8 @@ mod tests {
                 //.union(Features::TEXTURE_FORMATS_TIER2) not implemented
                 .union(Features::PRIMITIVE_INDEX)
                 .union(Features::TEXTURE_COMPONENT_SWIZZLE)
-                .union(Features::IMMEDIATES),
+                .union(Features::IMMEDIATES)
+                .union(Features::DEBUG_PRINTF),
         );
         assert!(
             difference.is_empty(),

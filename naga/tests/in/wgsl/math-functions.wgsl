@@ -1,5 +1,7 @@
 @fragment
 fn main() {
+    var runtime_f32 = 1.0;
+    var runtime_i32 = 1;
     let f = 1.0;
     let v = vec4<f32>(0.0);
     let a = degrees(f);
@@ -13,6 +15,9 @@ fn main() {
     let sign_c = sign(-1.0);
     let sign_d = sign(vec4(-1.0));
     let sign_e = sign(vec4(0.0));
+    let sign_f = sign(runtime_f32);
+    let sign_g = sign(vec4(runtime_f32));
+    let sign_h = sign(runtime_i32);
     let const_dot = dot(vec2<i32>(), vec2<i32>());
     let first_leading_bit_abs = firstLeadingBit(abs(0u));
     let flb_a = firstLeadingBit(-1);

@@ -591,6 +591,7 @@ impl super::Validator {
                 if !base_info
                     .flags
                     .contains(TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::CREATION_RESOLVED)
+                    || matches!(gctx.types[base].inner, Ti::HitObject)
                 {
                     return Err(TypeError::InvalidArrayBaseType(base));
                 }
@@ -694,6 +695,7 @@ impl super::Validator {
                     if !base_info
                         .flags
                         .contains(TypeFlags::DATA | TypeFlags::CREATION_RESOLVED)
+                        || matches!(gctx.types[member.ty].inner, Ti::HitObject)
                     {
                         return Err(TypeError::InvalidData(member.ty));
                     }
@@ -949,6 +951,16 @@ impl super::Validator {
                     Alignment::ONE,
                 )
             }
+            Ti::HitObject => {
+                self.require_type_capability(Capabilities::RAY_TRACING_INVOCATION_REORDER)?;
+                TypeInfo::new(
+                    TypeFlags::DATA
+                        | TypeFlags::CONSTRUCTIBLE
+                        | TypeFlags::SIZED
+                        | TypeFlags::CREATION_RESOLVED,
+                    Alignment::ONE,
+                )
+            }
             Ti::BindingArray { base, size } => {
                 let type_info_mask = match size {
                     crate::ArraySize::Constant(_) => {
@@ -970,13 +982,7 @@ impl super::Validator {
                         _ => return Err(TypeError::BindingArrayBaseTypeNotStruct(base)),
                     };
                 }
-                if matches!(
-                    gctx.types[base].inner,
-                    crate::TypeInner::Image {
-                        class: crate::ImageClass::External,
-                        ..
-                    }
-                ) {
+                if gctx.types[base].inner.is_external_image() {
                     // Binding arrays of external textures are not yet supported.
                     // See <https://github.com/gfx-rs/wgpu/issues/8027>. Note that
                     // `validate_global_var` relies on this error being raised here.

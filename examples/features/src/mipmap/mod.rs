@@ -65,8 +65,13 @@ struct Example {
 
 impl Example {
     fn generate_matrix(aspect_ratio: f32) -> glam::Mat4 {
-        let projection = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect_ratio, 1.0, 1000.0);
-        let view = glam::Mat4::look_at_rh(
+        let projection = glam::camera::rh::proj::directx::perspective(
+            consts::FRAC_PI_4,
+            aspect_ratio,
+            1.0,
+            1000.0,
+        );
+        let view = glam::camera::rh::view::look_at_mat4(
             glam::Vec3::new(0f32, 0.0, 10.0),
             glam::Vec3::new(0f32, 50.0, 0.0),
             glam::Vec3::Z,
@@ -240,6 +245,7 @@ impl crate::framework::Example for Example {
                 | wgpu::TextureUsages::COPY_DST,
             label: None,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         //Note: we could use queue.write_texture instead, and this is what other

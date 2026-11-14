@@ -38,6 +38,8 @@ impl super::Surface {
             render_layer: Mutex::new(layer),
             swapchain_format: RwLock::new(None),
             extent: RwLock::new(wgt::Extent3d::default()),
+            #[cfg(target_os = "macos")]
+            has_been_visible: wgpu_sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -257,7 +259,12 @@ impl crate::Surface for super::Surface {
         *self.extent.write() = config.extent;
 
         let render_layer = self.render_layer.lock();
-        let framebuffer_only = config.usage == wgt::TextureUses::COLOR_TARGET;
+        // Metal forbids creating alternate-format views of framebuffer-only textures.
+        let framebuffer_only = config.usage == wgt::TextureUses::COLOR_TARGET
+            && config
+                .view_formats
+                .iter()
+                .all(|format| *format == config.format);
         let display_sync = match config.present_mode {
             wgt::PresentMode::Fifo => true,
             wgt::PresentMode::Immediate => false,
@@ -278,17 +285,21 @@ impl crate::Surface for super::Surface {
         render_layer.setFramebufferOnly(framebuffer_only);
         // Opt into Metal EDR for the HDR color spaces (more display power, memory,
         // and bandwidth). The HDR spaces are exactly those `is_hdr()` classifies.
-        let wants_edr = config.color_space.is_hdr();
-        if wants_edr != render_layer.wantsExtendedDynamicRangeContent() {
-            render_layer.setWantsExtendedDynamicRangeContent(wants_edr);
+        //
+        // `wantsExtendedDynamicRangeContent` is iOS 16+. On older iOS calling it
+        // throws an unrecognized selector exception and the app aborts.
+        if available!(macos = 10.11, ios = 16.0, visionos = 1.0) {
+            let wants_edr = config.color_space.is_hdr();
+            if wants_edr != render_layer.wantsExtendedDynamicRangeContent() {
+                render_layer.setWantsExtendedDynamicRangeContent(wants_edr);
+            }
         }
 
         let colorspace_name: Option<&'static CFString> = match config.color_space {
             wgt::SurfaceColorSpace::Auto => {
                 unreachable!("wgpu-core resolves `Auto` before configuring the surface")
             }
-            // Reset to the layer's default, which treats contents as sRGB.
-            wgt::SurfaceColorSpace::Srgb => None,
+            wgt::SurfaceColorSpace::Srgb => Some(unsafe { objc2_core_graphics::kCGColorSpaceSRGB }),
             wgt::SurfaceColorSpace::ExtendedSrgbLinear => {
                 Some(unsafe { objc2_core_graphics::kCGColorSpaceExtendedLinearSRGB })
             }
@@ -360,14 +371,23 @@ impl crate::Surface for super::Surface {
             // When the window is occluded on macOS, presented drawables get stuck waiting
             // for vsync. Check the window's occlusion state and skip acquisition if
             // the window is not visible - this avoids a 1-second hang in nextDrawable().
+            //
+            // Only drawables presented while the window was visible get stuck, so this
+            // waits until the window has been visible once. Until then, nextDrawable()
+            // returns right away, and applications rely on that to render a first frame
+            // before the window is shown, or right after, while AppKit hasn't updated the
+            // occlusion state yet.
             use objc2::rc::Retained;
+            use wgpu_sync::atomic;
 
             // The CAMetalLayer is typically a sublayer; find the hosting window
             // and skip acquisition while it is occluded.
             if let Some(window) = hosting_window(Retained::into_super(render_layer.clone())) {
                 const NS_WINDOW_OCCLUSION_STATE_VISIBLE: usize = 1 << 1;
                 let occlusion_state: usize = unsafe { objc2::msg_send![&*window, occlusionState] };
-                if occlusion_state & NS_WINDOW_OCCLUSION_STATE_VISIBLE == 0 {
+                if occlusion_state & NS_WINDOW_OCCLUSION_STATE_VISIBLE != 0 {
+                    self.has_been_visible.store(true, atomic::Ordering::Relaxed);
+                } else if self.has_been_visible.load(atomic::Ordering::Relaxed) {
                     return Err(crate::SurfaceError::Occluded);
                 }
             }
@@ -387,6 +407,7 @@ impl crate::Surface for super::Surface {
         let suf_texture = super::SurfaceTexture {
             texture: super::Texture {
                 raw: texture,
+                plane1: None,
                 format: swapchain_format,
                 raw_type: MTLTextureType::Type2D,
                 array_layers: 1,

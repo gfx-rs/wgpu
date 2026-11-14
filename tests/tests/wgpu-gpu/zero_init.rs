@@ -77,6 +77,8 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH24PLUS_STENCIL8,
         WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH32FLOAT_STENCIL8,
         DYNAMIC_OFFSET_BUFFER_BINDING_INIT,
+        ZERO_INIT_MULTIPLANAR_TEXTURE,
+        ZERO_INIT_MULTIPLANAR_RENDER_ATTACHMENT,
         COPY_TEXTURE_TO_BUFFER_3D_SOURCE_ORIGIN_Z_UNINIT,
         COPY_TEXTURE_TO_TEXTURE_3D_SOURCE_ORIGIN_Z_UNINIT,
         COPY_BUFFER_TO_TEXTURE_3D_DEST_ORIGIN_Z_PARTIAL,
@@ -88,6 +90,12 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_ROW_PADDING_INIT,
         COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_IMAGE_PADDING_INIT,
         MARK_EXTERNALLY_INITIALIZED_SKIPS_LAZY_CLEAR,
+        ZERO_SIZE_VERTEX_BINDING_AT_END,
+        ZERO_SIZE_VERTEX_BINDING_AT_BEGINNING,
+        ZERO_SIZE_VERTEX_BINDING_UNALIGNED_BUFFER_SIZE,
+        ZERO_SIZE_INDEX_BINDING_AT_END,
+        ZERO_SIZE_INDEX_BINDING_NOT_AT_END,
+        ZERO_SIZE_INDEX_BINDING_UNALIGNED_BUFFER_SIZE,
     ]);
 }
 
@@ -299,6 +307,7 @@ impl TextureSpec {
                 | TextureUsages::RENDER_ATTACHMENT
                 | extra_usages,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     }
 }
@@ -1573,6 +1582,7 @@ static WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH24PLUS_STENCIL8: GpuTestCo
                     | TextureUsages::COPY_SRC
                     | TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
 
             let stencil_bytes_per_row = size.width;
@@ -1614,9 +1624,7 @@ static WRITE_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_NV12: GpuTestConfiguration =
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_NV12)
-                .limits(Limits::downlevel_defaults())
-                // https://github.com/gfx-rs/wgpu/issues/9688
-                .expect_fail(FailureCase::lvp_poison_memory("read back non-zero")),
+                .limits(Limits::downlevel_defaults()),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -1636,9 +1644,7 @@ static WRITE_TEXTURE_PLANE1_LEAVES_PLANE0_UNINIT_NV12: GpuTestConfiguration =
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_NV12)
-                .limits(Limits::downlevel_defaults())
-                // https://github.com/gfx-rs/wgpu/issues/9688
-                .expect_fail(FailureCase::lvp_poison_memory("read back non-zero")),
+                .limits(Limits::downlevel_defaults()),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -1658,9 +1664,7 @@ static WRITE_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_P010: GpuTestConfiguration =
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_P010 | Features::TEXTURE_FORMAT_16BIT_NORM)
-                .limits(Limits::downlevel_defaults())
-                // https://github.com/gfx-rs/wgpu/issues/9688
-                .expect_fail(FailureCase::lvp_poison_memory("read back non-zero")),
+                .limits(Limits::downlevel_defaults()),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -1680,9 +1684,7 @@ static WRITE_TEXTURE_PLANE1_LEAVES_PLANE0_UNINIT_P010: GpuTestConfiguration =
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_P010 | Features::TEXTURE_FORMAT_16BIT_NORM)
-                .limits(Limits::downlevel_defaults())
-                // https://github.com/gfx-rs/wgpu/issues/9688
-                .expect_fail(FailureCase::lvp_poison_memory("read back non-zero")),
+                .limits(Limits::downlevel_defaults()),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -1725,9 +1727,7 @@ static COPY_BUFFER_TO_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_NV12: GpuTestConfigura
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_NV12)
-                .limits(Limits::downlevel_defaults())
-                // https://github.com/gfx-rs/wgpu/issues/9688
-                .expect_fail(FailureCase::lvp_poison_memory("read back non-zero")),
+                .limits(Limits::downlevel_defaults()),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -1859,6 +1859,7 @@ async fn check_write_aspect_leaves_other_uninit(
         format,
         usage: TextureUsages::COPY_DST | TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let write_bytes_per_row = write.size.width * write.bpp;
@@ -2112,6 +2113,132 @@ static DYNAMIC_OFFSET_BUFFER_BINDING_INIT: GpuTestConfiguration = GpuTestConfigu
         );
     });
 
+#[apply(gpu_test!)]
+static ZERO_INIT_MULTIPLANAR_TEXTURE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgt::Features::TEXTURE_FORMAT_NV12))
+    .run_sync(|ctx| {
+        // This high for alignment in copies
+        const WIDTH: u32 = 256;
+        let texture = ctx.device.create_texture(&wgt::TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width: WIDTH,
+                height: WIDTH,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: wgt::TextureFormat::NV12,
+            usage: wgt::TextureUsages::COPY_SRC,
+            view_formats: &[],
+            texture_binding_view_dimension: None,
+        });
+        let buffer = ctx.device.create_buffer(&wgt::BufferDescriptor {
+            label: None,
+            size: (2 * WIDTH * WIDTH) as u64,
+            usage: wgt::BufferUsages::COPY_DST | wgt::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let mut encoder = ctx.device.create_command_encoder(&Default::default());
+        encoder.copy_texture_to_buffer(
+            TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: Default::default(),
+                aspect: wgt::TextureAspect::Plane1,
+            },
+            TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: TexelCopyBufferLayout {
+                    offset: 0,
+                    // Plane1 is half-res Rg8: (WIDTH/2) texels * 2 bytes = WIDTH bytes/row.
+                    bytes_per_row: Some(WIDTH),
+                    rows_per_image: Some(WIDTH / 2),
+                },
+            },
+            // Plane1 (chroma) of NV12 is half resolution in each dimension.
+            Extent3d {
+                width: WIDTH / 2,
+                height: WIDTH / 2,
+                depth_or_array_layers: 1,
+            },
+        );
+        ctx.queue.submit([encoder.finish()]);
+        buffer.map_async(MapMode::Read, .., |_| ());
+        ctx.device
+            .poll(wgpu_types::PollType::wait_indefinitely())
+            .unwrap();
+        assert!(buffer.get_mapped_range(..).unwrap().iter().all(|e| *e == 0));
+    });
+
+// Multi-planar textures with `RENDER_ATTACHMENT` are cleared with render passes rather than
+// buffer copies. Use multiple layers so that every (layer, plane) clear view must be selected
+// correctly. (Vulkan does not allow multiple mip levels for these formats.)
+//
+// TODO(https://github.com/gfx-rs/wgpu/issues/8122): With `tier1-texture-formats`, the
+// 16-bit norm formats should be renderable, but they currently are not.
+#[apply(gpu_test!)]
+static ZERO_INIT_MULTIPLANAR_RENDER_ATTACHMENT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::TEXTURE_FORMAT_NV12)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| async move {
+        check_multiplanar_render_attachment_zero_init(&ctx, TextureFormat::NV12).await;
+        // TODO(https://github.com/gfx-rs/wgpu/issues/8122): Add P010 (see above)
+    });
+
+async fn check_multiplanar_render_attachment_zero_init(
+    ctx: &TestingContext,
+    format: TextureFormat,
+) {
+    const LAYERS: u32 = 2;
+    let texture = ctx.device.create_texture(&TextureDescriptor {
+        label: Some("multi-planar render attachment zero-init test"),
+        // Non-square so a width/height swap is caught.
+        size: Extent3d {
+            width: 256,
+            height: 192,
+            depth_or_array_layers: LAYERS,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format,
+        usage: TextureUsages::COPY_SRC | TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+        texture_binding_view_dimension: None,
+    });
+
+    let readback_buffers = ReadbackBuffers::new(&ctx.device, &texture);
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor { label: None });
+    readback_buffers.copy_from(&ctx.device, &mut encoder, &texture);
+    ctx.queue.submit(Some(encoder.finish()));
+
+    for plane in 0..format.planes().unwrap() {
+        let aspect = TextureAspect::from_plane(plane).unwrap();
+        let data = readback_buffers.retrieve(ctx, aspect).await;
+        for layer in 0..LAYERS {
+            let subresource = data.subresource(0, layer);
+            let nonzero = subresource.iter().position(|&b| b != 0);
+            assert!(
+                nonzero.is_none(),
+                "{:?} of {:?} at layer {} read back non-zero from never-written memory; \
+                 first non-zero byte at offset {} = 0x{:02x}",
+                aspect,
+                format,
+                layer,
+                nonzero.unwrap(),
+                subresource[nonzero.unwrap()],
+            );
+        }
+    }
+}
+
 // Tests of initialization of 3D textures.
 //
 // Init tracking only operates on array layers, not on depth/volume slices
@@ -2171,6 +2298,7 @@ fn create_3d_texture(ctx: &TestingContext, label: &str, depth: u32) -> Texture {
         format: TextureFormat::R8Uint,
         usage: TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     })
 }
 
@@ -2546,6 +2674,7 @@ async fn check_vertex_buffer_tail_init(
         format: TextureFormat::Rgba8UnormSrgb,
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let output_view = output_texture.create_view(&Default::default());
 
@@ -2787,6 +2916,7 @@ async fn test_copy_texture_to_buffer_padding_init(
         format,
         usage: TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let readback = ctx.device.create_buffer(&BufferDescriptor {
@@ -2844,7 +2974,8 @@ static MARK_EXTERNALLY_INITIALIZED_SKIPS_LAZY_CLEAR: GpuTestConfiguration =
                     target_os = "windows",
                     target_os = "linux",
                     target_os = "android",
-                    target_os = "freebsd"
+                    target_os = "freebsd",
+                    target_os = "macos"
                 ))]
                 Backend::Vulkan => {
                     check_mark_externally_initialized::<hal::vulkan::Api>(&ctx).await;
@@ -2907,6 +3038,7 @@ async fn check_mark_externally_initialized_case<A: hal::Api>(ctx: &TestingContex
         format: TextureFormat::Rgba8Unorm,
         usage: TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     // Write a non-zero pattern into the texture through its raw hal handle, entirely
@@ -2919,9 +3051,8 @@ async fn check_mark_externally_initialized_case<A: hal::Api>(ctx: &TestingContex
     // by wgpu-core.
     unsafe {
         let hal_device = ctx.device.as_hal::<A>().expect("adapter backend mismatch");
-        let hal_texture = texture.as_hal::<A>().expect("adapter backend mismatch");
 
-        let staging_buffer = hal_device
+        let (staging_buffer, _allocated_size) = hal_device
             .create_buffer(&hal::BufferDescriptor {
                 label: Some("mark_externally_initialized staging"),
                 size: buffer_size,
@@ -2940,6 +3071,7 @@ async fn check_mark_externally_initialized_case<A: hal::Api>(ctx: &TestingContex
             hal_device.unmap_buffer(&staging_buffer);
         }
 
+        let hal_texture = texture.as_hal::<A>().expect("adapter backend mismatch");
         let mut encoder = ctx
             .device
             .create_command_encoder(&CommandEncoderDescriptor { label: None });
@@ -3019,4 +3151,580 @@ async fn check_mark_externally_initialized_case<A: hal::Api>(ctx: &TestingContex
              was not lazily cleared to zero as expected",
         );
     }
+}
+
+// Tests that it is possible to bind a zero-size range of a vertex or index buffer, and that
+// a shader that reads outside the bounds of a zero-size binding reads zeros.
+//
+// These tests are important on Vulkan, where `vkCmdBindVertexBuffers` and
+// `vkCmdBindIndexBuffer` do not specify the length of a binding nor allow an empty binding
+// at the end of a buffer. An implementation that passed the offset of a zero-size binding
+// through to the Vulkan hal as-is, could expose non-zero data to shaders. On Vulkan, `wgpu`
+// replaces a binding with zero size at any offset in the buffer, with a minimum-size
+// binding of zeroed padding at the end of the buffer. In adjusting the buffer size and doing
+// this relocation, it is important not to assume that original buffer size was a multiple of
+// four, because if it was not, a vertex or index binding at the original end position is
+// not valid.
+
+const ZB_SENTINEL_BYTE: u8 = 0xDE;
+const ZB_VERT_COUNT: u32 = 4;
+
+#[derive(Clone, Copy, Debug)]
+#[allow(clippy::enum_variant_names)]
+enum ZeroBindingCase {
+    /// Zero-size vertex binding at the end of a buffer holding non-zero data.
+    VertexAtEnd,
+    /// Zero-size vertex binding at offset 0 of a buffer holding non-zero data;
+    /// the shader must not observe that data.
+    VertexAtBeginning,
+    /// Zero-size vertex binding on a buffer whose size is not a multiple of 4.
+    /// This is a valid vertex buffer (its trailing bytes just can't form a
+    /// whole vertex), but the relocation of a zero-size binding to the end of
+    /// the buffer must still produce an offset the backend accepts.
+    VertexUnalignedBufferSize(NonZeroU64),
+    /// Zero-size index binding at the end of a buffer holding non-zero data.
+    IndexAtEnd,
+    /// Zero-size `Uint32` index binding on a buffer whose size is not a
+    /// multiple of 4. As with [`Self::VertexUnalignedBufferSize`] this is a
+    /// valid buffer, but the relocated binding lands at an unaligned end
+    /// offset that a `Uint32` index binding must not be given as-is (e.g. on
+    /// Vulkan `vkCmdBindIndexBuffer` requires a multiple of the index size).
+    IndexUnalignedBufferSize(NonZeroU64),
+}
+
+#[apply(gpu_test!)]
+static ZERO_SIZE_VERTEX_BINDING_AT_END: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::VERTEX_WRITABLE_STORAGE)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| async move {
+        check_zero_size_binding(&ctx, ZeroBindingCase::VertexAtEnd).await;
+    });
+
+#[apply(gpu_test!)]
+static ZERO_SIZE_VERTEX_BINDING_AT_BEGINNING: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::VERTEX_WRITABLE_STORAGE)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| async move {
+        check_zero_size_binding(&ctx, ZeroBindingCase::VertexAtBeginning).await;
+    });
+
+#[apply(gpu_test!)]
+static ZERO_SIZE_VERTEX_BINDING_UNALIGNED_BUFFER_SIZE: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .features(Features::VERTEX_WRITABLE_STORAGE)
+                .limits(Limits::downlevel_defaults()),
+        )
+        .run_async(|ctx| async move {
+            for size_delta in 1..4 {
+                let case = ZeroBindingCase::VertexUnalignedBufferSize(
+                    NonZeroU64::new(size_delta).unwrap(),
+                );
+                check_zero_size_binding(&ctx, case).await;
+            }
+        });
+
+#[apply(gpu_test!)]
+static ZERO_SIZE_INDEX_BINDING_AT_END: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::VERTEX_WRITABLE_STORAGE)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| async move {
+        check_zero_size_binding(&ctx, ZeroBindingCase::IndexAtEnd).await;
+    });
+
+#[apply(gpu_test!)]
+static ZERO_SIZE_INDEX_BINDING_UNALIGNED_BUFFER_SIZE: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .features(Features::VERTEX_WRITABLE_STORAGE)
+                .limits(Limits::downlevel_defaults()),
+        )
+        .run_async(|ctx| async move {
+            for size_delta in 1..4 {
+                let case =
+                    ZeroBindingCase::IndexUnalignedBufferSize(NonZeroU64::new(size_delta).unwrap());
+                check_zero_size_binding(&ctx, case).await;
+            }
+        });
+
+// Unlike vertex fetches, out-of-bounds index reads are not normally possible:
+// `draw_indexed` rejects an index count that exceeds the bound index buffer,
+// and indirect indexed draws are checked against the binding size by
+// indirect draw validation.
+//
+// This test removes that protection (does an indirect draw with indirect
+// validation disabled) to exercise the same code path the vertex tests do: the
+// backend's index binding, which on Vulkan are like vertex bindings and do not
+// carry a length. A naive implementation binds the application's offset
+// directly, so the GPU reads the (non-zero) index data that sits there instead
+// of the zeros required for a zero-size binding.
+#[apply(gpu_test!)]
+static ZERO_SIZE_INDEX_BINDING_NOT_AT_END: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::VERTEX_WRITABLE_STORAGE)
+            .downlevel_flags(DownlevelFlags::INDIRECT_EXECUTION)
+            .limits(Limits::downlevel_defaults())
+            .remove_instance_flags(InstanceFlags::VALIDATION_INDIRECT_CALL)
+            .expect_fail(FailureCase::backend(Backends::GL)),
+    )
+    .run_async(|ctx| async move {
+        check_zero_size_index_binding_not_at_end(&ctx).await;
+    });
+
+// Create a vertex or index buffer holding `data`, populated through the queue.
+// When `extra_bytes` is set, the buffer is made that many bytes larger than
+// `data`. This is used to test sizes that are not multiples of 4, which are
+// valid vertex/index buffers with an unusable partial element at the end.
+// The possibility of an unaligned size must be considered when relocating
+// zero-size bindings to the end of the buffer. `create_buffer_init` cannot be
+// used here, because it rounds the size up to a multiple of 4.
+fn create_zero_binding_buffer(
+    ctx: &TestingContext,
+    label: &str,
+    data: &[u8],
+    usage: BufferUsages,
+    extra_bytes: u64,
+) -> Buffer {
+    let size = data.len() as u64 + extra_bytes;
+    let buffer = ctx.device.create_buffer(&BufferDescriptor {
+        label: Some(label),
+        size,
+        usage: usage | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    ctx.queue.write_buffer(&buffer, 0, data);
+    buffer
+}
+
+async fn check_zero_size_binding(ctx: &TestingContext, case: ZeroBindingCase) {
+    let vb_size = ZB_VERT_COUNT as u64 * VB_TAIL_VERTEX_STRIDE;
+
+    // Non-zero vertex data. If a zero-size binding were mishandled, these values
+    // would leak into the shader.
+    let vertex_data: Vec<u32> = (0..ZB_VERT_COUNT).map(|i| 0xB0B0_0000 + i).collect();
+    let extra_bytes = if let ZeroBindingCase::VertexUnalignedBufferSize(delta) = case {
+        delta.get()
+    } else {
+        0
+    };
+    let vertex_buffer = create_zero_binding_buffer(
+        ctx,
+        "zero-binding vertex buffer",
+        bytemuck::cast_slice(&vertex_data),
+        BufferUsages::VERTEX,
+        extra_bytes,
+    );
+
+    // Non-zero index data, so that a zero-size binding at the end of this buffer
+    // is genuinely past real data.
+    let indices: Vec<u32> = (0..ZB_VERT_COUNT).collect();
+    let index_data: &[u8] = bytemuck::cast_slice(&indices);
+    let ib_size = index_data.len() as u64;
+    let extra_bytes = if let ZeroBindingCase::IndexUnalignedBufferSize(delta) = case {
+        delta.get()
+    } else {
+        0
+    };
+    let index_buffer = create_zero_binding_buffer(
+        ctx,
+        "zero-binding index buffer",
+        index_data,
+        BufferUsages::INDEX,
+        extra_bytes,
+    );
+
+    // The vertex shader writes each fetched value into this buffer at `vertex_index`.
+    // Pre-fill it with a sentinel so that reading zero is meaningful even if the
+    // underlying memory happened to be zero.
+    let result_buffer = ctx.device.create_buffer(&BufferDescriptor {
+        label: Some("result buffer"),
+        size: ZB_VERT_COUNT as u64 * core::mem::size_of::<u32>() as u64,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        mapped_at_creation: true,
+    });
+    {
+        let mut view = result_buffer.slice(..).get_mapped_range_mut().unwrap();
+        let len = view.len();
+        view.copy_from_slice(&vec![ZB_SENTINEL_BYTE; len]);
+    }
+    result_buffer.unmap();
+
+    let readback = ctx.device.create_buffer(&BufferDescriptor {
+        label: Some("result readback"),
+        size: result_buffer.size(),
+        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let output_texture = ctx.device.create_texture(&TextureDescriptor {
+        label: Some("unused render attachment"),
+        size: Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format: TextureFormat::Rgba8UnormSrgb,
+        usage: TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+        texture_binding_view_dimension: None,
+    });
+    let output_view = output_texture.create_view(&Default::default());
+
+    let shader = ctx.device.create_shader_module(ShaderModuleDescriptor {
+        label: Some("zero-size binding shader"),
+        source: ShaderSource::Wgsl(VB_TAIL_SHADER.into()),
+    });
+
+    let bgl = ctx
+        .device
+        .create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
+    let pipeline_layout = ctx
+        .device
+        .create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[Some(&bgl)],
+            immediate_size: 0,
+        });
+
+    let pipeline = ctx
+        .device
+        .create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("zero-size binding pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[Some(VertexBufferLayout {
+                    array_stride: VB_TAIL_VERTEX_STRIDE,
+                    step_mode: VertexStepMode::Vertex,
+                    attributes: &[VertexAttribute {
+                        format: VertexFormat::Uint32,
+                        offset: 0,
+                        shader_location: 0,
+                    }],
+                })],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(output_texture.format().into())],
+                compilation_options: Default::default(),
+            }),
+            primitive: PrimitiveState {
+                topology: PrimitiveTopology::PointList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+
+    let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+        label: None,
+        layout: &bgl,
+        entries: &[BindGroupEntry {
+            binding: 0,
+            resource: result_buffer.as_entire_binding(),
+        }],
+    });
+
+    // Choose which buffer is bound zero-size, and how many indices to draw. The
+    // index-buffer case can only issue a zero-index draw, because a zero-size
+    // index binding yields an index limit of zero.
+    let (vb_slice, ib_slice, index_count) = match case {
+        ZeroBindingCase::VertexAtEnd => (
+            vertex_buffer.slice(vb_size..vb_size),
+            index_buffer.slice(..),
+            ZB_VERT_COUNT,
+        ),
+        ZeroBindingCase::VertexAtBeginning => (
+            vertex_buffer.slice(0..0),
+            index_buffer.slice(..),
+            ZB_VERT_COUNT,
+        ),
+        ZeroBindingCase::IndexAtEnd => (
+            vertex_buffer.slice(..),
+            index_buffer.slice(ib_size..ib_size),
+            0,
+        ),
+        // The application binds a zero-size range at a valid, aligned offset
+        // (0). The relocation to the (unaligned) end of the buffer happens
+        // internally; every fetched vertex must read zero.
+        ZeroBindingCase::VertexUnalignedBufferSize(_) => (
+            vertex_buffer.slice(0..0),
+            index_buffer.slice(..),
+            ZB_VERT_COUNT,
+        ),
+        // Same as above but for the index buffer; drawing 0 indices reads
+        // nothing.
+        ZeroBindingCase::IndexUnalignedBufferSize(_) => {
+            (vertex_buffer.slice(..), index_buffer.slice(0..0), 0)
+        }
+    };
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor { label: None });
+    {
+        let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("zero-size binding pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &output_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(Color::default()),
+                    store: StoreOp::Store,
+                },
+            })],
+            ..Default::default()
+        });
+        pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.set_vertex_buffer(0, vb_slice);
+        pass.set_index_buffer(ib_slice, IndexFormat::Uint32);
+        pass.draw_indexed(0..index_count, 0, 0..1);
+    }
+    encoder.copy_buffer_to_buffer(&result_buffer, 0, &readback, 0, result_buffer.size());
+    ctx.queue.submit([encoder.finish()]);
+
+    let data = map_and_read(ctx, &readback).await;
+    let result: Vec<u32> = bytemuck::cast_slice(&data).to_vec();
+
+    // The vertex cases fetch every vertex through the zero-size binding, so all
+    // reads must be zero. The index cases draw nothing, so the result buffer must
+    // retain its sentinel (and, more importantly, binding a zero-size index range
+    // must not have errored).
+    let expected: u32 = match case {
+        ZeroBindingCase::IndexAtEnd | ZeroBindingCase::IndexUnalignedBufferSize(_) => {
+            u32::from_ne_bytes([ZB_SENTINEL_BYTE; 4])
+        }
+        ZeroBindingCase::VertexAtEnd
+        | ZeroBindingCase::VertexAtBeginning
+        | ZeroBindingCase::VertexUnalignedBufferSize(_) => 0,
+    };
+    for (i, &got) in result.iter().enumerate() {
+        assert_eq!(
+            got, expected,
+            "unexpected value read through zero-size binding (case: {case:?}, vertex {i}): \
+             expected 0x{expected:08x}, got 0x{got:08x}",
+        );
+    }
+}
+
+async fn check_zero_size_index_binding_not_at_end(ctx: &TestingContext) {
+    // Every real index points at this vertex. A correct implementation reads
+    // zero indices through the zero-size binding, so this vertex must never be
+    // fetched; if the binding leaks the index data, the shader fetches it and
+    // writes its distinctive value into the result buffer.
+    const POISON_INDEX: u32 = 7;
+    const VERT_COUNT: u32 = 8;
+
+    let vertex_data: Vec<u32> = (0..VERT_COUNT).map(|i| 0xB0B0_0000 + i).collect();
+    let vertex_buffer = ctx.device.create_buffer_init(&util::BufferInitDescriptor {
+        label: Some("index-not-at-end vertex buffer"),
+        contents: bytemuck::cast_slice(&vertex_data),
+        usage: BufferUsages::VERTEX,
+    });
+
+    let indices: Vec<u32> = vec![POISON_INDEX; VERT_COUNT as usize];
+    let index_buffer = ctx.device.create_buffer_init(&util::BufferInitDescriptor {
+        label: Some("index-not-at-end index buffer"),
+        contents: bytemuck::cast_slice(&indices),
+        usage: BufferUsages::INDEX,
+    });
+
+    // Draw four indices via an indirect call, which is not clamped against the
+    // (zero) index limit because indirect validation is disabled for this test.
+    let indirect = ctx.device.create_buffer_init(&util::BufferInitDescriptor {
+        label: Some("index-not-at-end indirect args"),
+        contents: util::DrawIndexedIndirectArgs {
+            index_count: 4,
+            instance_count: 1,
+            first_index: 0,
+            base_vertex: 0,
+            first_instance: 0,
+        }
+        .as_bytes(),
+        usage: BufferUsages::INDIRECT,
+    });
+
+    let result_buffer = ctx.device.create_buffer(&BufferDescriptor {
+        label: Some("result buffer"),
+        size: VERT_COUNT as u64 * core::mem::size_of::<u32>() as u64,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        mapped_at_creation: true,
+    });
+    {
+        let mut view = result_buffer.slice(..).get_mapped_range_mut().unwrap();
+        let len = view.len();
+        view.copy_from_slice(&vec![ZB_SENTINEL_BYTE; len]);
+    }
+    result_buffer.unmap();
+
+    let readback = ctx.device.create_buffer(&BufferDescriptor {
+        label: Some("result readback"),
+        size: result_buffer.size(),
+        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let output_texture = ctx.device.create_texture(&TextureDescriptor {
+        label: Some("unused render attachment"),
+        size: Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format: TextureFormat::Rgba8UnormSrgb,
+        usage: TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+        texture_binding_view_dimension: None,
+    });
+    let output_view = output_texture.create_view(&Default::default());
+
+    let shader = ctx.device.create_shader_module(ShaderModuleDescriptor {
+        label: Some("zero-size binding shader"),
+        source: ShaderSource::Wgsl(VB_TAIL_SHADER.into()),
+    });
+
+    let bgl = ctx
+        .device
+        .create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
+    let pipeline_layout = ctx
+        .device
+        .create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[Some(&bgl)],
+            immediate_size: 0,
+        });
+
+    let pipeline = ctx
+        .device
+        .create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("index-not-at-end pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[Some(VertexBufferLayout {
+                    array_stride: VB_TAIL_VERTEX_STRIDE,
+                    step_mode: VertexStepMode::Vertex,
+                    attributes: &[VertexAttribute {
+                        format: VertexFormat::Uint32,
+                        offset: 0,
+                        shader_location: 0,
+                    }],
+                })],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(output_texture.format().into())],
+                compilation_options: Default::default(),
+            }),
+            primitive: PrimitiveState {
+                topology: PrimitiveTopology::PointList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+
+    let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+        label: None,
+        layout: &bgl,
+        entries: &[BindGroupEntry {
+            binding: 0,
+            resource: result_buffer.as_entire_binding(),
+        }],
+    });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor { label: None });
+    {
+        let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("index-not-at-end pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &output_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(Color::default()),
+                    store: StoreOp::Store,
+                },
+            })],
+            ..Default::default()
+        });
+        pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        // Zero-size index binding at offset 0, on top of non-zero index data.
+        pass.set_index_buffer(index_buffer.slice(0..0), IndexFormat::Uint32);
+        pass.draw_indexed_indirect(&indirect, 0);
+    }
+    encoder.copy_buffer_to_buffer(&result_buffer, 0, &readback, 0, result_buffer.size());
+    ctx.queue.submit([encoder.finish()]);
+
+    let data = map_and_read(ctx, &readback).await;
+    let result: Vec<u32> = bytemuck::cast_slice(&data).to_vec();
+
+    // The poisoned vertex's value must never appear: seeing it means the
+    // zero-size index binding exposed the index buffer's contents to the draw.
+    let poison_value = vertex_data[POISON_INDEX as usize];
+    assert!(
+        !result.contains(&poison_value),
+        "zero-size index binding exposed index data: fetched vertex {POISON_INDEX} \
+         (value 0x{poison_value:08x}); results = {result:08x?}",
+    );
 }

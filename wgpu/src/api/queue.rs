@@ -277,10 +277,12 @@ impl Queue {
     }
 
     /// Submits a series of finished command buffers for execution.
+    ///
+    /// Returns `Some` if the submission started and can be waited on via a `poll`, or `None` otherwise. On the WebGPU backend, it always returns `None` (even for successful submissions), because the WebGPU backend does not support waiting for a particular submission.
     pub fn submit<I: IntoIterator<Item = CommandBuffer>>(
         &self,
         command_buffers: I,
-    ) -> SubmissionIndex {
+    ) -> Option<SubmissionIndex> {
         // As submit drains the iterator (even on error), collect deferred actions
         // from each CommandBuffer along the way.
         let mut actions = DeferredCommandBufferActions::default();
@@ -294,7 +296,7 @@ impl Queue {
         // Execute all deferred actions after submit.
         actions.execute(&self.inner);
 
-        SubmissionIndex { index }
+        index.map(|index| SubmissionIndex { index })
     }
 
     /// Gets the amount of nanoseconds each tick of a timestamp query represents.
@@ -394,5 +396,24 @@ impl Queue {
             handle,
             inner: dispatch,
         }
+    }
+}
+
+#[cfg(wgpu_core)]
+impl Queue {
+    /// Create a new queue of wgpu from a wgpu-core queue.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_queue` - wgpu-core queue.
+    pub fn from_core(core_queue: alloc::sync::Arc<wgc::device::queue::Queue>) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreQueue::from_core(core_queue).into(),
+        }
+    }
+
+    /// Returns the underlying wgpu-core queue if this `Queue` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::device::queue::Queue>> {
+        self.inner.as_core_opt().map(|cq| cq.as_core())
     }
 }

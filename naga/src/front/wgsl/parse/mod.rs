@@ -496,6 +496,7 @@ impl Parser {
             (Token::Word("RAY_QUERY_INTERSECTION_AABB"), _) => {
                 literal_ray_intersection(crate::RayQueryIntersection::Aabb)
             }
+            (Token::String(s), _) => ast::Expression::String(s),
             (Token::Word(word), span) => {
                 let ident = self.template_elaborated_ident(word, span, lexer, ctx)?;
 
@@ -2160,12 +2161,12 @@ impl Parser {
                         }
 
                         match stage {
-                            ShaderStage::AnyHit | ShaderStage::ClosestHit | ShaderStage::Miss => {
-                                if incoming_payload.value.is_none() {
-                                    return Err(Box::new(Error::MissingIncomingPayload(
-                                        shader_stage_error_span,
-                                    )));
-                                }
+                            ShaderStage::AnyHit | ShaderStage::ClosestHit | ShaderStage::Miss
+                                if incoming_payload.value.is_none() =>
+                            {
+                                return Err(Box::new(Error::MissingIncomingPayload(
+                                    shader_stage_error_span,
+                                )));
                             }
                             _ => {}
                         }

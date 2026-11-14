@@ -409,6 +409,24 @@ impl super::Device {
                 vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE;
         }
 
+        let mut usage = conv::map_texture_usage(desc.usage);
+        // wgpu allows views of textures that are only ever copied to or from, but Vulkan
+        // requires a viewable image to carry at least one of `VIEWABLE_IMAGE_USAGES`. Add a
+        // usage the format supports so that such views stay valid. Images backed by external
+        // memory are left alone: their usage has to match the resource being imported.
+        if !usage.intersects(conv::VIEWABLE_IMAGE_USAGES)
+            && external_memory_image_create_info.is_none()
+            && super::adapter::supports_format(
+                &self.shared.instance.raw,
+                self.shared.physical_device,
+                original_format,
+                tiling,
+                vk::FormatFeatureFlags::SAMPLED_IMAGE,
+            )
+        {
+            usage |= vk::ImageUsageFlags::SAMPLED;
+        }
+
         let mut vk_info = vk::ImageCreateInfo::default()
             .flags(raw_flags)
             .image_type(conv::map_texture_dimension(desc.dimension))
@@ -418,7 +436,7 @@ impl super::Device {
             .array_layers(desc.array_layer_count())
             .samples(vk::SampleCountFlags::from_raw(desc.sample_count))
             .tiling(tiling)
-            .usage(conv::map_texture_usage(desc.usage))
+            .usage(usage)
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .initial_layout(vk::ImageLayout::UNDEFINED);
 
@@ -473,8 +491,8 @@ impl super::Device {
     ) -> Result<super::Texture, crate::DeviceError> {
         if !self
             .shared
-            .features
-            .contains(wgt::Features::VULKAN_EXTERNAL_MEMORY_WIN32)
+            .enabled_extensions
+            .contains(&ash::khr::external_memory_win32::NAME)
         {
             log::error!("Vulkan driver does not support VK_KHR_external_memory_win32");
             return Err(crate::DeviceError::Unexpected);
@@ -531,8 +549,8 @@ impl super::Device {
     ///
     /// # Safety
     ///
-    /// - Requires `VULKAN_EXTERNAL_MEMORY_DMA_BUF` feature (implies VK_EXT_external_memory_dma_buf
-    ///   and VK_EXT_image_drm_format_modifier)
+    /// - Requires the VK_KHR_external_memory_fd, VK_EXT_external_memory_dma_buf, and
+    ///   VK_EXT_image_drm_format_modifier extensions
     /// - The `fd` must be a valid DMA-buf file descriptor matching `desc`
     /// - On success, Vulkan takes ownership of the file descriptor. On failure,
     ///   the file descriptor is closed.
@@ -548,10 +566,9 @@ impl super::Device {
     ) -> Result<super::Texture, crate::DeviceError> {
         use std::os::unix::io::IntoRawFd;
 
-        if !self
-            .shared
-            .features
-            .contains(wgt::Features::VULKAN_EXTERNAL_MEMORY_DMA_BUF)
+        let enabled_extensions = &self.shared.enabled_extensions;
+        if !enabled_extensions.contains(&ext::external_memory_dma_buf::NAME)
+            || !enabled_extensions.contains(&ext::image_drm_format_modifier::NAME)
         {
             log::error!(
                 "Vulkan driver does not support VK_EXT_external_memory_dma_buf \
@@ -729,7 +746,17 @@ impl super::Device {
                     entry_point: stage.entry_point.to_owned(),
                     shader_stage: naga_stage,
                 };
-                let needs_temp_options = !runtime_checks.bounds_checks
+                let polyfill_zero_init = matches!(
+                    naga_stage,
+                    naga::ShaderStage::Task | naga::ShaderStage::Mesh
+                ) && self
+                    .shared
+                    .workarounds
+                    .contains(super::Workarounds::POLYFILL_MESH_TASK_WORKGROUP_ZERO_INIT)
+                    && self.naga_options.zero_initialize_workgroup_memory
+                        == naga::back::spv::ZeroInitializeWorkgroupMemoryMode::Native;
+                let needs_temp_options = polyfill_zero_init
+                    || !runtime_checks.bounds_checks
                     || !runtime_checks.force_loop_bounding
                     || !runtime_checks.ray_query_initialization_tracking
                     || !binding_map.is_empty()
@@ -770,6 +797,9 @@ impl super::Device {
                     if !stage.zero_initialize_workgroup_memory {
                         temp_options.zero_initialize_workgroup_memory =
                             naga::back::spv::ZeroInitializeWorkgroupMemoryMode::None;
+                    } else if polyfill_zero_init {
+                        temp_options.zero_initialize_workgroup_memory =
+                            naga::back::spv::ZeroInitializeWorkgroupMemoryMode::Polyfill;
                     }
                     if !runtime_checks.task_shader_dispatch_tracking {
                         temp_options.task_dispatch_limits = None;
@@ -997,7 +1027,7 @@ impl crate::Device for super::Device {
     unsafe fn create_buffer(
         &self,
         desc: &crate::BufferDescriptor,
-    ) -> Result<super::Buffer, crate::DeviceError> {
+    ) -> Result<(super::Buffer, wgt::BufferAddress), crate::DeviceError> {
         let vk_info = vk::BufferCreateInfo::default()
             .size(desc.size)
             .usage(conv::map_buffer_usage(desc.usage))
@@ -1039,19 +1069,31 @@ impl crate::Device for super::Device {
                 .max(self.shared.private_caps.scratch_buffer_alignment as u64);
         }
 
+        if desc
+            .usage
+            .contains(wgt::BufferUses::RAY_TRACING_PIPELINE_SHADER_DATA)
+        {
+            requirements.alignment = requirements
+                .alignment
+                .max(self.shared.private_caps.shader_binding_table_alignment as u64);
+        }
+
         let allocation = self
             .mem_allocator
-            .lock()
-            .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
-                name,
-                requirements: vk::MemoryRequirements {
-                    memory_type_bits: requirements.memory_type_bits & self.valid_ash_memory_types,
-                    ..requirements
+            .allocate(
+                super::MemoryPool::from_memory_flags(desc.memory_flags),
+                &gpu_allocator::vulkan::AllocationCreateDesc {
+                    name,
+                    requirements: vk::MemoryRequirements {
+                        memory_type_bits: requirements.memory_type_bits
+                            & self.valid_ash_memory_types,
+                        ..requirements
+                    },
+                    location,
+                    linear: true, // Buffers are always linear
+                    allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
                 },
-                location,
-                linear: true, // Buffers are always linear
-                allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
-            })
+            )
             .inspect_err(|_| {
                 unsafe { self.shared.raw.destroy_buffer(raw, None) };
             })?;
@@ -1073,12 +1115,15 @@ impl crate::Device for super::Device {
         self.counters.buffer_memory.add(allocation.size() as isize);
         self.counters.buffers.add(1);
 
-        Ok(super::Buffer {
-            raw,
-            ownership: super::BufferOwnership::Managed(Mutex::new(
-                super::BufferMemoryBacking::Managed(allocation),
-            )),
-        })
+        Ok((
+            super::Buffer {
+                raw,
+                ownership: super::BufferOwnership::Managed(Mutex::new(
+                    super::BufferMemoryBacking::Managed(allocation),
+                )),
+            },
+            desc.size,
+        ))
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
         match buffer.ownership {
@@ -1088,7 +1133,7 @@ impl crate::Device for super::Device {
                 self.counters.buffer_memory.sub(allocation.size() as isize);
                 match allocation {
                     super::BufferMemoryBacking::Managed(allocation) => {
-                        let result = self.mem_allocator.lock().free(allocation);
+                        let result = self.mem_allocator.free(allocation);
                         if let Err(err) = result {
                             log::warn!("Failed to free buffer allocation: {err}");
                         }
@@ -1201,18 +1246,20 @@ impl crate::Device for super::Device {
 
         let allocation = self
             .mem_allocator
-            .lock()
-            .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
-                name,
-                requirements: vk::MemoryRequirements {
-                    memory_type_bits: image.requirements.memory_type_bits
-                        & self.valid_ash_memory_types,
-                    ..image.requirements
+            .allocate(
+                super::MemoryPool::from_memory_flags(desc.memory_flags),
+                &gpu_allocator::vulkan::AllocationCreateDesc {
+                    name,
+                    requirements: vk::MemoryRequirements {
+                        memory_type_bits: image.requirements.memory_type_bits
+                            & self.valid_ash_memory_types,
+                        ..image.requirements
+                    },
+                    location: gpu_allocator::MemoryLocation::GpuOnly,
+                    linear: false,
+                    allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
                 },
-                location: gpu_allocator::MemoryLocation::GpuOnly,
-                linear: false,
-                allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
-            })
+            )
             .inspect_err(|_| {
                 unsafe { self.shared.raw.destroy_image(image.raw, None) };
             })?;
@@ -1248,7 +1295,7 @@ impl crate::Device for super::Device {
         match texture.memory {
             super::TextureMemory::Allocation(allocation) => {
                 self.counters.texture_memory.sub(allocation.size() as isize);
-                let result = self.mem_allocator.lock().free(allocation);
+                let result = self.mem_allocator.free(allocation);
                 if let Err(err) = result {
                     log::warn!("Failed to free texture allocation: {err}");
                 }
@@ -1471,7 +1518,40 @@ impl crate::Device for super::Device {
 
             let count = entry.count.map_or(1, |c| c.get());
             match entry.ty {
-                wgt::BindingType::ExternalTexture => unimplemented!(),
+                wgt::BindingType::ExternalTexture => {
+                    assert!(
+                        count == 1 && entry.count.is_none() && flags.is_empty(),
+                        "ExternalTexture binding arrays are not supported"
+                    );
+                    vk_bindings.extend((next_binding..next_binding + 3).map(|binding| {
+                        vk::DescriptorSetLayoutBinding {
+                            binding,
+                            descriptor_type: vk::DescriptorType::SAMPLED_IMAGE,
+                            descriptor_count: 1,
+                            stage_flags: conv::map_shader_stage(entry.visibility),
+                            p_immutable_samplers: ptr::null(),
+                            _marker: Default::default(),
+                        }
+                    }));
+                    vk_bindings.push(vk::DescriptorSetLayoutBinding {
+                        binding: next_binding + 3,
+                        descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+                        descriptor_count: 1,
+                        stage_flags: conv::map_shader_stage(entry.visibility),
+                        p_immutable_samplers: ptr::null(),
+                        _marker: Default::default(),
+                    });
+                    binding_flags.extend(core::iter::repeat_n(flags, 4));
+                    binding_map.push((
+                        entry.binding,
+                        super::BindingInfo {
+                            binding: next_binding,
+                            binding_array_size: None,
+                            external_texture: true,
+                        },
+                    ));
+                    next_binding += 4;
+                }
                 _ => {
                     vk_bindings.push(vk::DescriptorSetLayoutBinding {
                         binding: next_binding,
@@ -1487,6 +1567,7 @@ impl crate::Device for super::Device {
                         super::BindingInfo {
                             binding: next_binding,
                             binding_array_size: entry.count,
+                            external_texture: false,
                         },
                     ));
                     next_binding += 1;
@@ -1526,7 +1607,10 @@ impl crate::Device for super::Device {
                 wgt::BindingType::AccelerationStructure { .. } => {
                     desc_count.acceleration_structure += count;
                 }
-                wgt::BindingType::ExternalTexture => unimplemented!(),
+                wgt::BindingType::ExternalTexture => {
+                    desc_count.sampled_image += 3;
+                    desc_count.uniform_buffer += 1;
+                }
             }
         }
 
@@ -1660,6 +1744,7 @@ impl crate::Device for super::Device {
                         descriptor_set: group as u32,
                         binding: binding_info.binding,
                         binding_array_size: binding_info.binding_array_size.map(NonZeroU32::get),
+                        external_texture: binding_info.external_texture,
                     },
                 );
             }
@@ -1747,9 +1832,12 @@ impl crate::Device for super::Device {
         }
 
         let mut writes = Vec::with_capacity(desc.entries.len());
-        let mut buffer_infos = Vec::with_capacity(desc.buffers.len());
+        let mut buffer_infos =
+            Vec::with_capacity(desc.buffers.len() + desc.external_textures.len());
         let mut buffer_infos = ExtendStack::from_vec_capacity(&mut buffer_infos);
-        let mut image_infos = Vec::with_capacity(desc.samplers.len() + desc.textures.len());
+        let mut image_infos = Vec::with_capacity(
+            desc.samplers.len() + desc.textures.len() + 3 * desc.external_textures.len(),
+        );
         let mut image_infos = ExtendStack::from_vec_capacity(&mut image_infos);
         // TODO: This length could be reduced to just the number of top-level acceleration
         // structure bindings, where multiple consecutive TLAS bindings that are set via
@@ -1775,7 +1863,59 @@ impl crate::Device for super::Device {
         });
         let mut next_binding = 0;
         for (layout, entry) in layout_and_entry_iter {
-            let write = vk::WriteDescriptorSet::default().dst_set(set.raw());
+            let dst_set = set.raw();
+
+            fn add_image_descriptor_writes<'a>(
+                mut infos: ExtendStack<'a, vk::DescriptorImageInfo>,
+                writes: &mut Vec<vk::WriteDescriptorSet<'a>>,
+                dst_set: vk::DescriptorSet,
+                next_binding: &mut u32,
+                add_infos: &'a [crate::TextureBinding<super::TextureView>],
+                add_ty: vk::DescriptorType,
+            ) -> ExtendStack<'a, vk::DescriptorImageInfo> {
+                let local_image_infos;
+                (infos, local_image_infos) = infos.extend(add_infos.iter().map(|binding| {
+                    let layout = conv::derive_image_layout(binding.usage, binding.view.format);
+                    vk::DescriptorImageInfo::default()
+                        .image_view(binding.view.raw)
+                        .image_layout(layout)
+                }));
+                writes.push(
+                    vk::WriteDescriptorSet::default()
+                        .dst_set(dst_set)
+                        .dst_binding(*next_binding)
+                        .descriptor_type(add_ty)
+                        .image_info(local_image_infos),
+                );
+                *next_binding += 1;
+                infos
+            }
+
+            fn add_buffer_descriptor_writes<'a>(
+                mut infos: ExtendStack<'a, vk::DescriptorBufferInfo>,
+                writes: &mut Vec<vk::WriteDescriptorSet<'a>>,
+                dst_set: vk::DescriptorSet,
+                next_binding: &mut u32,
+                add_infos: &'a [crate::BufferBinding<super::Buffer, wgt::BufferSize>],
+                add_ty: vk::DescriptorType,
+            ) -> ExtendStack<'a, vk::DescriptorBufferInfo> {
+                let local_buffer_infos;
+                (infos, local_buffer_infos) = infos.extend(add_infos.iter().map(|binding| {
+                    vk::DescriptorBufferInfo::default()
+                        .buffer(binding.buffer.raw)
+                        .offset(binding.offset)
+                        .range(binding.size.get())
+                }));
+                writes.push(
+                    vk::WriteDescriptorSet::default()
+                        .dst_set(dst_set)
+                        .dst_binding(*next_binding)
+                        .descriptor_type(add_ty)
+                        .buffer_info(local_buffer_infos),
+                );
+                *next_binding += 1;
+                infos
+            }
 
             match layout.ty {
                 wgt::BindingType::Sampler(_) => {
@@ -1787,7 +1927,8 @@ impl crate::Device for super::Device {
                             |sampler| vk::DescriptorImageInfo::default().sampler(sampler.raw),
                         ));
                     writes.push(
-                        write
+                        vk::WriteDescriptorSet::default()
+                            .dst_set(dst_set)
                             .dst_binding(next_binding)
                             .descriptor_type(conv::map_binding_type(layout.ty))
                             .image_info(local_image_infos),
@@ -1797,47 +1938,26 @@ impl crate::Device for super::Device {
                 wgt::BindingType::Texture { .. } | wgt::BindingType::StorageTexture { .. } => {
                     let start = entry.resource_index;
                     let end = start + entry.count;
-                    let local_image_infos;
-                    (image_infos, local_image_infos) =
-                        image_infos.extend(desc.textures[start as usize..end as usize].iter().map(
-                            |binding| {
-                                let layout =
-                                    conv::derive_image_layout(binding.usage, binding.view.format);
-                                vk::DescriptorImageInfo::default()
-                                    .image_view(binding.view.raw)
-                                    .image_layout(layout)
-                            },
-                        ));
-                    writes.push(
-                        write
-                            .dst_binding(next_binding)
-                            .descriptor_type(conv::map_binding_type(layout.ty))
-                            .image_info(local_image_infos),
+                    image_infos = add_image_descriptor_writes(
+                        image_infos,
+                        &mut writes,
+                        dst_set,
+                        &mut next_binding,
+                        &desc.textures[start as usize..end as usize],
+                        conv::map_binding_type(layout.ty),
                     );
-                    next_binding += 1;
                 }
                 wgt::BindingType::Buffer { .. } => {
                     let start = entry.resource_index;
                     let end = start + entry.count;
-                    let local_buffer_infos;
-                    (buffer_infos, local_buffer_infos) =
-                        buffer_infos.extend(desc.buffers[start as usize..end as usize].iter().map(
-                            |binding| {
-                                vk::DescriptorBufferInfo::default()
-                                    .buffer(binding.buffer.raw)
-                                    .offset(binding.offset)
-                                    .range(
-                                        binding.size.map_or(vk::WHOLE_SIZE, wgt::BufferSize::get),
-                                    )
-                            },
-                        ));
-                    writes.push(
-                        write
-                            .dst_binding(next_binding)
-                            .descriptor_type(conv::map_binding_type(layout.ty))
-                            .buffer_info(local_buffer_infos),
+                    buffer_infos = add_buffer_descriptor_writes(
+                        buffer_infos,
+                        &mut writes,
+                        dst_set,
+                        &mut next_binding,
+                        &desc.buffers[start as usize..end as usize],
+                        conv::map_binding_type(layout.ty),
                     );
-                    next_binding += 1;
                 }
                 wgt::BindingType::AccelerationStructure { .. } => {
                     let start = entry.resource_index;
@@ -1863,7 +1983,8 @@ impl crate::Device for super::Device {
                     );
 
                     writes.push(
-                        write
+                        vk::WriteDescriptorSet::default()
+                            .dst_set(dst_set)
                             .dst_binding(next_binding)
                             .descriptor_type(conv::map_binding_type(layout.ty))
                             .descriptor_count(entry.count)
@@ -1871,7 +1992,31 @@ impl crate::Device for super::Device {
                     );
                     next_binding += 1;
                 }
-                wgt::BindingType::ExternalTexture => unimplemented!(),
+                wgt::BindingType::ExternalTexture => {
+                    assert!(
+                        entry.count == 1,
+                        "ExternalTexture binding arrays are not supported"
+                    );
+                    let index = entry.resource_index as usize;
+                    for plane in &desc.external_textures[index].planes {
+                        image_infos = add_image_descriptor_writes(
+                            image_infos,
+                            &mut writes,
+                            dst_set,
+                            &mut next_binding,
+                            core::slice::from_ref(plane),
+                            vk::DescriptorType::SAMPLED_IMAGE,
+                        );
+                    }
+                    buffer_infos = add_buffer_descriptor_writes(
+                        buffer_infos,
+                        &mut writes,
+                        dst_set,
+                        &mut next_binding,
+                        core::slice::from_ref(&desc.external_textures[index].params),
+                        vk::DescriptorType::UNIFORM_BUFFER,
+                    )
+                }
             }
         }
 
@@ -2884,16 +3029,24 @@ impl crate::Device for super::Device {
                 .label
                 .unwrap_or("Unlabeled acceleration structure buffer");
 
+            let pool = if desc.allow_compaction {
+                super::MemoryPool::Transient
+            } else {
+                super::MemoryPool::General
+            };
             let allocation = self
                 .mem_allocator
-                .lock()
-                .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
-                    name,
-                    requirements,
-                    location: gpu_allocator::MemoryLocation::GpuOnly,
-                    linear: true, // Buffers are always linear
-                    allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
-                })
+                .allocate(
+                    pool,
+                    &gpu_allocator::vulkan::AllocationCreateDesc {
+                        name,
+                        requirements,
+                        location: gpu_allocator::MemoryLocation::GpuOnly,
+                        linear: true, // Buffers are always linear
+                        allocation_scheme:
+                            gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
+                    },
+                )
                 .inspect_err(|_| {
                     self.shared.raw.destroy_buffer(raw_buffer, None);
                 })?;
@@ -2977,10 +3130,7 @@ impl crate::Device for super::Device {
             self.shared
                 .raw
                 .destroy_buffer(acceleration_structure.buffer, None);
-            let result = self
-                .mem_allocator
-                .lock()
-                .free(acceleration_structure.allocation);
+            let result = self.mem_allocator.free(acceleration_structure.allocation);
             if let Err(err) = result {
                 log::warn!("Failed to free buffer acceleration structure: {err}");
             }
@@ -2999,36 +3149,7 @@ impl crate::Device for super::Device {
     }
 
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
-        let gpu_allocator::AllocatorReport {
-            allocations,
-            blocks,
-            total_allocated_bytes,
-            total_capacity_bytes,
-        } = self.mem_allocator.lock().generate_report();
-
-        let allocations = allocations
-            .into_iter()
-            .map(|alloc| wgt::AllocationReport {
-                name: alloc.name,
-                offset: alloc.offset,
-                size: alloc.size,
-            })
-            .collect();
-
-        let blocks = blocks
-            .into_iter()
-            .map(|block| wgt::MemoryBlockReport {
-                size: block.size,
-                allocations: block.allocations.clone(),
-            })
-            .collect();
-
-        Some(wgt::AllocatorReport {
-            allocations,
-            blocks,
-            total_allocated_bytes,
-            total_reserved_bytes: total_capacity_bytes,
-        })
+        Some(self.mem_allocator.generate_report())
     }
 
     fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>) {
