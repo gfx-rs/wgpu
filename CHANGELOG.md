@@ -175,6 +175,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Added `wgt::Features::CORE_FEATURES_AND_LIMITS`, which is reported only when the adapter supports WebGPU default limits and its downlevel capabilities are WebGPU-compliant. By @sagudev in [#10293](https://github.com/gfx-rs/wgpu/pull/10293).
 - Added `TextureDescriptor::default_view_dimension` to get the view dimension a texture's views default to. By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Added `Queue` getter on `Device`. By @sagudev in [#10895](https://github.com/gfx-rs/wgpu/pull/10895).
+- Add `Queue::present_with_damage`, which takes the regions that changed since the last present as a hint for the compositor. Implemented for Vulkan (`VK_KHR_incremental_present`) and EGL (`EGL_KHR_swap_buffers_with_damage` / `EGL_EXT_swap_buffers_with_damage`); ignored elsewhere. Adds `wgpu::Rect`, moved from `wgpu_core::command::Rect`. By @sauliusvl in [#10152](https://github.com/gfx-rs/wgpu/pull/10152).
 
 #### Naga
 
@@ -255,6 +256,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 #### Hal
 
 - `TextureDescriptor` has a new field `texture_binding_view_dimension`. It must be `Some` on devices without `DownlevelFlags::ARBITRARY_BINDING_VIEW_DIMENSIONS` (the GLES backend allocates the texture's GL target from it), and is ignored otherwise. By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
+- `hal::Queue::present` gained a `damage_rects: &[wgt::Rect<u32>]` parameter. The rects must be non-empty and within the surface. Pass an empty slice for the previous behavior. By @sauliusvl in [#10152](https://github.com/gfx-rs/wgpu/pull/10152).
 
 #### Metal
 
