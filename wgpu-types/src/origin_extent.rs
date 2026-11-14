@@ -82,6 +82,46 @@ impl core::fmt::Debug for Origin3d {
     }
 }
 
+/// A rectangle with a top-left origin.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Rect<T> {
+    /// Left edge.
+    pub x: T,
+    /// Top edge.
+    pub y: T,
+    /// Width.
+    pub w: T,
+    /// Height.
+    pub h: T,
+}
+
+impl Rect<u32> {
+    /// Returns the overlap of `self` and `other`, or `None` if it is empty.
+    #[must_use]
+    pub fn intersect(&self, other: &Self) -> Option<Self> {
+        let left = self.x.max(other.x);
+        let top = self.y.max(other.y);
+        let right = self
+            .x
+            .saturating_add(self.w)
+            .min(other.x.saturating_add(other.w));
+        let bottom = self
+            .y
+            .saturating_add(self.h)
+            .min(other.y.saturating_add(other.h));
+        if right <= left || bottom <= top {
+            return None;
+        }
+        Some(Self {
+            x: left,
+            y: top,
+            w: right - left,
+            h: bottom - top,
+        })
+    }
+}
+
 /// Extent of a texture related operation.
 ///
 /// Corresponds to [WebGPU `GPUExtent3D`](
@@ -190,5 +230,44 @@ impl Extent3d {
                 }
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rect(x: u32, y: u32, w: u32, h: u32) -> Rect<u32> {
+        Rect { x, y, w, h }
+    }
+
+    #[test]
+    fn intersect() {
+        let surface = rect(0, 0, 800, 600);
+        assert_eq!(
+            rect(10, 20, 100, 50).intersect(&surface),
+            Some(rect(10, 20, 100, 50))
+        );
+        assert_eq!(surface.intersect(&surface), Some(surface));
+        assert_eq!(
+            rect(750, 570, 100, 50).intersect(&surface),
+            Some(rect(750, 570, 50, 30))
+        );
+        assert_eq!(rect(900, 0, 100, 50).intersect(&surface), None);
+        assert_eq!(rect(0, 600, 100, 50).intersect(&surface), None);
+        assert_eq!(rect(10, 10, 0, 0).intersect(&surface), None);
+    }
+
+    #[test]
+    fn intersect_does_not_overflow() {
+        let surface = rect(0, 0, 800, 600);
+        assert_eq!(
+            rect(u32::MAX, u32::MAX, u32::MAX, u32::MAX).intersect(&surface),
+            None
+        );
+        assert_eq!(
+            rect(10, 10, u32::MAX, u32::MAX).intersect(&surface),
+            Some(rect(10, 10, 790, 590))
+        );
     }
 }
