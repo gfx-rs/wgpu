@@ -465,6 +465,10 @@ features! {
         /// - Vulkan
         ///
         /// This is a native only feature.
+        ///
+        /// See the [binding arrays documentation][binding_arrays] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["binding_arrays"]: "documentation/extensions/binding_arrays/index.html#texture-binding-arrays")]
         #[name("wgpu-texture-binding-array", "texture-binding-array")]
         const TEXTURE_BINDING_ARRAY = 1 << 8;
         /// Allows the user to create arrays of buffers in shaders:
@@ -487,6 +491,10 @@ features! {
         /// - Vulkan
         ///
         /// This is a native only feature.
+        ///
+        /// See the [binding arrays documentation][binding_arrays] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["binding_arrays"]: "documentation/extensions/binding_arrays/index.html#buffer-binding-arrays")]
         #[name("wgpu-buffer-binding-array", "buffer-binding-array")]
         const BUFFER_BINDING_ARRAY = 1 << 9;
         /// Allows the user to create uniform arrays of storage buffers or textures in shaders,
@@ -501,6 +509,10 @@ features! {
         /// - Vulkan
         ///
         /// This is a native only feature.
+        ///
+        /// See the [binding arrays documentation][binding_arrays] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["binding_arrays"]: "documentation/extensions/binding_arrays/index.html#storage-resource-binding-arrays")]
         #[name("wgpu-storage-resource-binding-array", "storage-resource-binding-array")]
         const STORAGE_RESOURCE_BINDING_ARRAY = 1 << 10;
         /// Allows shaders to index sampled texture and storage buffer resource arrays with dynamically non-uniform values:
@@ -527,6 +539,10 @@ features! {
         /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderSampledImageArrayNonUniformIndexing & shaderStorageBufferArrayNonUniformIndexing feature)
         ///
         /// This is a native only feature.
+        ///
+        /// See the [binding arrays documentation][binding_arrays] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["binding_arrays"]: "documentation/extensions/binding_arrays/index.html")]
         #[name("wgpu-sampled-texture-and-storage-buffer-array-non-uniform-indexing", "sampled-texture-and-storage-buffer-array-non-uniform-indexing")]
         const SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 1 << 11;
         /// Allows shaders to index storage texture resource arrays with dynamically non-uniform values:
@@ -539,6 +555,10 @@ features! {
         /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderStorageTextureArrayNonUniformIndexing feature)
         ///
         /// This is a native only feature.
+        ///
+        /// See the [binding arrays documentation][binding_arrays] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["binding_arrays"]: "documentation/extensions/binding_arrays/index.html")]
         #[name("wgpu-storage-texture-array-non-uniform-indexing", "storage-texture-array-non-uniform-indexing")]
         const STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 1 << 12;
         /// Allows the user to create bind groups containing arrays with less bindings than the BindGroupLayout.
@@ -548,6 +568,10 @@ features! {
         /// - DX12
         ///
         /// This is a native only feature.
+        ///
+        /// See the [binding arrays documentation][binding_arrays] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["binding_arrays"]: "documentation/extensions/binding_arrays/index.html#partially-bound-binding-arrays")]
         #[name("wgpu-partially-bound-binding-array", "partially-bound-binding-array")]
         const PARTIALLY_BOUND_BINDING_ARRAY = 1 << 13;
 
@@ -897,6 +921,10 @@ features! {
         /// Unimplemented Platforms:
         /// - DX12
         /// - Metal
+        ///
+        /// See the [pipeline cache documentation][pipeline_cache] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["pipeline_cache"]: "documentation/extensions/pipeline_cache/index.html")]
         #[name("wgpu-pipeline-cache")]
         const PIPELINE_CACHE = 1 << 41;
         /// Allows shaders to use i64 and u64 atomic min and max.
@@ -949,6 +977,10 @@ features! {
         /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s `shaderUniformBufferArrayNonUniformIndexing` feature)
         ///
         /// This is a native only feature.
+        ///
+        /// See the [binding arrays documentation][binding_arrays] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["binding_arrays"]: "documentation/extensions/binding_arrays/index.html#uniform-buffer-binding-arrays")]
         #[name("wgpu-uniform-buffer-binding-arrays", "uniform-buffer-binding-arrays")]
         const UNIFORM_BUFFER_BINDING_ARRAYS = 1 << 47;
 
@@ -1033,7 +1065,10 @@ features! {
         /// Ideally, in the future, all platforms will be supported. For more info, see
         /// [this comment](https://github.com/gfx-rs/wgpu/issues/3103#issuecomment-2833058367).
         ///
+        /// See the [passthrough shaders documentation][passthrough_shaders] for more information.
+        ///
         #[doc = link_to_wgpu_docs!(["`Device::create_shader_module_passthrough`"]: "struct.Device.html#method.create_shader_module_passthrough")]
+        #[doc = link_to_wgpu_docs!(["passthrough_shaders"]: "documentation/extensions/passthrough_precompiled_shaders/index.html")]
         #[name("wgpu-passthrough-shaders", "passthrough-shaders")]
         const PASSTHROUGH_SHADERS = 1 << 52;
 
@@ -1045,6 +1080,10 @@ features! {
         /// - Metal (with MSL 2.2+)
         ///
         /// This is a native only feature.
+        ///
+        /// See the [barycentric coordinates documentation][barycentrics] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["barycentrics"]: "documentation/extensions/barycentrics_per_vertex/index.html#barycentric-coordinates")]
         #[name("wgpu-shader-barycentrics")]
         const SHADER_BARYCENTRICS = 1 << 53;
 
@@ -1108,6 +1147,10 @@ features! {
         /// - Vulkan (with VK_KHR_fragment_shader_barycentric)
         ///
         /// This is a native only feature.
+        ///
+        /// See the [per-vertex bindings documentation][per_vertex] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["per_vertex"]: "documentation/extensions/barycentrics_per_vertex/index.html#per-vertex-bindings")]
         #[name("wgpu-shader-per-vertex")]
         const SHADER_PER_VERTEX = 1 << 58;
 
@@ -1136,6 +1179,10 @@ features! {
         /// - Vulkan
         ///
         /// This is a native only feature.
+        ///
+        /// See the [binding arrays documentation][binding_arrays] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["binding_arrays"]: "documentation/extensions/binding_arrays/index.html#acceleration-structure-binding-arrays")]
         #[name("wgpu-acceleration-structure-binding-array")]
         const ACCELERATION_STRUCTURE_BINDING_ARRAY = 1 << 60;
 
@@ -1148,6 +1195,10 @@ features! {
         /// - GLES (ES 3.1+ / GL 4.3+)
         ///
         /// This is a native only feature.
+        ///
+        /// See the [coherent buffers documentation][coherent] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["coherent"]: "documentation/extensions/coherent_volatile_buffers/index.html#coherent-behavior")]
         #[name("wgpu-memory-decoration-coherent")]
         const MEMORY_DECORATION_COHERENT = 1 << 61;
 
@@ -1158,6 +1209,10 @@ features! {
         /// - GLES (ES 3.1+ / GL 4.3+)
         ///
         /// This is a native only feature.
+        ///
+        /// See the [volatile buffers documentation][volatile] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["volatile"]: "documentation/extensions/coherent_volatile_buffers/index.html#volatile-behavior")]
         #[name("wgpu-memory-decoration-volatile")]
         const MEMORY_DECORATION_VOLATILE = 1 << 62;
 
