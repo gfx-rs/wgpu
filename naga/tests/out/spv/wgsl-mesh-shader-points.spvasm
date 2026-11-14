@@ -17,15 +17,6 @@ OpExecutionMode %85 OutputPrimitivesEXT 1
 OpMemberDecorate %71 0 BuiltIn Position
 OpDecorate %71 Block
 OpDecorate %77 BuiltIn PrimitivePointIndicesEXT
-OpMemberDecorate %4 0 Offset 0
-OpMemberDecorate %7 0 Offset 0
-OpMemberDecorate %8 0 Offset 0
-OpDecorate %10 ArrayStride 16
-OpDecorate %12 ArrayStride 4
-OpMemberDecorate %13 0 Offset 0
-OpMemberDecorate %13 1 Offset 16
-OpMemberDecorate %13 2 Offset 20
-OpMemberDecorate %13 3 Offset 24
 OpDecorate %24 BuiltIn LocalInvocationIndex
 OpDecorate %68 BuiltIn LocalInvocationIndex
 %2 = OpTypeVoid

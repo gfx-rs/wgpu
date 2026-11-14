@@ -629,6 +629,10 @@ enum WrappedFunction {
         left_type_id: Word,
         right_type_id: Word,
     },
+    WorkgroupArrayCopy {
+        ty: Handle<crate::Type>,
+        to_workgroup: bool,
+    },
     ConvertFromStd140CompatType {
         r#type: Handle<crate::Type>,
     },
@@ -969,6 +973,9 @@ pub struct Writer {
     cached_constants: crate::FastHashMap<CachedConstant, Word>,
     global_variables: HandleVec<crate::GlobalVariable, GlobalVariable>,
     std140_compat_uniform_types: crate::FastHashMap<Handle<crate::Type>, Std140CompatTypeInfo>,
+    /// SPIR-V ids of undecorated clones for Workgroup types that are also used
+    /// by a buffer. Absent, or equal to the default id, means no clone was needed.
+    workgroup_type_ids: crate::FastHashMap<Handle<crate::Type>, Word>,
     fake_missing_bindings: bool,
     binding_map: BindingMap,
 

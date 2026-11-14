@@ -2880,6 +2880,30 @@ impl BlockContext<'_> {
         }
     }
 
+    fn layoutless_workgroup_type_id(&mut self, ty: Handle<crate::Type>) -> Option<Word> {
+        let id = *self.writer.workgroup_type_ids.get(&ty)?;
+        (id != self.writer.get_handle_type_id(ty)).then_some(id)
+    }
+
+    fn maybe_convert_value_for_workgroup_store(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+        value: Handle<crate::Expression>,
+        block: &mut Block,
+    ) -> Result<Word, Error> {
+        let value_id = self.cached[value];
+        let crate::TypeInner::Pointer { base, space } =
+            *self.fun_info[pointer].ty.inner_with(&self.ir_module.types)
+        else {
+            return Ok(value_id);
+        };
+        if !space.forbids_explicit_layout() {
+            return Ok(value_id);
+        }
+        self.writer
+            .convert_workgroup_value(self.ir_module, base, value_id, true, block)
+    }
+
     fn write_checked_load(
         &mut self,
         pointer: Handle<crate::Expression>,
@@ -2908,30 +2932,38 @@ impl BlockContext<'_> {
                 r#type: Handle<crate::Type>,
             }
             let mut wrapped_load = None;
+            let mut workgroup_load_type_id = None;
+            let mut workgroup_load_type = None;
             if let crate::TypeInner::Pointer {
                 base: pointer_base_type,
-                space: crate::AddressSpace::Uniform,
+                space,
             } = *self.fun_info[pointer].ty.inner_with(&self.ir_module.types)
             {
-                if self
-                    .writer
-                    .std140_compat_uniform_types
-                    .contains_key(&pointer_base_type)
+                if space == crate::AddressSpace::Uniform
+                    && self
+                        .writer
+                        .std140_compat_uniform_types
+                        .contains_key(&pointer_base_type)
                 {
                     wrapped_load = Some(WrappedLoad {
                         access_type_adjustment: AccessTypeAdjustment::UseStd140CompatType,
                         r#type: pointer_base_type,
                     });
-                };
+                } else if space.forbids_explicit_layout() {
+                    workgroup_load_type_id = self.layoutless_workgroup_type_id(pointer_base_type);
+                    workgroup_load_type = Some(pointer_base_type);
+                }
             };
 
-            let (load_type_id, access_type_adjustment) = match wrapped_load {
-                Some(ref wrapped_load) => (
-                    self.writer.std140_compat_uniform_types[&wrapped_load.r#type].type_id,
-                    wrapped_load.access_type_adjustment,
-                ),
-                None => (result_type_id, access_type_adjustment),
-            };
+            let (load_type_id, access_type_adjustment) =
+                match (wrapped_load.as_ref(), workgroup_load_type_id) {
+                    (Some(wrapped_load), _) => (
+                        self.writer.std140_compat_uniform_types[&wrapped_load.r#type].type_id,
+                        wrapped_load.access_type_adjustment,
+                    ),
+                    (None, Some(wg_type_id)) => (wg_type_id, access_type_adjustment),
+                    (None, None) => (result_type_id, access_type_adjustment),
+                };
 
             let load_id = match self.write_access_chain(pointer, block, access_type_adjustment)? {
                 ExpressionPointer::Ready { pointer_id } => {
@@ -3003,6 +3035,13 @@ impl BlockContext<'_> {
                     ));
                     Ok(result_id)
                 }
+                None if workgroup_load_type_id.is_some() => self.writer.convert_workgroup_value(
+                    self.ir_module,
+                    workgroup_load_type.unwrap(),
+                    load_id,
+                    false,
+                    block,
+                ),
                 None => Ok(load_id),
             }
         }
@@ -3896,7 +3935,8 @@ impl BlockContext<'_> {
                     self.writer.write_memory_barrier(flags, &mut block);
                 }
                 Statement::Store { pointer, value } => {
-                    let value_id = self.cached[value];
+                    let value_id =
+                        self.maybe_convert_value_for_workgroup_store(pointer, value, &mut block)?;
                     match self.write_access_chain(
                         pointer,
                         &mut block,
