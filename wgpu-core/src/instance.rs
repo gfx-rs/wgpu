@@ -1102,6 +1102,10 @@ impl Adapter {
         self.raw.capabilities.cooperative_matrix_properties.clone()
     }
 
+    pub fn ray_tracing_invocation_reorder_mode(&self) -> wgt::RayTracingInvocationReorderMode {
+        self.raw.capabilities.ray_tracing_invocation_reorder_mode
+    }
+
     pub fn get_texture_format_features(
         &self,
         format: wgt::TextureFormat,

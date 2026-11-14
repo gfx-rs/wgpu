@@ -84,6 +84,10 @@ impl AdapterInterface for CustomAdapter {
         Vec::new()
     }
 
+    fn ray_tracing_invocation_reorder_mode(&self) -> wgpu::RayTracingInvocationReorderMode {
+        wgpu::RayTracingInvocationReorderMode::None
+    }
+
     fn is_surface_supported(&self, _surface: &DispatchSurface) -> bool {
         unimplemented!()
     }
