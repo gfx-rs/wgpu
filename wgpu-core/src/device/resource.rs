@@ -1249,7 +1249,7 @@ impl Device {
             .usage
             .intersects(wgt::BufferUsages::BLAS_INPUT | wgt::BufferUsages::TLAS_INPUT)
         {
-            self.require_features(wgt::Features::EXPERIMENTAL_RAY_QUERY)?;
+            self.require_acceleration_structures()?;
         }
 
         if desc.usage.contains(wgt::BufferUsages::INDEX)
@@ -1667,6 +1667,7 @@ impl Device {
             format_features,
             resource::TextureClearMode::None,
             !cleared, // inverted so it marks the tracker properly
+            self.resolve_texture_binding_view_dimension(desc),
         );
 
         let texture = Arc::new(texture);
@@ -1828,7 +1829,9 @@ impl Device {
         desc: &resource::TextureDescriptor,
     ) -> Result<(wgt::TextureFormatFeatures, Vec<TextureFormat>), resource::CreateTextureError>
     {
-        use resource::{CreateTextureError, TextureDimensionError};
+        use resource::{
+            CreateTextureError, TextureBindingViewDimensionError, TextureDimensionError,
+        };
 
         self.check_is_valid()?;
 
@@ -2103,7 +2106,69 @@ impl Device {
             self.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
         }
 
+        if !self
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::ARBITRARY_BINDING_VIEW_DIMENSIONS)
+        {
+            if let Some(texture_binding_view_dimension) = desc.texture_binding_view_dimension {
+                match texture_binding_view_dimension {
+                    TextureViewDimension::D2 => {
+                        if desc.size.depth_or_array_layers != 1 {
+                            return Err(CreateTextureError::InvalidTextureBindingViewDimension(
+                                TextureBindingViewDimensionError::InvalidLayerCount {
+                                    dimension: texture_binding_view_dimension,
+                                    required: 1,
+                                    actual: desc.size.depth_or_array_layers,
+                                },
+                            ));
+                        }
+                    }
+                    TextureViewDimension::Cube => {
+                        if desc.size.depth_or_array_layers != 6 {
+                            return Err(CreateTextureError::InvalidTextureBindingViewDimension(
+                                TextureBindingViewDimensionError::InvalidLayerCount {
+                                    dimension: texture_binding_view_dimension,
+                                    required: 6,
+                                    actual: desc.size.depth_or_array_layers,
+                                },
+                            ));
+                        }
+                    }
+                    TextureViewDimension::CubeArray => {
+                        self.require_downlevel_flags(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES)?;
+                        if !desc.size.depth_or_array_layers.is_multiple_of(6) {
+                            return Err(CreateTextureError::InvalidTextureBindingViewDimension(
+                                TextureBindingViewDimensionError::InvalidCubeArrayLayerCount(
+                                    desc.size.depth_or_array_layers,
+                                ),
+                            ));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         Ok((format_features, hal_view_formats))
+    }
+
+    fn resolve_texture_binding_view_dimension(
+        &self,
+        desc: &resource::TextureDescriptor,
+    ) -> Option<TextureViewDimension> {
+        if self
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::ARBITRARY_BINDING_VIEW_DIMENSIONS)
+        {
+            None
+        } else {
+            Some(
+                desc.texture_binding_view_dimension
+                    .unwrap_or_else(|| desc.default_view_dimension()),
+            )
+        }
     }
 
     fn create_texture_inner(
@@ -2113,6 +2178,8 @@ impl Device {
         let (format_features, hal_view_formats) = self.validate_texture_descriptor_inner(desc)?;
 
         let hal_usage = conv::map_texture_usage_for_texture(desc, &format_features);
+
+        let texture_binding_view_dimension = self.resolve_texture_binding_view_dimension(desc);
 
         let hal_desc = hal::TextureDescriptor {
             label: desc.label.to_hal(self.instance_flags),
@@ -2124,6 +2191,7 @@ impl Device {
             usage: hal_usage,
             memory_flags: hal::MemoryFlags::empty(),
             view_formats: hal_view_formats,
+            texture_binding_view_dimension,
         };
 
         let raw_texture = unsafe { self.raw().create_texture(&hal_desc) }
@@ -2148,45 +2216,17 @@ impl Device {
                 self.instance_flags,
             );
 
-            let mut clear_views = SmallVec::new();
-            for mip_level in 0..desc.mip_level_count {
-                for array_layer in 0..desc.size.depth_or_array_layers {
-                    macro_rules! push_clear_view {
-                        ($format:expr, $aspect:expr) => {
-                            let desc = hal::TextureViewDescriptor {
-                                label: clear_label,
-                                format: $format,
-                                dimension: TextureViewDimension::D2,
-                                usage,
-                                range: wgt::ImageSubresourceRange {
-                                    aspect: $aspect,
-                                    base_mip_level: mip_level,
-                                    mip_level_count: Some(1),
-                                    base_array_layer: array_layer,
-                                    array_layer_count: Some(1),
-                                },
-                                swizzle: wgt::TextureComponentSwizzle::default(),
-                            };
-                            clear_views.push(ManuallyDrop::new(
-                                unsafe {
-                                    self.raw().create_texture_view(raw_texture.as_ref(), &desc)
-                                }
-                                .map_err(|e| self.handle_hal_error(e))?,
-                            ));
-                        };
-                    }
-
-                    if let Some(planes) = desc.format.planes() {
-                        for plane in 0..planes {
-                            let aspect = wgt::TextureAspect::from_plane(plane).unwrap();
-                            let format = desc.format.aspect_specific_format(aspect).unwrap();
-                            push_clear_view!(format, aspect);
-                        }
-                    } else {
-                        push_clear_view!(desc.format, wgt::TextureAspect::All);
-                    }
-                }
-            }
+            let clear_views = resource::ClearViews::new(
+                clear_label,
+                usage,
+                desc.format,
+                desc.mip_level_count,
+                desc.size.depth_or_array_layers,
+                |desc| {
+                    unsafe { self.raw().create_texture_view(raw_texture.as_ref(), desc) }
+                        .map_err(|e| self.handle_hal_error(e))
+                },
+            )?;
             resource::TextureClearMode::RenderPass {
                 clear_views,
                 is_color,
@@ -2203,6 +2243,7 @@ impl Device {
             format_features,
             clear_mode,
             true,
+            texture_binding_view_dimension,
         );
 
         let texture = Arc::new(texture);
@@ -2944,7 +2985,7 @@ impl Device {
 
     /// Generate information about late-validated buffer bindings for pipelines.
     //TODO: should this be combined with `get_introspection_bind_group_layouts` in some way?
-    fn make_late_sized_buffer_groups(
+    pub(super) fn make_late_sized_buffer_groups(
         shader_binding_sizes: &FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         layout: &binding_model::PipelineLayout,
     ) -> ArrayVec<pipeline::LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }> {
@@ -3205,11 +3246,12 @@ impl Device {
                     )
                 }
                 Bt::AccelerationStructure { vertex_return } => {
-                    self.require_features(wgt::Features::EXPERIMENTAL_RAY_QUERY)
-                        .map_err(|e| CreateBindGroupLayoutError::Entry {
+                    self.require_acceleration_structures().map_err(|e| {
+                        CreateBindGroupLayoutError::Entry {
                             binding: entry.binding,
                             error: e.into(),
-                        })?;
+                        }
+                    })?;
                     if vertex_return {
                         self.require_features(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)
                             .map_err(|e| CreateBindGroupLayoutError::Entry {
@@ -4172,6 +4214,17 @@ impl Device {
                         view_dimension: view.desc.dimension,
                     });
                 }
+                if let Some(texture_binding_view_dimension) =
+                    view.parent.texture_binding_view_dimension()
+                {
+                    if texture_binding_view_dimension != view.desc.dimension {
+                        return Err(Error::InvalidTextureBindingViewDimension {
+                            binding,
+                            view_dimension: view.desc.dimension,
+                            texture_binding_view_dimension,
+                        });
+                    }
+                }
                 view.check_usage(wgt::TextureUsages::TEXTURE_BINDING)?;
                 let depth_stencil_uses = if view.desc.aspects() == hal::FormatAspects::DEPTH {
                     wgt::TextureUses::DEPTH_SAMPLED
@@ -4200,6 +4253,17 @@ impl Device {
                         layout_dimension: view_dimension,
                         view_dimension: view.desc.dimension,
                     });
+                }
+                if let Some(texture_binding_view_dimension) =
+                    view.parent.texture_binding_view_dimension()
+                {
+                    if texture_binding_view_dimension != view.desc.dimension {
+                        return Err(Error::InvalidTextureBindingViewDimension {
+                            binding,
+                            view_dimension: view.desc.dimension,
+                            texture_binding_view_dimension,
+                        });
+                    }
                 }
 
                 let mip_level_count = view.selector.mips.end - view.selector.mips.start;
@@ -4407,7 +4471,7 @@ impl Device {
         Ok(layout)
     }
 
-    fn create_derived_pipeline_layout(
+    pub(super) fn create_derived_pipeline_layout(
         self: &Arc<Self>,
         mut derived_group_layouts: Box<ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>>,
         immediate_size: u32,

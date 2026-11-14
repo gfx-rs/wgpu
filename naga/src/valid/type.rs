@@ -591,6 +591,7 @@ impl super::Validator {
                 if !base_info
                     .flags
                     .contains(TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::CREATION_RESOLVED)
+                    || matches!(gctx.types[base].inner, Ti::HitObject)
                 {
                     return Err(TypeError::InvalidArrayBaseType(base));
                 }
@@ -694,6 +695,7 @@ impl super::Validator {
                     if !base_info
                         .flags
                         .contains(TypeFlags::DATA | TypeFlags::CREATION_RESOLVED)
+                        || matches!(gctx.types[member.ty].inner, Ti::HitObject)
                     {
                         return Err(TypeError::InvalidData(member.ty));
                     }
@@ -941,6 +943,16 @@ impl super::Validator {
                 if vertex_return {
                     self.require_type_capability(Capabilities::RAY_HIT_VERTEX_POSITION)?;
                 }
+                TypeInfo::new(
+                    TypeFlags::DATA
+                        | TypeFlags::CONSTRUCTIBLE
+                        | TypeFlags::SIZED
+                        | TypeFlags::CREATION_RESOLVED,
+                    Alignment::ONE,
+                )
+            }
+            Ti::HitObject => {
+                self.require_type_capability(Capabilities::RAY_TRACING_INVOCATION_REORDER)?;
                 TypeInfo::new(
                     TypeFlags::DATA
                         | TypeFlags::CONSTRUCTIBLE

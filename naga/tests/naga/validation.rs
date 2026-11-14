@@ -485,6 +485,140 @@ fn builtin_sign_unsigned_arg() {
 }
 
 #[test]
+fn bitcast_operand_and_result_types() {
+    use naga::{Type, TypeInner, VectorSize};
+
+    fn variant(src: TypeInner, dst: TypeInner) -> Result<ModuleInfo, Box<valid::ValidationError>> {
+        let span = naga::Span::default();
+        let mut module = Module::default();
+        let ty_src = module.types.insert(
+            Type {
+                name: None,
+                inner: src,
+            },
+            span,
+        );
+        let ty_dst = module.types.insert(
+            Type {
+                name: None,
+                inner: dst,
+            },
+            span,
+        );
+
+        let mut fun = Function {
+            result: Some(naga::ir::FunctionResult {
+                ty: ty_dst,
+                binding: None,
+            }),
+            ..Function::default()
+        };
+        let ex_zero = fun.expressions.append(Expression::ZeroValue(ty_src), span);
+        let ex_bitcast = fun.expressions.append(
+            Expression::Bitcast {
+                expr: ex_zero,
+                ty: ty_dst,
+            },
+            span,
+        );
+        fun.body.push(
+            naga::Statement::Emit(naga::Range::new_from_bounds(ex_bitcast, ex_bitcast)),
+            span,
+        );
+        fun.body.push(
+            naga::Statement::Return {
+                value: Some(ex_bitcast),
+            },
+            span,
+        );
+        module.functions.append(fun, span);
+
+        valid::Validator::new(ValidationFlags::default(), Capabilities::all())
+            .validate(&module)
+            .map_err(|err| Box::new(err.into_inner()))
+    }
+
+    let vector = |size, scalar| TypeInner::Vector { size, scalar };
+    let scalar = TypeInner::Scalar;
+
+    for (src, dst) in [
+        (scalar(Scalar::U32), scalar(Scalar::F32)),
+        (scalar(Scalar::F32), scalar(Scalar::I32)),
+        (scalar(Scalar::U64), scalar(Scalar::I64)),
+        (
+            vector(VectorSize::Tri, Scalar::U32),
+            vector(VectorSize::Tri, Scalar::F32),
+        ),
+        (vector(VectorSize::Bi, Scalar::F16), scalar(Scalar::U32)),
+        (scalar(Scalar::I32), vector(VectorSize::Bi, Scalar::F16)),
+        (
+            vector(VectorSize::Quad, Scalar::F16),
+            vector(VectorSize::Bi, Scalar::F32),
+        ),
+        (
+            vector(VectorSize::Bi, Scalar::U32),
+            vector(VectorSize::Quad, Scalar::F16),
+        ),
+        (scalar(Scalar::F16), scalar(Scalar::I16)),
+        (scalar(Scalar::U16), scalar(Scalar::F16)),
+        (
+            vector(VectorSize::Bi, Scalar::F16),
+            vector(VectorSize::Bi, Scalar::U16),
+        ),
+        (
+            vector(VectorSize::Tri, Scalar::I16),
+            vector(VectorSize::Tri, Scalar::F16),
+        ),
+        (scalar(Scalar::U32), scalar(Scalar::U32)),
+    ] {
+        variant(src.clone(), dst.clone())
+            .unwrap_or_else(|err| panic!("bitcast from {src:?} to {dst:?} should be valid: {err}"));
+    }
+
+    for (src, dst) in [
+        (scalar(Scalar::U32), scalar(Scalar::BOOL)),
+        (scalar(Scalar::BOOL), scalar(Scalar::U32)),
+        (scalar(Scalar::U32), scalar(Scalar::U64)),
+        (
+            vector(VectorSize::Bi, Scalar::U32),
+            vector(VectorSize::Tri, Scalar::U32),
+        ),
+        (vector(VectorSize::Tri, Scalar::F16), scalar(Scalar::U32)),
+        (vector(VectorSize::Bi, Scalar::F16), scalar(Scalar::U64)),
+        (scalar(Scalar::F16), scalar(Scalar::I32)),
+        (
+            vector(VectorSize::Bi, Scalar::I16),
+            vector(VectorSize::Quad, Scalar::F16),
+        ),
+        (
+            TypeInner::Matrix {
+                columns: VectorSize::Bi,
+                rows: VectorSize::Bi,
+                scalar: Scalar::F32,
+            },
+            vector(VectorSize::Quad, Scalar::F32),
+        ),
+    ] {
+        let err = variant(src.clone(), dst.clone()).expect_err(&format!(
+            "bitcast from {src:?} to {dst:?} should be invalid"
+        ));
+        assert!(
+            matches!(
+                *err,
+                valid::ValidationError::Function {
+                    source: valid::FunctionError::Expression {
+                        source: valid::ExpressionError::InvalidBitcast(_),
+                        ..
+                    },
+                    ..
+                }
+            ),
+            "unexpected error for bitcast from {src:?} to {dst:?}: {err:?}"
+        );
+    }
+}
+
+#[test]
 fn incompatible_interpolation_and_sampling_types() {
     use dummy_interpolation_shader::DummyInterpolationShader;
 

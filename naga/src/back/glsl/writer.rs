@@ -534,6 +534,7 @@ impl<'a, W: Write> Writer<'a, W> {
             | TypeInner::Sampler { .. }
             | TypeInner::AccelerationStructure { .. }
             | TypeInner::RayQuery { .. }
+            | TypeInner::HitObject
             | TypeInner::BindingArray { .. }
             | TypeInner::CooperativeMatrix { .. } => {
                 return Err(Error::Custom(format!("Unable to write type {inner:?}")))
@@ -944,6 +945,25 @@ impl<'a, W: Write> Writer<'a, W> {
                 {
                     self.need_bake_expressions.insert(left);
                     self.need_bake_expressions.insert(right);
+                }
+            }
+
+            if let Expression::Select {
+                condition,
+                accept,
+                reject,
+            } = *expr
+            {
+                // Componentwise `select` below names each operand once per component.
+                if !self.options.version.supports_integer_mix()
+                    && !matches!(inner.scalar_kind(), Some(crate::ScalarKind::Float))
+                {
+                    let cond_inner = info[condition].ty.inner_with(&self.module.types);
+                    if let TypeInner::Vector { .. } = *cond_inner {
+                        self.need_bake_expressions.insert(condition);
+                        self.need_bake_expressions.insert(accept);
+                        self.need_bake_expressions.insert(reject);
+                    }
                 }
             }
         }
@@ -2281,7 +2301,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 writeln!(self.out, ");")?;
             }
             Statement::CooperativeStore { .. } => unimplemented!(),
-            Statement::RayPipelineFunction(_) => unimplemented!(),
+            Statement::RayPipelineFunction(_) | Statement::HitObject { .. } => unimplemented!(),
             Statement::DebugPrintf { .. } => unimplemented!(),
         }
 
@@ -3019,16 +3039,46 @@ impl<'a, W: Write> Writer<'a, W> {
                     false
                 };
 
-                // TODO: Boolean mix on desktop required GL_EXT_shader_integer_mix
                 if vec_select {
-                    // Glsl defines that for mix when the condition is a boolean the first element
-                    // is picked if condition is false and the second if condition is true
-                    write!(self.out, "mix(")?;
-                    self.write_expr(reject, ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(accept, ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(condition, ctx)?;
+                    let result_ty = ctx.resolve_type(accept, &self.module.types);
+                    let size = match *result_ty {
+                        TypeInner::Vector { size, .. } => size,
+                        _ => unreachable!(),
+                    };
+                    let is_float =
+                        matches!(result_ty.scalar_kind(), Some(crate::ScalarKind::Float));
+
+                    if is_float || self.options.version.supports_integer_mix() {
+                        // Glsl defines that for mix when the condition is a boolean the first
+                        // element is picked if condition is false and the second if condition
+                        // is true
+                        write!(self.out, "mix(")?;
+                        self.write_expr(reject, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(accept, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(condition, ctx)?;
+                        write!(self.out, ")")?;
+                    } else {
+                        // No integer `mix` before GLSL 4.50 / ES 3.10.
+                        self.write_value_type(result_ty)?;
+                        write!(self.out, "(")?;
+
+                        for i in 0..size as usize {
+                            if i != 0 {
+                                write!(self.out, ", ")?;
+                            }
+
+                            self.write_expr(condition, ctx)?;
+                            write!(self.out, ".{} ? ", back::COMPONENTS[i])?;
+                            self.write_expr(accept, ctx)?;
+                            write!(self.out, ".{} : ", back::COMPONENTS[i])?;
+                            self.write_expr(reject, ctx)?;
+                            write!(self.out, ".{}", back::COMPONENTS[i])?;
+                        }
+
+                        write!(self.out, ")")?;
+                    }
                 } else {
                     write!(self.out, "(")?;
                     self.write_expr(condition, ctx)?;
@@ -3036,9 +3086,8 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.write_expr(accept, ctx)?;
                     write!(self.out, " : ")?;
                     self.write_expr(reject, ctx)?;
+                    write!(self.out, ")")?;
                 }
-
-                write!(self.out, ")")?
             }
             // `Derivative` is a function call to a glsl provided function
             Expression::Derivative { axis, ctrl, expr } => {
@@ -3741,92 +3790,66 @@ impl<'a, W: Write> Writer<'a, W> {
                     write!(self.out, ")")?
                 }
             }
-            // `As` is always a call.
-            // If `convert` is true the function name is the type
-            // Else the function name is one of the glsl provided bitcast functions
-            Expression::As {
-                expr,
-                kind: target_kind,
-                convert,
-            } => {
+            // `As` is always a call, whose name is the target type.
+            Expression::As { expr, target } => {
                 let inner = ctx.resolve_type(expr, &self.module.types);
-                match convert {
-                    Some(width) => {
-                        // this is similar to `write_type`, but with the target kind
-                        let scalar = glsl_scalar(crate::Scalar {
-                            kind: target_kind,
-                            width,
-                        })?;
-                        match *inner {
-                            TypeInner::Matrix { columns, rows, .. } => write!(
-                                self.out,
-                                "{}mat{}x{}",
-                                scalar.prefix, columns as u8, rows as u8
-                            )?,
-                            TypeInner::Vector { size, .. } => {
-                                write!(self.out, "{}vec{}", scalar.prefix, size as u8)?
-                            }
-                            _ => write!(self.out, "{}", scalar.full)?,
-                        }
-
-                        write!(self.out, "(")?;
-                        self.write_expr(expr, ctx)?;
-                        write!(self.out, ")")?
+                // this is similar to `write_type`, but with the target scalar
+                let scalar = glsl_scalar(target)?;
+                match *inner {
+                    TypeInner::Matrix { columns, rows, .. } => write!(
+                        self.out,
+                        "{}mat{}x{}",
+                        scalar.prefix, columns as u8, rows as u8
+                    )?,
+                    TypeInner::Vector { size, .. } => {
+                        write!(self.out, "{}vec{}", scalar.prefix, size as u8)?
                     }
-                    None => {
-                        use crate::ScalarKind as Sk;
-
-                        let target_vector_type = match *inner {
-                            TypeInner::Vector { size, scalar } => Some(TypeInner::Vector {
-                                size,
-                                scalar: crate::Scalar {
-                                    kind: target_kind,
-                                    width: scalar.width,
-                                },
-                            }),
-                            _ => None,
-                        };
-
-                        let source_kind = inner.scalar_kind().unwrap();
-
-                        match (source_kind, target_kind, target_vector_type) {
-                            // No conversion needed
-                            (Sk::Sint, Sk::Sint, _)
-                            | (Sk::Uint, Sk::Uint, _)
-                            | (Sk::Float, Sk::Float, _)
-                            | (Sk::Bool, Sk::Bool, _) => {
-                                self.write_expr(expr, ctx)?;
-                                return Ok(());
-                            }
-
-                            // Cast to/from floats
-                            (Sk::Float, Sk::Sint, _) => write!(self.out, "floatBitsToInt")?,
-                            (Sk::Float, Sk::Uint, _) => write!(self.out, "floatBitsToUint")?,
-                            (Sk::Sint, Sk::Float, _) => write!(self.out, "intBitsToFloat")?,
-                            (Sk::Uint, Sk::Float, _) => write!(self.out, "uintBitsToFloat")?,
-
-                            // Cast between vector types
-                            (_, _, Some(vector)) => {
-                                self.write_value_type(&vector)?;
-                            }
-
-                            // There is no way to bitcast between Uint/Sint in glsl. Use constructor conversion
-                            (Sk::Uint | Sk::Bool, Sk::Sint, None) => write!(self.out, "int")?,
-                            (Sk::Sint | Sk::Bool, Sk::Uint, None) => write!(self.out, "uint")?,
-                            (Sk::Bool, Sk::Float, None) => write!(self.out, "float")?,
-                            (Sk::Sint | Sk::Uint | Sk::Float, Sk::Bool, None) => {
-                                write!(self.out, "bool")?
-                            }
-
-                            (Sk::AbstractInt | Sk::AbstractFloat, _, _)
-                            | (_, Sk::AbstractInt | Sk::AbstractFloat, _) => unreachable!(),
-                        };
-
-                        write!(self.out, "(")?;
-                        self.write_expr(expr, ctx)?;
-                        write!(self.out, ")")?;
-                    }
+                    _ => write!(self.out, "{}", scalar.full)?,
                 }
+
+                write!(self.out, "(")?;
+                self.write_expr(expr, ctx)?;
+                write!(self.out, ")")?
+            }
+            // `Bitcast` is a call to one of the glsl provided bitcast functions,
+            // or to a constructor when only the signedness of an integer changes.
+            Expression::Bitcast { expr, ty } => {
+                use crate::ScalarKind as Sk;
+
+                let inner = ctx.resolve_type(expr, &self.module.types);
+                let target = &self.module.types[ty].inner;
+
+                if inner == target {
+                    return self.write_expr(expr, ctx);
+                }
+
+                let unsupported =
+                    || Error::Custom(format!("GLSL cannot bitcast from {inner:?} to {target:?}"));
+                let (Some((src_size, src)), Some((dst_size, dst))) = (
+                    inner.vector_size_and_scalar(),
+                    target.vector_size_and_scalar(),
+                ) else {
+                    return Err(unsupported());
+                };
+                if src_size != dst_size {
+                    return Err(unsupported());
+                }
+
+                match (src.kind, dst.kind) {
+                    (Sk::Float, Sk::Sint) if src.width == 4 => write!(self.out, "floatBitsToInt")?,
+                    (Sk::Float, Sk::Uint) if src.width == 4 => write!(self.out, "floatBitsToUint")?,
+                    (Sk::Sint, Sk::Float) if src.width == 4 => write!(self.out, "intBitsToFloat")?,
+                    (Sk::Uint, Sk::Float) if src.width == 4 => write!(self.out, "uintBitsToFloat")?,
+                    // There is no way to bitcast between Uint/Sint in glsl. Use constructor conversion
+                    (Sk::Uint, Sk::Sint) | (Sk::Sint, Sk::Uint) => {
+                        self.write_value_type(target)?;
+                    }
+                    _ => return Err(unsupported()),
+                };
+
+                write!(self.out, "(")?;
+                self.write_expr(expr, ctx)?;
+                write!(self.out, ")")?;
             }
             // These expressions never show up in `Emit`.
             Expression::CallResult(_)
@@ -3844,6 +3867,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // not supported yet
             Expression::RayQueryGetIntersection { .. }
             | Expression::RayQueryVertexPositions { .. }
+            | Expression::HitObjectQuery { .. }
             | Expression::CooperativeLoad { .. }
             | Expression::CooperativeMultiplyAdd { .. } => unreachable!(),
         }
