@@ -850,6 +850,7 @@ impl crate::Queue for Queue {
         &self,
         _surface: &Surface,
         texture: SurfaceTexture,
+        _damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), crate::SurfaceError> {
         autoreleasepool(|_| {
             // We do not bother adjusting `command_buffer_created_not_submitted`
@@ -900,6 +901,10 @@ impl crate::DynBuffer for Buffer {}
 impl Buffer {
     fn as_raw(&self) -> NonNull<ProtocolObject<dyn MTLBuffer>> {
         unsafe { NonNull::new_unchecked(Retained::as_ptr(&self.raw) as *mut _) }
+    }
+
+    pub fn raw_handle(&self) -> &ProtocolObject<dyn MTLBuffer> {
+        &self.raw
     }
 }
 

@@ -1000,10 +1000,8 @@ impl TextureFormat {
             Self::Depth32Float =>         (        msaa, attachment),
             Self::Depth32FloatStencil8 => (        msaa, attachment),
 
-            // We only support sampling nv12 and p010 textures until we
-            // implement transfer plane data.
-            Self::NV12 =>                 (        none,    binding),
-            Self::P010 =>                 (        none,    binding),
+            Self::NV12 =>                 (        none, attachment),
+            Self::P010 =>                 (        none,      basic),
 
             Self::R16Unorm =>             (        msaa | s_ro_wo,    storage),
             Self::R16Snorm =>             (        msaa | s_ro_wo,    storage),

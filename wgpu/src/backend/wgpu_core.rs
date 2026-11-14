@@ -985,6 +985,12 @@ impl dispatch::DeviceInterface for CoreDevice {
         self.wgpu_device.limits().clone()
     }
 
+    fn is_surface_supported(&self, surface: &dispatch::DispatchSurface) -> bool {
+        self.wgpu_device
+            .adapter()
+            .is_surface_supported(&surface.as_core().wgpu_surface)
+    }
+
     fn adapter_info(&self) -> crate::AdapterInfo {
         self.wgpu_device.adapter_info()
     }
@@ -1892,8 +1898,16 @@ impl dispatch::QueueInterface for CoreQueue {
     }
 
     fn present(&self, detail: &dispatch::DispatchSurfaceOutputDetail) {
+        self.present_with_damage(detail, &[]);
+    }
+
+    fn present_with_damage(
+        &self,
+        detail: &dispatch::DispatchSurfaceOutputDetail,
+        damage_rects: &[wgt::Rect<u32>],
+    ) {
         let detail = detail.as_core();
-        match detail.wgpu_surface.present() {
+        match detail.wgpu_surface.present_with_damage(damage_rects) {
             Ok(_status) => (),
             Err(err) => {
                 self.wgpu_queue

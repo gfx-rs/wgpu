@@ -144,6 +144,7 @@ pub trait AdapterInterface: CommonTraits {
 pub trait DeviceInterface: CommonTraits {
     fn features(&self) -> crate::Features;
     fn limits(&self) -> crate::Limits;
+    fn is_surface_supported(&self, surface: &DispatchSurface) -> bool;
     fn adapter_info(&self) -> crate::AdapterInfo;
     fn queue(&self) -> DispatchQueue;
 
@@ -273,6 +274,14 @@ pub trait QueueInterface: CommonTraits {
     fn compact_blas(&self, blas: &DispatchBlas) -> (Option<u64>, DispatchBlas);
 
     fn present(&self, detail: &DispatchSurfaceOutputDetail);
+
+    fn present_with_damage(
+        &self,
+        detail: &DispatchSurfaceOutputDetail,
+        _damage_rects: &[wgt::Rect<u32>],
+    ) {
+        self.present(detail);
+    }
 }
 
 pub trait ShaderModuleInterface: CommonTraits {

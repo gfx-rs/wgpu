@@ -2053,6 +2053,11 @@ impl dispatch::DeviceInterface for WebDevice {
             .clone()
     }
 
+    fn is_surface_supported(&self, _surface: &dispatch::DispatchSurface) -> bool {
+        // All surfaces are inherently supported.
+        true
+    }
+
     fn adapter_info(&self) -> crate::AdapterInfo {
         self.cached_properties
             .adapter_info
