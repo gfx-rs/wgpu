@@ -131,6 +131,11 @@ impl Device {
         self.inner.limits()
     }
 
+    /// Returns whether this adapter may present to the passed surface.
+    pub fn is_surface_supported(&self, surface: &Surface<'_>) -> bool {
+        self.inner.is_surface_supported(&surface.inner)
+    }
+
     /// Get info about the adapter that this device was created from.
     pub fn adapter_info(&self) -> AdapterInfo {
         self.inner.adapter_info()
