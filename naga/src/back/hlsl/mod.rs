@@ -674,6 +674,8 @@ pub struct PipelineOptions {
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("This backend cannot preserve arithmetic controls")]
+    UnsupportedArithmeticControls,
     #[error(transparent)]
     IoError(#[from] FmtError),
     #[error("A scalar with an unsupported width was requested: {0:?}")]
@@ -798,6 +800,9 @@ pub struct Writer<'a, W> {
     /// [`AccessIndex`]: crate::Expression::AccessIndex
     temp_access_chain: Vec<storage::SubAccess>,
     need_bake_expressions: back::NeedBakeExpressions,
+    hoisted_loop_expressions: crate::FastHashMap<Handle<crate::Expression>, String>,
+    arithmetic_control_helpers:
+        crate::FastHashMap<(back::FunctionType, Handle<crate::Expression>), String>,
 
     function_task_payload_var:
         crate::FastHashMap<Handle<crate::Function>, Handle<crate::GlobalVariable>>,

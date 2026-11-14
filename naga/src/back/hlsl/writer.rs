@@ -177,6 +177,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             continue_ctx: back::continue_forward::ContinueCtx::default(),
             temp_access_chain: Vec::new(),
             need_bake_expressions: Default::default(),
+            arithmetic_control_helpers: Default::default(),
+            hoisted_loop_expressions: Default::default(),
             function_task_payload_var: Default::default(),
             immediate_raw_names: crate::FastHashMap::default(),
         }
@@ -199,6 +201,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.written_candidate_intersection = false;
         self.continue_ctx.clear();
         self.need_bake_expressions.clear();
+        self.arithmetic_control_helpers.clear();
+        self.hoisted_loop_expressions.clear();
         self.function_task_payload_var.clear();
         self.immediate_raw_names.clear();
     }
@@ -244,6 +248,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) {
         use crate::Expression;
         self.need_bake_expressions.clear();
+        self.need_bake_expressions
+            .extend(func.expression_controls.keys().copied());
+        for &handle in func.expression_controls.keys() {
+            let (left, right) = back::arithmetic_control_operands(&func.expressions[handle]);
+            self.need_bake_expressions.extend([left, right]);
+        }
         for (exp_handle, expr) in func.expressions.iter() {
             let expr_info = &info[exp_handle];
             let min_ref_count = func.expressions[exp_handle].bake_ref_count();
@@ -333,12 +343,125 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
     }
 
+    /// A real non-inlined function bounds HLSL's backward `precise`
+    /// propagation. Ordinary helpers and temporaries do not provide this
+    /// boundary: FXC inlines even `[noinline]`, so this requires SM 6 / DXC.
+    fn write_arithmetic_control_helpers(
+        &mut self,
+        module: &Module,
+        ty: back::FunctionType,
+        function: &crate::Function,
+        info: &valid::FunctionInfo,
+    ) -> BackendResult {
+        // Inout operand arrays address NVIDIA scalar-return helper miscompiles
+        // and retain stock DXC dependencies through their real input stores.
+        for &handle in function.expression_controls.keys() {
+            let expression = &function.expressions[handle];
+
+            let (left, _) = back::arithmetic_control_operands(expression);
+            let argument_type = info[left].ty.inner_with(&module.types);
+            let scalar = argument_type.scalar().unwrap();
+            if scalar.width == 2 && self.options.shader_model < ShaderModel::V6_2 {
+                return Err(Error::UnsupportedArithmeticControls);
+            }
+            let scalar_type = TypeInner::Scalar(scalar);
+            let dot_size = match *expression {
+                crate::Expression::Math {
+                    fun: crate::MathFunction::Dot,
+                    ..
+                } => match *argument_type {
+                    TypeInner::Vector { size, .. } => Some(size),
+                    _ => unreachable!("validated dot control"),
+                },
+                _ => None,
+            };
+            if dot_size.is_some() && scalar == Scalar::F64 {
+                return Err(Error::UnsupportedArithmeticControls);
+            }
+            let name = self.namer.call("naga_no_contraction");
+            writeln!(self.out, "[noinline]")?;
+            write!(self.out, "void {name}(inout ")?;
+            self.write_value_type(module, &scalar_type)?;
+            let arity = 2 * dot_size.map_or(1, |size| size as u8);
+            writeln!(self.out, " operands[{arity}]) {{")?;
+            write!(self.out, "{}precise ", back::INDENT)?;
+            self.write_value_type(module, &scalar_type)?;
+            write!(self.out, " result = ")?;
+            match *expression {
+                crate::Expression::Binary { op, .. } if scalar.kind == ScalarKind::Sint => {
+                    let (to_signed, to_unsigned) = match scalar.width {
+                        2 => ("int16_t", "uint16_t"),
+                        4 => ("asint", "asuint"),
+                        8 => ("int64_t", "uint64_t"),
+                        _ => unreachable!("validated signed integer width"),
+                    };
+                    write!(
+                        self.out,
+                        "{to_signed}({to_unsigned}(operands[0]) {} {to_unsigned}(operands[1]))",
+                        back::binary_operation_str(op)
+                    )?;
+                }
+                crate::Expression::Binary { op, .. } => {
+                    write!(
+                        self.out,
+                        "operands[0] {} operands[1]",
+                        back::binary_operation_str(op)
+                    )?;
+                }
+                crate::Expression::Math {
+                    fun: crate::MathFunction::Dot,
+                    ..
+                } => {
+                    write!(self.out, "dot(")?;
+                    let size = dot_size.unwrap() as u8;
+                    for side in 0..2 {
+                        if side != 0 {
+                            write!(self.out, ", ")?;
+                        }
+                        self.write_value_type(module, argument_type)?;
+                        write!(self.out, "(")?;
+                        for lane in 0..size {
+                            if lane != 0 {
+                                write!(self.out, ", ")?;
+                            }
+                            write!(self.out, "operands[{}]", side * size + lane)?;
+                        }
+                        write!(self.out, ")")?;
+                    }
+                    write!(self.out, ")")?;
+                }
+                _ => unreachable!("validated arithmetic control"),
+            }
+            writeln!(self.out, ";\n{}operands[0] = result;\n}}\n", back::INDENT)?;
+            self.arithmetic_control_helpers.insert((ty, handle), name);
+        }
+        Ok(())
+    }
+
     pub fn write(
         &mut self,
         module: &Module,
         module_info: &valid::ModuleInfo,
         fragment_entry_point: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<super::ReflectionInfo, Error> {
+        let ep_range = get_entry_points(module, self.pipeline_options.entry_point.as_ref())
+            .map_err(|(stage, name)| Error::EntryPointNotFound(stage, name))?;
+        let reachable = module
+            .has_arithmetic_controls()
+            .then(|| back::reachable_functions(module, ep_range.clone()));
+        let has_controls = ep_range.clone().any(|index| {
+            !module.entry_points[index]
+                .function
+                .expression_controls
+                .is_empty()
+        }) || reachable.as_ref().is_some_and(|functions| {
+            functions
+                .iter()
+                .any(|&handle| !module.functions[handle].expression_controls.is_empty())
+        });
+        if has_controls && self.options.shader_model < ShaderModel::V6_0 {
+            return Err(Error::UnsupportedArithmeticControls);
+        }
         self.reset(module);
 
         if module.uses_mesh_shaders() && self.options.shader_model < ShaderModel::V6_5 {
@@ -384,9 +507,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             // Extra newline for readability
             writeln!(self.out)?;
         }
-
-        let ep_range = get_entry_points(module, self.pipeline_options.entry_point.as_ref())
-            .map_err(|(stage, name)| Error::EntryPointNotFound(stage, name))?;
 
         // Save all entry point output types
         let ep_results = module
@@ -473,6 +593,34 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         // Write all regular functions
         for (handle, function) in module.functions.iter() {
+            if reachable
+                .as_ref()
+                .is_some_and(|functions| !functions.contains(&handle))
+            {
+                continue;
+            }
+            self.write_arithmetic_control_helpers(
+                module,
+                back::FunctionType::Function(handle),
+                function,
+                &module_info[handle],
+            )?;
+        }
+        for index in ep_range.clone() {
+            self.write_arithmetic_control_helpers(
+                module,
+                back::FunctionType::EntryPoint(index as u16),
+                &module.entry_points[index].function,
+                module_info.get_entry_point(index),
+            )?;
+        }
+        for (handle, function) in module.functions.iter() {
+            if reachable
+                .as_ref()
+                .is_some_and(|functions| !functions.contains(&handle))
+            {
+                continue;
+            }
             let info = &module_info[handle];
 
             // Check if all of the globals are accessible
@@ -1688,6 +1836,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         // Function Declaration Syntax - https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-function-syntax
 
+        self.hoisted_loop_expressions.clear();
         self.update_expressions_to_bake(module, func, info);
         let ep = match func_ctx.ty {
             back::FunctionType::EntryPoint(idx) => Some(&module.entry_points[idx as usize]),
@@ -2381,6 +2530,97 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         Ok(())
     }
 
+    fn write_arithmetic_control_result(
+        &mut self,
+        module: &Module,
+        handle: Handle<crate::Expression>,
+        name: String,
+        func_ctx: &back::FunctionCtx<'_>,
+        level: back::Level,
+    ) -> BackendResult {
+        use crate::Expression;
+        let helper = self.arithmetic_control_helpers[&(func_ctx.ty, handle)].clone();
+        let expression = &func_ctx.expressions[handle];
+        let result_type = func_ctx.resolve_type(handle, &module.types);
+        let scalar_type = TypeInner::Scalar(result_type.scalar().unwrap());
+        let (operands, dot_size) = {
+            let (left, right) = back::arithmetic_control_operands(expression);
+            let dot_size = if matches!(
+                *expression,
+                Expression::Math {
+                    fun: crate::MathFunction::Dot,
+                    ..
+                }
+            ) {
+                match *func_ctx.resolve_type(left, &module.types) {
+                    TypeInner::Vector { size, .. } => Some(size),
+                    _ => return Err(Error::UnsupportedArithmeticControls),
+                }
+            } else {
+                None
+            };
+            (alloc::vec![left, right], dot_size)
+        };
+        // A runtime operand lacking its baked name has no valid dominating
+        // Emit here. Do not re-evaluate it or hoist it to manufacture one.
+        for &operand in &operands {
+            if !self.named_expressions.contains_key(&operand)
+                && !matches!(
+                    func_ctx.expressions[operand],
+                    Expression::Literal(_)
+                        | Expression::Constant(_)
+                        | Expression::ZeroValue(_)
+                        | Expression::FunctionArgument(_)
+                )
+            {
+                return Err(Error::UnsupportedArithmeticControls);
+            }
+        }
+        let vector_size = match *result_type {
+            TypeInner::Vector { size, .. } => Some(size),
+            TypeInner::Scalar(_) => None,
+            _ => return Err(Error::UnsupportedArithmeticControls),
+        };
+        let mut outputs = Vec::new();
+        let arity = operands.len() * dot_size.map_or(1, |size| size as usize);
+        for lane in 0..vector_size.map_or(1, |size| size as u8) {
+            let packet = self.namer.call("naga_operands");
+            write!(self.out, "{level}")?;
+            self.write_value_type(module, &scalar_type)?;
+            write!(self.out, " {packet}[{arity}] = {{")?;
+            for (side, &operand) in operands.iter().enumerate() {
+                for component in 0..dot_size.map_or(1, |size| size as u8) {
+                    if side != 0 || component != 0 {
+                        write!(self.out, ", ")?;
+                    }
+                    write!(self.out, "(")?;
+                    self.write_expr(module, operand, func_ctx)?;
+                    write!(self.out, ")")?;
+                    if dot_size.is_some() || vector_size.is_some() {
+                        let component = if dot_size.is_some() { component } else { lane };
+                        write!(self.out, ".{}", back::COMPONENTS[component as usize])?;
+                    }
+                }
+            }
+            writeln!(self.out, "}};\n{level}{helper}({packet});")?;
+            outputs.push(format!("{packet}[0]"));
+        }
+        write!(self.out, "{level}")?;
+        if !self.hoisted_loop_expressions.contains_key(&handle) {
+            self.write_value_type(module, result_type)?;
+            write!(self.out, " ")?;
+        }
+        write!(self.out, "{name} = ")?;
+        if vector_size.is_some() {
+            self.write_value_type(module, result_type)?;
+            writeln!(self.out, "({});", outputs.join(", "))?;
+        } else {
+            writeln!(self.out, "{};", outputs[0])?;
+        }
+        self.named_expressions.insert(handle, name);
+        Ok(())
+    }
+
     /// Helper method used to write statements
     ///
     /// # Notes
@@ -2403,6 +2643,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         // but we shouldn't ever need to: they should never be named expressions,
                         // and none of the expression types flagged by bake_ref_count can be pointer-valued.
                         None
+                    } else if let Some(name) = self.hoisted_loop_expressions.get(&handle) {
+                        Some(name.clone())
                     } else if let Some(name) = func_ctx.named_expressions.get(&handle) {
                         // Front end provides names for all variables at the start of writing.
                         // But we write them to step by step. We need to recache them
@@ -2416,6 +2658,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     };
 
                     if let Some(name) = expr_name {
+                        if self
+                            .arithmetic_control_helpers
+                            .contains_key(&(func_ctx.ty, handle))
+                        {
+                            self.write_arithmetic_control_result(
+                                module, handle, name, func_ctx, level,
+                            )?;
+                            continue;
+                        }
                         write!(self.out, "{level}")?;
                         self.write_named_expr(module, handle, name, handle, func_ctx)?;
                     }
@@ -2794,6 +3045,64 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     writeln!(self.out, "{level}bool {gate_name} = true;")?;
                 }
 
+                let mut hoisted = Vec::new();
+                if gate_name.is_some()
+                    && self
+                        .arithmetic_control_helpers
+                        .keys()
+                        .any(|&(ty, _)| ty == func_ctx.ty)
+                {
+                    for statement in body.iter() {
+                        let handles: Vec<_> = match *statement {
+                            Statement::Emit(ref range) => range
+                                .clone()
+                                .filter(|handle| {
+                                    func_ctx
+                                        .resolve_type(*handle, &module.types)
+                                        .pointer_space()
+                                        .is_none()
+                                        && (self.need_bake_expressions.contains(handle)
+                                            || func_ctx.named_expressions.contains_key(handle))
+                                })
+                                .collect(),
+                            Statement::Call {
+                                result: Some(handle),
+                                ..
+                            }
+                            | Statement::Atomic {
+                                result: Some(handle),
+                                ..
+                            }
+                            | Statement::WorkGroupUniformLoad { result: handle, .. }
+                            | Statement::SubgroupBallot { result: handle, .. }
+                            | Statement::SubgroupCollectiveOperation { result: handle, .. }
+                            | Statement::SubgroupGather { result: handle, .. } => {
+                                alloc::vec![handle]
+                            }
+                            Statement::RayQuery {
+                                fun: RayQueryFunction::Proceed { result },
+                                ..
+                            } => alloc::vec![result],
+                            _ => Vec::new(),
+                        };
+                        for handle in handles {
+                            let name = if matches!(statement, Statement::Emit(_)) {
+                                match func_ctx.named_expressions.get(&handle) {
+                                    Some(name) => self.namer.call(name),
+                                    None => Baked(handle).to_string(),
+                                }
+                            } else {
+                                Baked(handle).to_string()
+                            };
+                            write!(self.out, "{level}")?;
+                            self.write_expression_declaration(module, handle, &name, func_ctx)?;
+                            writeln!(self.out, ";")?;
+                            self.hoisted_loop_expressions.insert(handle, name.clone());
+                            hoisted.push((handle, name));
+                        }
+                    }
+                }
+
                 self.continue_ctx.enter_loop();
                 writeln!(self.out, "{level}while(true) {{")?;
                 if let Some((_, ref break_and_inc)) = force_loop_bound_statements {
@@ -2803,6 +3112,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 if let Some(gate_name) = gate_name {
                     writeln!(self.out, "{l2}if (!{gate_name}) {{")?;
                     let l3 = l2.next();
+                    let previous_names = self.named_expressions.len();
+                    for &(handle, ref name) in &hoisted {
+                        self.named_expressions.insert(handle, name.clone());
+                    }
                     for sta in continuing.iter() {
                         self.write_stmt(module, sta, func_ctx, l3)?;
                     }
@@ -2813,6 +3126,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         writeln!(self.out, "{}break;", l3.next())?;
                         writeln!(self.out, "{l3}}}")?;
                     }
+                    self.named_expressions.truncate(previous_names);
                     writeln!(self.out, "{l2}}}")?;
                     writeln!(self.out, "{l2}{gate_name} = false;")?;
                 }
@@ -2823,6 +3137,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                 writeln!(self.out, "{level}}}")?;
                 self.continue_ctx.exit_loop();
+                for (handle, _) in hoisted {
+                    self.hoisted_loop_expressions.remove(&handle);
+                }
             }
             Statement::Break => writeln!(self.out, "{level}break;")?,
             Statement::Continue => {
@@ -2873,22 +3190,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "{level}")?;
 
                 if let Some(expr) = result {
-                    write!(self.out, "const ")?;
                     let name = Baked(expr).to_string();
-                    let expr_ty = &func_ctx.info[expr].ty;
-                    let ty_inner = match *expr_ty {
-                        proc::TypeResolution::Handle(handle) => {
-                            self.write_type(module, handle)?;
-                            &module.types[handle].inner
-                        }
-                        proc::TypeResolution::Value(ref value) => {
-                            self.write_value_type(module, value)?;
-                            value
-                        }
-                    };
-                    write!(self.out, " {name}")?;
-                    if let TypeInner::Array { base, size, .. } = *ty_inner {
-                        self.write_array_size(module, base, size)?;
+                    if self.hoisted_loop_expressions.contains_key(&expr) {
+                        write!(self.out, "{name}")?;
+                    } else {
+                        write!(self.out, "const ")?;
+                        self.write_expression_declaration(module, expr, &name, func_ctx)?;
                     }
                     write!(self.out, " = ")?;
                     self.named_expressions.insert(expr, name);
@@ -2924,13 +3231,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "{level}")?;
                 let res_var_info = if let Some(res_handle) = result {
                     let name = Baked(res_handle).to_string();
-                    match func_ctx.info[res_handle].ty {
-                        proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
-                        proc::TypeResolution::Value(ref value) => {
-                            self.write_value_type(module, value)?
-                        }
-                    };
-                    write!(self.out, " {name}; ")?;
+                    if !self.hoisted_loop_expressions.contains_key(&res_handle) {
+                        self.write_expression_declaration(module, res_handle, &name, func_ctx)?;
+                        write!(self.out, "; ")?;
+                    }
                     self.named_expressions.insert(res_handle, name.clone());
                     Some((res_handle, name))
                 } else {
@@ -3114,7 +3418,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let name = Baked(result).to_string();
-                write!(self.out, "const uint4 {name} = ")?;
+                if self.hoisted_loop_expressions.contains_key(&result) {
+                    write!(self.out, "{name} = ")?;
+                } else {
+                    write!(self.out, "const uint4 {name} = ")?;
+                }
                 self.named_expressions.insert(result, name);
 
                 write!(self.out, "WaveActiveBallot(")?;
@@ -3131,15 +3439,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 result,
             } => {
                 write!(self.out, "{level}")?;
-                write!(self.out, "const ")?;
                 let name = Baked(result).to_string();
-                match func_ctx.info[result].ty {
-                    proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
-                    proc::TypeResolution::Value(ref value) => {
-                        self.write_value_type(module, value)?
-                    }
-                };
-                write!(self.out, " {name} = ")?;
+                if self.hoisted_loop_expressions.contains_key(&result) {
+                    write!(self.out, "{name}")?;
+                } else {
+                    write!(self.out, "const ")?;
+                    self.write_expression_declaration(module, result, &name, func_ctx)?;
+                }
+                write!(self.out, " = ")?;
                 self.named_expressions.insert(result, name);
 
                 match (collective_op, op) {
@@ -3195,15 +3502,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 result,
             } => {
                 write!(self.out, "{level}")?;
-                write!(self.out, "const ")?;
                 let name = Baked(result).to_string();
-                match func_ctx.info[result].ty {
-                    proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
-                    proc::TypeResolution::Value(ref value) => {
-                        self.write_value_type(module, value)?
-                    }
-                };
-                write!(self.out, " {name} = ")?;
+                if self.hoisted_loop_expressions.contains_key(&result) {
+                    write!(self.out, "{name}")?;
+                } else {
+                    write!(self.out, "const ")?;
+                    self.write_expression_declaration(module, result, &name, func_ctx)?;
+                }
+                write!(self.out, " = ")?;
                 self.named_expressions.insert(result, name);
                 match mode {
                     crate::GatherMode::BroadcastFirst => {
@@ -3975,6 +4281,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         if let Some(name) = self.named_expressions.get(&expr) {
             write!(self.out, "{name}{closing_bracket}")?;
             return Ok(());
+        }
+
+        if self
+            .arithmetic_control_helpers
+            .contains_key(&(func_ctx.ty, expr))
+        {
+            return Err(Error::UnsupportedArithmeticControls);
         }
 
         let expression = &func_ctx.expressions[expr];
@@ -4991,6 +5304,24 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         None
     }
 
+    fn write_expression_declaration(
+        &mut self,
+        module: &Module,
+        handle: Handle<crate::Expression>,
+        name: &str,
+        func_ctx: &back::FunctionCtx<'_>,
+    ) -> BackendResult {
+        match func_ctx.info[handle].ty {
+            proc::TypeResolution::Handle(ty) => self.write_type(module, ty)?,
+            proc::TypeResolution::Value(ref inner) => self.write_value_type(module, inner)?,
+        }
+        write!(self.out, " {name}")?;
+        if let TypeInner::Array { base, size, .. } = *func_ctx.resolve_type(handle, &module.types) {
+            self.write_array_size(module, base, size)?;
+        }
+        Ok(())
+    }
+
     fn write_named_expr(
         &mut self,
         module: &Module,
@@ -5005,8 +5336,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             let ty_inner = func_ctx.resolve_type(pointer, &module.types);
             if ty_inner.is_atomic_pointer(&module.types) {
                 let pointer_space = ty_inner.pointer_space().unwrap();
-                self.write_value_type(module, func_ctx.info[handle].ty.inner_with(&module.types))?;
-                write!(self.out, " {name}; ")?;
+                if !self.hoisted_loop_expressions.contains_key(&expr) {
+                    self.write_value_type(
+                        module,
+                        func_ctx.info[handle].ty.inner_with(&module.types),
+                    )?;
+                    write!(self.out, " {name}; ")?;
+                }
                 match pointer_space {
                     crate::AddressSpace::WorkGroup => {
                         write!(self.out, "InterlockedOr(")?;
@@ -5027,27 +5363,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 return Ok(());
             }
         }
-        match func_ctx.info[expr].ty {
-            proc::TypeResolution::Handle(ty_handle) => match module.types[ty_handle].inner {
-                TypeInner::Struct { .. } => {
-                    let ty_name = &self.names[&NameKey::Type(ty_handle)];
-                    write!(self.out, "{ty_name}")?;
-                }
-                _ => {
-                    self.write_type(module, ty_handle)?;
-                }
-            },
-            proc::TypeResolution::Value(ref inner) => {
-                self.write_value_type(module, inner)?;
-            }
-        }
-
-        let resolved = func_ctx.resolve_type(expr, &module.types);
-
-        write!(self.out, " {name}")?;
-        // If rhs is a array type, we should write array size
-        if let TypeInner::Array { base, size, .. } = *resolved {
-            self.write_array_size(module, base, size)?;
+        if self.hoisted_loop_expressions.contains_key(&expr) {
+            write!(self.out, "{name}")?;
+        } else {
+            self.write_expression_declaration(module, expr, &name, func_ctx)?;
         }
         write!(self.out, " = ")?;
         self.write_expr(module, handle, func_ctx)?;

@@ -203,6 +203,8 @@ enum ResolvedInterpolation {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("This backend cannot preserve arithmetic controls")]
+    UnsupportedArithmeticControls,
     #[error(transparent)]
     Format(#[from] FmtError),
     #[error("bind target {0:?} is empty")]

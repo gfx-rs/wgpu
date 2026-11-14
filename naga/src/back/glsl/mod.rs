@@ -411,6 +411,8 @@ type BackendResult<T = ()> = Result<T, Error>;
 /// A GLSL compilation error.
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("This backend cannot preserve arithmetic controls")]
+    UnsupportedArithmeticControls,
     /// A error occurred while writing to the output.
     #[error("Format error")]
     FmtError(#[from] FmtError),

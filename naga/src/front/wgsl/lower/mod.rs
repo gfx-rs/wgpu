@@ -1625,6 +1625,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             local_variables: Arena::new(),
             expressions,
             named_expressions: crate::NamedExpressions::default(),
+            expression_controls: Default::default(),
             body: ir::Block::default(),
             diagnostic_filter_leaf: f.diagnostic_filter_leaf,
         };

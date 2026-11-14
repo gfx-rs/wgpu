@@ -239,6 +239,7 @@ struct Decoration {
     matrix_stride: Option<NonZeroU32>,
     matrix_major: Option<Majority>,
     invariant: bool,
+    no_contraction: bool,
     interpolation: Option<crate::Interpolation>,
     sampling: Option<crate::Sampling>,
     flags: DecorationFlags,
@@ -595,6 +596,8 @@ struct BlockContext<'function> {
     function_id: spirv::Word,
     /// Expression arena of the function currently being processed
     expressions: &'function mut Arena<crate::Expression>,
+    expression_controls:
+        &'function mut FastIndexMap<Handle<crate::Expression>, crate::ArithmeticControl>,
     /// Local variables arena of the function currently being processed
     local_arena: &'function mut Arena<crate::LocalVariable>,
     /// Arguments of the function currently being processed
@@ -657,6 +660,7 @@ pub struct Frontend<I> {
         core::hash::BuildHasherDefault<rustc_hash::FxHasher>,
     >,
     options: Options,
+    pending_no_contraction: FastHashSet<spirv::Word>,
 
     /// Maps for a switch from a case target to the respective body and associated literals that
     /// use that target block id.
@@ -686,6 +690,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             ext_glsl_id: None,
             ext_non_semantic_id: None,
             future_decor: FastHashMap::default(),
+            pending_no_contraction: FastHashSet::default(),
             future_member_decor: FastHashMap::default(),
             handle_sampling: FastHashMap::default(),
             lookup_member: FastHashMap::default(),
@@ -802,6 +807,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             spirv::Decoration::MatrixStride => {
                 inst.expect(base_words + 2)?;
                 dec.matrix_stride = NonZeroU32::new(self.next()?);
+            }
+            spirv::Decoration::NoContraction => {
+                inst.expect(base_words + 1)?;
+                dec.no_contraction = true;
             }
             spirv::Decoration::Invariant => {
                 dec.invariant = true;
@@ -1023,6 +1032,33 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         Ok(())
     }
 
+    fn register_arithmetic_control(
+        &mut self,
+        ctx: &mut BlockContext,
+        id: spirv::Word,
+        handle: Handle<crate::Expression>,
+    ) -> Result<(), Error> {
+        if self.pending_no_contraction.remove(&id) {
+            if !matches!(
+                ctx.expressions[handle],
+                crate::Expression::Binary {
+                    op: crate::BinaryOperator::Add
+                        | crate::BinaryOperator::Subtract
+                        | crate::BinaryOperator::Multiply,
+                    ..
+                } | crate::Expression::Math {
+                    fun: crate::MathFunction::Dot,
+                    ..
+                }
+            ) {
+                return Err(Error::UnsupportedNoContraction(id));
+            }
+            ctx.expression_controls
+                .insert(handle, crate::ArithmeticControl::NoContraction);
+        }
+        Ok(())
+    }
+
     fn parse_expr_binary_op(
         &mut self,
         ctx: &mut BlockContext,
@@ -1044,10 +1080,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let right = self.get_expr_handle(p2_id, p2_lexp, ctx, emitter, block, body_idx);
 
         let expr = crate::Expression::Binary { op, left, right };
+        let handle = ctx.expressions.append(expr, self.span_from_with_op(start));
+        self.register_arithmetic_control(ctx, result_id, handle)?;
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: ctx.expressions.append(expr, self.span_from_with_op(start)),
+                handle,
                 type_id: result_type_id,
                 block_id,
             },
@@ -1162,10 +1200,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             },
         };
 
+        let handle = ctx.expressions.append(expr, span);
+        self.register_arithmetic_control(ctx, result_id, handle)?;
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: ctx.expressions.append(expr, span),
+                handle,
                 type_id: result_type_id,
                 block_id,
             },
@@ -1853,6 +1893,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             self.future_member_decor.clear();
         }
 
+        if let Some(&id) = self.pending_no_contraction.iter().next() {
+            return Err(Error::UnsupportedNoContraction(id));
+        }
         Ok(module)
     }
 
@@ -2090,6 +2133,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let id = self.next()?;
         let mut dec = self.future_decor.remove(&id).unwrap_or_default();
         self.next_decoration(inst, 2, &mut dec)?;
+        if dec.no_contraction {
+            self.pending_no_contraction.insert(id);
+        }
         self.future_decor.insert(id, dec);
         Ok(())
     }
@@ -2105,6 +2151,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             .remove(&(id, member))
             .unwrap_or_default();
         self.next_decoration(inst, 3, &mut dec)?;
+        if dec.no_contraction {
+            return Err(Error::UnsupportedNoContraction(id));
+        }
         self.future_member_decor.insert((id, member), dec);
         Ok(())
     }
