@@ -438,6 +438,13 @@ impl super::Adapter {
             wgt::DownlevelFlags::MULTISAMPLED_SHADING,
             supported((3, 2), (4, 0)) || extensions.contains("OES_sample_variables"),
         );
+        downlevel_flags.set(
+            wgt::DownlevelFlags::DEPTH_BIAS_CLAMP,
+            full_ver.is_some_and(|v| v >= (4, 6))
+            || extensions.contains("EXT_polygon_offset_clamp") // WebGL
+            || extensions.contains("GL_EXT_polygon_offset_clamp")
+            || extensions.contains("GL_ARB_polygon_offset_clamp"),
+        );
         // GLSL ES has no `noperspective` qualifier, so `@interpolate(linear)` is only
         // expressible on desktop GLSL (where we require at least 330, well past the 130
         // that introduced `noperspective`).
