@@ -300,6 +300,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix `var<immediate>` members being read from the wrong offsets on DX12 when a nested struct is not 16-byte aligned. By @DouglasDwyer in [#10581](https://github.com/gfx-rs/wgpu/pull/10581).
 - Disallow usage of `ray_query` as a binding. By @szymros in [#10832](https://github.com/gfx-rs/wgpu/pull/10832)
 - Fix `@builtin(position).w` in fragment shaders on DX12. The HLSL backend now provides 1/w of the clip-space position, as WGSL specifies and the other backends already do, instead of w. By @abdymazhit in [#10733](https://github.com/gfx-rs/wgpu/pull/10733).
+- Generate correct SPIR-V for nested structs containing two-row matrices. By @jimblandy in [#10846](https://github.com/gfx-rs/wgpu/pull/10846)
 
 #### Validation
 
@@ -347,6 +348,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Don't use timeline semaphores on VeriSilicon's proprietary driver, as on NXP's i.MX 8 SoCs, which crashes in `vkQueueSubmit` with them. wgpu falls back to binary fences there. By @tronical in [#10535](https://github.com/gfx-rs/wgpu/pull/10535).
 - Recover from `VK_ERROR_FRAGMENTED_POOL` and `VK_ERROR_OUT_OF_POOL_MEMORY` when allocating descriptor sets by resetting or retiring the offending pool and retrying on the next available (or a freshly created) pool instead of panicking. By @beicause in [#10264](https://github.com/gfx-rs/wgpu/pull/10264).
 - Enable the `depthBiasClamp` device feature when it is supported. Pipelines with a non-zero `DepthBiasState::clamp` previously failed Vulkan validation. By @VoxelBoy in [#10566](https://github.com/gfx-rs/wgpu/pull/10566).
+- Polyfill workgroup zero init in mesh and task shaders on AMD's proprietary driver, which fails with `VK_ERROR_INITIALIZATION_FAILED` when they use `OpVariable` initializers. By @apollo-2006 in [#10692](https://github.com/gfx-rs/wgpu/pull/10692).
 
 #### Metal
 
