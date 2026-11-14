@@ -2150,41 +2150,22 @@ fn invalid_functions() {
         })
     }
 
-    // Pointers of these address spaces cannot be passed as arguments.
+    // `unrestricted_pointer_parameters` permits these address spaces.
     check_validation! {
-        "fn unacceptable_ptr_space(arg: ptr<storage, array<f32>>) { }":
-        Err(naga::valid::ValidationError::Function {
-            name: function_name,
-            source: naga::valid::FunctionError::InvalidArgumentPointerSpace {
-                index: 0,
-                name: argument_name,
-                space: naga::AddressSpace::Storage { .. },
-            },
-            ..
-        })
-        if function_name == "unacceptable_ptr_space" && argument_name == "arg"
+        "fn acceptable_ptr_space(arg: ptr<storage, array<f32>>) { }",
+        "fn acceptable_ptr_space(arg: ptr<uniform, f32>) { }",
+        "fn acceptable_ptr_space(arg: ptr<workgroup, f32>) { }":
+        Ok(_)
     }
+
+    // Pointers of this address space cannot be passed as arguments.
     check_validation! {
-        "fn unacceptable_ptr_space(arg: ptr<uniform, f32>) { }":
+        "fn unacceptable_ptr_space(arg: ptr<immediate, f32>) { }":
         Err(naga::valid::ValidationError::Function {
             name: function_name,
-            source: naga::valid::FunctionError::InvalidArgumentPointerSpace {
+            source: naga::valid::FunctionError::InvalidArgumentType {
                 index: 0,
                 name: argument_name,
-                space: naga::AddressSpace::Uniform,
-            },
-            ..
-        })
-        if function_name == "unacceptable_ptr_space" && argument_name == "arg"
-    }
-    check_validation! {
-        "fn unacceptable_ptr_space(arg: ptr<workgroup, f32>) { }":
-        Err(naga::valid::ValidationError::Function {
-            name: function_name,
-            source: naga::valid::FunctionError::InvalidArgumentPointerSpace {
-                index: 0,
-                name: argument_name,
-                space: naga::AddressSpace::WorkGroup,
             },
             ..
         })

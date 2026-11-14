@@ -2038,6 +2038,12 @@ impl crate::Device for super::Device {
         desc: &crate::ShaderModuleDescriptor,
         shader: crate::ShaderInput,
     ) -> Result<super::ShaderModule, crate::ShaderError> {
+        let shader = match shader {
+            crate::ShaderInput::Naga(naga_shader) => {
+                crate::ShaderInput::Naga(naga_shader.inline(naga::inline::InlineTarget::Spirv)?)
+            }
+            shader => shader,
+        };
         let shader_module = match shader {
             crate::ShaderInput::Naga(naga_shader)
                 if self

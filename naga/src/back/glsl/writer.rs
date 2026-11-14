@@ -130,6 +130,12 @@ impl<'a, W: Write> Writer<'a, W> {
     /// # Panics
     /// Might panic if the module is invalid
     pub fn write(&mut self) -> Result<ReflectionInfo, Error> {
+        if let Some(name) =
+            crate::inline::find_needs_inline(self.module, crate::inline::InlineTarget::Glsl)
+        {
+            return Err(Error::NeedsInline(name));
+        }
+
         // We use `writeln!(self.out)` throughout the write to add newlines
         // to make the output more readable
 

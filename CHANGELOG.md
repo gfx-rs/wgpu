@@ -175,11 +175,15 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Added `TextureDescriptor::default_view_dimension` to get the view dimension a texture's views default to. By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Added `Queue` getter on `Device`. By @sagudev in [#10895](https://github.com/gfx-rs/wgpu/pull/10895).
 
+- Support the WGSL `unrestricted_pointer_parameters` language extension: functions may take pointers in the `storage`, `uniform` and `workgroup` address spaces. Where a backend cannot express such a call, or a pointer argument to part of a variable like `&a[i]`, the call is inlined. By @Inner-Daemons in [#10355](https://github.com/gfx-rs/wgpu/pull/10355).
+
 #### Naga
 
+- Added `naga::inline`, which replaces the calls a given backend cannot express with the body of the called function. By @Inner-Daemons in [#10355](https://github.com/gfx-rs/wgpu/pull/10355).
 - Add `@builtin(hit_barycentrics)`, a `vec2<f32>` readable in `@any_hit` and `@closest_hit` ray tracing pipeline shaders, holding two of the barycentric coordinates of the hit point on the triangle (the third is `1.0 - x - y`). Currently only supported with the SPIR-V backend. By @JMS55 in [#10193](https://github.com/gfx-rs/wgpu/pull/10193).
 - Add the `wgpu_ray_tracing_invocation_reorder` WGSL enable-extension and the matching `Capabilities::RAY_TRACING_INVOCATION_REORDER`, exposing hit objects and shader invocation reordering. It provides the `hit_object` type, which records the result of a ray traversal without running any hit or miss shader, various `hitObject*` built-in functions, and `reorderThread`, which reorders invocations of a `@ray_generation` shader to improve coherence. Currently only supported with the SPIR-V backend. By @JMS55 in [#10311](https://github.com/gfx-rs/wgpu/pull/10311).
 - Support WGSL `bitcast` between `vec2<f16>` and 32-bit scalars, between `vec4<f16>` and `vec2` of 32-bit scalars, between `f16` and `i16`/`u16` (with `wgpu_int16`), and the corresponding SPIR-V `OpBitcast`s. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
+- `naga::compact::compact` now accepts functions whose expression arenas contain forward references (an expression referring to a later one), and renumbers the function's expressions so that every expression precedes its users. This lets passes that rewrite function bodies append expressions freely and run compaction afterwards. Modules without forward references are compacted exactly as before. By @Inner-Daemons in [#10409](https://github.com/gfx-rs/wgpu/pull/10409).
 
 #### Hal
 
@@ -246,6 +250,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 #### naga
 
+- The SPIR-V, HLSL, GLSL and MSL writers return a new `NeedsInline` error for modules that must first be passed through `naga::inline::process`. The SPIR-V writer previously emitted invalid SPIR-V for pointer arguments to part of a variable. `FunctionError::InvalidArgumentPointerSpace` was removed. By @Inner-Daemons in [#10355](https://github.com/gfx-rs/wgpu/pull/10355).
 - `naga::valid::ValidationError` is now always returned boxed, to avoid `clippy::large_result_err` warning. By @beicause in [#9612](https://github.com/gfx-rs/wgpu/pull/9612)
 - Added `naga::valid::Capabilities::LINEAR_INTERPOLATION`, which is now required in order to use `@interpolate(linear)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - The GLSL backend's `MissingFeatures` error now names the GLSL version that lacks the features, e.g. `GLSL 300 es doesn't support the required feature(s): NOPERSPECTIVE_QUALIFIER`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
