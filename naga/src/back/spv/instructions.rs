@@ -230,6 +230,20 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn execution_mode_id(
+        entry_point_id: Word,
+        execution_mode: spirv::ExecutionMode,
+        args: &[Word],
+    ) -> Self {
+        let mut instruction = Self::new(Op::ExecutionModeId);
+        instruction.add_operand(entry_point_id);
+        instruction.add_operand(execution_mode as u32);
+        for arg in args {
+            instruction.add_operand(*arg);
+        }
+        instruction
+    }
+
     pub(super) fn capability(capability: spirv::Capability) -> Self {
         let mut instruction = Self::new(Op::Capability);
         instruction.add_operand(capability as u32);

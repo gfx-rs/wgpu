@@ -1272,6 +1272,11 @@ impl<'a, W: Write> Writer<'a, W> {
         info: &valid::FunctionInfo,
     ) -> BackendResult {
         for &handle in function.expression_controls.keys() {
+            if function.expression_controls[&handle]
+                == crate::ArithmeticControl::Exp2F32NoRefactoringV1
+            {
+                return Err(Error::UnsupportedArithmeticControls);
+            }
             let expression = &function.expressions[handle];
             let (left, _) = back::arithmetic_control_operands(expression);
             let argument_type = info[left].ty.inner_with(&self.module.types);

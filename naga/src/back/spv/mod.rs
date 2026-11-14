@@ -159,6 +159,30 @@ struct Instruction {
 
 const BITS_PER_BYTE: crate::Bytes = 8;
 
+/// The `FPFastMathDefault` mask written for every floating-point width in a
+/// module that declares `FloatControls2`.
+///
+/// These are the flags Vulkan assumes for an instruction without
+/// `NoContraction` in a module that does not specify its floating-point
+/// environment and does not use `SignedZeroInfNanPreserve`.
+const FP_FAST_MATH_DEFAULT: spirv::FPFastMathMode = spirv::FPFastMathMode::NOT_NAN
+    .union(spirv::FPFastMathMode::NOT_INF)
+    .union(spirv::FPFastMathMode::NSZ)
+    .union(spirv::FPFastMathMode::ALLOW_RECIP)
+    .union(spirv::FPFastMathMode::ALLOW_CONTRACT)
+    .union(spirv::FPFastMathMode::ALLOW_REASSOC)
+    .union(spirv::FPFastMathMode::ALLOW_TRANSFORM);
+
+/// The `FPFastMathMode` mask that stands for `NoContraction` in a module that
+/// declares `FloatControls2`.
+///
+/// Vulkan assumes `AllowContract`, `AllowReassoc`, `AllowRecip` and
+/// `AllowTransform` only for instructions that are not decorated
+/// `NoContraction`, so all four are clear.
+const FP_FAST_MATH_NO_CONTRACTION: spirv::FPFastMathMode = spirv::FPFastMathMode::NOT_NAN
+    .union(spirv::FPFastMathMode::NOT_INF)
+    .union(spirv::FPFastMathMode::NSZ);
+
 #[derive(Clone, Debug, Error)]
 pub enum Error {
     #[error("The requested entry point couldn't be found")]
@@ -948,6 +972,15 @@ pub struct Writer {
     debug_strings: Vec<Instruction>,
     debugs: Vec<Instruction>,
     annotations: Vec<Instruction>,
+    /// `NoContraction` decorations in [`annotations`], as `(index, target id,
+    /// target has a floating-point type)`.
+    ///
+    /// See [`Writer::finish_float_controls`].
+    ///
+    /// [`annotations`]: Writer::annotations
+    no_contraction_annotations: Vec<(usize, Word, bool)>,
+    /// The function ids of the entry points written so far.
+    entry_point_ids: Vec<Word>,
     flags: WriterFlags,
     bounds_check_policies: BoundsCheckPolicies,
     zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode,
