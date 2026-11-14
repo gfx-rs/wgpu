@@ -1005,6 +1005,7 @@ impl super::Adapter {
                     ray_tracing_pipeline_group_data_size: 0,
                     ray_tracing_pipeline_group_data_alignment: 0,
                     ray_tracing_pipeline_data_offset_alignment: 0,
+                    null_acceleration_structure_allowed: false,
                 },
                 cooperative_matrix_properties: Vec::new(),
             },

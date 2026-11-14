@@ -1899,6 +1899,9 @@ impl PhysicalDeviceProperties {
                 .map_or(0, |ray_tracing_pipeline| {
                     ray_tracing_pipeline.shader_group_base_alignment
                 }),
+            // According to https://docs.vulkan.org/spec/latest/chapters/accelstructures.html#acceleration-structure-inactive-prims,
+            // "An inactive instance is one whose acceleration structure reference is 0."
+            null_acceleration_structure_allowed: true,
         }
     }
 }

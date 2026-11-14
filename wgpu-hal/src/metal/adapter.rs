@@ -1673,6 +1673,9 @@ impl super::CapabilitiesQuery {
                 >())
                 .unwrap(),
                 ray_tracing_scratch_buffer_alignment: 1,
+                // There is nothing documenting whether or not this is allowed.
+                // Assume the worst.
+                null_acceleration_structure_allowed: false,
                 // Not yet supported
                 ray_tracing_pipeline_group_data_size: 0,
                 ray_tracing_pipeline_group_data_alignment: 0,

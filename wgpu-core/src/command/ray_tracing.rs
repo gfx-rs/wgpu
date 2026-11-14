@@ -244,91 +244,134 @@ pub(crate) fn build_acceleration_structures(
         let mut instance_count = 0;
 
         let mut max_intersection_idx = None;
-        for (instance_idx, instance) in mem::take(&mut package.instances)
+
+        let null_handle = state
+            .device
+            .null_blas_handle()
+            .expect("acceleration structures must be allowed as we are building them!");
+
+        let instances = mem::take(&mut package.instances);
+        let mut final_some_instance = 0;
+        for (idx, instance) in instances.iter().enumerate().rev() {
+            if let Some(_) = instance {
+                final_some_instance = idx;
+                break;
+            }
+        }
+
+        if instances.len() > tlas.max_instance_count as usize {
+            return Err(BuildAccelerationStructureError::TlasInstanceCountExceeded(
+                tlas.error_ident(),
+                instances.len(),
+                tlas.max_instance_count as usize,
+            ));
+        }
+
+        // Take all the instances that are some as well as those which are none between them.
+        // Note: this can take one too many instances if no `Some` instances are present and there
+        // is one `None` instance. Conversion of a single `None` instance is completely invisible
+        // and the small upload cost is not worth the added complexity of checking if there are
+        // absolutely no instances
+        for (instance_idx, instance) in instances
             .into_iter()
+            .take(final_some_instance + 1)
             .enumerate()
-            .flat_map(|(idx, instance)| instance.map(|inst| (idx, inst)))
         {
-            if instance.custom_data >= (1u32 << 24u32) {
-                return Err(BuildAccelerationStructureError::TlasInvalidCustomData(
-                    tlas.error_ident(),
-                    instance_idx,
-                ));
-            }
-
-            let max_intersection_idx = max_intersection_idx.get_or_insert(0);
-
-            *max_intersection_idx = (*max_intersection_idx).max(instance.intersection_index);
-
-            let blas = instance.blas;
-            let is_new_dependency = seen_dependencies.insert(blas.tracker_index());
-
-            if is_new_dependency {
-                state.tracker.blas_s.insert_single(blas.clone());
-            }
-
-            if instance.intersection_index >= (1u32 << 24u32) {
-                return Err(
-                    BuildAccelerationStructureError::TlasInvalidIntersectionIndex(
-                        tlas.error_ident(),
-                        instance_idx,
-                        instance.intersection_index,
-                    ),
-                );
-            } else if instance.intersection_index != 0 {
-                state
-                    .device
-                    .require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)?;
-            }
-
-            state.device.raw().tlas_instance_to_bytes(
-                hal::TlasInstance {
-                    transform: instance.transform,
-                    custom_data: instance.custom_data,
-                    mask: instance.mask,
-                    blas_address: blas.handle,
-                    pipeline_intersection_data_offset: instance.intersection_index,
-                },
-                &mut instance_buffer_staging_source,
-            );
-
-            if tlas
-                .flags
-                .contains(wgpu_types::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
-                && !blas
-                    .flags
-                    .contains(wgpu_types::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
-            {
-                return Err(
-                    BuildAccelerationStructureError::TlasDependentMissingVertexReturn(
-                        tlas.error_ident(),
-                        blas.error_ident(),
-                    ),
-                );
-            }
-
             instance_count += 1;
 
-            let intersection_ty = crate::resource::TlasIntersectionType {
-                index: instance.intersection_index,
-                required_intersection_ty: match blas.sizes {
-                    wgt::BlasGeometrySizeDescriptors::Triangles { .. } => {
-                        crate::ray_tracing_pipeline::RayTracingIntersectionType::Triangle
+            match instance {
+                None => {
+                    state.device.raw().tlas_instance_to_bytes(
+                        hal::TlasInstance {
+                            transform: [0.0; 12],
+                            custom_data: 0,
+                            mask: 0xff,
+                            blas_address: null_handle,
+                            pipeline_intersection_data_offset: 0,
+                        },
+                        &mut instance_buffer_staging_source,
+                    );
+                }
+                Some(instance) => {
+                    if instance.custom_data >= (1u32 << 24u32) {
+                        return Err(BuildAccelerationStructureError::TlasInvalidCustomData(
+                            tlas.error_ident(),
+                            instance_idx,
+                        ));
                     }
-                    wgt::BlasGeometrySizeDescriptors::AABBs { .. } => {
-                        crate::ray_tracing_pipeline::RayTracingIntersectionType::AABB
+
+                    let max_intersection_idx = max_intersection_idx.get_or_insert(0);
+
+                    *max_intersection_idx =
+                        (*max_intersection_idx).max(instance.intersection_index);
+
+                    let blas = instance.blas;
+                    let is_new_dependency = seen_dependencies.insert(blas.tracker_index());
+
+                    if is_new_dependency {
+                        state.tracker.blas_s.insert_single(blas.clone());
                     }
-                },
-            };
 
-            let new_intersection_ty = seen_intersection_types.insert(intersection_ty);
+                    if instance.intersection_index >= (1u32 << 24u32) {
+                        return Err(
+                            BuildAccelerationStructureError::TlasInvalidIntersectionIndex(
+                                tlas.error_ident(),
+                                instance_idx,
+                                instance.intersection_index,
+                            ),
+                        );
+                    } else if instance.intersection_index != 0 {
+                        state
+                            .device
+                            .require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)?;
+                    }
 
-            if new_intersection_ty {
-                required_intersection_types.push(intersection_ty);
-            }
+                    state.device.raw().tlas_instance_to_bytes(
+                        hal::TlasInstance {
+                            transform: instance.transform,
+                            custom_data: instance.custom_data,
+                            mask: instance.mask,
+                            blas_address: blas.handle,
+                            pipeline_intersection_data_offset: instance.intersection_index,
+                        },
+                        &mut instance_buffer_staging_source,
+                    );
 
-            if is_new_dependency {
-                dependencies.push(blas);
+                    if tlas.flags.contains(
+                        wgpu_types::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
+                    ) && !blas.flags.contains(
+                        wgpu_types::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
+                    ) {
+                        return Err(
+                            BuildAccelerationStructureError::TlasDependentMissingVertexReturn(
+                                tlas.error_ident(),
+                                blas.error_ident(),
+                            ),
+                        );
+                    }
+
+                    let intersection_ty = crate::resource::TlasIntersectionType {
+                        index: instance.intersection_index,
+                        required_intersection_ty: match blas.sizes {
+                            wgt::BlasGeometrySizeDescriptors::Triangles { .. } => {
+                                crate::ray_tracing_pipeline::RayTracingIntersectionType::Triangle
+                            }
+                            wgt::BlasGeometrySizeDescriptors::AABBs { .. } => {
+                                crate::ray_tracing_pipeline::RayTracingIntersectionType::AABB
+                            }
+                        },
+                    };
+
+                    let new_intersection_ty = seen_intersection_types.insert(intersection_ty);
+
+                    if new_intersection_ty {
+                        required_intersection_types.push(intersection_ty);
+                    }
+
+                    if is_new_dependency {
+                        dependencies.push(blas);
+                    }
+                }
             }
         }
 
@@ -338,14 +381,6 @@ pub(crate) fn build_acceleration_structures(
             max_intersection_idx,
             required_intersection_types,
         });
-
-        if instance_count > tlas.max_instance_count {
-            return Err(BuildAccelerationStructureError::TlasInstanceCountExceeded(
-                tlas.error_ident(),
-                instance_count,
-                tlas.max_instance_count,
-            ));
-        }
 
         tlas_storage.push(TlasStore {
             internal: UnsafeTlasStore {
