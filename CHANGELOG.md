@@ -356,6 +356,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 - Advertise `TEXTURE_INT64_ATOMIC` and R64Uint storage atomics on Apple8+Mac2 devices with MSL 3.1, restoring support for 64-bit texture atomic min/max on M2 Macs. By @urothis.
 - Cap `max_storage_buffer_binding_size` to `u32::MAX - 4` again. By @nuri-yoo in [#10306](https://github.com/gfx-rs/wgpu/pull/10306).
+- Count occlusion query sets in `HalCounters::query_sets`. Only timestamp query sets were counted, while destroying either kind decremented the counter. By @VitaminCpp in [#10862](https://github.com/gfx-rs/wgpu/pull/10862).
 - Fix a crash/hang when configuring a surface with the `Bt2100Pq`, `Bt2100Hlg`, or `ExtendedDisplayP3` color space: the dynamically resolved CoreGraphics color-space constants were read with one level of indirection missing. By @stuartparmenter in [#10175](https://github.com/gfx-rs/wgpu/pull/10175).
 - Fix bind group resources for the task, mesh, fragment, and compute shader stages being bound from the wrong offsets whenever a bind group contained resources visible to the task or mesh stages, which could bind the wrong buffer, texture, or sampler to a shader slot. By @teoxoy in [#10043](https://github.com/gfx-rs/wgpu/issues/10043).
 - Report an error instead of panicking when Metal declines to create a texture view, which can occur for some views of textures with `TRANSIENT_ATTACHMENT` usage. By @matthargett in [#10145](https://github.com/gfx-rs/wgpu/pull/10145).
@@ -391,6 +392,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - GLES: `Queue::submit` no longer resets GL state for command buffers that record no commands (e.g. the internal transit and pre-pass encoders), removing two full reset sequences (about 20 GL calls) per frame for a typical single-pass WebGL2 renderer. By @chinqan in [#10913](https://github.com/gfx-rs/wgpu/pull/10913).
 - Added explicit `Send` and `Sync` implementations to key `wgpu` types so that the compiler can do less work checking those bounds. If you previously added a `#![recursion_limit = ...]` attribute to your crate due to overflow errors involving `wgpu` types, you may now be able to remove it. By @kpreid in [#10177](https://github.com/gfx-rs/wgpu/pull/10177).
 - `Queue::write_buffer`, `Queue::write_texture` and buffer unmaps no longer record a separate barrier before each copy. The transitions for a whole batch of queue writes are now coalesced into a single barrier recorded ahead of the batch's copies, so a frame that updates N buffers costs one barrier instead of N. By @JMS55 in [#10319](https://github.com/gfx-rs/wgpu/pull/10319).
+- Reuse the resource trackers of completed command buffers and of finished compute and ray tracing passes, so a new command encoder or pass no longer allocates them again. By @VitaminCpp in [#10862](https://github.com/gfx-rs/wgpu/pull/10862).
 
 #### WebGPU
 

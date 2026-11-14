@@ -309,6 +309,14 @@ impl BufferTracker {
         self.metadata.tracker_assert_in_bounds(index);
     }
 
+    /// Removes all buffers from the tracker, keeping the capacity of its vectors.
+    pub fn clear(&mut self) {
+        self.start.clear();
+        self.end.clear();
+        self.metadata.clear();
+        self.temp.clear();
+    }
+
     /// Sets the size of all the vectors inside the tracker.
     ///
     /// Must be called with the highest possible Buffer ID before

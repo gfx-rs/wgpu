@@ -84,6 +84,7 @@ mod texture_sampling;
 mod texture_view_creation;
 mod timestamp_normalization;
 mod timestamp_query;
+mod tracker_pool;
 mod transfer;
 mod transient;
 mod transient_memory;
@@ -180,6 +181,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     texture_view_creation::all_tests(&mut tests);
     timestamp_normalization::all_tests(&mut tests);
     timestamp_query::all_tests(&mut tests);
+    tracker_pool::all_tests(&mut tests);
     transfer::all_tests(&mut tests);
     transient::all_tests(&mut tests);
     transient_memory::all_tests(&mut tests);

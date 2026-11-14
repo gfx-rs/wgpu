@@ -602,6 +602,41 @@ impl<'a> UsageScope<'a> {
     }
 }
 
+/// A pool of [`Tracker`]s for command encoders and compute passes, owned by a `Device`.
+///
+/// A tracker's vectors grow to the number of resources on the device. Taking a tracker
+/// from the pool reuses that memory instead of allocating it again for each command
+/// encoder and compute pass.
+pub(crate) struct TrackerPool {
+    trackers: Mutex<Vec<Tracker>>,
+}
+
+impl TrackerPool {
+    pub fn new() -> Self {
+        Self {
+            trackers: Mutex::new(rank::DEVICE_TRACKER_POOL, Vec::new()),
+        }
+    }
+
+    /// Returns an empty tracker, from the pool if it has one.
+    pub fn acquire(
+        &self,
+        ordered_buffer_usages: wgt::BufferUses,
+        ordered_texture_usages: wgt::TextureUses,
+    ) -> Tracker {
+        let pooled = self.trackers.lock().pop();
+        pooled.unwrap_or_else(|| Tracker::new(ordered_buffer_usages, ordered_texture_usages))
+    }
+
+    /// Empties `tracker` and adds it to the pool.
+    pub fn release(&self, mut tracker: Tracker) {
+        // Drop the references before taking the lock: dropping the last
+        // reference to a resource takes locks of its own.
+        tracker.clear();
+        self.trackers.lock().push(tracker);
+    }
+}
+
 /// A tracker used by Device.
 pub(crate) struct DeviceTracker {
     pub buffers: DeviceBufferTracker,
@@ -673,6 +708,34 @@ impl Tracker {
             bundles: StatelessTracker::new(),
             query_sets: QuerySetTracker::new(),
         }
+    }
+
+    /// Removes all resources from the tracker, keeping the capacity of its storage.
+    pub fn clear(&mut self) {
+        let Self {
+            buffers,
+            textures,
+            blas_s,
+            tlas_s,
+            views,
+            bind_groups,
+            compute_pipelines,
+            render_pipelines,
+            ray_tracing_pipelines,
+            bundles,
+            query_sets,
+        } = self;
+        buffers.clear();
+        textures.clear();
+        blas_s.clear();
+        tlas_s.clear();
+        views.clear();
+        bind_groups.clear();
+        compute_pipelines.clear();
+        render_pipelines.clear();
+        ray_tracing_pipelines.clear();
+        bundles.clear();
+        query_sets.clear();
     }
 
     /// Iterates through all resources in the given bind group and adopts
