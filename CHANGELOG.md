@@ -304,6 +304,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix `@builtin(position).w` in fragment shaders on DX12. The HLSL backend now provides 1/w of the clip-space position, as WGSL specifies and the other backends already do, instead of w. By @abdymazhit in [#10733](https://github.com/gfx-rs/wgpu/pull/10733).
 - Fix GLSL output for WGSL vector `select` with integer or boolean values on WebGL 2 and older OpenGL. By @arcusbuilds in [#10457](https://github.com/gfx-rs/wgpu/pull/10457).
 - Generate correct SPIR-V for nested structs containing two-row matrices. By @jimblandy in [#10846](https://github.com/gfx-rs/wgpu/pull/10846)
+- In the MSL backend, `subgroupBallot` now keeps lanes 32-63, which were lost on GPUs with 64-wide SIMD groups (AMD GPUs on macOS). By @ErkoRisthein in [#10797](https://github.com/gfx-rs/wgpu/pull/10797).
 
 #### Validation
 
