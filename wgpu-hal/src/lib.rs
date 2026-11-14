@@ -1642,6 +1642,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// # Safety
     ///
     /// - `offset_bytes` must be a multiple of 4.
+    /// - `data` must not be empty.
     /// - The range of immediates written must be valid for the pipeline layout at draw time.
     unsafe fn set_immediates(
         &mut self,

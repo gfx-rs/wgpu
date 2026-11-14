@@ -1020,9 +1020,12 @@ fn set_pipeline(
 
     state.pipeline = Some(pipeline.clone());
 
-    state
+    if state
         .binder
-        .change_pipeline_layout(pipeline.layout()?, &pipeline.late_sized_buffer_groups);
+        .change_pipeline_layout(pipeline.layout()?, &pipeline.late_sized_buffer_groups)
+    {
+        state.immediate_state.immediates_dirty = true;
+    }
 
     state.vertex.update_limits(&pipeline.vertex_steps);
 
@@ -1863,12 +1866,12 @@ impl State {
     }
 
     fn flush_immediates(&mut self) {
-        if !self.immediate_state.immediates.is_empty() && self.immediate_state.immediates_dirty {
+        let layout = self.pipeline.as_ref().unwrap().layout().unwrap();
+        if let Some(data) = self.immediate_state.take_dirty(layout) {
             self.commands.push(ArcRenderCommand::SetImmediate {
                 offset: 0,
-                data: self.immediate_state.immediates.clone(),
+                data: data.to_vec(),
             });
-            self.immediate_state.immediates_dirty = false;
         }
     }
 
