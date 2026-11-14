@@ -1946,7 +1946,13 @@ impl crate::Queue for super::Queue {
             // Always reset the state between command_buffers to reflect this assumption. Do
             // this at the beginning of the loop in case something outside of wgpu modified
             // this state prior to commit.
-            unsafe { self.reset_state(gl) };
+            //
+            // An empty command buffer executes no commands, so it neither depends on nor
+            // changes any GL state; the next non-empty command buffer still resets the
+            // state before running its own commands.
+            if !cmd_buf.commands.is_empty() {
+                unsafe { self.reset_state(gl) };
+            }
             if let Some(ref label) = cmd_buf.label {
                 if self
                     .shared

@@ -100,6 +100,11 @@ impl Version {
         *self >= Version::Desktop(450)
     }
 
+    /// Returns true if `mix` with a boolean selector accepts non-float vectors.
+    pub fn supports_integer_mix(&self) -> bool {
+        *self >= Version::Desktop(450) || *self >= Version::new_gles(310)
+    }
+
     // For supports_pack_unpack_4x8, supports_pack_unpack_snorm_2x16, supports_pack_unpack_unorm_2x16
     // see:
     // https://registry.khronos.org/OpenGL-Refpages/gl4/html/unpackUnorm.xhtml

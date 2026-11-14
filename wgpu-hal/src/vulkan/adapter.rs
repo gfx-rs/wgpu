@@ -683,9 +683,11 @@ impl PhysicalDeviceFeatures {
             | F::PIPELINE_CACHE
             | F::SHADER_EARLY_DEPTH_TEST
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | F::TEXTURE_ATOMIC;
+            | F::TEXTURE_ATOMIC
+            | F::UNRESTRICTED_BYTES_PER_ROW;
 
         let mut dl_flags = Df::empty()
+            | Df::ARBITRARY_BINDING_VIEW_DIMENSIONS
             | Df::BASE_VERTEX
             | Df::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED
             | Df::COMPARISON_SAMPLERS
@@ -1060,25 +1062,6 @@ impl PhysicalDeviceFeatures {
         }
 
         features.set(
-            F::VULKAN_GOOGLE_DISPLAY_TIMING,
-            caps.supports_extension(google::display_timing::NAME),
-        );
-
-        features.set(
-            F::VULKAN_EXTERNAL_MEMORY_WIN32,
-            caps.supports_extension(khr::external_memory_win32::NAME),
-        );
-        features.set(
-            F::VULKAN_EXTERNAL_MEMORY_FD,
-            caps.supports_extension(khr::external_memory_fd::NAME),
-        );
-        features.set(
-            F::VULKAN_EXTERNAL_MEMORY_DMA_BUF,
-            caps.supports_extension(khr::external_memory_fd::NAME)
-                && caps.supports_extension(ext::external_memory_dma_buf::NAME)
-                && caps.supports_extension(ext::image_drm_format_modifier::NAME),
-        );
-        features.set(
             F::EXPERIMENTAL_MESH_SHADER,
             caps.supports_extension(ext::mesh_shader::NAME),
         );
@@ -1429,6 +1412,11 @@ impl PhysicalDeviceProperties {
             extensions.push(ext::image_drm_format_modifier::NAME);
         }
 
+        // Optional `VK_GOOGLE_display_timing`
+        if self.supports_extension(google::display_timing::NAME) {
+            extensions.push(google::display_timing::NAME);
+        }
+
         // Optional `VK_EXT_memory_budget`
         if self.supports_extension(ext::memory_budget::NAME) {
             extensions.push(ext::memory_budget::NAME);
@@ -1496,11 +1484,6 @@ impl PhysicalDeviceProperties {
         // Require `VK_EXT_shader_atomic_float` if the associated feature was requested
         if requested_features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC) {
             extensions.push(ext::shader_atomic_float::NAME);
-        }
-
-        // Require VK_GOOGLE_display_timing if the associated feature was requested
-        if requested_features.contains(wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING) {
-            extensions.push(google::display_timing::NAME);
         }
 
         if requested_features.contains(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
@@ -2393,11 +2376,8 @@ impl super::Instance {
                 phd_capabilities.properties.vendor_id == db::nvidia::VENDOR,
             );
             workarounds.set(
-                super::Workarounds::IGNORED_NEGATIVE_VIEWPORT_HEIGHT,
-                phd_capabilities
-                    .driver
-                    .as_ref()
-                    .is_some_and(|driver| driver.driver_id == vk::DriverId::ARM_PROPRIETARY),
+                super::Workarounds::POLYFILL_MESH_TASK_WORKGROUP_ZERO_INIT,
+                phd_capabilities.is_driver(vk::DriverId::AMD_PROPRIETARY),
             );
         };
 
@@ -2561,6 +2541,7 @@ impl super::Instance {
                 .map(|maintenance_5| maintenance_5.depth_stencil_swizzle_one_support == vk::TRUE)
                 .unwrap_or(false),
             ray_tracing_pipeline_group_data_size: alignments.ray_tracing_pipeline_group_data_size,
+            shader_binding_table_alignment: alignments.ray_tracing_pipeline_data_offset_alignment,
             store_op_none: phd_capabilities.device_api_version >= vk::API_VERSION_1_3
                 || (phd_capabilities.device_api_version >= vk::API_VERSION_1_2
                     && phd_capabilities.supports_extension(khr::dynamic_rendering::NAME))
@@ -2595,6 +2576,15 @@ impl super::Instance {
             downlevel_flags,
             private_caps,
             workarounds,
+        };
+
+        let available_features = if crate::auxil::supports_core_features_and_limits(
+            &capabilities.limits,
+            &capabilities.downlevel,
+        ) {
+            available_features | wgt::Features::CORE_FEATURES_AND_LIMITS
+        } else {
+            available_features
         };
 
         Some(crate::ExposedAdapter {
@@ -2896,11 +2886,6 @@ impl super::Adapter {
             flags.set(
                 spv::WriterFlags::LABEL_VARYINGS,
                 self.phd_capabilities.properties.vendor_id != crate::auxil::db::qualcomm::VENDOR,
-            );
-            flags.set(
-                spv::WriterFlags::ADJUST_COORDINATE_SPACE,
-                self.workarounds
-                    .contains(super::Workarounds::IGNORED_NEGATIVE_VIEWPORT_HEIGHT),
             );
             flags.set(
                 spv::WriterFlags::FORCE_POINT_SIZE,

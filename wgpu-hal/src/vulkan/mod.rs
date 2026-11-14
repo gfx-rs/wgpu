@@ -274,7 +274,7 @@ impl Surface {
     ///
     /// - If the surface hasn't been configured.
     /// - If the surface has been configured for a DXGI swapchain.
-    /// - If the device doesn't [support present timing](wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING).
+    /// - If the device doesn't have the [VK_GOOGLE_display_timing] extension enabled.
     ///
     /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
     #[track_caller]
@@ -520,6 +520,10 @@ struct PrivateCapabilities {
     /// require an unnecessary parameter.
     ray_tracing_pipeline_group_data_size: u32,
 
+    /// `shaderGroupBaseAlignment`. Shader binding table regions must start at a device
+    /// address that is a multiple of this, so shader binding table buffers use it as their alignment.
+    shader_binding_table_alignment: u32,
+
     /// Whether `VK_ATTACHMENT_STORE_OP_NONE` is supported. This includes:
     /// - `VK_ATTACHMENT_STORE_OP_NONE` provided by `VK_VERSION_1_3`.
     /// - `VK_ATTACHMENT_STORE_OP_NONE_KHR` provided by `VK_KHR_dynamic_rendering`, or `VK_KHR_load_store_op_none` (promoted to Vulkan 1.4).
@@ -536,10 +540,10 @@ bitflags::bitflags!(
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct Workarounds: u32 {
         /// Only generate SPIR-V for one entry point at a time.
-        const SEPARATE_ENTRY_POINTS = 0x1;
+        const SEPARATE_ENTRY_POINTS = 1 << 0;
         /// Qualcomm OOMs when there are zero color attachments but a non-null pointer
         /// to a subpass resolve attachment array. This nulls out that pointer in that case.
-        const EMPTY_RESOLVE_ATTACHMENT_LISTS = 0x2;
+        const EMPTY_RESOLVE_ATTACHMENT_LISTS = 1 << 1;
         /// If the following code returns false, then nvidia will end up filling the wrong range.
         ///
         /// ```skip
@@ -561,15 +565,11 @@ bitflags::bitflags!(
         ///
         /// As such, we need to make sure all calls to vkCmdFillBuffer are aligned to 16 bytes
         /// if they cover a range of 4096 bytes or more.
-        const FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16 = 0x4;
-        /// Arm's proprietary driver (observed on r54p2, Mali-G715 / Pixel 9 Pro,
-        /// Android 16) ignores negative viewport heights, so it does not do the
-        /// Y-flip that maps WebGPU clip space to Vulkan's.
-        ///
-        /// We flip Y in the vertex shader and use positive-height viewports instead.
-        /// This gives the same framebuffer coordinates, so facing does not change.
-        /// SPIR-V passthrough shaders do not get this flip.
-        const IGNORED_NEGATIVE_VIEWPORT_HEIGHT = 0x8;
+        const FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16 = 1 << 2;
+        /// AMD's proprietary driver fails with VK_ERROR_INITIALIZATION_FAILED on mesh
+        /// and task shaders that zero-initialize workgroup memory with `OpVariable`
+        /// initializers, so polyfill it in those stages.
+        const POLYFILL_MESH_TASK_WORKGROUP_ZERO_INIT = 1 << 3;
     }
 );
 
@@ -1037,6 +1037,7 @@ impl crate::DynSampler for Sampler {}
 struct BindingInfo {
     binding: u32,
     binding_array_size: Option<NonZeroU32>,
+    external_texture: bool,
 }
 
 #[derive(Debug)]

@@ -9,7 +9,7 @@ bool test_any_and_all_for_bool()
 
 float4 derivatives(FragmentInput_derivatives fragmentinput_derivatives) : SV_Target0
 {
-    float4 foo = fragmentinput_derivatives.foo_1;
+    float4 foo = float4(fragmentinput_derivatives.foo_1.xyz, 1.0 / fragmentinput_derivatives.foo_1.w);
     float4 x = (float4)0;
     float4 y = (float4)0;
     float4 z = (float4)0;

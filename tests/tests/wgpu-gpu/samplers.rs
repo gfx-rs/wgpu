@@ -11,6 +11,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
         SAMPLER_DEDUPLICATION,
         SAMPLER_CREATION_FAILURE,
+        SAMPLER_ANISOTROPY,
         SAMPLER_SINGLE_BIND_GROUP,
         SAMPLER_MULTI_BIND_GROUP,
     ]);
@@ -139,6 +140,30 @@ fn sampler_creation_failure(ctx: TestingContext) {
                 ..desc
             });
             sampler_storage.push(sampler);
+        });
+    }
+}
+
+#[apply(gpu_test!)]
+static SAMPLER_ANISOTROPY: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::ANISOTROPIC_FILTERING)
+            .enable_noop(),
+    )
+    .run_sync(sampler_anisotropy);
+
+fn sampler_anisotropy(ctx: TestingContext) {
+    for anisotropy_clamp in [2, 4, 8, 16] {
+        valid(&ctx.device, || {
+            ctx.device.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("anisotropic sampler"),
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::MipmapFilterMode::Linear,
+                anisotropy_clamp,
+                ..Default::default()
+            })
         });
     }
 }
@@ -351,6 +376,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let input_image_view = input_image.create_view(&wgpu::TextureViewDescriptor::default());

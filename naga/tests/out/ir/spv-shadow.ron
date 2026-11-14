@@ -711,15 +711,16 @@
                     base: 55,
                     index: 1,
                 ),
-                As(
+                Bitcast(
                     expr: 42,
-                    kind: Sint,
-                    convert: None,
+                    ty: 8,
                 ),
                 As(
                     expr: 58,
-                    kind: Float,
-                    convert: Some(4),
+                    target: (
+                        kind: Float,
+                        width: 4,
+                    ),
                 ),
                 Compose(
                     ty: 1,
@@ -768,8 +769,10 @@
                 ),
                 As(
                     expr: 68,
-                    kind: Sint,
-                    convert: Some(4),
+                    target: (
+                        kind: Sint,
+                        width: 4,
+                    ),
                 ),
                 ImageSample(
                     image: 5,
