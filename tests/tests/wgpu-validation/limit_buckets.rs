@@ -10,7 +10,8 @@ use wgpu_types as wgt;
 const UPLEVEL_FEATURES: wgt::Features = {
     use wgt::Features;
 
-    Features::DEPTH_CLIP_CONTROL
+    Features::CORE_FEATURES_AND_LIMITS
+        .union(Features::DEPTH_CLIP_CONTROL)
         .union(Features::DEPTH32FLOAT_STENCIL8)
         .union(Features::TEXTURE_COMPRESSION_BC)
         .union(Features::TEXTURE_COMPRESSION_BC_SLICED_3D)
@@ -45,7 +46,7 @@ fn enabled() {
     let instance = create_noop_instance(wgt::NoopBackendOptions {
         enable: true,
         device_type: Some(wgt::DeviceType::DiscreteGpu),
-        features: Some(wgt::Features::empty()),
+        features: Some(wgt::Features::CORE_FEATURES_AND_LIMITS),
         subgroup_min_size: Some(4),
         subgroup_max_size: Some(128),
         ..Default::default() // noop defaults to max limits
@@ -67,7 +68,7 @@ fn enabled() {
 
     // Max limits should be replaced with "default"
     assert_eq!(limits, wgt::Limits::defaults());
-    assert_eq!(features, wgt::Features::empty());
+    assert_eq!(features, wgt::Features::CORE_FEATURES_AND_LIMITS);
     assert_eq!(info.subgroup_min_size, 4);
     assert_eq!(info.subgroup_max_size, 128);
 }
@@ -82,7 +83,11 @@ fn exempt_features() {
     let instance = create_noop_instance(wgt::NoopBackendOptions {
         enable: true,
         device_type: Some(wgt::DeviceType::DiscreteGpu),
-        features: Some(EXEMPT_FEATURES.union(wgt::Features::SUBGROUP)),
+        features: Some(
+            EXEMPT_FEATURES
+                .union(wgt::Features::SUBGROUP)
+                .union(wgt::Features::CORE_FEATURES_AND_LIMITS),
+        ),
         subgroup_min_size: Some(4),
         subgroup_max_size: Some(128),
         ..Default::default() // noop defaults to max limits
@@ -104,7 +109,10 @@ fn exempt_features() {
 
     // Max limits should be replaced with "default" bucket
     assert_eq!(limits, wgt::Limits::defaults());
-    assert_eq!(features, EXEMPT_FEATURES);
+    assert_eq!(
+        features,
+        EXEMPT_FEATURES.union(wgt::Features::CORE_FEATURES_AND_LIMITS)
+    );
     assert_eq!(info.subgroup_min_size, 4);
     assert_eq!(info.subgroup_max_size, 128);
 }
@@ -118,7 +126,7 @@ fn limits_below_minimums_returns_no_adapter() {
             ..wgt::Limits::default()
         }),
         device_type: Some(wgt::DeviceType::DiscreteGpu),
-        features: Some(wgt::Features::empty()),
+        features: Some(wgt::Features::CORE_FEATURES_AND_LIMITS),
         ..Default::default()
     });
 
@@ -135,11 +143,32 @@ fn limits_below_minimums_returns_no_adapter() {
 }
 
 #[test]
-fn device_creation_exceeding_bucket_fails() {
+fn no_core_features_and_limits() {
     let instance = create_noop_instance(wgt::NoopBackendOptions {
         enable: true,
         device_type: Some(wgt::DeviceType::DiscreteGpu),
         features: Some(wgt::Features::empty()),
+        ..Default::default()
+    });
+
+    let result = instance.request_adapter(
+        &wgt::RequestAdapterOptions {
+            apply_limit_buckets: true,
+            ..Default::default()
+        },
+        wgt::Backends::NOOP,
+    );
+
+    // Device does not have the CORE_FEATURES_AND_LIMITS feature, so no bucket matches
+    assert!(result.is_err());
+}
+
+#[test]
+fn device_creation_exceeding_bucket_fails() {
+    let instance = create_noop_instance(wgt::NoopBackendOptions {
+        enable: true,
+        device_type: Some(wgt::DeviceType::DiscreteGpu),
+        features: Some(wgt::Features::CORE_FEATURES_AND_LIMITS),
         ..Default::default()
     });
 
@@ -170,7 +199,7 @@ fn subgroup_sizes_fixed_when_unsupported() {
     let instance = create_noop_instance(wgt::NoopBackendOptions {
         enable: true,
         device_type: Some(wgt::DeviceType::DiscreteGpu),
-        features: Some(wgt::Features::empty()),
+        features: Some(wgt::Features::CORE_FEATURES_AND_LIMITS),
         subgroup_min_size: Some(64),
         subgroup_max_size: Some(64),
         ..Default::default()
@@ -199,11 +228,11 @@ fn subgroup_sizes_fixed_when_unsupported() {
 
 #[test]
 fn fallback_adapter() {
-    // DeviceType::Cpu with empty features should match "fallback" bucket
+    // DeviceType::Cpu with CORE_FEATURES_AND_LIMITS features should match "fallback" bucket
     let instance = create_noop_instance(wgt::NoopBackendOptions {
         enable: true,
         device_type: Some(wgt::DeviceType::Cpu),
-        features: Some(wgt::Features::empty()),
+        features: Some(wgt::Features::CORE_FEATURES_AND_LIMITS),
         ..Default::default()
     });
 
@@ -296,7 +325,7 @@ fn enumerate_adapters_bucketing_enabled() {
     let instance = create_noop_instance(wgt::NoopBackendOptions {
         enable: true,
         device_type: Some(wgt::DeviceType::DiscreteGpu),
-        features: Some(wgt::Features::SUBGROUP),
+        features: Some(wgt::Features::SUBGROUP.union(wgt::Features::CORE_FEATURES_AND_LIMITS)),
         ..Default::default()
     });
 

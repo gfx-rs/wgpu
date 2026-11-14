@@ -254,6 +254,7 @@ async fn run_test_inner(
         format: wgpu::TextureFormat::R8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let out_texture_view = out_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -550,6 +551,7 @@ fn create_rgba8_render_target(
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     (texture, view)
@@ -684,6 +686,7 @@ async fn run_multi_draw_indirect_after_discarded_3d_attachment(ctx: TestingConte
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     let args = vec![
@@ -1341,6 +1344,7 @@ async fn run_multi_draw_indirect_sampled_texture(ctx: TestingContext) {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         },
         wgpu::util::TextureDataOrder::LayerMajor,
         &[u8::MAX; 4],
@@ -1538,7 +1542,12 @@ static MULTI_DRAW_INDIRECT_AFTER_DISCARDED_3D_ATTACHMENT: GpuTestConfiguration =
                 // With indirect validation on, its compute pass would sit
                 // between the attachment's re-initialization and the
                 // multi-draw's own pre-pass work and hide the case under test.
-                .remove_instance_flags(wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL),
+                .remove_instance_flags(wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL)
+                // https://github.com/gfx-rs/wgpu/issues/9184
+                .expect_fail(
+                    wgpu_test::FailureCase::molten_vk()
+                        .validation_error("VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT"),
+                ),
         )
         .run_async(run_multi_draw_indirect_after_discarded_3d_attachment);
 
@@ -1739,6 +1748,7 @@ async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let out_texture_view = out_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -2266,6 +2276,7 @@ async fn indirect_buffer_offsets(ctx: TestingContext) {
         format: wgpu::TextureFormat::R8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let out_texture_view = out_texture.create_view(&wgpu::TextureViewDescriptor::default());
 

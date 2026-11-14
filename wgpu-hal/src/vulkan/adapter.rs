@@ -687,6 +687,7 @@ impl PhysicalDeviceFeatures {
             | F::UNRESTRICTED_BYTES_PER_ROW;
 
         let mut dl_flags = Df::empty()
+            | Df::ARBITRARY_BINDING_VIEW_DIMENSIONS
             | Df::BASE_VERTEX
             | Df::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED
             | Df::COMPARISON_SAMPLERS
@@ -2369,6 +2370,10 @@ impl super::Instance {
                 super::Workarounds::FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16,
                 phd_capabilities.properties.vendor_id == db::nvidia::VENDOR,
             );
+            workarounds.set(
+                super::Workarounds::POLYFILL_MESH_TASK_WORKGROUP_ZERO_INIT,
+                phd_capabilities.is_driver(vk::DriverId::AMD_PROPRIETARY),
+            );
         };
 
         if let Some(driver) = phd_capabilities.driver {
@@ -2564,6 +2569,15 @@ impl super::Instance {
             downlevel_flags,
             private_caps,
             workarounds,
+        };
+
+        let available_features = if crate::auxil::supports_core_features_and_limits(
+            &capabilities.limits,
+            &capabilities.downlevel,
+        ) {
+            available_features | wgt::Features::CORE_FEATURES_AND_LIMITS
+        } else {
+            available_features
         };
 
         Some(crate::ExposedAdapter {
