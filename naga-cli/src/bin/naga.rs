@@ -87,6 +87,11 @@ struct Args {
     #[argh(switch)]
     keep_coordinate_space: bool,
 
+    /// keep SPIR-V `NoContraction` decorations as arithmetic controls;
+    /// backends that cannot honor them then return an error
+    #[argh(switch)]
+    preserve_arithmetic_controls: bool,
+
     /// in dot output, include only the control flow graph
     #[argh(switch)]
     dot_cfg_only: bool,
@@ -541,6 +546,7 @@ fn run() -> anyhow::Result<()> {
         adjust_coordinate_space: !args.keep_coordinate_space,
         strict_capabilities: false,
         block_ctx_dump_prefix: args.block_ctx_dir.clone(),
+        preserve_arithmetic_controls: args.preserve_arithmetic_controls,
     };
 
     params.entry_point.clone_from(&args.entry_point);

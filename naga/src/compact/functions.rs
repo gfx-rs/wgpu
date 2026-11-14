@@ -107,6 +107,14 @@ impl FunctionMap {
             }
         });
 
+        let controls = core::mem::take(&mut function.expression_controls);
+        for (mut handle, control) in controls {
+            if self.expressions.used(handle) {
+                self.expressions.adjust(&mut handle);
+                function.expression_controls.insert(handle, control);
+            }
+        }
+
         // Adjust named expressions.
         for (mut handle, name) in function.named_expressions.drain(..) {
             self.expressions.adjust(&mut handle);

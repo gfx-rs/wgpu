@@ -141,6 +141,9 @@ impl<W: Write> Writer<W> {
     }
 
     pub fn write(&mut self, module: &Module, info: &valid::ModuleInfo) -> BackendResult {
+        if module.has_arithmetic_controls() {
+            return Err(Error::UnsupportedArithmeticControls);
+        }
         self.reset(module);
 
         // Write all `enable` declarations

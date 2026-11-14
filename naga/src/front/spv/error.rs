@@ -14,6 +14,8 @@ use crate::{arena::Handle, error::replace_control_chars, front::atomic_upgrade};
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
+    #[error("NoContraction on result %{0} cannot be preserved by this lowering")]
+    UnsupportedNoContraction(spirv::Word),
     #[error("invalid header")]
     InvalidHeader,
     #[error("invalid word count")]

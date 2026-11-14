@@ -2385,6 +2385,7 @@ version = "30.0.0"
 dependencies = [
  "arbitrary",
  "arrayvec",
+ "bincode 2.0.1",
  "bit-set 0.11.1",
  "bitflags 2.13.2",
  "bytemuck",

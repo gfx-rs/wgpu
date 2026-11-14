@@ -134,6 +134,35 @@ fn get_entry_points(
     }
 }
 
+/// Functions called by the selected entry points, including indirect calls.
+/// Omit unreachable callers together with their controlled callees.
+#[cfg(any(glsl_out, hlsl_out, msl_out))]
+fn reachable_functions(
+    module: &crate::Module,
+    entry_points: core::ops::Range<usize>,
+) -> crate::FastHashSet<crate::Handle<crate::Function>> {
+    // A module without entry points may be translated as a function library.
+    if module.entry_points.is_empty() {
+        return module.functions.iter().map(|(handle, _)| handle).collect();
+    }
+    let mut reachable = crate::FastHashSet::default();
+    let mut pending = alloc::vec::Vec::new();
+    for index in entry_points {
+        pending.push(&module.entry_points[index].function.body);
+    }
+    while let Some(body) = pending.pop() {
+        crate::proc::any_statement(body, &mut |statement| {
+            if let crate::Statement::Call { function, .. } = *statement {
+                if reachable.insert(function) {
+                    pending.push(&module.functions[function].body);
+                }
+            }
+            false
+        });
+    }
+    reachable
+}
+
 /// Whether we're generating an entry point or a regular function.
 ///
 /// Backend languages often require different code for a [`Function`]
@@ -149,7 +178,7 @@ fn get_entry_points(
 /// [`EntryPoint`]: crate::EntryPoint
 /// [`Module`]: crate::Module
 /// [`Module::entry_points`]: crate::Module::entry_points
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FunctionType {
     /// A regular function.
     Function(crate::Handle<crate::Function>),
@@ -158,6 +187,26 @@ pub enum FunctionType {
     /// [`EntryPoint`]: crate::EntryPoint
     /// [`Module::entry_points`]: crate::Module::entry_points
     EntryPoint(crate::proc::EntryPointIndex),
+}
+
+/// Operands of a supported, single-operation arithmetic control helper.
+#[cfg(any(glsl_out, hlsl_out))]
+fn arithmetic_control_operands(
+    expression: &crate::Expression,
+) -> (
+    crate::Handle<crate::Expression>,
+    crate::Handle<crate::Expression>,
+) {
+    match *expression {
+        crate::Expression::Binary { left, right, .. } => (left, right),
+        crate::Expression::Math {
+            fun: crate::MathFunction::Dot,
+            arg,
+            arg1: Some(arg1),
+            ..
+        } => (arg, arg1),
+        _ => unreachable!("validated arithmetic control"),
+    }
 }
 
 impl FunctionType {

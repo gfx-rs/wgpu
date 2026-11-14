@@ -18,6 +18,8 @@ use crate::common::wgsl;
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("This backend cannot preserve arithmetic controls")]
+    UnsupportedArithmeticControls,
     #[error(transparent)]
     FmtError(#[from] core::fmt::Error),
     #[error("{0}")]

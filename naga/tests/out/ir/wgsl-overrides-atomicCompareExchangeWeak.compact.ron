@@ -112,6 +112,7 @@
                     ),
                 ],
                 named_expressions: {},
+                expression_controls: {},
                 body: [
                     Emit((
                         start: 2,

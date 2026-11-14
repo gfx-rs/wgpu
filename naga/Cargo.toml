@@ -109,6 +109,7 @@ unicode-ident = { workspace = true, optional = true }
 cfg_aliases.workspace = true
 
 [dev-dependencies]
+bincode = { workspace = true, features = ["serde"] }
 bytemuck.workspace = true
 diff.workspace = true
 env_logger.workspace = true

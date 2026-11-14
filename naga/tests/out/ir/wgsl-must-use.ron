@@ -33,6 +33,7 @@
                 Literal(I32(10)),
             ],
             named_expressions: {},
+            expression_controls: {},
             body: [
                 Return(
                     value: Some(0),
@@ -52,6 +53,7 @@
                 CallResult(0),
             ],
             named_expressions: {},
+            expression_controls: {},
             body: [
                 Call(
                     function: 0,
@@ -86,6 +88,7 @@
                 ),
             ],
             named_expressions: {},
+            expression_controls: {},
             body: [
                 Call(
                     function: 0,
@@ -120,6 +123,7 @@
             named_expressions: {
                 0: "q",
             },
+            expression_controls: {},
             body: [
                 Call(
                     function: 0,
@@ -143,6 +147,7 @@
             named_expressions: {
                 0: "phony",
             },
+            expression_controls: {},
             body: [
                 Call(
                     function: 0,
@@ -174,6 +179,7 @@
                     CallResult(3),
                 ],
                 named_expressions: {},
+                expression_controls: {},
                 body: [
                     Call(
                         function: 1,

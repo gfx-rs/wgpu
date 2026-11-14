@@ -160,6 +160,7 @@
             local_variables: [],
             expressions: [],
             named_expressions: {},
+            expression_controls: {},
             body: [
                 Return(
                     value: None,
@@ -174,6 +175,7 @@
             local_variables: [],
             expressions: [],
             named_expressions: {},
+            expression_controls: {},
             body: [
                 Return(
                     value: None,
@@ -209,6 +211,7 @@
                     3: "phony",
                     4: "phony",
                 },
+                expression_controls: {},
                 body: [
                     Emit((
                         start: 1,

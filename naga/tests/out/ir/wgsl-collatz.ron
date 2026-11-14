@@ -161,6 +161,7 @@
             named_expressions: {
                 0: "n_base",
             },
+            expression_controls: {},
             body: [
                 Store(
                     pointer: 1,
@@ -309,6 +310,7 @@
                 named_expressions: {
                     0: "global_id",
                 },
+                expression_controls: {},
                 body: [
                     Emit((
                         start: 2,

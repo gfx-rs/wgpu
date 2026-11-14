@@ -121,6 +121,7 @@
                 0: "a",
                 1: "i",
             },
+            expression_controls: {},
             body: [
                 Emit((
                     start: 2,
@@ -193,6 +194,7 @@
                 1: "j",
                 8: "a",
             },
+            expression_controls: {},
             body: [
                 Emit((
                     start: 0,
@@ -281,6 +283,7 @@
                 1: "j",
                 8: "a",
             },
+            expression_controls: {},
             body: [
                 Emit((
                     start: 6,
@@ -348,6 +351,7 @@
                 6: "arr",
                 7: "value",
             },
+            expression_controls: {},
             body: [
                 Emit((
                     start: 6,
@@ -421,6 +425,7 @@
                 named_expressions: {
                     0: "vi",
                 },
+                expression_controls: {},
                 body: [
                     Emit((
                         start: 0,

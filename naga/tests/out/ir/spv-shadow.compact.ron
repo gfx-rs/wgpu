@@ -532,6 +532,7 @@
                 ),
             ],
             named_expressions: {},
+            expression_controls: {},
             body: [
                 Emit((
                     start: 8,
@@ -903,6 +904,7 @@
                 ),
             ],
             named_expressions: {},
+            expression_controls: {},
             body: [
                 Loop(
                     body: [
@@ -1021,6 +1023,7 @@
                     ),
                 ],
                 named_expressions: {},
+                expression_controls: {},
                 body: [
                     Store(
                         pointer: 1,

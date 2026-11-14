@@ -2288,6 +2288,14 @@ impl BlockContext<'_> {
             }
         };
 
+        if self
+            .ir_function
+            .expression_controls
+            .contains_key(&expr_handle)
+        {
+            self.writer
+                .decorate(id, spirv::Decoration::NoContraction, &[]);
+        }
         self.cached[expr_handle] = id;
         Ok(())
     }

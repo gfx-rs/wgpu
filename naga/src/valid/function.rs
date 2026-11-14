@@ -97,6 +97,8 @@ pub enum LocalVariableError {
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum FunctionError {
+    #[error("Unsupported arithmetic control on expression {0:?}")]
+    InvalidArithmeticControl(Handle<crate::Expression>),
     #[error("Expression {handle:?} is invalid")]
     Expression {
         handle: Handle<crate::Expression>,
@@ -2135,9 +2137,55 @@ impl super::Validator {
         mod_info: &ModuleInfo,
         entry_point: bool,
     ) -> Result<FunctionInfo, WithSpan<FunctionError>> {
+        for &handle in fun.expression_controls.keys() {
+            let valid = matches!(
+                fun.expressions.try_get(handle),
+                Ok(crate::Expression::Binary {
+                    op: crate::BinaryOperator::Add
+                        | crate::BinaryOperator::Subtract
+                        | crate::BinaryOperator::Multiply,
+                    ..
+                }) | Ok(crate::Expression::Math {
+                    fun: crate::MathFunction::Dot,
+                    ..
+                })
+            );
+            if !valid {
+                return Err(FunctionError::InvalidArithmeticControl(handle).with_span());
+            }
+        }
         let mut info = mod_info.process_function(fun, module, self.flags, self.capabilities)?;
+        for &handle in fun.expression_controls.keys() {
+            let valid = match fun.expressions[handle] {
+                crate::Expression::Binary { left, right, .. } => {
+                    matches!(
+                        info[left].ty.inner_with(&module.types),
+                        crate::TypeInner::Scalar(_) | crate::TypeInner::Vector { .. }
+                    ) && info[left].ty.inner_with(&module.types)
+                        == info[right].ty.inner_with(&module.types)
+                }
+                crate::Expression::Math {
+                    fun: crate::MathFunction::Dot,
+                    arg,
+                    ..
+                } => matches!(
+                    info[arg].ty.inner_with(&module.types),
+                    crate::TypeInner::Vector {
+                        scalar: crate::Scalar {
+                            kind: crate::ScalarKind::Float,
+                            ..
+                        },
+                        ..
+                    }
+                ),
+                _ => false,
+            };
+            if !valid {
+                return Err(FunctionError::InvalidArithmeticControl(handle).with_span());
+            }
+        }
 
-        let local_expr_kind = crate::proc::ExpressionKindTracker::from_arena(&fun.expressions);
+        let local_expr_kind = crate::proc::ExpressionKindTracker::from_function(fun);
 
         for (var_handle, var) in fun.local_variables.iter() {
             self.validate_local_var(var, module.to_ctx(), &info, &local_expr_kind)

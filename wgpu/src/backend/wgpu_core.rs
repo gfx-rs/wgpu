@@ -1019,6 +1019,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     adjust_coordinate_space: false, // we require NDC_Y_UP feature
                     strict_capabilities: true,
                     block_ctx_dump_prefix: None,
+                    preserve_arithmetic_controls: false,
                 };
                 wgc::pipeline::ShaderModuleSource::SpirV(Borrowed(spv), options)
             }

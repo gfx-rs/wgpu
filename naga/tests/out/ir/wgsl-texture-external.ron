@@ -337,6 +337,7 @@
             named_expressions: {
                 0: "t",
             },
+            expression_controls: {},
             body: [
                 Emit((
                     start: 3,
@@ -407,6 +408,7 @@
                     CallResult(0),
                 ],
                 named_expressions: {},
+                expression_controls: {},
                 body: [
                     Call(
                         function: 0,
@@ -446,6 +448,7 @@
                     CallResult(0),
                 ],
                 named_expressions: {},
+                expression_controls: {},
                 body: [
                     Call(
                         function: 0,
@@ -480,6 +483,7 @@
                     CallResult(0),
                 ],
                 named_expressions: {},
+                expression_controls: {},
                 body: [
                     Call(
                         function: 0,

@@ -2496,6 +2496,20 @@ pub struct FunctionResult {
     pub binding: Option<Binding>,
 }
 
+/// Restrictions on optimizations of one arithmetic expression result.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum ArithmeticControl {
+    /// The operation must not contract with another operation or reassociate.
+    ///
+    /// This applies only to the decorated producer, not recursively to its
+    /// operands or consumers. It does not specify a rounding mode, denormal
+    /// handling, or the internal evaluation order of a dot product.
+    NoContraction,
+}
+
 /// A function defined in the module.
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -2541,6 +2555,17 @@ pub struct Function {
     pub expressions: Arena<Expression>,
     /// Map of expressions that have associated variable names
     pub named_expressions: NamedExpressions,
+    /// Optimization restrictions attached to producing arithmetic expressions.
+    ///
+    /// Controls are supported on scalar or equal-shaped vector addition,
+    /// subtraction, and multiplication, and on floating-point dot products.
+    /// Backends must reject controls they cannot preserve. These entries do not
+    /// keep otherwise unused expressions alive during compaction.
+    /// Controlled expressions and their consumers are runtime expressions: they
+    /// cannot be used as constant-or-override local variable initializers. Use
+    /// an emitted expression and a store for runtime initialization instead.
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub expression_controls: FastIndexMap<Handle<Expression>, ArithmeticControl>,
     /// Block of instructions comprising the body of the function.
     pub body: Block,
     /// The leaf of all diagnostic filter rules tree (stored in [`Module::diagnostic_filters`])

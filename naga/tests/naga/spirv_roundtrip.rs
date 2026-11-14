@@ -32,6 +32,7 @@ fn atomic_compare_exchange_roundtrip_to_spirv() {
             adjust_coordinate_space: true,
             strict_capabilities: false,
             block_ctx_dump_prefix: None,
+            preserve_arithmetic_controls: false,
         },
     )
     .unwrap();

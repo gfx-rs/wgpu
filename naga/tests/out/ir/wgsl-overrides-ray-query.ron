@@ -206,6 +206,7 @@
                 named_expressions: {
                     23: "desc",
                 },
+                expression_controls: {},
                 body: [
                     Emit((
                         start: 5,

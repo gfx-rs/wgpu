@@ -2074,6 +2074,7 @@ impl dispatch::DeviceInterface for WebDevice {
                     adjust_coordinate_space: false,
                     strict_capabilities: true,
                     block_ctx_dump_prefix: None,
+                    preserve_arithmetic_controls: false,
                 };
                 let spv_parser = front::spv::Frontend::new(spv.iter().cloned(), &options);
                 spv_parser
