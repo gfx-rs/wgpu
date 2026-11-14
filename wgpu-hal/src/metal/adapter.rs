@@ -399,11 +399,12 @@ impl crate::Adapter for super::Adapter {
                 flags
             }
             Tf::NV12 | Tf::P010 => {
-                return Tfc::COLOR_ATTACHMENT
-                    | Tfc::COLOR_ATTACHMENT_BLEND
-                    | Tfc::SAMPLED_LINEAR
-                    | Tfc::COPY_SRC
-                    | Tfc::COPY_DST
+                let plane_caps = |aspect| unsafe {
+                    self.texture_format_capabilities(format.aspect_specific_format(aspect).unwrap())
+                };
+                return plane_caps(wgt::TextureAspect::Plane0)
+                    & plane_caps(wgt::TextureAspect::Plane1)
+                    & (Tfc::VALID_FOR_MULTI_PLANAR | Tfc::COPY_SRC | Tfc::COPY_DST);
             }
             Tf::Rgb9e5Ufloat => {
                 if pc.msaa_apple3 {
