@@ -24,6 +24,37 @@ use wgc::{
     id::PointerId,
 };
 
+/// Parse the actions of a `trace.ron` file.
+///
+/// Traces have one action per line. Blank lines and lines starting with `//` are
+/// ignored. If the last action can't be parsed, it is assumed to have been cut
+/// short (for example, because the traced program crashed while writing it), and
+/// is skipped with a warning.
+pub fn parse_trace(content: &str) -> Vec<trace::Action<'_, PointerReferences>> {
+    let lines: Vec<(usize, &str)> = content
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| {
+            let line = line.trim();
+            !line.is_empty() && !line.starts_with("//")
+        })
+        .collect();
+    let mut actions = Vec::with_capacity(lines.len());
+    for (index, &(line_number, line)) in lines.iter().enumerate() {
+        match ron::de::from_str(line) {
+            Ok(action) => actions.push(action),
+            Err(e) if index + 1 == lines.len() => {
+                log::warn!(
+                    "Skipping the incomplete last action of the trace (line {}): {e}",
+                    line_number + 1
+                );
+            }
+            Err(e) => panic!("Failed to parse line {} of the trace: {e}", line_number + 1),
+        }
+    }
+    actions
+}
+
 #[derive(Debug)]
 pub struct Player {
     pipeline_layouts: HashMap<

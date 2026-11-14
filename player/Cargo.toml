@@ -47,5 +47,10 @@ features = [
 [dev-dependencies]
 serde.workspace = true
 
+# `trace_file` tests check that traces written by `DiskTrace` can be read back.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.wgpu-core]
+workspace = true
+features = ["trace"]
+
 [lints]
 workspace = true
