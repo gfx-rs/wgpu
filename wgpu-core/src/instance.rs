@@ -1244,7 +1244,8 @@ impl Adapter {
     /// This validates the provided device descriptor as if it were passed to
     /// [`Self::request_device`]. If [`InstanceFlags::STRICT_WEBGPU_COMPLIANCE`] is active,
     /// the requested extensions in the descriptor will be filtered to remove `wgpu`
-    /// extensions, except for those that are included in [`limits::EXEMPT_FEATURES`].
+    /// extensions, except for those that are included in [`limits::EXEMPT_FEATURES`]
+    /// or [`STRICT_COMPLIANCE_EXPERIMENTAL_FEATURES`].
     ///
     /// This may be useful when it is necessary to obtain the device itself from a raw hal
     /// API, but the rest of the `request_device` validation is still desired.
@@ -1439,13 +1440,21 @@ fn adapter_allowed(
     true
 }
 
+/// Native features that Deno exposes as experimental WebGPU features, such as
+/// `chromium-experimental-multi-draw-indirect`. Firefox cannot request them, because
+/// `wgpu-core-remote-types` only carries [`wgt::FeaturesWebGPU`].
+const STRICT_COMPLIANCE_EXPERIMENTAL_FEATURES: wgt::Features =
+    wgt::Features::MULTI_DRAW_INDIRECT_COUNT;
+
 fn filter_features_and_limits(
     flags: InstanceFlags,
     features: &mut wgt::Features,
     limits: &mut wgt::Limits,
 ) {
     if flags.contains(InstanceFlags::STRICT_WEBGPU_COMPLIANCE) {
-        *features &= wgt::Features::all_webgpu_mask() | limits::EXEMPT_FEATURES;
+        *features &= wgt::Features::all_webgpu_mask()
+            | limits::EXEMPT_FEATURES
+            | STRICT_COMPLIANCE_EXPERIMENTAL_FEATURES;
         limits.zero_native_only();
     }
 }

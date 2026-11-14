@@ -32,6 +32,23 @@ pub struct GPURenderPassEncoder {
   pub label: String,
 }
 
+impl GPURenderPassEncoder {
+  /// `wgpu` only requires the feature when a draw count buffer is used.
+  fn require_multi_draw_indirect(&self, fn_ident: &'static str) -> bool {
+    let render_pass = self.render_pass.borrow();
+    let device = render_pass.device();
+    match device
+      .require_features(wgpu_types::Features::MULTI_DRAW_INDIRECT_COUNT)
+    {
+      Ok(()) => true,
+      Err(err) => {
+        device.handle_error(err, render_pass.label(), fn_ident);
+        false
+      }
+    }
+  }
+}
+
 impl GarbageCollected for GPURenderPassEncoder {
   fn get_name(&self) -> &'static std::ffi::CStr {
     c"GPURenderPassEncoder"
@@ -353,6 +370,75 @@ impl GPURenderPassEncoder {
       indirect_buffer.wgpu_buffer.clone(),
       indirect_offset,
     );
+  }
+
+  #[required(3)]
+  #[undefined]
+  fn multi_draw_indirect(
+    &self,
+    #[webidl] indirect_buffer: Ptr<GPUBuffer>,
+    #[webidl(options(enforce_range = true))] indirect_offset: u64,
+    #[webidl(options(enforce_range = true))] max_draw_count: u32,
+    #[webidl] draw_count_buffer: Option<Ptr<GPUBuffer>>,
+    #[webidl(default = 0, options(enforce_range = true))]
+    draw_count_buffer_offset: u64,
+  ) {
+    if !self
+      .require_multi_draw_indirect("GPURenderPassEncoder::multiDrawIndirect")
+    {
+      return;
+    }
+    if let Some(draw_count_buffer) = draw_count_buffer {
+      self.render_pass.borrow_mut().multi_draw_indirect_count(
+        indirect_buffer.wgpu_buffer.clone(),
+        indirect_offset,
+        draw_count_buffer.wgpu_buffer.clone(),
+        draw_count_buffer_offset,
+        max_draw_count,
+      );
+    } else {
+      self.render_pass.borrow_mut().multi_draw_indirect(
+        indirect_buffer.wgpu_buffer.clone(),
+        indirect_offset,
+        max_draw_count,
+      );
+    }
+  }
+
+  #[required(3)]
+  #[undefined]
+  fn multi_draw_indexed_indirect(
+    &self,
+    #[webidl] indirect_buffer: Ptr<GPUBuffer>,
+    #[webidl(options(enforce_range = true))] indirect_offset: u64,
+    #[webidl(options(enforce_range = true))] max_draw_count: u32,
+    #[webidl] draw_count_buffer: Option<Ptr<GPUBuffer>>,
+    #[webidl(default = 0, options(enforce_range = true))]
+    draw_count_buffer_offset: u64,
+  ) {
+    if !self.require_multi_draw_indirect(
+      "GPURenderPassEncoder::multiDrawIndexedIndirect",
+    ) {
+      return;
+    }
+    if let Some(draw_count_buffer) = draw_count_buffer {
+      self
+        .render_pass
+        .borrow_mut()
+        .multi_draw_indexed_indirect_count(
+          indirect_buffer.wgpu_buffer.clone(),
+          indirect_offset,
+          draw_count_buffer.wgpu_buffer.clone(),
+          draw_count_buffer_offset,
+          max_draw_count,
+        );
+    } else {
+      self.render_pass.borrow_mut().multi_draw_indexed_indirect(
+        indirect_buffer.wgpu_buffer.clone(),
+        indirect_offset,
+        max_draw_count,
+      );
+    }
   }
 
   #[required(2)]

@@ -375,7 +375,13 @@ impl<'a> WebIdlConverter<'a> for GPUFeatureName {
     _options: &Self::Options,
   ) -> Result<Self, WebIdlError> {
     let s = value.to_rust_string_lossy(scope);
-    s.parse().map(Self).map_err(|()| {
+    let feature = match s.as_str() {
+      "chromium-experimental-multi-draw-indirect" => {
+        Ok(wgpu_types::Features::MULTI_DRAW_INDIRECT_COUNT)
+      }
+      _ => s.parse(),
+    };
+    feature.map(Self).map_err(|()| {
       WebIdlError::new(
         prefix,
         context,
