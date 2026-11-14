@@ -170,6 +170,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Add `as_core` and `from_core` methods on various wgpu resources. By @sagudev in [#10211](https://github.com/gfx-rs/wgpu/pull/10211).
 - Add `TlasInstance::from_blas_untransformed` and `TlasInstance::from_blas_transformed` for easier construction an reability in simple cases. By @Vecvec in [#10476](https://github.com/gfx-rs/wgpu/pull/10476).
 - Added `Features::UNRESTRICTED_BYTES_PER_ROW`: `bytes_per_row` in `copy_buffer_to_texture` and `copy_texture_to_buffer` need only be a multiple of the texel block copy size, not of 256. Supported on Vulkan, Metal, GL, and DX12 with `UnrestrictedBufferTextureCopyPitchSupported`. By @michael-dm in [#10619](https://github.com/gfx-rs/wgpu/pull/10619).
+- Expose `is_surface_supported` on `Device`. By @sagudev in [#10896](https://github.com/gfx-rs/wgpu/pull/10896).
 - The format string of `debugPrintf` is now checked for correctness. By @evilpie in [#9641](https://github.com/gfx-rs/wgpu/pull/9641).
 - Added `wgt::Features::CORE_FEATURES_AND_LIMITS`, which is reported only when the adapter supports WebGPU default limits and its downlevel capabilities are WebGPU-compliant. By @sagudev in [#10293](https://github.com/gfx-rs/wgpu/pull/10293).
 - Added `TextureDescriptor::default_view_dimension` to get the view dimension a texture's views default to. By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
