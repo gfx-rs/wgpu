@@ -12,6 +12,7 @@ use deno_core::v8;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
+use wgpu_core::resource::Labeled;
 
 use crate::buffer::GPUBuffer;
 use crate::command_buffer::GPUCommandBuffer;
@@ -23,8 +24,6 @@ use crate::webidl::GPUExtent3D;
 use crate::webidl::GPUOrigin3D;
 
 pub struct GPUQueue {
-  pub label: String,
-
   pub wgpu_queue: Arc<wgpu_core::device::queue::Queue>,
   pub wgpu_device: Arc<wgpu_core::device::Device>,
 }
@@ -46,7 +45,7 @@ impl GPUQueue {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_queue.label().to_string()
   }
   #[setter]
   #[string]

@@ -20,21 +20,21 @@ struct _9
     vec3 _m5;
 };
 
-layout(location = 0) rayPayloadEXT _4 _11;
-layout(set = 0, binding = 0) uniform accelerationStructureEXT _13;
+layout(location = 0) rayPayloadEXT _4 _12;
+layout(set = 0, binding = 0) uniform accelerationStructureEXT _14;
 
-void _49(accelerationStructureEXT _50, _9 _51)
+void _50(accelerationStructureEXT _51, _9 _52)
 {
-    bool _77 = (_51._m0 & 256u) != 0u;
-    bool _85 = (_51._m0 & 16u) != 0u;
-    bool _88 = (_51._m0 & 32u) != 0u;
-    bool _97 = (_51._m0 & 1u) != 0u;
-    bool _100 = (_51._m0 & 2u) != 0u;
-    bool _103 = (_51._m0 & 64u) != 0u;
-    bool _106 = (_51._m0 & 128u) != 0u;
-    if (((((((!((((((_100 && _97) || (_106 && _97)) || (_106 && _100)) || (_106 && _103)) || (_103 && _97)) || (_103 && _100))) && (_51._m2 <= _51._m3)) && (_51._m2 >= 0.0)) && (!(any(isnan(_51._m4)) || any(isinf(_51._m4))))) && (!(any(isnan(_51._m5)) || any(isinf(_51._m5))))) && (!(((_51._m0 & 512u) != 0u) && _77))) && (!(((_85 && _77) || (_88 && _77)) || (_88 && _85))))
+    bool _78 = (_52._m0 & 256u) != 0u;
+    bool _86 = (_52._m0 & 16u) != 0u;
+    bool _89 = (_52._m0 & 32u) != 0u;
+    bool _98 = (_52._m0 & 1u) != 0u;
+    bool _101 = (_52._m0 & 2u) != 0u;
+    bool _104 = (_52._m0 & 64u) != 0u;
+    bool _107 = (_52._m0 & 128u) != 0u;
+    if (((((((!((((((_101 && _98) || (_107 && _98)) || (_107 && _101)) || (_107 && _104)) || (_104 && _98)) || (_104 && _101))) && (_52._m2 <= _52._m3)) && (_52._m2 >= 0.0)) && (!(any(isnan(_52._m4)) || any(isinf(_52._m4))))) && (!(any(isnan(_52._m5)) || any(isinf(_52._m5))))) && (!(((_52._m0 & 512u) != 0u) && _78))) && (!(((_86 && _78) || (_89 && _78)) || (_89 && _86))))
     {
-        traceRayEXT(_50, _51._m0, _51._m1, 0u, 0u, 0u, _51._m4, _51._m2, _51._m5, _51._m3, 0);
+        traceRayEXT(_51, _52._m0, _52._m1, 0u, 0u, 0u, _52._m4, _52._m2, _52._m5, _52._m3, 0);
     }
     else
     {
@@ -43,9 +43,9 @@ void _49(accelerationStructureEXT _50, _9 _51)
 
 void main()
 {
-    _11 = _4(0u, 0u);
-    vec3 _40 = vec3(gl_LaunchIDEXT) / vec3(gl_LaunchSizeEXT);
-    _49(_13, _9(0u, 255u, 0.00999999977648258209228515625, 100.0, vec3(0.0), vec3(0.0, 1.0, 0.0) + ((vec3(_40.x, 0.0, _40.y) * 2.0) - vec3(1.0))));
+    _12 = _4(0u, 0u);
+    vec3 _41 = vec3(gl_LaunchIDEXT) / vec3(gl_LaunchSizeEXT);
+    _50(_14, _9(0u, 255u, 0.00999999977648258209228515625, 100.0, vec3(0.0), vec3(0.0, 1.0, 0.0) + ((vec3(_41.x, 0.0, _41.y) * 2.0) - vec3(1.0))));
 }
 
 
@@ -98,12 +98,13 @@ struct _9
     vec3 _m5;
 };
 
-layout(location = 0) rayPayloadInEXT _4 _15;
+layout(location = 0) rayPayloadInEXT _4 _16;
+hitAttributeEXT vec2 _151;
 
 void main()
 {
-    _15._m0++;
-    _15._m1 = uint(gl_InstanceCustomIndexEXT);
+    _16._m0++;
+    _16._m1 = uint(gl_InstanceCustomIndexEXT) + uint(clamp(_151.x + _151.y, 0.0, 4294967040.0));
 }
 
 
@@ -129,8 +130,12 @@ struct _9
     vec3 _m5;
 };
 
+layout(location = 0) rayPayloadInEXT _4 _16;
+hitAttributeEXT vec2 _179;
+
 void main()
 {
+    _16._m1 = uint(clamp((1.0 - _179.x) - _179.y, 0.0, 4294967040.0));
 }
 
 
@@ -156,11 +161,11 @@ struct _9
     vec3 _m5;
 };
 
-layout(location = 0) rayPayloadInEXT _4 _15;
+layout(location = 0) rayPayloadInEXT _4 _16;
 
 void main()
 {
-    _15._m0 = uint(gl_PrimitiveID);
-    _15._m0 = uint(gl_InstanceID);
+    _16._m0 = uint(gl_PrimitiveID);
+    _16._m0 = uint(gl_InstanceID);
 }
 

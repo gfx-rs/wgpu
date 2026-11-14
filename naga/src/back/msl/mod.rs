@@ -77,6 +77,7 @@ use core::fmt::{Error as FmtError, Write};
 
 use crate::{arena::Handle, back::TaskDispatchLimits, ir, proc::index, valid::ModuleInfo};
 
+mod hoist;
 mod keywords;
 mod mesh_shader;
 mod ray;
@@ -181,6 +182,9 @@ enum ResolvedBinding {
     },
     Resource(BindTarget),
     Payload,
+    /// A fragment shader's depth output, qualified by how it may differ from
+    /// the depth calculated by the rasterizer.
+    ConservativeDepth(crate::ConservativeDepth),
 }
 
 #[derive(Copy, Clone)]
@@ -235,6 +239,8 @@ pub enum Error {
     UnsupportedRayTracing,
     #[error("cooperative matrix is not supported prior to MSL 2.3")]
     UnsupportedCooperativeMatrix,
+    #[error("debugPrintf is not supported prior to MSL 3.2")]
+    UnsupportedDebugPrintf,
     #[error("overrides should not be present at this stage")]
     Override,
     #[error("bitcasting to {0:?} is not supported")]
@@ -705,11 +711,21 @@ impl ResolvedBinding {
                     | Bi::RayTCurrentMax
                     | Bi::ObjectToWorld
                     | Bi::WorldToObject
-                    | Bi::HitKind => unreachable!(),
+                    | Bi::HitKind
+                    | Bi::HitBarycentrics => unreachable!(),
                 };
                 write!(out, "{name}")?;
             }
             Self::Attribute(index) => write!(out, "attribute({index})")?,
+            Self::ConservativeDepth(conservative) => {
+                use crate::ConservativeDepth as Cd;
+                let qualifier = match conservative {
+                    Cd::GreaterEqual => "greater",
+                    Cd::LessEqual => "less",
+                    Cd::Unchanged => "any",
+                };
+                write!(out, "depth({qualifier})")?
+            }
             Self::Color {
                 location,
                 blend_src,
@@ -843,7 +859,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         // No CULL_DISTANCE
         | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
         | Caps::MULTIVIEW
-        // No EARLY_DEPTH_TEST
+        | Caps::EARLY_DEPTH_TEST
         | Caps::MULTISAMPLED_SHADING
         | Caps::RAY_QUERY
         | Caps::DUAL_SOURCE_BLENDING
@@ -876,6 +892,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         // No MEMORY_DECORATION_VOLATILE
         | Caps::MEMORY_DECORATION_COHERENT
         | Caps::LINEAR_INTERPOLATION
+        | Caps::DEBUG_PRINTF
 }
 
 #[test]

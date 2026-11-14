@@ -153,7 +153,8 @@ pub(in crate::back::glsl) const fn glsl_built_in(
         | Bi::RayTCurrentMax
         | Bi::ObjectToWorld
         | Bi::WorldToObject
-        | Bi::HitKind => {
+        | Bi::HitKind
+        | Bi::HitBarycentrics => {
             unimplemented!()
         }
     }

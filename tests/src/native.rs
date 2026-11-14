@@ -1,7 +1,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 //! Infrastructure for the native, `cargo-nextest` based harness.
 //!
-//! This is largly used by [`gpu_test_main`](crate::gpu_test_main) and [`gpu_test`](crate::gpu_test).
+//! This is largely used by [`gpu_test_main`](crate::gpu_test_main) and [`gpu_test`](crate::gpu_test).
 
 use std::{future::Future, pin::Pin};
 

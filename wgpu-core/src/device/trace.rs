@@ -9,6 +9,7 @@ use alloc::{borrow::Cow, string::String, vec::Vec};
 use macro_rules_attribute::apply;
 
 use crate::{
+    binding_model::BindGroupLayoutEntry,
     command::{serde_object_reference_struct, BasePass, Command, ReferenceType, RenderCommand},
     id::{markers, PointerId},
     pipeline::GeneralRenderPipelineDescriptor,
@@ -158,7 +159,7 @@ pub enum Action<'a, R: ReferenceType> {
     ReleaseSurfaceTexture(R::Surface),
     CreateBindGroupLayout(
         PointerId<markers::BindGroupLayout>,
-        crate::binding_model::BindGroupLayoutDescriptor<'a>,
+        crate::binding_model::BindGroupLayoutDescriptor<'a, BindGroupLayoutEntry>,
     ),
     GetRenderPipelineBindGroupLayout {
         id: PointerId<markers::BindGroupLayout>,
@@ -168,6 +169,11 @@ pub enum Action<'a, R: ReferenceType> {
     GetComputePipelineBindGroupLayout {
         id: PointerId<markers::BindGroupLayout>,
         pipeline: PointerId<markers::ComputePipeline>,
+        index: u32,
+    },
+    GetRayTracingPipelineBindGroupLayout {
+        id: PointerId<markers::BindGroupLayout>,
+        pipeline: PointerId<markers::RayTracingPipeline>,
         index: u32,
     },
     DropBindGroupLayout(PointerId<markers::BindGroupLayout>),
@@ -201,6 +207,11 @@ pub enum Action<'a, R: ReferenceType> {
         desc: TraceGeneralRenderPipelineDescriptor<'a>,
     },
     DropRenderPipeline(PointerId<markers::RenderPipeline>),
+    CreateRayTracingPipeline {
+        id: PointerId<markers::RayTracingPipeline>,
+        desc: TraceRayTracingPipelineDescriptor<'a>,
+    },
+    DropRayTracingPipeline(PointerId<markers::RayTracingPipeline>),
     CreatePipelineCache {
         id: PointerId<markers::PipelineCache>,
         desc: crate::pipeline::PipelineCacheDescriptor<'a>,
@@ -285,3 +296,15 @@ pub type TraceComputePipelineDescriptor<'a> = crate::pipeline::ComputePipelineDe
     PointerId<markers::ShaderModule>,
     PointerId<markers::PipelineCache>,
 >;
+
+/// Not a public API. For use by `player` only.
+///
+/// cbindgen:ignore
+#[doc(hidden)]
+pub type TraceRayTracingPipelineDescriptor<'a> =
+    crate::ray_tracing_pipeline::RayTracingPipelineDescriptor<
+        'a,
+        PointerId<markers::PipelineLayout>,
+        PointerId<markers::ShaderModule>,
+        PointerId<markers::PipelineCache>,
+    >;

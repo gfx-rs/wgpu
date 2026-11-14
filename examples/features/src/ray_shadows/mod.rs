@@ -65,8 +65,8 @@ struct Example {
 const CAM_LOOK_AT: Vec3 = Vec3::new(0.0, 1.0, -1.5);
 
 fn create_matrix(config: &wgpu::SurfaceConfiguration) -> Uniforms {
-    let view = Mat4::look_at_rh(CAM_LOOK_AT, Vec3::ZERO, Vec3::Y);
-    let proj = Mat4::perspective_rh(
+    let view = glam::camera::rh::view::look_at_mat4(CAM_LOOK_AT, Vec3::ZERO, Vec3::Y);
+    let proj = glam::camera::rh::proj::directx::perspective(
         59.0_f32.to_radians(),
         config.width as f32 / config.height as f32,
         0.1,
@@ -218,12 +218,7 @@ impl crate::framework::Example for Example {
             cache: None,
         });
 
-        tlas[0] = Some(wgpu::TlasInstance::new(
-            &blas,
-            [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
-            0,
-            0xFF,
-        ));
+        tlas[0] = Some(wgpu::TlasInstance::from_blas_untransformed(&blas));
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });

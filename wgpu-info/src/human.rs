@@ -158,7 +158,11 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_sampled_textures_per_shader_stage,
         max_samplers_per_shader_stage,
         max_storage_buffers_per_shader_stage,
+        max_storage_buffers_in_vertex_stage,
+        max_storage_buffers_in_fragment_stage,
         max_storage_textures_per_shader_stage,
+        max_storage_textures_in_vertex_stage,
+        max_storage_textures_in_fragment_stage,
         max_uniform_buffers_per_shader_stage,
         max_binding_array_elements_per_shader_stage,
         max_binding_array_sampler_elements_per_shader_stage,
@@ -220,7 +224,11 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t              Max Sampled Textures Per Shader Stage: {max_sampled_textures_per_shader_stage}")?;
     writeln!(output, "\t\t                      Max Samplers Per Shader Stage: {max_samplers_per_shader_stage}")?;
     writeln!(output, "\t\t               Max Storage Buffers Per Shader Stage: {max_storage_buffers_per_shader_stage}")?;
+    writeln!(output, "\t\t                Max Storage Buffers In Vertex Stage: {max_storage_buffers_in_vertex_stage}")?;
+    writeln!(output, "\t\t              Max Storage Buffers In Fragment Stage: {max_storage_buffers_in_fragment_stage}")?;
     writeln!(output, "\t\t              Max Storage Textures Per Shader Stage: {max_storage_textures_per_shader_stage}")?;
+    writeln!(output, "\t\t               Max Storage Textures In Vertex Stage: {max_storage_textures_in_vertex_stage}")?;
+    writeln!(output, "\t\t             Max Storage Textures In Fragment Stage: {max_storage_textures_in_fragment_stage}")?;
     writeln!(output, "\t\t               Max Uniform Buffers Per Shader Stage: {max_uniform_buffers_per_shader_stage}")?;
     writeln!(output, "\t\t        Max Binding Array Elements Per Shader Stage: {max_binding_array_elements_per_shader_stage}")?;
     writeln!(output, "\t\tMax Binding Array Sampler Elements Per Shader Stage: {max_binding_array_sampler_elements_per_shader_stage}")?;

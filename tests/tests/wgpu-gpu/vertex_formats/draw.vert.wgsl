@@ -353,6 +353,27 @@ fn vertex_block_7(v_in: AttributeBlock7) -> @builtin(position) vec4<f32>
   return vec4(0.0);
 }
 
+struct AttributeBlock8 {
+  @location(0) snorm10_10_10_2: vec4<f32>,
+}
+
+@vertex
+fn vertex_block_8(v_in: AttributeBlock8) -> @builtin(position) vec4<f32>
+{
+  init_checksums();
+
+  // Accumulate all snorm into one checksum value.
+  var all_snorm: f32 = 0.0;
+  all_snorm = accumulate_snorm(all_snorm, v_in.snorm10_10_10_2.x);
+  all_snorm = accumulate_snorm(all_snorm, v_in.snorm10_10_10_2.y);
+  all_snorm = accumulate_snorm(all_snorm, v_in.snorm10_10_10_2.z);
+  all_snorm = accumulate_snorm(all_snorm, v_in.snorm10_10_10_2.w);
+
+  checksums[index_snorm] = f32(all_snorm);
+
+  return vec4(0.0);
+}
+
 fn accumulate_uint(accum: u32, val: u32) -> u32 {
   return accum + val;
 }

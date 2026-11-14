@@ -147,63 +147,41 @@ enum WebShaderCompilationInfo {
     },
 }
 
-fn map_utf16_to_utf8_offset(utf16_offset: u32, text: &str) -> u32 {
-    let mut utf16_i = 0;
-    for (utf8_index, c) in text.char_indices() {
-        if utf16_i >= utf16_offset {
-            return utf8_index as u32;
-        }
-        utf16_i += c.len_utf16() as u32;
-    }
-    if utf16_i >= utf16_offset {
-        text.len() as u32
-    } else {
-        log::error!("UTF16 offset {utf16_offset} is out of bounds for string {text}");
-        u32::MAX
-    }
-}
+fn compilation_message_from_js(
+    js_message: webgpu_sys::GpuCompilationMessage,
+    compilation_info: &WebShaderCompilationInfo,
+) -> crate::CompilationMessage {
+    let message_type = match js_message.type_() {
+        webgpu_sys::GpuCompilationMessageType::Error => crate::CompilationMessageType::Error,
+        webgpu_sys::GpuCompilationMessageType::Warning => crate::CompilationMessageType::Warning,
+        webgpu_sys::GpuCompilationMessageType::Info => crate::CompilationMessageType::Info,
+        _ => crate::CompilationMessageType::Error,
+    };
+    let utf16_offset = js_message.offset() as u32;
+    let utf16_length = js_message.length() as u32;
+    let span = match compilation_info {
+        WebShaderCompilationInfo::Wgsl { .. } if utf16_offset == 0 && utf16_length == 0 => None,
+        WebShaderCompilationInfo::Wgsl { source } => {
+            let line_number = js_message.line_num() as u32; // That's legal, because we're counting lines the same way
+            let utf16_line_position = js_message.line_pos() as u32;
 
-impl crate::CompilationMessage {
-    fn from_js(
-        js_message: webgpu_sys::GpuCompilationMessage,
-        compilation_info: &WebShaderCompilationInfo,
-    ) -> Self {
-        let message_type = match js_message.type_() {
-            webgpu_sys::GpuCompilationMessageType::Error => crate::CompilationMessageType::Error,
-            webgpu_sys::GpuCompilationMessageType::Warning => {
-                crate::CompilationMessageType::Warning
-            }
-            webgpu_sys::GpuCompilationMessageType::Info => crate::CompilationMessageType::Info,
-            _ => crate::CompilationMessageType::Error,
-        };
-        let utf16_offset = js_message.offset() as u32;
-        let utf16_length = js_message.length() as u32;
-        let span = match compilation_info {
-            WebShaderCompilationInfo::Wgsl { .. } if utf16_offset == 0 && utf16_length == 0 => None,
-            WebShaderCompilationInfo::Wgsl { source } => {
-                let offset = map_utf16_to_utf8_offset(utf16_offset, source);
-                let length = map_utf16_to_utf8_offset(utf16_length, &source[offset as usize..]);
-                let line_number = js_message.line_num() as u32; // That's legal, because we're counting lines the same way
-
-                let prefix = &source[..offset as usize];
-                let line_start = prefix.rfind('\n').map(|pos| pos + 1).unwrap_or(0) as u32;
-                let line_position = offset - line_start + 1; // Counting UTF-8 byte indices
-
-                Some(crate::SourceLocation {
-                    offset,
-                    length,
+            Some(
+                wgt::Utf16SourceLocation {
+                    offset: utf16_offset,
+                    length: utf16_length,
                     line_number,
-                    line_position,
-                })
-            }
-            WebShaderCompilationInfo::Transformed { .. } => None,
-        };
-
-        crate::CompilationMessage {
-            message: js_message.message(),
-            message_type,
-            location: span,
+                    line_position: utf16_line_position,
+                }
+                .to_utf8(source),
+            )
         }
+        WebShaderCompilationInfo::Transformed { .. } => None,
+    };
+
+    crate::CompilationMessage {
+        message: js_message.message(),
+        message_type,
+        location: span,
     }
 }
 
@@ -588,6 +566,10 @@ fn map_vertex_format(format: wgt::VertexFormat) -> webgpu_sys::GpuVertexFormat {
         VertexFormat::Sint32x4 => vf::Sint32x4,
         VertexFormat::Unorm10_10_10_2 => vf::Unorm1010102,
         VertexFormat::Unorm8x4Bgra => vf::Unorm8x4Bgra,
+        VertexFormat::Snorm10_10_10_2 => {
+            // https://github.com/gfx-rs/wgpu/issues/10216
+            panic!("snorm10-10-10-2 is not yet available on the WebGPU backend")
+        }
         VertexFormat::Float64
         | VertexFormat::Float64x2
         | VertexFormat::Float64x3
@@ -794,82 +776,16 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 16] = [
-    (
-        wgt::Features::DEPTH_CLIP_CONTROL,
-        webgpu_sys::GpuFeatureName::DepthClipControl,
-    ),
-    (
-        wgt::Features::DEPTH32FLOAT_STENCIL8,
-        webgpu_sys::GpuFeatureName::Depth32floatStencil8,
-    ),
-    (
-        wgt::Features::TEXTURE_COMPRESSION_BC,
-        webgpu_sys::GpuFeatureName::TextureCompressionBc,
-    ),
-    (
-        wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D,
-        webgpu_sys::GpuFeatureName::TextureCompressionBcSliced3d,
-    ),
-    (
-        wgt::Features::TEXTURE_COMPRESSION_ETC2,
-        webgpu_sys::GpuFeatureName::TextureCompressionEtc2,
-    ),
-    (
-        wgt::Features::TEXTURE_COMPRESSION_ASTC,
-        webgpu_sys::GpuFeatureName::TextureCompressionAstc,
-    ),
-    (
-        wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
-        webgpu_sys::GpuFeatureName::TextureCompressionAstcSliced3d,
-    ),
-    (
-        wgt::Features::TIMESTAMP_QUERY,
-        webgpu_sys::GpuFeatureName::TimestampQuery,
-    ),
-    (
-        wgt::Features::INDIRECT_FIRST_INSTANCE,
-        webgpu_sys::GpuFeatureName::IndirectFirstInstance,
-    ),
-    (
-        wgt::Features::SHADER_F16,
-        webgpu_sys::GpuFeatureName::ShaderF16,
-    ),
-    (
-        wgt::Features::RG11B10UFLOAT_RENDERABLE,
-        webgpu_sys::GpuFeatureName::Rg11b10ufloatRenderable,
-    ),
-    (
-        wgt::Features::BGRA8UNORM_STORAGE,
-        webgpu_sys::GpuFeatureName::Bgra8unormStorage,
-    ),
-    (
-        wgt::Features::FLOAT32_FILTERABLE,
-        webgpu_sys::GpuFeatureName::Float32Filterable,
-    ),
-    (
-        wgt::Features::FLOAT32_BLENDABLE,
-        webgpu_sys::GpuFeatureName::Float32Blendable,
-    ),
-    (
-        wgt::Features::DUAL_SOURCE_BLENDING,
-        webgpu_sys::GpuFeatureName::DualSourceBlending,
-    ),
-    (
-        wgt::Features::CLIP_DISTANCES,
-        webgpu_sys::GpuFeatureName::ClipDistances,
-    ),
-];
-
 fn map_wgt_features(supported_features: webgpu_sys::GpuSupportedFeatures) -> wgt::Features {
-    let mut features = wgt::Features::empty();
-    for (wgpu_feat, web_feat) in FEATURES_MAPPING {
-        match wasm_bindgen::JsValue::from(web_feat).as_string() {
-            Some(value) if supported_features.has(&value) => features |= wgpu_feat,
-            _ => {}
-        }
+    let mut wgpu_features = wgt::Features::default();
+    for feature in supported_features.values().into_iter() {
+        let feature = feature.expect("`GpuSupportedFeatures` elements should be valid");
+        let feature = feature
+            .as_string()
+            .expect("`GpuSupportedFeatures` should be string set");
+        wgpu_features |= feature.parse::<wgt::Features>().unwrap_or_default();
     }
-    features
+    wgpu_features
 }
 
 fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
@@ -888,7 +804,11 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_sampled_textures_per_shader_stage: limits.max_sampled_textures_per_shader_stage(),
         max_samplers_per_shader_stage: limits.max_samplers_per_shader_stage(),
         max_storage_buffers_per_shader_stage: limits.max_storage_buffers_per_shader_stage(),
+        max_storage_buffers_in_vertex_stage: limits.max_storage_buffers_in_vertex_stage(),
+        max_storage_buffers_in_fragment_stage: limits.max_storage_buffers_in_fragment_stage(),
         max_storage_textures_per_shader_stage: limits.max_storage_textures_per_shader_stage(),
+        max_storage_textures_in_vertex_stage: limits.max_storage_textures_in_vertex_stage(),
+        max_storage_textures_in_fragment_stage: limits.max_storage_textures_in_fragment_stage(),
         max_uniform_buffers_per_shader_stage: limits.max_uniform_buffers_per_shader_stage(),
         max_binding_array_elements_per_shader_stage: 0,
         max_binding_array_sampler_elements_per_shader_stage: 0,
@@ -1003,7 +923,11 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object<js_sys::Number> {
         (maxSampledTexturesPerShaderStage, max_sampled_textures_per_shader_stage),
         (maxSamplersPerShaderStage, max_samplers_per_shader_stage),
         (maxStorageBuffersPerShaderStage, max_storage_buffers_per_shader_stage),
+        (maxStorageBuffersInVertexStage, max_storage_buffers_in_vertex_stage),
+        (maxStorageBuffersInFragmentStage, max_storage_buffers_in_fragment_stage),
         (maxStorageTexturesPerShaderStage, max_storage_textures_per_shader_stage),
+        (maxStorageTexturesInVertexStage, max_storage_textures_in_vertex_stage),
+        (maxStorageTexturesInFragmentStage, max_storage_textures_in_fragment_stage),
         (maxUniformBuffersPerShaderStage, max_uniform_buffers_per_shader_stage),
         (maxUniformBufferBindingSize, max_uniform_buffer_binding_size),
         (maxStorageBufferBindingSize, max_storage_buffer_binding_size),
@@ -1037,6 +961,7 @@ fn future_request_adapter(
             Some(adapter) => Ok(WebAdapter {
                 inner: adapter,
                 ident: crate::cmp::Identifier::create(),
+                cached_properties: Rc::new(CachedProperties::default()),
             }
             .into()),
             None => Err(request_adapter_null_error(requested_backends)),
@@ -1070,18 +995,22 @@ fn future_request_device(
             // `Surface::get_capabilities` can report `Rgba16Float` truthfully.
             rgba16float_probe::probe_rgba16float_canvas_support(&device);
 
+            let queue = WebQueue {
+                inner: queue,
+                ident: crate::cmp::Identifier::create(),
+            };
+
             (
                 WebDevice {
                     inner: device,
                     ident: crate::cmp::Identifier::create(),
                     error_scope_count: Rc::new(Cell::new(0)),
+                    uncaptured_error_listener: Rc::new(RefCell::new(None)),
+                    cached_properties: Rc::new(CachedProperties::default()),
+                    queue: queue.clone(),
                 }
                 .into(),
-                WebQueue {
-                    inner: queue,
-                    ident: crate::cmp::Identifier::create(),
-                }
-                .into(),
+                queue.into(),
             )
         })
         .map_err(|error_value| crate::RequestDeviceError {
@@ -1107,21 +1036,22 @@ fn future_compilation_info(
         _ => [].iter().cloned(),
     };
 
-    let messages =
-        match result {
-            Ok(info) => base_messages
-                .chain(info.messages().into_iter().map(|message| {
-                    crate::CompilationMessage::from_js(message, base_compilation_info)
-                }))
-                .collect(),
-            Err(_v) => base_messages
-                .chain(core::iter::once(crate::CompilationMessage {
-                    message: "Getting compilation info failed".to_string(),
-                    message_type: crate::CompilationMessageType::Error,
-                    location: None,
-                }))
-                .collect(),
-        };
+    let messages = match result {
+        Ok(info) => base_messages
+            .chain(
+                info.messages()
+                    .into_iter()
+                    .map(|message| compilation_message_from_js(message, base_compilation_info)),
+            )
+            .collect(),
+        Err(_v) => base_messages
+            .chain(core::iter::once(crate::CompilationMessage {
+                message: "Getting compilation info failed".to_string(),
+                message_type: crate::CompilationMessageType::Error,
+                location: None,
+            }))
+            .collect(),
+    };
 
     crate::CompilationInfo { messages }
 }
@@ -1287,11 +1217,22 @@ pub fn get_browser_gpu_property(
     Ok(DefinedNonNullJsValue::new(maybe_undefined_gpu))
 }
 
+/// Cached Rust values for WebGPU adapter or device properties.
+/// Avoids repeated JavaScript property reads and conversions on subsequent queries.
+#[derive(Debug, Default)]
+struct CachedProperties {
+    features: OnceCell<crate::Features>,
+    limits: OnceCell<crate::Limits>,
+    adapter_info: OnceCell<crate::AdapterInfo>,
+}
+
 #[derive(Debug, Clone)]
 pub struct WebAdapter {
     pub(crate) inner: webgpu_sys::GpuAdapter,
     /// Unique identifier for this Adapter.
     ident: crate::cmp::Identifier,
+    /// Cached Rust values for the adapter's properties.
+    cached_properties: Rc<CachedProperties>,
 }
 
 #[derive(Debug, Clone)]
@@ -1301,6 +1242,13 @@ pub struct WebDevice {
     ident: crate::cmp::Identifier,
     /// Current number of error scopes that have been pushed on the device.
     error_scope_count: Rc<Cell<u32>>,
+    /// The `uncapturederror` listener currently registered on the device, so
+    /// that setting a new handler can unregister the previous one.
+    uncaptured_error_listener: Rc<RefCell<Option<js_sys::Function>>>,
+    /// Cached Rust values for the device's properties.
+    cached_properties: Rc<CachedProperties>,
+    /// The default queue associated with this device.
+    queue: WebQueue,
 }
 
 #[derive(Debug, Clone)]
@@ -1492,6 +1440,12 @@ pub struct WebComputePipeline {
 }
 
 #[derive(Debug, Clone)]
+pub struct WebRayTracingPipeline {
+    /// Unique identifier for this RayTracingPipeline.
+    ident: crate::cmp::Identifier,
+} // no ray tracing pipelines on web
+
+#[derive(Debug, Clone)]
 pub struct WebPipelineCache {
     /// Unique identifier for this PipelineCache.
     ident: crate::cmp::Identifier,
@@ -1517,6 +1471,12 @@ pub struct WebRenderPassEncoder {
     /// Unique identifier for this RenderPassEncoder.
     ident: crate::cmp::Identifier,
 }
+
+#[derive(Debug, Clone)]
+pub struct WebRayTracingPassEncoder {
+    /// Unique identifier for this RayTracingPassEncoder.
+    ident: crate::cmp::Identifier,
+} // no ray tracing pipelines on web
 
 #[derive(Debug)]
 pub struct WebCommandBuffer {
@@ -1600,10 +1560,12 @@ impl_send_sync!(WebQuerySet);
 impl_send_sync!(WebPipelineLayout);
 impl_send_sync!(WebRenderPipeline);
 impl_send_sync!(WebComputePipeline);
+impl_send_sync!(WebRayTracingPipeline);
 impl_send_sync!(WebPipelineCache);
 impl_send_sync!(WebCommandEncoder);
 impl_send_sync!(WebComputePassEncoder);
 impl_send_sync!(WebRenderPassEncoder);
+impl_send_sync!(WebRayTracingPassEncoder);
 impl_send_sync!(WebCommandBuffer);
 impl_send_sync!(WebRenderBundleEncoder);
 impl_send_sync!(WebRenderBundle);
@@ -1630,11 +1592,13 @@ crate::cmp::impl_eq_ord_hash_proxy!(WebQuerySet => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebPipelineLayout => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebRenderPipeline => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebComputePipeline => .ident);
+crate::cmp::impl_eq_ord_hash_proxy!(WebRayTracingPipeline => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebPipelineCache => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebCommandEncoder => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebComputePassEncoder => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebRenderPassEncoder => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebCommandBuffer => .ident);
+crate::cmp::impl_eq_ord_hash_proxy!(WebRayTracingPassEncoder => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebRenderBundleEncoder => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebRenderBundle => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebSurface => .ident);
@@ -1835,21 +1799,35 @@ impl dispatch::AdapterInterface for WebAdapter {
         let required_limits = map_js_sys_limits(&desc.required_limits);
         mapped_desc.set_required_limits(&required_limits);
 
-        let required_features = FEATURES_MAPPING
+        // Note that `ALLOWED_ON_WEB_BACKEND` may include bits in `FeaturesWGPU` for
+        // standards-track features that have not yet been migrated to `FeaturesWebGPU`.
+        let blocked_features = wgt::Features::ALLOWED_ON_WEB_BACKEND.complement();
+        let required_features = match desc
+            .required_features
             .iter()
-            .copied()
-            .flat_map(|(flag, value)| {
-                if desc.required_features.contains(flag) {
-                    Some(
-                        wasm_bindgen::JsValue::from(value)
-                            .dyn_into::<js_sys::JsString>()
-                            .unwrap(),
-                    )
+            .map(|feat| {
+                let name = feat.as_str().unwrap();
+                if feat.intersects(blocked_features) {
+                    Err(crate::RequestDeviceError {
+                        inner: crate::RequestDeviceErrorKind::WebGpu(format!(
+                            "Requested unsupported feature `{name}`. \
+                            This feature is unsupported by the WebGPU backend, even \
+                            if the underlying implementation supports it."
+                        )),
+                    })
                 } else {
-                    None
+                    // Any other name is handed to the implementation, which rejects the
+                    // features it does not support.
+                    Ok(js_sys::JsString::from(name))
                 }
             })
-            .collect::<Vec<js_sys::JsString>>();
+            .collect::<Result<Vec<js_sys::JsString>, _>>()
+        {
+            Ok(features) => features,
+            Err(err) => {
+                return Box::pin(core::future::ready(Err(err)));
+            }
+        };
         mapped_desc.set_required_features(&required_features);
 
         if let Some(label) = desc.label {
@@ -1876,11 +1854,28 @@ impl dispatch::AdapterInterface for WebAdapter {
     }
 
     fn features(&self) -> crate::Features {
-        map_wgt_features(self.inner.features())
+        // We generally want to expose WebGPU features offered by the underlying
+        // implementation if we know about them, and not if we don't (because in that case
+        // we don't know if changes are needed in the WebGPU backend to correctly pass them
+        // through). Cleared bits in the `ALLOWED_ON_WEB_BACKEND` mask specify individual
+        // features that should never be exposed by the WebGPU backend regardless of
+        // underlying support. This may be appropriate in cases where missing logic in the
+        // WebGPU backend means the feature will not work via `wgpu` even though it is
+        // supported by the underlying backend, or where there is concern about interactions
+        // or confusion with `wgpu` native features having subtly different API or behavior.
+        //
+        // Note that `ALLOWED_ON_WEB_BACKEND` may include bits in `FeaturesWGPU` for
+        // standards-track features that have not yet been migrated to `FeaturesWebGPU`.
+        *self.cached_properties.features.get_or_init(|| {
+            map_wgt_features(self.inner.features()) & wgt::Features::ALLOWED_ON_WEB_BACKEND
+        })
     }
 
     fn limits(&self) -> crate::Limits {
-        map_wgt_limits(self.inner.limits())
+        self.cached_properties
+            .limits
+            .get_or_init(|| map_wgt_limits(self.inner.limits()))
+            .clone()
     }
 
     fn downlevel_capabilities(&self) -> crate::DownlevelCapabilities {
@@ -1889,7 +1884,10 @@ impl dispatch::AdapterInterface for WebAdapter {
     }
 
     fn get_info(&self) -> crate::AdapterInfo {
-        map_adapter_info(&self.inner.info())
+        self.cached_properties
+            .adapter_info
+            .get_or_init(|| map_adapter_info(&self.inner.info()))
+            .clone()
     }
 
     fn get_texture_format_features(
@@ -1975,17 +1973,91 @@ impl WebDevice {
     }
 }
 
+#[cfg(feature = "glsl")]
+pub(crate) fn glsl_to_compilation_info(
+    value: naga::error::ShaderError<naga::front::glsl::ParseErrors>,
+) -> wgt::CompilationInfo {
+    use alloc::string::ToString;
+    let messages = value
+        .inner
+        .errors
+        .into_iter()
+        .map(|err| wgt::CompilationMessage {
+            message: err.to_string(),
+            message_type: wgt::CompilationMessageType::Error,
+            location: err.location(&value.source).map(naga_to_source_location),
+        })
+        .collect();
+    wgt::CompilationInfo { messages }
+}
+
+#[cfg(feature = "spirv")]
+pub(crate) fn spirv_to_compilation_info(
+    value: naga::error::ShaderError<naga::front::spv::Error>,
+) -> wgt::CompilationInfo {
+    use alloc::{string::ToString, vec};
+    wgt::CompilationInfo {
+        messages: vec![wgt::CompilationMessage {
+            message: value.to_string(),
+            message_type: wgt::CompilationMessageType::Error,
+            location: None,
+        }],
+    }
+}
+
+#[cfg(naga)]
+pub(crate) fn naga_to_compilation_info(
+    value: crate::naga::error::ShaderError<
+        crate::naga::WithSpan<crate::naga::valid::ValidationError>,
+    >,
+) -> wgt::CompilationInfo {
+    use alloc::{string::ToString, vec};
+    wgt::CompilationInfo {
+        messages: vec![wgt::CompilationMessage {
+            message: value.to_string(),
+            message_type: wgt::CompilationMessageType::Error,
+            location: value
+                .inner
+                .location(&value.source)
+                .map(naga_to_source_location),
+        }],
+    }
+}
+
+#[cfg(naga)]
+fn naga_to_source_location(value: crate::naga::SourceLocation) -> wgt::SourceLocation {
+    wgt::SourceLocation {
+        length: value.length,
+        offset: value.offset,
+        line_number: value.line_number,
+        line_position: value.line_position,
+    }
+}
+
 impl dispatch::DeviceInterface for WebDevice {
     fn features(&self) -> crate::Features {
-        map_wgt_features(self.inner.features())
+        *self
+            .cached_properties
+            .features
+            .get_or_init(|| map_wgt_features(self.inner.features()))
     }
 
     fn limits(&self) -> crate::Limits {
-        map_wgt_limits(self.inner.limits())
+        self.cached_properties
+            .limits
+            .get_or_init(|| map_wgt_limits(self.inner.limits()))
+            .clone()
     }
 
     fn adapter_info(&self) -> crate::AdapterInfo {
-        map_adapter_info(&self.inner.adapter_info())
+        self.cached_properties
+            .adapter_info
+            .get_or_init(|| map_adapter_info(&self.inner.adapter_info()))
+            .clone()
+    }
+
+    fn queue(&self) -> dispatch::DispatchQueue {
+        self.queue.clone().into()
     }
 
     fn create_shader_module(
@@ -2007,7 +2079,7 @@ impl dispatch::DeviceInterface for WebDevice {
                 spv_parser
                     .parse()
                     .map_err(|inner| {
-                        crate::CompilationInfo::from(naga::error::ShaderError {
+                        spirv_to_compilation_info(naga::error::ShaderError {
                             source: String::new(),
                             label: desc.label.map(|s| s.to_string()),
                             inner: Box::new(inner),
@@ -2044,7 +2116,7 @@ impl dispatch::DeviceInterface for WebDevice {
                 parser
                     .parse(&options, shader)
                     .map_err(|inner| {
-                        crate::CompilationInfo::from(naga::error::ShaderError {
+                        glsl_to_compilation_info(naga::error::ShaderError {
                             source: shader.to_string(),
                             label: desc.label.map(|s| s.to_string()),
                             inner: Box::new(inner),
@@ -2097,7 +2169,7 @@ impl dispatch::DeviceInterface for WebDevice {
             let mut validator =
                 valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all());
             let module_info = validator.validate(module).map_err(|err| {
-                crate::CompilationInfo::from(naga::error::ShaderError {
+                naga_to_compilation_info(naga::error::ShaderError {
                     source: source.to_string(),
                     label: desc.label.map(|s| s.to_string()),
                     inner: err,
@@ -2177,8 +2249,11 @@ impl dispatch::DeviceInterface for WebDevice {
             .entries
             .iter()
             .map(|bind| {
-                let mapped_entry =
-                    webgpu_sys::GpuBindGroupLayoutEntry::new(bind.binding, bind.visibility.bits());
+                assert!(bind.visibility.features_wgpu.is_empty());
+                let mapped_entry = webgpu_sys::GpuBindGroupLayoutEntry::new(
+                    bind.binding,
+                    bind.visibility.features_webgpu.bits(),
+                );
 
                 match bind.ty {
                     wgt::BindingType::Buffer {
@@ -2538,6 +2613,13 @@ impl dispatch::DeviceInterface for WebDevice {
         .into()
     }
 
+    fn create_ray_tracing_pipeline(
+        &self,
+        _desc: &crate::RayTracingPipelineDescriptor<'_>,
+    ) -> dispatch::DispatchRayTracingPipeline {
+        unimplemented!("ray tracing is not on the web.")
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         _desc: &crate::PipelineCacheDescriptor<'_>,
@@ -2549,8 +2631,11 @@ impl dispatch::DeviceInterface for WebDevice {
     }
 
     fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> dispatch::DispatchBuffer {
-        let mapped_desc =
-            webgpu_sys::GpuBufferDescriptor::new_with_f64(desc.size as f64, desc.usage.bits());
+        assert!(desc.usage.buffer_usages_wgpu.is_empty());
+        let mapped_desc = webgpu_sys::GpuBufferDescriptor::new_with_f64(
+            desc.size as f64,
+            desc.usage.buffer_usages_webgpu.bits(),
+        );
         mapped_desc.set_mapped_at_creation(desc.mapped_at_creation);
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
@@ -2751,8 +2836,27 @@ impl dispatch::DeviceInterface for WebDevice {
             let error = error_from_js(event.error().value_of());
             handler(error);
         }) as Box<dyn FnMut(_)>);
+        let listener: js_sys::Function = f.as_ref().unchecked_ref::<js_sys::Function>().clone();
+
+        // Not every browser implements the `onuncapturederror` attribute
+        // (Safari does not, see <https://bugs.webkit.org/show_bug.cgi?id=323544>),
+        // where assigning to it silently does nothing. The event is dispatched
+        // either way, so listen for it instead.
         self.inner
-            .set_onuncapturederror(Some(f.as_ref().unchecked_ref()));
+            .add_event_listener_with_callback("uncapturederror", &listener)
+            .expect("Adding an event listener should never fail");
+
+        // Setting a handler replaces the previous one, as on the other backends.
+        let previous = self
+            .uncaptured_error_listener
+            .borrow_mut()
+            .replace(listener);
+        if let Some(previous) = previous {
+            self.inner
+                .remove_event_listener_with_callback("uncapturederror", &previous)
+                .expect("Removing an event listener should never fail");
+        }
+
         // Release memory management of this closure from Rust to the JS GC.
         // TODO: This will leak if weak references is not supported.
         f.forget();
@@ -2803,9 +2907,14 @@ impl dispatch::DeviceInterface for WebDevice {
         // No capturing api in webgpu
     }
 
-    fn poll(&self, _poll_type: wgt::PollType<u64>) -> Result<crate::PollStatus, crate::PollError> {
-        // Device is polled automatically
-        Ok(crate::PollStatus::QueueEmpty)
+    fn poll(&self, poll_type: wgt::PollType<u64>) -> Result<crate::PollStatus, crate::PollError> {
+        match poll_type {
+            wgt::PollType::Wait { .. } => Err(crate::PollError::CantWait),
+            wgt::PollType::Poll => {
+                // Device is polled automatically
+                Ok(crate::PollStatus::Poll)
+            }
+        }
     }
 
     fn get_internal_counters(&self) -> crate::InternalCounters {
@@ -2867,7 +2976,10 @@ impl dispatch::QueueInterface for WebQueue {
     ) -> Option<()> {
         let buffer = buffer.as_webgpu();
 
-        let usage = wgt::BufferUsages::from_bits_truncate(buffer.inner.usage());
+        let usage = wgt::BufferUsages::from_internal_flags(
+            wgt::BufferUsagesWebGPU::from_bits_truncate(buffer.inner.usage()),
+            wgt::BufferUsagesWGPU::empty(),
+        );
         // TODO: actually send this down the error scope
         if !usage.contains(wgt::BufferUsages::COPY_DST) {
             log::error!("Destination buffer is missing the `COPY_DST` usage flag");
@@ -2946,7 +3058,7 @@ impl dispatch::QueueInterface for WebQueue {
     fn submit(
         &self,
         command_buffers: &mut dyn Iterator<Item = dispatch::DispatchCommandBuffer>,
-    ) -> u64 {
+    ) -> Option<u64> {
         let temp_command_buffers = command_buffers.collect::<Vec<_>>();
 
         let array = temp_command_buffers
@@ -2956,7 +3068,7 @@ impl dispatch::QueueInterface for WebQueue {
 
         self.inner.submit(&array);
 
-        0
+        None
     }
 
     fn get_timestamp_period(&self) -> f32 {
@@ -3161,6 +3273,10 @@ impl dispatch::TextureInterface for WebTexture {
     fn usage(&self) -> wgt::TextureUsages {
         self.desc.usage
     }
+
+    fn texture_binding_view_dimension(&self) -> Option<crate::TextureViewDimension> {
+        None
+    }
 }
 impl Drop for WebTexture {
     fn drop(&mut self) {
@@ -3257,6 +3373,17 @@ impl dispatch::ComputePipelineInterface for WebComputePipeline {
     }
 }
 impl Drop for WebComputePipeline {
+    fn drop(&mut self) {
+        // no-op
+    }
+}
+
+impl dispatch::RayTracingPipelineInterface for WebRayTracingPipeline {
+    fn get_bind_group_layout(&self, _index: u32) -> dispatch::DispatchBindGroupLayout {
+        unimplemented!("ray tracing is not on the web.")
+    }
+}
+impl Drop for WebRayTracingPipeline {
     fn drop(&mut self) {
         // no-op
     }
@@ -3406,6 +3533,9 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
                     if let Some(cv) = clear_value {
                         mapped_color_attachment.set_clear_value_gpu_color_dict(&cv);
                     }
+                    if let Some(slice) = ca.depth_slice {
+                        mapped_color_attachment.set_depth_slice(slice);
+                    }
                     if let Some(rt) = ca.resolve_target {
                         let resolve_target_view = &rt.inner.as_webgpu().inner;
                         mapped_color_attachment
@@ -3487,6 +3617,13 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
             ident: crate::cmp::Identifier::create(),
         }
         .into()
+    }
+
+    fn begin_ray_tracing_pass(
+        &self,
+        _desc: &crate::RayTracingPassDescriptor<'_>,
+    ) -> dispatch::DispatchRayTracingPass {
+        unimplemented!("ray tracing is not on the web.")
     }
 
     fn finish(&mut self) -> dispatch::DispatchCommandBuffer {
@@ -3747,7 +3884,7 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         buffer: &dispatch::DispatchBuffer,
         index_format: crate::IndexFormat,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.as_webgpu();
         let index_format = map_index_format(index_format);
@@ -3757,7 +3894,7 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
                 &buffer.inner,
                 index_format,
                 offset as f64,
-                size.get() as f64,
+                size as f64,
             );
         } else {
             self.inner
@@ -3770,17 +3907,13 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         slot: u32,
         buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.map(|buffer| &buffer.as_webgpu().inner);
 
         if let Some(size) = size {
-            self.inner.set_vertex_buffer_with_f64_and_f64(
-                slot,
-                buffer,
-                offset as f64,
-                size.get() as f64,
-            );
+            self.inner
+                .set_vertex_buffer_with_f64_and_f64(slot, buffer, offset as f64, size as f64);
         } else {
             self.inner
                 .set_vertex_buffer_with_f64(slot, buffer, offset as f64);
@@ -3997,6 +4130,43 @@ impl Drop for WebRenderPassEncoder {
     }
 }
 
+impl dispatch::RayTracingPassInterface for WebRayTracingPassEncoder {
+    fn set_pipeline(&mut self, _pipeline: &dispatch::DispatchRayTracingPipeline) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+    fn set_bind_group(
+        &mut self,
+        _index: u32,
+        _bind_group: Option<&dispatch::DispatchBindGroup>,
+        _offsets: &[crate::DynamicOffset],
+    ) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+    fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+
+    fn insert_debug_marker(&mut self, _label: &str) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+    fn push_debug_group(&mut self, _group_label: &str) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+    fn pop_debug_group(&mut self) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+
+    fn trace_rays(&mut self, _x: u32, _y: u32, _z: u32) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+}
+
+impl Drop for WebRayTracingPassEncoder {
+    fn drop(&mut self) {
+        // no-op
+    }
+}
+
 impl dispatch::CommandBufferInterface for WebCommandBuffer {}
 impl Drop for WebCommandBuffer {
     fn drop(&mut self) {
@@ -4038,7 +4208,7 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         buffer: &dispatch::DispatchBuffer,
         index_format: crate::IndexFormat,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.as_webgpu();
         let index_format = map_index_format(index_format);
@@ -4048,7 +4218,7 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
                 &buffer.inner,
                 index_format,
                 offset as f64,
-                size.get() as f64,
+                size as f64,
             );
         } else {
             self.inner
@@ -4061,17 +4231,13 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         slot: u32,
         buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.map(|buffer| &buffer.as_webgpu().inner);
 
         if let Some(size) = size {
-            self.inner.set_vertex_buffer_with_f64_and_f64(
-                slot,
-                buffer,
-                offset as f64,
-                size.get() as f64,
-            );
+            self.inner
+                .set_vertex_buffer_with_f64_and_f64(slot, buffer, offset as f64, size as f64);
         } else {
             self.inner
                 .set_vertex_buffer_with_f64(slot, buffer, offset as f64);
@@ -4080,6 +4246,18 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
 
     fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
         panic!("IMMEDIATES feature must be enabled to call set_immediates")
+    }
+
+    fn insert_debug_marker(&mut self, label: &str) {
+        self.inner.insert_debug_marker(label);
+    }
+
+    fn push_debug_group(&mut self, group_label: &str) {
+        self.inner.push_debug_group(group_label);
+    }
+
+    fn pop_debug_group(&mut self) {
+        self.inner.pop_debug_group();
     }
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
@@ -4322,7 +4500,11 @@ impl dispatch::SurfaceInterface for WebSurface {
             formats,
             // Doesn't really have meaning on the web.
             present_modes: vec![wgt::PresentMode::Fifo],
-            alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
+            // https://gpuweb.github.io/gpuweb/#gpucanvasalphamode
+            alpha_modes: vec![
+                wgt::CompositeAlphaMode::Opaque,
+                wgt::CompositeAlphaMode::PreMultiplied,
+            ],
             // Statically set to RENDER_ATTACHMENT for now. See https://gpuweb.github.io/gpuweb/#dom-gpucanvasconfiguration-usage
             usages: wgt::TextureUsages::RENDER_ATTACHMENT,
         }
@@ -4548,10 +4730,6 @@ impl WebBufferMappedRange {
     }
 }
 impl dispatch::BufferMappedRangeInterface for WebBufferMappedRange {
-    fn len(&self) -> usize {
-        self.get_temporary_mapping().len()
-    }
-
     #[inline]
     unsafe fn read_slice(&self) -> &[u8] {
         self.get_temporary_mapping()

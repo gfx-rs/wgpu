@@ -29,13 +29,14 @@ const MODEL_CENTER_Y: f32 = 2.0;
 impl Camera {
     fn to_uniform_data(&self) -> [f32; 16 * 3 + 4] {
         let aspect = self.screen_size.0 as f32 / self.screen_size.1 as f32;
-        let proj = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect, 1.0, 50.0);
+        let proj =
+            glam::camera::rh::proj::directx::perspective(consts::FRAC_PI_4, aspect, 1.0, 50.0);
         let cam_pos = glam::Vec3::new(
             self.angle_xz.cos() * self.angle_y.sin() * self.dist,
             self.angle_xz.sin() * self.dist + MODEL_CENTER_Y,
             self.angle_xz.cos() * self.angle_y.cos() * self.dist,
         );
-        let view = glam::Mat4::look_at_rh(
+        let view = glam::camera::rh::view::look_at_mat4(
             cam_pos,
             glam::Vec3::new(0f32, MODEL_CENTER_Y, 0.0),
             glam::Vec3::Y,
@@ -84,6 +85,7 @@ impl Example {
                 | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
             label: None,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
@@ -333,6 +335,7 @@ impl crate::framework::Example for Example {
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 label: None,
                 view_formats: &[],
+                texture_binding_view_dimension: Some(wgpu::TextureViewDimension::Cube),
             },
             // KTX2 stores mip levels in mip major order.
             wgpu::util::TextureDataOrder::MipMajor,

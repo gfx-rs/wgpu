@@ -7,12 +7,12 @@ use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use std::sync::Arc;
+use wgpu_core::resource::Labeled as _;
 
 use crate::error::GPUGenericError;
 
 pub struct GPUPipelineLayout {
   pub wgpu_pipeline_layout: Arc<wgpu_core::binding_model::PipelineLayout>,
-  pub label: String,
 }
 
 impl WebIdlInterfaceConverter for GPUPipelineLayout {
@@ -36,7 +36,7 @@ impl GPUPipelineLayout {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_pipeline_layout.label().to_string()
   }
   #[setter]
   #[string]

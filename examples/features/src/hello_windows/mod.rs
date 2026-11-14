@@ -259,11 +259,9 @@ impl ApplicationHandler for App {
                     queue.present(frame);
                 }
             }
-            WindowEvent::Occluded(is_occluded) => {
-                if !is_occluded {
-                    if let Some(viewport) = viewports.get(&window_id) {
-                        viewport.desc.window.request_redraw();
-                    }
+            WindowEvent::Occluded(false) => {
+                if let Some(viewport) = viewports.get(&window_id) {
+                    viewport.desc.window.request_redraw();
                 }
             }
             WindowEvent::CloseRequested => {

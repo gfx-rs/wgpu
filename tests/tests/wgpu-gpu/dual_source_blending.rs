@@ -107,12 +107,29 @@ async fn dual_source_blending_disabled(ctx: TestingContext) {
     fail(
         &ctx.device,
         || {
-            let _ = ctx.device.create_shader_module(ShaderModuleDescriptor {
+            let module = ctx.device.create_shader_module(ShaderModuleDescriptor {
                 label: Some("shader"),
                 source: ShaderSource::Wgsl(FRAGMENT_SHADER_WITH_DUAL_SOURCE_BLENDING.into()),
             });
+            let info = pollster::block_on(module.get_compilation_info());
+            assert_eq!(
+                info.messages[0].message_type,
+                wgpu::CompilationMessageType::Error
+            );
+            assert_eq!(
+                info.messages[0].location,
+                Some(SourceLocation {
+                    line_number: 2,
+                    line_position: 8,
+                    offset: 8,
+                    length: 20
+                })
+            );
+            assert!(info.messages[0].message.contains(
+                "the `dual_source_blending` extension is not supported in the current environment"
+            ))
         },
-        Some("the `dual_source_blending` extension is not supported in the current environment"),
+        Some("Shader 'shader' parsing error"),
     );
 }
 

@@ -72,7 +72,7 @@ ref_as_ptr = "warn"
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.93"
+rust-version = "1.95"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
@@ -132,15 +132,18 @@ cargo_metadata = "0.23"
 cfg_aliases = "0.2.2"
 cfg-if = "1"
 codespan-reporting = { version = "0.13", default-features = false }
+concurrent-queue = { version = "2.5.0", default-features = false }
 diff = "0.1"
 document-features = "0.2.10"
-encase = "0.12"
-env_logger = { version = "0.11", default-features = false }
+encase = "0.13"
+env_logger = { version = "0.11", default-features = false, features = [
+    "humantime",
+] }
 exhaust = "0.2"
 fern = "0.7"
 flume = "0.12"
 futures-lite = "2"
-glam = "0.33.0"
+glam = "0.34.0"
 glob = "0.3"
 half = { version = "2.5", default-features = false } # We require 2.5 to have `Arbitrary` support.
 hashbrown = { version = "0.17", default-features = false, features = [
@@ -160,7 +163,7 @@ libloading = "0.8"
 libm = { version = "0.2.6", default-features = false }
 libtest-mimic = "0.8"
 # Minimum version supported by parking_lot 0.12.3
-lock_api = { version = "0.4.6", default-features = false }
+lock_api = { version = ">=0.4.6, <0.6.0", default-features = false }
 log = "0.4.29"
 macro_rules_attribute = "0.2"
 nanoserde = "0.2"
@@ -175,7 +178,7 @@ obj = "0.10"
 once_cell = { version = "1.21", default-features = false }
 # Firefox has 3.4.0 vendored, so we allow that version in our dependencies
 ordered-float = { version = ">=3, <6.0", default-features = false }
-parking_lot = "0.12.3"
+parking_lot = ">=0.12.3, <0.14.0"
 paste = "1.0.15"
 petgraph = { version = "0.8", default-features = false }
 pico-args = { version = "0.5", features = [
@@ -212,14 +215,14 @@ strum = { version = "0.28", default-features = false, features = ["derive"] }
 tempfile = "3"
 toml = "1.0.0"
 trybuild = "1"
-tracy-client = "0.18"
+tracy-client = "0.19"
 thiserror = { version = "2.0.12", default-features = false }
 ureq = { version = "3.2.0", default-features = false }
 unicode-ident = "1.0.5"
 walkdir = "2.3"
 winit = { version = "0.30.8", features = ["android-native-activity"] }
 which = "8"
-xshell = "0.2.2"
+xshell = "0.2.6"
 
 # Metal dependencies
 block2 = "0.6.2"
@@ -251,6 +254,7 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
     "MTLCommandBuffer",
     "MTLCommandEncoder",
     "MTLCommandQueue",
+    "MTLArgumentEncoder",
     "MTLComputeCommandEncoder",
     "MTLComputePass",
     "MTLComputePipeline",
@@ -259,6 +263,8 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
     "MTLDevice",
     "MTLDrawable",
     "MTLEvent",
+    "MTLIndirectCommandBuffer",
+    "MTLIndirectCommandEncoder",
     "MTLLibrary",
     "MTLPipeline",
     "MTLPixelFormat",
@@ -275,6 +281,7 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
     "MTLAccelerationStructureTypes",
     "MTLAccelerationStructureCommandEncoder",
     "MTLResidencySet",
+    "MTLLogState",
 ] }
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
     "std",
@@ -292,7 +299,8 @@ ash = "0.38"
 
 # DX12 dependencies
 range-alloc = "0.1"
-mach-dxcompiler-rs = { version = "0.1.4", default-features = false } # remember to increase max_shader_model if applicable
+# 0.1.5 requires a newer MSVC toolset than Visual Studio 2022 provides.
+mach-dxcompiler-rs = { version = ">=0.1.0,<=0.1.4", default-features = false } # remember to increase max_shader_model if applicable
 windows-core = { version = "0.62", default-features = false }
 windows-result = { version = "0.4", default-features = false }
 

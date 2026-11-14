@@ -2,8 +2,10 @@ use alloc::{boxed::Box, string::String, sync::Arc, vec};
 #[cfg(wgpu_core)]
 use core::ops::Deref;
 use core::{error, fmt, future::Future, marker::PhantomData};
+use hashbrown::HashSet;
 
 use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, CreateBlasDescriptor};
+use crate::api::ray_tracing_pipeline::{RayTracingPipeline, RayTracingPipelineDescriptor};
 use crate::api::tlas::{CreateTlasDescriptor, Tlas};
 use crate::util::Mutex;
 use crate::*;
@@ -20,6 +22,9 @@ pub use wgt::error::*;
 #[derive(Debug, Clone)]
 pub struct Device {
     pub(crate) inner: dispatch::DispatchDevice,
+    /// The set of buffers that are currently alive on the device.
+    /// This is used to ensure that all buffers are unmapped before the device is destroyed.
+    pub(crate) buffers: Arc<Mutex<HashSet<WeakMapContext>>>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Device: Send, Sync);
@@ -56,6 +61,7 @@ impl Device {
     pub fn from_custom<T: custom::DeviceInterface>(device: T) -> Self {
         Self {
             inner: dispatch::DispatchDevice::custom(device),
+            buffers: Arc::new(Mutex::new(HashSet::new())),
         }
     }
 
@@ -95,13 +101,12 @@ impl Device {
 
     /// Check for resource cleanups and mapping callbacks. Will block if [`PollType::Wait`] is passed.
     ///
-    /// Return `true` if the queue is empty, or `false` if there are more queue
-    /// submissions still in flight. (Note that, unless access to the [`Queue`] is
-    /// coordinated somehow, this information could be out of date by the time
-    /// the caller receives it. `Queue`s can be shared between threads, so
-    /// other threads could submit new work at any time.)
+    /// (Note that, unless access to the [`Queue`] is coordinated somehow,
+    /// the returned [`PollStatus`] could be out of date by the time the caller
+    /// receives it. `Queue`s can be shared between threads, so other threads
+    /// could submit new work at any time.)
     ///
-    /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
+    /// On the WebGPU backend, a call with [`PollType::Poll`] is a no-op since `Device`s are automatically polled. A call with [`PollType::Wait`] is not supported (always returns [`crate::PollError::CantWait`]).
     pub fn poll(&self, poll_type: PollType) -> Result<crate::PollStatus, crate::PollError> {
         self.inner.poll(poll_type.map_index(|s| s.index))
     }
@@ -129,6 +134,13 @@ impl Device {
     /// Get info about the adapter that this device was created from.
     pub fn adapter_info(&self) -> AdapterInfo {
         self.inner.adapter_info()
+    }
+
+    /// Get a primary [Queue] for this device
+    pub fn queue(&self) -> Queue {
+        Queue {
+            inner: self.inner.queue(),
+        }
     }
 
     /// Creates a shader module.
@@ -281,16 +293,32 @@ impl Device {
         ComputePipeline { inner: pipeline }
     }
 
+    /// Creates a [`RayTracingPipeline`].
+    #[must_use]
+    pub fn create_ray_tracing_pipeline(
+        &self,
+        desc: &RayTracingPipelineDescriptor<'_>,
+    ) -> RayTracingPipeline {
+        let pipeline = self.inner.create_ray_tracing_pipeline(desc);
+        RayTracingPipeline { inner: pipeline }
+    }
+
     /// Creates a [`Buffer`].
     #[must_use]
     pub fn create_buffer(&self, desc: &BufferDescriptor<'_>) -> Buffer {
-        let map_context = MapContext::new(desc.mapped_at_creation.then_some(0..desc.size));
+        let map_context = MapContext::new(
+            desc.mapped_at_creation.then_some(MappingInfo {
+                range: 0..desc.size,
+                kind: MapMode::Write,
+            }),
+            &self.buffers,
+        );
 
         let buffer = self.inner.create_buffer(desc);
 
         Buffer {
             inner: buffer,
-            map_context: Arc::new(Mutex::new(map_context)),
+            map_context,
         }
     }
 
@@ -352,6 +380,9 @@ impl Device {
     ///   the moment of wrap.
     /// - `cleared` must not be `true` unless the resource's contents are
     ///   actually valid/defined
+    /// - On devices without [`ARBITRARY_BINDING_VIEW_DIMENSIONS`](crate::DownlevelFlags::ARBITRARY_BINDING_VIEW_DIMENSIONS),
+    ///   `hal_texture`'s GL target must match `desc.texture_binding_view_dimension`, or the
+    ///   one inferred from the texture's dimension and layer count if it is `None`.
     #[cfg(wgpu_core)]
     #[must_use]
     pub unsafe fn create_texture_from_hal<A: hal::Api>(
@@ -477,6 +508,7 @@ impl Device {
             usage: wgt::TextureUses::empty(),
             memory_flags: hal::MemoryFlags::empty(),
             view_formats: desc.view_formats.to_vec(),
+            texture_binding_view_dimension: Some(view_dimension),
         };
 
         let hal_texture = {
@@ -612,7 +644,13 @@ impl Device {
         hal_buffer: A::Buffer,
         desc: &BufferDescriptor<'_>,
     ) -> Buffer {
-        let map_context = MapContext::new(desc.mapped_at_creation.then_some(0..desc.size));
+        let map_context = MapContext::new(
+            desc.mapped_at_creation.then_some(MappingInfo {
+                range: 0..desc.size,
+                kind: MapMode::Write,
+            }),
+            &self.buffers,
+        );
 
         let buffer = unsafe {
             let core_device = self.inner.as_core();
@@ -621,7 +659,7 @@ impl Device {
 
         Buffer {
             inner: buffer.into(),
-            map_context: Arc::new(Mutex::new(map_context)),
+            map_context,
         }
     }
 
@@ -642,6 +680,9 @@ impl Device {
     }
 
     /// Set a callback which will be called for all errors that are not handled in error scopes.
+    ///
+    /// Detailed shader creation errors will not be provided to handler;
+    /// they can be inspected via [`ShaderModule::get_compilation_info`].
     pub fn on_uncaptured_error(&self, handler: Arc<dyn UncapturedErrorHandler>) {
         self.inner.on_uncaptured_error(handler)
     }
@@ -812,7 +853,12 @@ impl Device {
     }
 
     /// Destroy this device.
+    ///
+    /// Panics if there is any [`BufferView`] or [`BufferViewMut`] alive.
     pub fn destroy(&self) {
+        for buffer in self.buffers.lock().drain() {
+            buffer.unmap();
+        }
         self.inner.destroy()
     }
 
@@ -921,6 +967,26 @@ impl Device {
             instances: vec![None; desc.max_instances as usize],
             lowest_unmodified: 0,
         }
+    }
+}
+
+#[cfg(wgpu_core)]
+impl Device {
+    /// Create a new device of wgpu from a wgpu-core device.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_device` - wgpu-core device.
+    pub fn from_core(core_device: alloc::sync::Arc<wgc::device::Device>) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreDevice::from_core(core_device).into(),
+            buffers: Default::default(),
+        }
+    }
+
+    /// Returns the underlying wgpu-core device if this `Device` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::device::Device>> {
+        self.inner.as_core_opt().map(|cd| cd.as_core())
     }
 }
 
@@ -1062,6 +1128,9 @@ impl ErrorScopeGuard {
     ///
     /// Returns a future which resolves to the error captured by this scope, if any.
     /// The pop takes effect immediately; the future does not need to be awaited before doing work that is outside of this error scope.
+    ///
+    /// Detailed shader creation errors are not returned via this function;
+    /// they can be inspected via [`ShaderModule::get_compilation_info`].
     pub fn pop(mut self) -> impl Future<Output = Option<Error>> + WasmNotSend {
         self.popped = true;
         self.device.pop_error_scope(self.index)

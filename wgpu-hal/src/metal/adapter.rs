@@ -1,15 +1,18 @@
-use objc2::rc::autoreleasepool;
+use block2::StackBlock;
+use objc2::rc::{autoreleasepool, Retained};
 use objc2::runtime::{AnyObject, ProtocolObject, Sel};
 use objc2::{available, sel};
-use objc2_foundation::{NSOperatingSystemVersion, NSProcessInfo};
+use objc2_foundation::{NSError, NSOperatingSystemVersion, NSProcessInfo, NSString};
 use objc2_metal::{
-    MTLArgumentBuffersTier, MTLCounterSamplingPoint, MTLDevice, MTLFeatureSet, MTLGPUFamily,
-    MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion, MTLPixelFormat,
+    MTLArgumentBuffersTier, MTLCommandQueueDescriptor, MTLCounterSamplingPoint, MTLDevice,
+    MTLFeatureSet, MTLGPUFamily, MTLIndirectAccelerationStructureInstanceDescriptor,
+    MTLLanguageVersion, MTLLogLevel, MTLLogState, MTLLogStateDescriptor, MTLPixelFormat,
     MTLReadWriteTextureTier,
 };
 use wgt::{AstcBlock, AstcChannel};
 
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
+use core::ptr::NonNull;
 use wgpu_sync::{atomic, Mutex, OnceCell};
 
 use crate::metal::QueueShared;
@@ -24,6 +27,20 @@ use super::{OsFeatures, TimestampQuerySupport};
 /// at runtime but doesn't declare the methods in its class.
 fn device_class_responds_to(device: &ProtocolObject<dyn MTLDevice>, sel: Sel) -> bool {
     AnyObject::class(device.as_ref()).responds_to(sel)
+}
+
+/// Whether the render ICB probe may run on this device. Apple's paravirtual
+/// device aborts the process instead of failing the probe, and on Macs with
+/// Tier 1 argument buffers compiling the probe's ICB argument buffer aborts the
+/// shader compiler.
+fn render_icb_probe_allowed(
+    is_virtual: bool,
+    os_type: super::OsType,
+    argument_buffers: Option<MTLArgumentBuffersTier>,
+) -> bool {
+    let tier1_mac =
+        os_type == super::OsType::Macos && argument_buffers == Some(MTLArgumentBuffersTier::Tier1);
+    !is_virtual && !tier1_mac
 }
 
 /// Maximum number of command buffers for `MTLCommandQueue`s that we create.
@@ -51,6 +68,34 @@ pub(super) const MAX_COMMAND_BUFFERS: usize = 4096;
 /// counting down from MAX_BUFFERS - 1.
 pub const MAX_BUFFERS: u32 = 31;
 
+/// Create an `MTLLogState` that forwards shader `debugPrintf` messages to the
+/// `log` crate, or the error reported by Metal if the log state could not be
+/// created.
+fn create_debug_printf_log_state(
+    device: &ProtocolObject<dyn MTLDevice>,
+) -> Result<Retained<ProtocolObject<dyn MTLLogState>>, Retained<NSError>> {
+    let log_desc = MTLLogStateDescriptor::new();
+    log_desc.setLevel(MTLLogLevel::Debug);
+
+    let log_state = device.newLogStateWithDescriptor_error(&log_desc)?;
+
+    let handler = StackBlock::new(
+        |_subsystem: *mut NSString,
+         _category: *mut NSString,
+         _level: MTLLogLevel,
+         message: NonNull<NSString>| {
+            // SAFETY: message is NonNull<NSString>.
+            let message = unsafe { message.as_ref() }.to_string();
+            log::info!("[shader debugPrintf] {message}");
+        },
+    );
+
+    // SAFETY: addLogHandler copies the block, so we don't need to keep it alive.
+    unsafe { log_state.addLogHandler(&handler) };
+
+    Ok(log_state)
+}
+
 impl super::Adapter {
     pub(super) fn new(shared: Arc<super::AdapterShared>) -> Self {
         Self { shared }
@@ -70,11 +115,30 @@ impl crate::Adapter for super::Adapter {
         _memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         autoreleasepool(|_| {
-            let queue = self
-                .shared
-                .device
-                .newCommandQueueWithMaxCommandBufferCount(MAX_COMMAND_BUFFERS)
-                .unwrap();
+            let device = &self.shared.device;
+
+            let cq_desc = MTLCommandQueueDescriptor::new();
+            // SAFETY: MAX_COMMAND_BUFFERS is a reasonable number of buffers.
+            unsafe {
+                cq_desc.setMaxCommandBufferCount(MAX_COMMAND_BUFFERS);
+            }
+
+            let use_debug_printf = features.contains(wgt::Features::DEBUG_PRINTF)
+                && self.shared.private_caps.supports_debug_printf;
+            self.shared
+                .use_debug_printf
+                .store(use_debug_printf, atomic::Ordering::Relaxed);
+
+            if use_debug_printf {
+                match create_debug_printf_log_state(device) {
+                    Ok(log_state) => cq_desc.setLogState(Some(&log_state)),
+                    Err(err) => log::warn!(
+                        "Failed to create an MTLLogState, debugPrintf output will not be captured: {err:?}"
+                    ),
+                }
+            }
+
+            let queue = device.newCommandQueueWithDescriptor(&cq_desc).unwrap();
 
             // Acquiring the meaning of timestamp ticks is hard with Metal!
             // The only thing there is a method correlating cpu & gpu timestamps (`device.sample_timestamps`).
@@ -102,12 +166,17 @@ impl crate::Adapter for super::Adapter {
                 1.0
             };
 
+            let counters = Arc::<wgt::HalCounters>::default();
+            let icb =
+                super::icb::IcbContext::new(&self.shared, Arc::clone(&counters)).map(Arc::new);
+
             Ok(crate::OpenDevice {
                 device: super::Device {
                     shared: Arc::clone(&self.shared),
                     features,
-                    counters: Default::default(),
+                    counters,
                     limits: limits.clone(),
+                    icb: icb.clone(),
                 },
                 queue: super::Queue {
                     shared: Arc::new(QueueShared {
@@ -118,6 +187,7 @@ impl crate::Adapter for super::Adapter {
                         relay: OnceCell::new(),
                     }),
                     timestamp_period,
+                    icb,
                 },
             })
         })
@@ -169,11 +239,12 @@ impl crate::Adapter for super::Adapter {
             Tfc::empty()
         };
 
-        let image_64_atomic_if = if pc.int64_atomics {
-            Tfc::STORAGE_ATOMIC
-        } else {
-            Tfc::empty()
-        };
+        let image_64_atomic_if =
+            if pc.int64_atomics_min_max && msl_version >= MTLLanguageVersion::Version3_1 {
+                Tfc::STORAGE_ATOMIC
+            } else {
+                Tfc::empty()
+            };
 
         // Metal defined pixel format capabilities
         let all_caps = Tfc::SAMPLED_LINEAR
@@ -327,8 +398,13 @@ impl crate::Adapter for super::Adapter {
                 }
                 flags
             }
-            Tf::NV12 => return Tfc::empty(),
-            Tf::P010 => return Tfc::empty(),
+            Tf::NV12 | Tf::P010 => {
+                return Tfc::COLOR_ATTACHMENT
+                    | Tfc::COLOR_ATTACHMENT_BLEND
+                    | Tfc::SAMPLED_LINEAR
+                    | Tfc::COPY_SRC
+                    | Tfc::COPY_DST
+            }
             Tf::Rgb9e5Ufloat => {
                 if pc.msaa_apple3 {
                     all_caps
@@ -571,7 +647,16 @@ const BGR10A2_ALL: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
-/// "Indirect draw & dispatch arguments" in the Metal feature set tables
+/// "Indirect draw & dispatch arguments" in the Metal feature set tables.
+///
+/// The live tables at
+/// <https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf> are
+/// revised in place and current revisions are organized by `MTLGPUFamily`, so
+/// they no longer carry the per-`MTLFeatureSet` rows these constants encode.
+/// For an auditable source of the values below, use the archived revision that
+/// still lists them:
+/// <https://web.archive.org/web/20210421214844/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf>
+/// - "Indirect draw & dispatch arguments": iOS GPUFamily3 v1, tvOS GPUFamily2 v1, macOS GPUFamily1 v1
 const INDIRECT_DRAW_DISPATCH_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
@@ -581,6 +666,11 @@ const INDIRECT_DRAW_DISPATCH_SUPPORT: &[MTLFeatureSet] = &[
 /// "Base vertex/instance drawing" in the Metal feature set tables
 ///
 /// in our terms, `base_vertex` and `first_instance` must be 0
+///
+/// Same table as [`INDIRECT_DRAW_DISPATCH_SUPPORT`]; the
+/// "Base vertex/instance drawing" row lists the identical feature sets
+/// (iOS GPUFamily3 v1, tvOS GPUFamily2 v1, macOS GPUFamily1 v1), which is why
+/// this aliases that constant rather than repeating it.
 const BASE_VERTEX_FIRST_INSTANCE_SUPPORT: &[MTLFeatureSet] = INDIRECT_DRAW_DISPATCH_SUPPORT;
 
 const TEXTURE_CUBE_ARRAY_SUPPORT: &[MTLFeatureSet] = &[
@@ -631,7 +721,7 @@ impl super::CapabilitiesQuery {
         //
         // Along with the different OSes, there is also two other modes that
         // applications can run in: the Simulator, and Mac Catalyst. This can
-        // be detected using `cfg!(target_env = "sim")` or
+        // be detected using `cfg!(target_abi = "sim")` or
         // `cfg!(target_env = "macabi")`.
         //
         // Finally, iOS applications can be run on macOS and visionOS directly
@@ -698,15 +788,6 @@ impl super::CapabilitiesQuery {
         let argument_buffers = available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0)
             .then(|| device.argumentBuffersSupport());
 
-        let is_virtual = device.name().to_string().to_lowercase().contains("virtual");
-
-        let mesh_shaders = family_check
-                && (device.supportsFamily(MTLGPUFamily::Metal3)
-                    || device.supportsFamily(MTLGPUFamily::Apple7)
-                    || device.supportsFamily(MTLGPUFamily::Mac2))
-                    // Mesh shaders don't work on virtual devices even if they should be supported. CI thing
-                && !is_virtual;
-
         let msl_version = if available!(macos = 26.0, ios = 26.0, tvos = 26.0, visionos = 26.0) {
             MTLLanguageVersion::Version4_0
         } else if available!(macos = 15.0, ios = 18.0, tvos = 18.0, visionos = 2.0) {
@@ -733,6 +814,72 @@ impl super::CapabilitiesQuery {
             MTLLanguageVersion::Version1_0
         };
 
+        let is_virtual = device.name().to_string().to_lowercase().contains("virtual");
+
+        // Static preconditions for lowering multi-draws to render ICBs. The
+        // `available!` floor is the API availability of the two selectors the
+        // path depends on -- hazard-tracked `useResource:` and
+        // `inheritPipelineState` -- not a hardware claim:
+        // <https://developer.apple.com/documentation/metal/mtlindirectcommandbufferdescriptor/inheritpipelinestate>
+        //
+        // Whether a device actually executes GPU-generated render ICBs is not
+        // something Apple's feature tables predict: iOS/iPadOS/tvOS 17.x fail
+        // where the same hardware on 18 passes, and A10X only works with
+        // command generation hoisted out of the render pass. The real gate is
+        // therefore a runtime probe that executes a one-draw ICB and reads the
+        // pixel back. It runs in `Adapter::open` (see `icb::IcbContext::new`),
+        // so recording never stalls on it, and not at all under
+        // `STRICT_WEBGPU_COMPLIANCE`, which clears this cap in
+        // `AdapterShared::new`.
+        //
+        // No feature or downlevel flag depends on the probe: multi-draws are
+        // exposed exactly as they were before ICBs existed, and a failed probe
+        // only means they keep taking the per-draw indirect loop. The probe
+        // chooses a lowering, never a capability.
+        //
+        // Devices that crash on the probe instead of failing it are excluded up
+        // front; see `render_icb_probe_allowed`.
+        let probe_allowed = render_icb_probe_allowed(is_virtual, os_type, argument_buffers);
+        let indirect_command_buffers_rendering = probe_allowed
+            && available!(
+                macos = 10.15,
+                ios = 13.0,
+                tvos = 13.0,
+                watchos = 6.0,
+                visionos = 1.0
+            )
+            && device_class_responds_to(
+                device,
+                sel!(newIndirectCommandBufferWithDescriptor:maxCommandCount:options:),
+            );
+        // Mesh ICBs are gated far more conservatively: their execution has
+        // only been verified by readback on macOS 26 / Apple9. Every other
+        // combination takes the per-draw path until it can be verified the
+        // same way.
+        //
+        // Metal's shader validation layer (MTL_SHADER_VALIDATION=1) makes
+        // GPU-generated mesh commands execute without drawing anything on
+        // that combination while the API debug layer is off; the same
+        // commands draw correctly without it. Keep that in mind before
+        // blaming this path for an empty attachment under a debugger.
+        let indirect_command_buffers_mesh = indirect_command_buffers_rendering
+            && os_type == super::OsType::Macos
+            && available!(macos = 26.0)
+            && device.supportsFamily(MTLGPUFamily::Apple9);
+        // `optimizeIndirectCommandBuffer` halves ICB execution time on Apple3
+        // (A10X) and costs 5-10% of a frame on every Apple4-or-later GPU
+        // measured (A12, A14, A18 Pro, M4 Max), so it is kept only where it has
+        // not been measured to lose: Apple3 and GPUs outside the Apple families.
+        let indirect_command_buffers_optimize =
+            !(family_check && device.supportsFamily(MTLGPUFamily::Apple4));
+
+        let mesh_shaders = family_check
+                && (device.supportsFamily(MTLGPUFamily::Metal3)
+                    || device.supportsFamily(MTLGPUFamily::Apple7)
+                    || device.supportsFamily(MTLGPUFamily::Mac2))
+                    // Mesh shaders don't work on virtual devices even if they should be supported. CI thing
+                && !is_virtual;
+
         Self {
             msl_version,
             // macOS 10.11 doesn't support read-write resources
@@ -749,7 +896,11 @@ impl super::CapabilitiesQuery {
                 MUTABLE_COMPARISON_SAMPLER_SUPPORT,
             ),
             sampler_clamp_to_border: Self::supports_any(device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
-            indirect_draw_dispatch: Self::supports_any(device, INDIRECT_DRAW_DISPATCH_SUPPORT),
+            indirect_draw_dispatch: Self::supports_any(device, INDIRECT_DRAW_DISPATCH_SUPPORT)
+                || cfg!(target_abi = "sim"),
+            indirect_command_buffers_rendering,
+            indirect_command_buffers_mesh,
+            indirect_command_buffers_optimize,
             base_vertex_first_instance_drawing: Self::supports_any(
                 device,
                 BASE_VERTEX_FIRST_INSTANCE_SUPPORT,
@@ -872,7 +1023,10 @@ impl super::CapabilitiesQuery {
                 && (device.supportsFamily(MTLGPUFamily::Apple7)
                     || device.supportsFamily(MTLGPUFamily::Mac2))
             {
-                1024
+                // This was 1024 for Apple7, Apple8, and Mac2 in older versions of the document.
+                // In new versions of the document, it is 996 for Apple7 and Apple8, with Mac2
+                // values no longer listed.
+                996
             } else if family_check && device.supportsFamily(MTLGPUFamily::Apple6) {
                 128
             } else {
@@ -887,10 +1041,11 @@ impl super::CapabilitiesQuery {
                 64
             },
             // "Minimum constant buffer offset alignment"
-            constant_buffer_offset_alignment: if matches!(
-                os_type,
-                super::OsType::Macos | super::OsType::VisionOs
-            ) {
+            // The iOS Simulator requires 256-byte constant buffer offsets, like macOS
+            // (Apple: "Developing Metal apps that run in Simulator").
+            constant_buffer_offset_alignment: if cfg!(target_abi = "sim")
+                || matches!(os_type, super::OsType::Macos | super::OsType::VisionOs)
+            {
                 256
             } else if device.supportsFeatureSet(MTLFeatureSet::macOS_GPUFamily2_v1) {
                 32
@@ -1087,7 +1242,6 @@ impl super::CapabilitiesQuery {
                 && (device.supportsFamily(MTLGPUFamily::Apple9)
                     || (device.supportsFamily(MTLGPUFamily::Apple8)
                         && device.supportsFamily(MTLGPUFamily::Mac2))),
-            int64_atomics: family_check && device.supportsFamily(MTLGPUFamily::Apple9),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             float_atomics: family_check
                 && (metal3
@@ -1179,6 +1333,7 @@ impl super::CapabilitiesQuery {
                 tvos = 16.0,
                 visionos = 1.0
             ),
+            supports_debug_printf: msl_version >= MTLLanguageVersion::Version3_2,
             texture_component_swizzle: family_check
                 && (metal3
                     || device.supportsFamily(MTLGPUFamily::Mac2)
@@ -1186,27 +1341,32 @@ impl super::CapabilitiesQuery {
         }
     }
 
-    pub fn features(&self) -> wgt::Features {
+    pub fn features(&self, capabilities: &crate::Capabilities) -> wgt::Features {
         use wgt::Features as F;
 
         let mut features = F::empty()
-            | F::MAPPABLE_PRIMARY_BUFFERS
-            | F::VERTEX_WRITABLE_STORAGE
-            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | F::IMMEDIATES
-            | F::POLYGON_MODE_LINE
+            | F::ADDRESS_MODE_CLAMP_TO_ZERO
+            | F::BGRA8UNORM_STORAGE
             | F::CLEAR_TEXTURE
-            | F::TEXTURE_FORMAT_16BIT_NORM
+            | F::CLIP_DISTANCES
+            | F::DEPTH32FLOAT_STENCIL8
+            | F::EXTERNAL_TEXTURE
+            | F::FLOAT32_BLENDABLE
+            | F::IMMEDIATES
+            | F::MAPPABLE_PRIMARY_BUFFERS
+            | F::PASSTHROUGH_SHADERS
+            | F::POLYGON_MODE_LINE
             | F::SHADER_F16
             | F::SHADER_I16
-            | F::DEPTH32FLOAT_STENCIL8
-            | F::BGRA8UNORM_STORAGE
-            | F::PASSTHROUGH_SHADERS
-            | F::EXTERNAL_TEXTURE;
+            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | F::TEXTURE_FORMAT_16BIT_NORM
+            | F::TEXTURE_FORMAT_NV12
+            | F::TEXTURE_FORMAT_P010
+            | F::UNRESTRICTED_BYTES_PER_ROW
+            | F::VERTEX_WRITABLE_STORAGE;
 
         features.set(F::TEXTURE_COMPONENT_SWIZZLE, self.texture_component_swizzle);
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
-        features.set(F::FLOAT32_BLENDABLE, true);
         features.set(F::INDIRECT_FIRST_INSTANCE, self.indirect_draw_dispatch);
         features.set(
             F::TIMESTAMP_QUERY,
@@ -1223,10 +1383,13 @@ impl super::CapabilitiesQuery {
             self.timestamp_query_support
                 .contains(TimestampQuerySupport::INSIDE_WGPU_PASSES),
         );
-        features.set(F::CLIP_DISTANCES, true);
         features.set(
             F::DUAL_SOURCE_BLENDING,
             self.msl_version >= MTLLanguageVersion::Version1_2 && self.dual_source_blending,
+        );
+        features.set(
+            F::SHADER_EARLY_DEPTH_TEST,
+            MTLLanguageVersion::Version1_2 <= self.msl_version,
         );
         features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
@@ -1278,7 +1441,7 @@ impl super::CapabilitiesQuery {
         );
         features.set(
             F::TEXTURE_INT64_ATOMIC,
-            self.int64_atomics && self.msl_version >= MTLLanguageVersion::Version3_1,
+            self.int64_atomics_min_max && self.msl_version >= MTLLanguageVersion::Version3_1,
         );
         features.set(
             F::TEXTURE_ATOMIC,
@@ -1297,7 +1460,6 @@ impl super::CapabilitiesQuery {
             F::ADDRESS_MODE_CLAMP_TO_BORDER,
             self.sampler_clamp_to_border,
         );
-        features.set(F::ADDRESS_MODE_CLAMP_TO_ZERO, true);
 
         features.set(F::RG11B10UFLOAT_RENDERABLE, self.format_rg11b10_all);
 
@@ -1334,6 +1496,15 @@ impl super::CapabilitiesQuery {
         features.set(F::EXPERIMENTAL_RAY_QUERY, self.supports_raytracing);
 
         features.set(F::MULTISAMPLE_ARRAY, self.supports_multisample_array);
+        features.set(F::DEBUG_PRINTF, self.supports_debug_printf);
+
+        features.set(
+            F::CORE_FEATURES_AND_LIMITS,
+            crate::auxil::supports_core_features_and_limits(
+                &capabilities.limits,
+                &capabilities.downlevel,
+            ),
+        );
 
         features
     }
@@ -1362,10 +1533,6 @@ impl super::CapabilitiesQuery {
             wgt::DownlevelFlags::BASE_VERTEX,
             self.base_vertex_first_instance_drawing,
         );
-        downlevel
-            .flags
-            .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
-
         downlevel.flags.set(
             wgt::DownlevelFlags::MSL2_1,
             self.msl_version >= MTLLanguageVersion::Version2_1,
@@ -1403,6 +1570,8 @@ impl super::CapabilitiesQuery {
             max_buffers_and_acceleration_structures_per_shader_stage = MAX_USABLE_BUFFERS;
         }
 
+        let (max_sampled_textures_per_shader_stage, max_storage_textures_per_shader_stage) =
+            self.max_textures_per_stage;
         let limits = crate::auxil::adjust_raw_limits(wgt::Limits {
             //
             // WebGPU LIMITS:
@@ -1424,16 +1593,22 @@ impl super::CapabilitiesQuery {
             max_dynamic_storage_buffers_per_pipeline_layout: max_storage_buffers_per_shader_stage,
             // "Maximum number of entries in the sampler state argument table, per graphics or kernel function"
             max_samplers_per_shader_stage: 16,
-            max_sampled_textures_per_shader_stage: self.max_textures_per_stage.0,
-            max_storage_textures_per_shader_stage: self.max_textures_per_stage.1,
+            max_sampled_textures_per_shader_stage,
             max_storage_buffers_per_shader_stage,
+            max_storage_buffers_in_vertex_stage: 0,
+            max_storage_buffers_in_fragment_stage: 0,
+            max_storage_textures_per_shader_stage,
+            max_storage_textures_in_vertex_stage: 0,
+            max_storage_textures_in_fragment_stage: 0,
             max_uniform_buffers_per_shader_stage,
             max_vertex_buffers,
             max_buffer_size: self.max_buffer_size,
             // No limit, use maxBufferSize.
             max_uniform_buffer_binding_size: self.max_buffer_size,
-            // No limit, use maxBufferSize.
-            max_storage_buffer_binding_size: self.max_buffer_size,
+            // naga bounds-checks use `uint`. Limit to `u32::MAX` if enabled.
+            max_storage_buffer_binding_size: self
+                .max_buffer_size
+                .min(u64::from(u32::MAX) & !(wgt::STORAGE_BINDING_SIZE_ALIGNMENT as u64 - 1)),
             min_uniform_buffer_offset_alignment: self.constant_buffer_offset_alignment,
             // No documented limit. Use 32, which is the lowest allowed value.
             min_storage_buffer_offset_alignment: 32,
@@ -1571,6 +1746,10 @@ impl super::CapabilitiesQuery {
             timestamp_query_support: self.timestamp_query_support,
             supports_memoryless_storage: self.supports_memoryless_storage,
             mesh_shaders: self.mesh_shaders,
+            indirect_command_buffers_rendering: self.indirect_command_buffers_rendering,
+            indirect_command_buffers_mesh: self.indirect_command_buffers_mesh,
+            indirect_command_buffers_optimize: self.indirect_command_buffers_optimize,
+            supports_debug_printf: self.supports_debug_printf,
             texture_component_swizzle: self.texture_component_swizzle,
         }
     }
@@ -1579,7 +1758,7 @@ impl super::CapabilitiesQuery {
         super::PrivateTextureFormatCapabilities {
             read_write_texture_tier: self.read_write_texture_tier,
             sample_count_mask: self.sample_count_mask,
-            int64_atomics: self.int64_atomics,
+            int64_atomics_min_max: self.int64_atomics_min_max,
             msaa_desktop: self.msaa_desktop,
             msaa_apple3: self.msaa_apple3,
             msaa_apple7: self.msaa_apple7,
@@ -1813,5 +1992,23 @@ impl super::OsType {
         } else {
             Self::Ios
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::OsType;
+    use super::{render_icb_probe_allowed, MTLArgumentBuffersTier};
+
+    #[test]
+    fn render_icb_probe_skipped_on_tier1_macs() {
+        let tier1 = Some(MTLArgumentBuffersTier::Tier1);
+        let tier2 = Some(MTLArgumentBuffersTier::Tier2);
+        assert!(!render_icb_probe_allowed(false, OsType::Macos, tier1));
+        assert!(render_icb_probe_allowed(false, OsType::Macos, tier2));
+        assert!(render_icb_probe_allowed(false, OsType::Ios, tier1));
+        assert!(render_icb_probe_allowed(false, OsType::Ios, tier2));
+        assert!(!render_icb_probe_allowed(true, OsType::Macos, tier2));
+        assert!(!render_icb_probe_allowed(true, OsType::Ios, tier2));
     }
 }

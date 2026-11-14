@@ -896,16 +896,20 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let left_cast = ctx.expressions.append(
                         crate::Expression::As {
                             expr: left,
-                            kind: crate::ScalarKind::Float,
-                            convert: Some(size),
+                            target: crate::Scalar {
+                                kind: crate::ScalarKind::Float,
+                                width: size,
+                            },
                         },
                         span,
                     );
                     let right_cast = ctx.expressions.append(
                         crate::Expression::As {
                             expr: right,
-                            kind: crate::ScalarKind::Float,
-                            convert: Some(size),
+                            target: crate::Scalar {
+                                kind: crate::ScalarKind::Float,
+                                width: size,
+                            },
                         },
                         span,
                     );
@@ -930,8 +934,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let cast = ctx.expressions.append(
                         crate::Expression::As {
                             expr: floor,
-                            kind,
-                            convert: Some(size),
+                            target: crate::Scalar { kind, width: size },
                         },
                         span,
                     );
@@ -1130,8 +1133,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         ctx.expressions.append(
                             crate::Expression::As {
                                 expr: offset_handle,
-                                kind: crate::ScalarKind::Uint,
-                                convert: None,
+                                target: crate::Scalar::U32,
                             },
                             span,
                         )
@@ -1143,8 +1145,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         ctx.expressions.append(
                             crate::Expression::As {
                                 expr: count_handle,
-                                kind: crate::ScalarKind::Uint,
-                                convert: None,
+                                target: crate::Scalar::U32,
                             },
                             span,
                         )
@@ -1198,8 +1199,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         ctx.expressions.append(
                             crate::Expression::As {
                                 expr: offset_handle,
-                                kind: crate::ScalarKind::Uint,
-                                convert: None,
+                                target: crate::Scalar::U32,
                             },
                             span,
                         )
@@ -1211,8 +1211,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         ctx.expressions.append(
                             crate::Expression::As {
                                 expr: count_handle,
-                                kind: crate::ScalarKind::Uint,
-                                convert: None,
+                                target: crate::Scalar::U32,
                             },
                             span,
                         )
@@ -1619,16 +1618,16 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         _ => return Err(Error::InvalidAsType(ty_lookup.handle)),
                     };
 
-                    let expr = crate::Expression::As {
-                        expr: get_expr_handle!(value_id, value_lexp),
-                        kind: scalar.kind,
-                        convert: if scalar.kind == crate::ScalarKind::Bool {
-                            Some(crate::BOOL_WIDTH)
-                        } else if inst.op == Op::Bitcast {
-                            None
-                        } else {
-                            Some(scalar.width)
-                        },
+                    let expr = if inst.op == Op::Bitcast {
+                        crate::Expression::Bitcast {
+                            expr: get_expr_handle!(value_id, value_lexp),
+                            ty: ty_lookup.handle,
+                        }
+                    } else {
+                        crate::Expression::As {
+                            expr: get_expr_handle!(value_id, value_lexp),
+                            target: scalar,
+                        }
                     };
                     self.lookup_expression.insert(
                         result_id,
@@ -2152,9 +2151,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                             // IR expects a signed integer, so do a bitcast
                             ctx.expressions.append(
                                 crate::Expression::As {
-                                    kind: crate::ScalarKind::Sint,
                                     expr: selector_handle,
-                                    convert: None,
+                                    target: crate::Scalar::I32,
                                 },
                                 span,
                             )

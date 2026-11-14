@@ -115,6 +115,7 @@ impl Writer {
             ray_query_functions: crate::FastHashMap::default(),
             ray_tracing_functions: crate::FastHashMap::default(),
             has_ray_tracing_pipeline: false,
+            hit_object_attribute_var: None,
             io_f16_polyfills: super::f16_polyfill::F16IoPolyfill::new(
                 options.use_storage_input_output_16,
             ),
@@ -211,6 +212,7 @@ impl Writer {
             ray_query_functions: take(&mut self.ray_query_functions).reclaim(),
             ray_tracing_functions: take(&mut self.ray_tracing_functions).reclaim(),
             has_ray_tracing_pipeline: false,
+            hit_object_attribute_var: None,
             io_f16_polyfills: take(&mut self.io_f16_polyfills).reclaim(),
             debug_printf: None,
         };
@@ -365,6 +367,55 @@ impl Writer {
         self.get_pointer_type_id(rq_id, spirv::StorageClass::Function)
     }
 
+    pub(super) fn get_hit_object_pointer_id(&mut self) -> Word {
+        let ho_id = self.get_type_id(LookupType::Local(LocalType::HitObject));
+        self.get_pointer_type_id(ho_id, spirv::StorageClass::Function)
+    }
+
+    /// Request everything needed to use `SPV_EXT_shader_invocation_reorder`.
+    pub(super) fn require_hit_objects(&mut self) -> Result<(), Error> {
+        self.require_any(
+            "hit objects",
+            &[spirv::Capability::ShaderInvocationReorderEXT],
+        )?;
+        self.use_extension("SPV_EXT_shader_invocation_reorder");
+        Ok(())
+    }
+
+    /// Return the id of the module-scope `HitObjectAttributeEXT` variable used
+    /// to read triangle barycentrics out of a hit object, creating it if needed.
+    pub(super) fn get_hit_object_attribute_var(&mut self) -> Word {
+        if let Some(id) = self.hit_object_attribute_var {
+            return id;
+        }
+
+        let barycentrics_type_id = self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Bi,
+            scalar: crate::Scalar::F32,
+        });
+        let pointer_type_id = self.get_pointer_type_id(
+            barycentrics_type_id,
+            spirv::StorageClass::HitObjectAttributeEXT,
+        );
+
+        let id = self.id_gen.next();
+        Instruction::variable(
+            pointer_type_id,
+            id,
+            spirv::StorageClass::HitObjectAttributeEXT,
+            None,
+        )
+        .to_words(&mut self.logical_layout.declarations);
+
+        if self.flags.contains(WriterFlags::DEBUG) {
+            self.debugs
+                .push(Instruction::name(id, "naga_hit_object_attributes"));
+        }
+
+        self.hit_object_attribute_var = Some(id);
+        id
+    }
+
     /// Return a SPIR-V type for a pointer to `resolution`.
     ///
     /// The given `resolution` must be one that we can represent
@@ -513,6 +564,7 @@ impl Writer {
             crate::TypeInner::Sampler { comparison: _ } => LocalType::Sampler,
             crate::TypeInner::AccelerationStructure { .. } => LocalType::AccelerationStructure,
             crate::TypeInner::RayQuery { .. } => LocalType::RayQuery,
+            crate::TypeInner::HitObject => LocalType::HitObject,
             crate::TypeInner::Array { .. }
             | crate::TypeInner::Struct { .. }
             | crate::TypeInner::BindingArray { .. } => return None,
@@ -534,6 +586,7 @@ impl Writer {
                 descriptor_set: res_binding.group,
                 binding: res_binding.binding,
                 binding_array_size: None,
+                external_texture: false,
             }),
             None => Err(Error::MissingBinding(*res_binding)),
         }
@@ -1491,6 +1544,29 @@ impl Writer {
                     .varying_ids
                     .push(self.global_variables[task_payload].var_id);
             }
+            // The mesh output copy and the workgroup memory polyfill both read
+            // `LocalInvocationIndex`, which an entry point may only declare once.
+            if iface.mesh_info.is_some() && local_invocation_index_var_id.is_none() {
+                let u32_type_id = self.get_u32_type_id();
+                let pointer_type_id =
+                    self.get_pointer_type_id(u32_type_id, spirv::StorageClass::Input);
+                let var_id = self.id_gen.next();
+                Instruction::variable(pointer_type_id, var_id, spirv::StorageClass::Input, None)
+                    .to_words(&mut self.logical_layout.declarations);
+                self.decorate(
+                    var_id,
+                    spirv::Decoration::BuiltIn,
+                    &[spirv::BuiltIn::LocalInvocationIndex as u32],
+                );
+                iface.varying_ids.push(var_id);
+
+                let id = self.id_gen.next();
+                prelude
+                    .body
+                    .push(Instruction::load(u32_type_id, id, var_id, None));
+                local_invocation_index_var_id = Some(var_id);
+                local_invocation_index_id = Some(id);
+            }
             self.write_entry_point_mesh_shader_info(
                 iface,
                 local_invocation_index_var_id,
@@ -1631,7 +1707,7 @@ impl Writer {
                 id,
                 spirv::StorageClass::Function,
                 init_word.or_else(|| match ir_module.types[variable.ty].inner {
-                    crate::TypeInner::RayQuery { .. } => None,
+                    crate::TypeInner::RayQuery { .. } | crate::TypeInner::HitObject => None,
                     _ => {
                         let type_id = context.get_handle_type_id(variable.ty);
                         Some(context.writer.write_constant_null(type_id))
@@ -1694,6 +1770,14 @@ impl Writer {
                         instruction: t_max_tracker_instruction,
                     },
                 );
+            }
+
+            if let crate::TypeInner::HitObject = ir_module.types[variable.ty].inner {
+                // SPIR-V gives a fresh hit object no defined state, so record it
+                // as empty. This lands in the first block right after the
+                // `OpVariable`s, so an untouched hit object reliably reports
+                // `hitObjectIsEmpty`.
+                prelude.body.push(Instruction::hit_object_record_empty(id));
             }
         }
 
@@ -1936,6 +2020,18 @@ impl Writer {
         };
         //self.check(exec_model.required_capabilities())?;
 
+        // `HitObjectAttributeEXT` variables are only permitted in these stages.
+        if matches!(
+            exec_model,
+            spirv::ExecutionModel::RayGenerationKHR
+                | spirv::ExecutionModel::ClosestHitKHR
+                | spirv::ExecutionModel::MissKHR
+        ) {
+            if let Some(id) = self.hit_object_attribute_var {
+                interface_ids.push(id);
+            }
+        }
+
         Ok(Instruction::entry_point(
             exec_model,
             function_id,
@@ -2055,6 +2151,9 @@ impl Writer {
             }
             crate::TypeInner::RayQuery { .. } => {
                 self.require_any("Ray Query", &[spirv::Capability::RayQueryKHR])?;
+            }
+            crate::TypeInner::HitObject => {
+                self.require_hit_objects()?;
             }
             crate::TypeInner::Atomic(crate::Scalar { width: 8, kind: _ }) => {
                 self.require_any("64 bit integer atomics", &[spirv::Capability::Int64Atomics])?;
@@ -2183,6 +2282,7 @@ impl Writer {
             }
             LocalType::AccelerationStructure => Instruction::type_acceleration_structure(id),
             LocalType::RayQuery => Instruction::type_ray_query(id),
+            LocalType::HitObject => Instruction::type_hit_object(id),
         };
 
         instruction.to_words(&mut self.logical_layout.declarations);
@@ -2288,7 +2388,8 @@ impl Writer {
                 | crate::TypeInner::Image { .. }
                 | crate::TypeInner::Sampler { .. }
                 | crate::TypeInner::AccelerationStructure { .. }
-                | crate::TypeInner::RayQuery { .. } => unreachable!(),
+                | crate::TypeInner::RayQuery { .. }
+                | crate::TypeInner::HitObject => unreachable!(),
             };
 
             instruction.to_words(&mut self.logical_layout.declarations);
@@ -2431,10 +2532,10 @@ impl Writer {
                             rows: crate::VectorSize::Bi,
                             ..
                         } => needs_std140_type = true,
-                        // If an array member needs a std140 type, because it is an array
-                        // (of an array, etc) of `matCx2`s, then the struct also needs
+                        // If an array or struct member needs a std140 type, because it
+                        // (transitively) contains a `matCx2`, then the struct also needs
                         // a std140 type which uses the std140 type for this member.
-                        crate::TypeInner::Array { .. }
+                        crate::TypeInner::Array { .. } | crate::TypeInner::Struct { .. }
                             if self
                                 .write_std140_compat_type_declaration(module, member.ty)?
                                 .is_some() =>
@@ -2963,7 +3064,8 @@ impl Writer {
     /// the interface, and adds appropriate decorations to indicate which
     /// builtin or location it represents, how it should be interpolated, and so
     /// on. The `class` argument gives the variable's SPIR-V storage class,
-    /// which should be either [`Input`] or [`Output`].
+    /// which should be either [`Input`] or [`Output`]. The one exception is
+    /// `hit_barycentrics`, which overrides `class` to `HitAttributeKHR`.
     ///
     /// [`Binding`]: crate::Binding
     /// [`Function`]: crate::Function
@@ -2979,6 +3081,25 @@ impl Writer {
         ty: Handle<crate::Type>,
         binding: &crate::Binding,
     ) -> Result<Word, Error> {
+        // Triangle barycentrics are supplied as a `HitAttributeKHR` variable, not as an `Input`
+        // builtin: when a hit group has no intersection shader, the hit attribute an any-hit or
+        // closest-hit shader reads is a two-component float vector holding the barycentric
+        // coordinates of the hit, and hit attributes carry no `BuiltIn` decoration.
+        //
+        // SPEC: https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#interfaces-raypipeline
+        //
+        // Declaring it here, alongside the entry point's other varyings, works because ray tracing
+        // requires SPIR-V 1.4, where the `OpEntryPoint` interface lists global variables from every
+        // storage class rather than just `Input` and `Output`.
+        //
+        // SPEC: https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#OpEntryPoint
+        let class = match *binding {
+            crate::Binding::BuiltIn(crate::BuiltIn::HitBarycentrics) => {
+                spirv::StorageClass::HitAttributeKHR
+            }
+            _ => class,
+        };
+
         let id = self.id_gen.next();
         let ty_inner = &ir_module.types[ty].inner;
         let needs_polyfill = self.needs_f16_polyfill(ty_inner);
@@ -3351,6 +3472,8 @@ impl Writer {
                     Bi::ObjectToWorld => BuiltIn::ObjectToWorldKHR,
                     Bi::WorldToObject => BuiltIn::WorldToObjectKHR,
                     Bi::HitKind => BuiltIn::HitKindKHR,
+                    // Read from the entry point's `HitAttributeKHR` variable instead.
+                    Bi::HitBarycentrics => return Ok(BindingDecorations::None),
                 };
 
                 use crate::ScalarKind as Sk;
@@ -3755,10 +3878,27 @@ impl Writer {
             }
         }
         if has_ray_tracing_pipeline {
+            // `SPV_KHR_ray_tracing` requires SPIR-V 1.4. That is also what lets `write_varying`
+            // emit `hit_barycentrics` as a `HitAttributeKHR` variable, since only from 1.4 on does
+            // the `OpEntryPoint` interface cover storage classes other than `Input` and `Output`.
+            //
+            // SPEC: https://github.khronos.org/SPIRV-Registry/extensions/KHR/SPV_KHR_ray_tracing.html
+            let lang_version = self.lang_version();
+            if lang_version.0 <= 1 && lang_version.1 < 4 {
+                return Err(Error::SpirvVersionTooLow(1, 4));
+            }
             Instruction::extension("SPV_KHR_ray_tracing")
                 .to_words(&mut self.logical_layout.extensions)
         }
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
+
+        if ir_module.uses_invocation_reorder() {
+            // Create the `HitObjectAttributeEXT` variable up front, so that we
+            // can list it in the interface of every ray tracing entry point,
+            // whether or not that entry point happens to use it.
+            self.require_hit_objects()?;
+            self.get_hit_object_attribute_var();
+        }
         Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")
             .to_words(&mut self.logical_layout.ext_inst_imports);
 

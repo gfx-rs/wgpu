@@ -224,6 +224,7 @@ pub(super) fn describe_vertex_format(vertex_format: wgt::VertexFormat) -> super:
         Vf::Sint32x4 => (4, glow::INT, Vak::Integer),
         Vf::Float32x4 => (4, glow::FLOAT, Vak::Float),
         Vf::Unorm10_10_10_2 => (4, glow::UNSIGNED_INT_2_10_10_10_REV, Vak::Float),
+        Vf::Snorm10_10_10_2 => (4, glow::INT_2_10_10_10_REV, Vak::Float),
         Vf::Unorm8x4Bgra => (glow::BGRA as i32, glow::UNSIGNED_BYTE, Vak::Float),
         Vf::Float64 | Vf::Float64x2 | Vf::Float64x3 | Vf::Float64x4 => unimplemented!(),
     };
@@ -313,17 +314,6 @@ pub(super) fn map_primitive_state(state: &wgt::PrimitiveState) -> super::Primiti
             wgt::PolygonMode::Line => glow::LINE,
             wgt::PolygonMode::Point => glow::POINT,
         },
-    }
-}
-
-pub fn _map_view_dimension(dim: wgt::TextureViewDimension) -> u32 {
-    use wgt::TextureViewDimension as Tvd;
-    match dim {
-        Tvd::D1 | Tvd::D2 => glow::TEXTURE_2D,
-        Tvd::D2Array => glow::TEXTURE_2D_ARRAY,
-        Tvd::Cube => glow::TEXTURE_CUBE_MAP,
-        Tvd::CubeArray => glow::TEXTURE_CUBE_MAP_ARRAY,
-        Tvd::D3 => glow::TEXTURE_3D,
     }
 }
 

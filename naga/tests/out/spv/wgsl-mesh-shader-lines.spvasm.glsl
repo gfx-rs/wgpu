@@ -99,7 +99,7 @@ struct _42
 taskPayloadSharedEXT _4 _16;
 shared _15 _18;
 
-void _78()
+void _79()
 {
     if (gl_LocalInvocationIndex == 0u)
     {
@@ -110,18 +110,18 @@ void _78()
 
 void main()
 {
-    _78();
+    _79();
     barrier();
-    uint _97 = min(_18._m2, 2u);
-    uint _101 = min(_18._m3, 1u);
-    SetMeshOutputsEXT(_97, _101);
-    for (uint _89 = gl_LocalInvocationIndex; _89 < _97; _89 += 64u)
+    uint _96 = min(_18._m2, 2u);
+    uint _100 = min(_18._m3, 1u);
+    SetMeshOutputsEXT(_96, _100);
+    for (uint _88 = gl_LocalInvocationIndex; _88 < _96; _88 += 64u)
     {
-        gl_MeshVerticesEXT[_89].gl_Position = _18._m0[_89]._m0;
+        gl_MeshVerticesEXT[_88].gl_Position = _18._m0[_88]._m0;
     }
-    for (uint _90 = gl_LocalInvocationIndex; _90 < _101; _90 += 64u)
+    for (uint _89 = gl_LocalInvocationIndex; _89 < _100; _89 += 64u)
     {
-        gl_PrimitiveLineIndicesEXT[_90] = _18._m1[_90]._m0;
+        gl_PrimitiveLineIndicesEXT[_89] = _18._m1[_89]._m0;
     }
 }
 

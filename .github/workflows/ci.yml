@@ -1,14 +1,12 @@
 name: CI
 
 on:
-  push:
-    branches-ignore: [
-        # Branches with the `gh-readonly-queue` prefix are used by the
-        # merge queue, so they are already covered by the `merge_group` event.
-        "gh-readonly-queue/**",
-      ]
   pull_request:
-  merge_group:
+  # Runs on `trunk` to save the build caches that pull requests read
+  # and to upload the coverage baseline.
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
 
 env:
   #
@@ -20,7 +18,7 @@ env:
   #
 
   # This is the MSRV used by all repository infrastructure.
-  REPO_MSRV: "1.93"
+  REPO_MSRV: "1.96.1"
   # This is the MSRV used by `wgpu` itself.
   WGPU_MSRV: "1.87"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, `wgpu-sync`, and `wgpu-types` crates,
@@ -36,7 +34,7 @@ env:
   RUST_LOG: debug,wasm_bindgen_wasm_interpreter=warn,wasm_bindgen_cli_support=warn,walrus=warn,naga=info
   RUST_BACKTRACE: full
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
-  RUSTFLAGS: -D warnings
+  RUSTFLAGS: -D warnings --cfg wgpu_validate_locks_debug
   RUSTDOCFLAGS: -D warnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: e # cache busting
@@ -83,41 +81,41 @@ jobs:
         include:
           # Windows
           - name: Windows x86_64
-            os: windows-2022
+            os: windows-2025
             target: x86_64-pc-windows-msvc
             tier: 1
             kind: native
 
           # Windows
           - name: Windows aarch64
-            os: windows-2022
+            os: windows-2025
             target: aarch64-pc-windows-msvc
             tier: 2
             kind: native
 
           # MacOS
           - name: MacOS x86_64
-            os: macos-14
+            os: macos-26
             target: x86_64-apple-darwin
             tier: 1
             kind: native
 
           - name: MacOS aarch64
-            os: macos-14
+            os: macos-26
             target: aarch64-apple-darwin
             tier: 1
             kind: native
 
           # IOS
           - name: IOS aarch64
-            os: macos-14
+            os: macos-26
             target: aarch64-apple-ios
             tier: 2
             kind: native
 
           # VisionOS
           - name: VisionOS aarch64
-            os: macos-14
+            os: macos-26
             target: aarch64-apple-visionos
             kind: wgpu-only
             tier: 3
@@ -125,81 +123,81 @@ jobs:
 
           # Linux
           - name: Linux x86_64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: x86_64-unknown-linux-gnu
             tier: 1
             kind: native
 
           - name: Linux aarch64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: aarch64-unknown-linux-gnu
             tier: 1
             kind: native
 
           # FreeBSD
           - name: FreeBSD x86_64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: x86_64-unknown-freebsd
             tier: 2
             kind: wgpu-only
 
           # NetBSD
           - name: NetBSD x86_64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: x86_64-unknown-netbsd
             tier: 2
             kind: wgpu-only
 
           # Android
           - name: Android aarch64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: aarch64-linux-android
             tier: 2
             kind: native
 
           # Android
           - name: Android ARMv7
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: armv7-linux-androideabi
             tier: 2
             kind: wgpu-only
 
           # Android
           - name: Android x86_64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: x86_64-linux-android
             tier: 2
             kind: wgpu-only
 
           # OpenHarmony
           - name: OpenHarmony aarch64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: aarch64-unknown-linux-ohos
             tier: 2
             kind: native
 
           # WebGPU/WebGL
           - name: WebAssembly
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: wasm32-unknown-unknown
             tier: 2
             kind: web
 
           - name: WebAssembly 64-bit
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: wasm64-unknown-unknown
             kind: wgpu-only
             tier: 3
             extra-flags: -Zbuild-std=std,panic_abort
 
           - name: Emscripten
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: wasm32-unknown-emscripten
             tier: 2
             kind: wgpu-only
 
           - name: WebAssembly Core 1.0
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: wasm32v1-none
             tier: 2
             kind: no_std
@@ -207,7 +205,7 @@ jobs:
           # 32-bit PowerPC Linux
           # Included to test support for `portable-atomic`
           - name: Linux ppc32
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: powerpc-unknown-linux-gnu
             tier: 2
             kind: wgpu-only
@@ -259,7 +257,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -367,6 +365,11 @@ jobs:
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features metal
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features dx12
 
+          # Check important naga features in isolation
+          for feature in arbitrary glsl-in glsl-out hlsl-out msl-out spv-in spv-out wgsl-in wgsl-out; do
+            cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features --features $feature
+          done
+
           # build docs
           cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --all-features --no-deps
 
@@ -399,22 +402,22 @@ jobs:
         include:
           # Windows
           - name: Windows x86_64
-            os: windows-2022
+            os: windows-2025
             target: x86_64-pc-windows-msvc
 
           # MacOS
           - name: MacOS x86_64
-            os: macos-14
+            os: macos-26
             target: x86_64-apple-darwin
 
           # Linux
           - name: Linux x86_64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: x86_64-unknown-linux-gnu
 
           # WebGPU
           - name: WebAssembly
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: wasm32-unknown-unknown
 
     name: wgpu MSRV Check ${{ matrix.name }}
@@ -445,7 +448,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: wgpu-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -482,17 +485,17 @@ jobs:
         include:
           # Windows
           - name: Windows x86_64
-            os: windows-2022
+            os: windows-2025
             target: x86_64-pc-windows-msvc
 
           # MacOS
           - name: MacOS x86_64
-            os: macos-14
+            os: macos-26
             target: x86_64-apple-darwin
 
           # Linux
           - name: Linux x86_64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             target: x86_64-unknown-linux-gnu
 
     name: Core MSRV Check ${{ matrix.name }}
@@ -523,7 +526,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: core-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -554,7 +557,7 @@ jobs:
     timeout-minutes: 10
 
     name: MSRV Minimal Versions
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     env:
       # Override flags to NOT include `-D warnings`, because warnings may be due to harmless problems in deps.
       # Also, allow unexpected_cfgs because it is very common and spammy when using old deps.
@@ -599,11 +602,11 @@ jobs:
           cargo check --all-targets --all-features
 
   wasm-test:
-    # runtime is normally 2 minutes
-    timeout-minutes: 10
+    # runtime is normally 6-8 minutes
+    timeout-minutes: 20
 
     name: Test WebAssembly
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     permissions: {}
 
@@ -631,7 +634,7 @@ jobs:
         run: cargo +stable install wasm-bindgen-cli --version=$WASM_BINDGEN_VERSION
 
       - name: Install `cargo-nextest`
-        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2.83.2
+        uses: taiki-e/install-action@b80e2bb2635f28eb98b9fce1e2f0887e1535c6b2 # v2.90.0
         with:
           tool: cargo-nextest
 
@@ -646,29 +649,37 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Windows runs in the `gpu-test-windows-attempt-*` jobs below.
         include:
-          # Windows
-          - name: Windows x86_64
-            os: windows-2022
-
           # Mac
           - name: Mac aarch64
-            os: macos-14
+            os: macos-26
 
           # Linux
           - name: Linux x86_64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
 
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
     permissions: {}
 
-    steps:
+    steps: &gpu-test-steps
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # Windows CI intermittently lands on hosts that stall for a minute or
+      # more at a time, which kills whichever tests happen to be running.
+      # Record the host details and counters from the start of the job.
+      # https://github.com/gfx-rs/wgpu/issues/9248
+      - name: (Windows) Start host metrics sampler
+        if: matrix.os == 'windows-2025'
+        uses: $/.github/actions/sample-host-metrics
+        with:
+          output-dir: host-metrics
+          abort-on-bad-host: ${{ matrix.attempt == 1 }}
 
       - name: Install repo MSRV toolchain
         run: |
@@ -676,7 +687,7 @@ jobs:
           cargo -V
 
       - name: Install `cargo-nextest` and `cargo-llvm-cov`
-        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2.83.2
+        uses: taiki-e/install-action@b80e2bb2635f28eb98b9fce1e2f0887e1535c6b2 # v2.90.0
         with:
           tool: cargo-nextest,cargo-llvm-cov
 
@@ -693,7 +704,7 @@ jobs:
         # Cache step must go before warp and mesa install on windows as they write into the
         # target directory, and rust-cache will overwrite the entirety of the target directory.
       - name: Caching
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -702,37 +713,37 @@ jobs:
             . -> target
 
       - name: (Windows) Install DXC
-        if: matrix.os == 'windows-2022'
+        if: matrix.os == 'windows-2025'
         uses: $/.github/actions/install-dxc
 
       - name: (Windows) Install WARP
-        if: matrix.os == 'windows-2022'
+        if: matrix.os == 'windows-2025'
         uses: $/.github/actions/install-warp
         with:
           target-dir: "target/llvm-cov-target/debug"
 
       - name: (Windows) Install Agility SDK
-        if: matrix.os == 'windows-2022'
+        if: matrix.os == 'windows-2025'
         uses: $/.github/actions/install-agility-sdk
 
       - name: (Windows) Install Mesa
-        if: matrix.os == 'windows-2022'
+        if: matrix.os == 'windows-2025'
         uses: $/.github/actions/install-mesa
 
       - name: (Windows) Install Vulkan SDK
-        if: matrix.os == 'windows-2022'
+        if: matrix.os == 'windows-2025'
         uses: $/.github/actions/install-vulkan-sdk
 
       - name: (Mac) Install Vulkan SDK
-        if: matrix.os == 'macos-14'
+        if: matrix.os == 'macos-26'
         uses: $/.github/actions/install-vulkan-sdk
 
       - name: (Linux) Install Vulkan SDK
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'ubuntu-26.04'
         uses: $/.github/actions/install-vulkan-sdk
 
       - name: (Linux) Install Mesa
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'ubuntu-26.04'
         uses: $/.github/actions/install-mesa
 
       - name: Delete Naga snapshots
@@ -743,25 +754,61 @@ jobs:
           # Delete snapshots so we can ensure there aren't any excess output files.
           rm -r naga/tests/out
 
+      # While armed, the sampler judges whether the host is one of the stalling
+      # ones, and on the first attempt kills the build or tests if it is.
+      - name: (Windows) Arm host watchdog
+        if: matrix.os == 'windows-2025'
+        shell: pwsh
+        run: New-Item -ItemType File -Force -Path host-metrics/watchdog-armed | Out-Null
+
       - name: Run tests
+        id: tests
         shell: bash
         run: |
           set -e
 
           cargo --locked xtask test --llvm-cov
 
+      - name: (Windows) Disarm host watchdog
+        if: always() && matrix.os == 'windows-2025'
+        shell: pwsh
+        run: Remove-Item -Force -ErrorAction SilentlyContinue -Path host-metrics/watchdog-armed
+
+      - name: (Windows) Check host
+        id: check-host
+        if: always() && matrix.os == 'windows-2025'
+        shell: pwsh
+        env:
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          RETRY_ALLOWED: ${{ matrix.attempt == 1 }}
+        run: |
+          .github/actions/sample-host-metrics/check-host.ps1 -OutputDir host-metrics `
+              -TestsOutcome $env:TESTS_OUTCOME -RetryAllowed:($env:RETRY_ALLOWED -eq "true")
+
       - name: Check Naga snapshots
         # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
-        run: git add . && git diff --exit-code HEAD naga/tests/out
+        run: git add --intent-to-add -- naga/tests/out && git diff --exit-code HEAD -- naga/tests/out
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         name: Upload comparison images
         if: always() # We want artifacts even if the tests fail.
         with:
-          name: comparison-images-${{ matrix.os }}
+          name: comparison-images-${{ matrix.os }}${{ matrix.attempt && format('-attempt-{0}', matrix.attempt) || '' }}
           path: |
             **/*-actual.png
             **/*-difference.png
+
+      # Per-test timings and the host counter samples outlive the run logs,
+      # which is what we need to chase intermittent timeouts (#9248).
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        name: Upload test timings
+        if: always() # We want timings even if the tests fail.
+        with:
+          name: test-timings-${{ matrix.os }}${{ matrix.attempt && format('-attempt-{0}', matrix.attempt) || '' }}
+          path: |
+            **/nextest/*/junit.xml
+            host-metrics/
+          if-no-files-found: warn
 
       # Print GPU configuration so we can see what features were available during the test.
       - name: Print GPU configurations
@@ -782,18 +829,96 @@ jobs:
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
-        if: steps.coverage.outcome == 'success'
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
+        # Mergify draft pull requests re-run the tests of already-reported
+        # pull requests, so their coverage is not uploaded.
+        if: steps.coverage.outcome == 'success' && !startsWith(github.head_ref, 'mergify/merge-queue/')
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Windows runs the same steps as `gpu-test`, but gets a second attempt on a
+  # new host when the first attempt finds that its host is one of the stalling
+  # ones, or when its tests fail only by timing out.
+  # https://github.com/gfx-rs/wgpu/issues/9248
+  gpu-test-windows-attempt-1:
+    timeout-minutes: 30
+
+    strategy:
+      matrix:
+        include:
+          - name: Windows x86_64
+            os: windows-2025
+            attempt: 1
+
+    # Not substituting the platform to be consistent with the retry jobs.
+    name: Test Windows x86_64 (attempt ${{ matrix.attempt }})
+    runs-on: ${{ matrix.os }}
+
+    permissions: {}
+
+    outputs:
+      retry: ${{ steps.check-host.outputs.retry }}
+
+    steps: *gpu-test-steps
+
+  gpu-test-windows-attempt-2:
+    needs: gpu-test-windows-attempt-1
+    if: ${{ !cancelled() && needs.gpu-test-windows-attempt-1.outputs.retry == 'true' }}
+
+    timeout-minutes: 30
+
+    strategy:
+      matrix:
+        include:
+          - name: Windows x86_64
+            os: windows-2025
+            attempt: 2
+
+    # Avoid substituting the platform because skipped jobs don't apply substitutions.
+    name: Test Windows x86_64 (retry; attempt ${{ matrix.attempt }})
+    runs-on: ${{ matrix.os }}
+
+    permissions: {}
+
+    steps: *gpu-test-steps
+
+  # Reports the outcome of the attempts under the name the Windows test job
+  # has always had.
+  gpu-test-windows:
+    needs: [gpu-test-windows-attempt-1, gpu-test-windows-attempt-2]
+    if: always()
+
+    timeout-minutes: 2
+
+    name: Test Windows x86_64
+    runs-on: ubuntu-26.04
+
+    permissions: {}
+
+    steps:
+      - name: Check attempts
+        env:
+          FIRST: ${{ needs.gpu-test-windows-attempt-1.result }}
+          RETRY: ${{ needs.gpu-test-windows-attempt-1.outputs.retry }}
+          SECOND: ${{ needs.gpu-test-windows-attempt-2.result }}
+        run: |
+          echo "attempt 1: $FIRST, retry requested: ${RETRY:-false}, attempt 2: $SECOND"
+          if [ "$FIRST" = success ]; then
+            exit 0
+          fi
+          if [ "$RETRY" = true ] && [ "$SECOND" = success ]; then
+            echo "::notice title=Windows tests passed on retry::Attempt 1 ran on an unsuitable host."
+            exit 0
+          fi
+          exit 1
 
   doctest:
     # runtime is normally 2 minutes
     timeout-minutes: 10
 
     name: Doctest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     permissions: {}
 
@@ -810,7 +935,7 @@ jobs:
           cargo -V
 
       - name: Caching
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: doctests-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -828,7 +953,7 @@ jobs:
     timeout-minutes: 10
 
     name: Miri (limited scope)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     permissions: {}
 
@@ -847,7 +972,7 @@ jobs:
           cargo -V
 
       - name: Caching
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: miri-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -868,7 +993,7 @@ jobs:
     timeout-minutes: 2
 
     name: Format & Typos
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions: {}
     steps:
       - name: Checkout repo
@@ -876,23 +1001,32 @@ jobs:
         with:
           persist-credentials: false
 
+      # Only pull requests give a well-defined commit range. The merge queue
+      # runs the commits that this check already saw on the pull request.
+      - name: Check for AI-authored commits
+        if: github.event_name == 'pull_request'
+        uses: $/.github/actions/ai-commit-check
+
       - name: Install repo MSRV toolchain
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component rustfmt
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
+      - name: Check repository files
+        run: cargo --locked xtask sync-repo-files --check
+
       # NOTE: Keep this above the others, because this will fail if there are _any_ changes to
       # files, even ones this step doesn't modify.
       - name: "Format `**/*.{md,js,html,yml}` files"
-        run: "npx --yes prettier@3.8.1 --check --write . && git diff --exit-code"
+        run: "npx --yes prettier@3.9.6 --check --write . && git diff --exit-code"
 
       - name: Run `cargo fmt`
         run: |
           cargo --locked fmt -- --check
 
       - name: Install Tombi
-        uses: tombi-toml/setup-tombi@fa8fb98ef9af2d3b9da565edc15935d523bca7e9 # v1.2.0
+        uses: tombi-toml/setup-tombi@8ddc6b91b6fa3ad0ce192a68b409930851e4886c # v1.11.2
         with:
           version: "1.1.3"
 
@@ -900,14 +1034,14 @@ jobs:
         run: tombi format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@8a48f81b6c64dcfea44b3633223084c4be58ac5f # v1.49.0
+        uses: crate-ci/typos@276087d9a4f06398b3e04825487805e2d7375888 # v1.52.2
 
   check-cts-runner:
     # runtime is normally 2 minutes
     timeout-minutes: 10
 
     name: Clippy cts_runner
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions: {}
     steps:
       - name: Checkout repo
@@ -932,7 +1066,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: cts-runner-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -950,7 +1084,7 @@ jobs:
     timeout-minutes: 5
 
     name: "cargo-deny advisories"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions: {}
     steps:
       - name: Checkout repo
@@ -971,7 +1105,7 @@ jobs:
     timeout-minutes: 5
 
     name: "cargo-deny"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions: {}
     steps:
       - name: Checkout repo
@@ -989,7 +1123,7 @@ jobs:
 
   zizmor:
     name: "Zizmor"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       # `zizmor-action` uploads its findings to GitHub code scanning as SARIF.
       security-events: write
@@ -1000,4 +1134,4 @@ jobs:
           persist-credentials: false
 
       - name: Run `zizmor`
-        uses: zizmorcore/zizmor-action@70fb788f84895a7701f5643d103d587e460b5c99 # v0.6.3
+        uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0

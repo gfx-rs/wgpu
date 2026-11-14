@@ -27,7 +27,13 @@ static BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestConfigurati
             .limits(Limits {
                 max_binding_array_elements_per_shader_stage: 17,
                 ..Limits::default()
-            }),
+            })
+            .expect_fail(
+                // https://github.com/gfx-rs/wgpu/issues/9849 and/or https://github.com/gfx-rs/wgpu/issues/6745
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("Shader library compile failed")
+                    .validation_error("could not be compiled into pipeline"),
+            ),
     )
     .run_async(|ctx| async move { binding_array_storage_textures(ctx, false).await });
 
@@ -46,7 +52,13 @@ static PARTIAL_BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestCon
             .limits(Limits {
                 max_binding_array_elements_per_shader_stage: 33,
                 ..Limits::default()
-            }),
+            })
+            .expect_fail(
+                // https://github.com/gfx-rs/wgpu/issues/9849 and/or https://github.com/gfx-rs/wgpu/issues/6745
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("Shader library compile failed")
+                    .validation_error("could not be compiled into pipeline"),
+            ),
     )
     .run_async(|ctx| async move { binding_array_storage_textures(ctx, true).await });
 
@@ -98,6 +110,7 @@ async fn binding_array_storage_textures(ctx: TestingContext, partially_bound: bo
             format: TextureFormat::Rgba8Unorm,
             usage: TextureUsages::STORAGE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         ctx.queue.write_texture(
@@ -136,6 +149,7 @@ async fn binding_array_storage_textures(ctx: TestingContext, partially_bound: bo
         format: TextureFormat::Rgba8Unorm,
         usage: TextureUsages::STORAGE_BINDING | TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let output_view = output_texture.create_view(&TextureViewDescriptor::default());

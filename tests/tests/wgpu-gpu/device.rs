@@ -1,5 +1,6 @@
 use std::sync::atomic::AtomicBool;
 
+use wgpu::InstanceFlags;
 use wgpu_test::{
     apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
     TestingContext,
@@ -50,6 +51,34 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
         }
 
         ctx.async_poll(wgpu::PollType::Poll).await.unwrap();
+    });
+
+#[apply(gpu_test!)]
+static SINGLE_DEVICES: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .instance_flags(InstanceFlags::STRICT_WEBGPU_COMPLIANCE)
+            .enable_noop(),
+    )
+    .run_sync(|ctx| {
+        use pollster::FutureExt as _;
+        ctx.adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::downlevel_webgl2_defaults(),
+                ..Default::default()
+            })
+            .block_on()
+            .expect("failed to create device");
+        assert!(ctx
+            .adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::downlevel_webgl2_defaults(),
+                ..Default::default()
+            })
+            .block_on()
+            .is_err());
     });
 
 #[cfg(not(wasm_test))]
@@ -167,6 +196,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             format: wgpu::TextureFormat::Rg8Uint,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let target_view = texture_for_view.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -179,6 +209,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             format: wgpu::TextureFormat::Rg8Uint,
             usage: wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         let texture_for_write = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -190,6 +221,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             format: wgpu::TextureFormat::Rg8Uint,
             usage: wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         // Create some buffers.
@@ -281,6 +313,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             format: wgpu::TextureFormat::Rg8Uint,
             usage: wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         encoder_for_clear.clear_texture(
@@ -550,6 +583,7 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         let my_texture_view = my_texture.create_view(&wgpu::TextureViewDescriptor {
@@ -651,6 +685,7 @@ static DEVICE_DESTROY_THEN_BUFFER_CLEANUP: GpuTestConfiguration = GpuTestConfigu
             format: wgpu::TextureFormat::Rg8Uint,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         // Destroy the device.

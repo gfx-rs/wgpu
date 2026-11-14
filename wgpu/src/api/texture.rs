@@ -195,6 +195,35 @@ impl Texture {
     pub unsafe fn mark_externally_initialized(&self) {
         unsafe { self.inner.mark_externally_initialized() }
     }
+
+    /// Returns the texture binding view dimension that was inferred or provided when creating the
+    /// texture.
+    ///
+    /// On adapters without ARBITRARY_BINDING_VIEW_DIMENSIONS when a texture binding view dimension
+    /// was not specified - this returns the inferred texture view dimension.
+    /// On adapters with it - this returns None.
+    pub fn texture_binding_view_dimension(&self) -> Option<TextureViewDimension> {
+        self.inner.texture_binding_view_dimension()
+    }
+}
+
+#[cfg(wgpu_core)]
+impl Texture {
+    /// Create a new texture of wgpu from a wgpu-core texture.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_texture` - wgpu-core texture.
+    pub fn from_core(core_texture: alloc::sync::Arc<wgc::resource::Texture>) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreTexture::from_core(core_texture).into(),
+        }
+    }
+
+    /// Returns the underlying wgpu-core texture if this `Texture` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::resource::Texture>> {
+        self.inner.as_core_opt().map(|cd| cd.as_core())
+    }
 }
 
 /// Describes a [`Texture`].

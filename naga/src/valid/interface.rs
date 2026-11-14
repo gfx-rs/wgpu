@@ -640,6 +640,23 @@ impl VaryingContext<'_> {
                         },
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
+                    Bi::HitBarycentrics => (
+                        match self.stage {
+                            St::RayGeneration
+                            | St::Miss
+                            | St::Vertex
+                            | St::Fragment
+                            | St::Compute
+                            | St::Mesh
+                            | St::Task => false,
+                            St::AnyHit | St::ClosestHit => !self.output,
+                        },
+                        *ty_inner
+                            == Ti::Vector {
+                                size: Vs::Bi,
+                                scalar: crate::Scalar::F32,
+                            },
+                    ),
                     // Validated elsewhere, shouldn't be here
                     Bi::VertexCount | Bi::PrimitiveCount | Bi::Vertices | Bi::Primitives => {
                         (false, true)
@@ -654,12 +671,12 @@ impl VaryingContext<'_> {
                     | Bi::VertexCount
                     | Bi::PrimitiveCount
                     | Bi::Vertices
-                    | Bi::Primitives => {
-                        if !self.capabilities.contains(Capabilities::MESH_SHADER) {
-                            return Err(VaryingError::UnsupportedCapability(
-                                Capabilities::MESH_SHADER,
-                            ));
-                        }
+                    | Bi::Primitives
+                        if !self.capabilities.contains(Capabilities::MESH_SHADER) =>
+                    {
+                        return Err(VaryingError::UnsupportedCapability(
+                            Capabilities::MESH_SHADER,
+                        ));
                     }
                     _ => (),
                 }
@@ -965,29 +982,29 @@ impl super::Validator {
                                 unreachable!("binding arrays of external images are not supported");
                             }
                         },
-                        crate::TypeInner::Sampler { .. } => {
+                        crate::TypeInner::Sampler { .. }
                             if !self
                                 .capabilities
-                                .contains(Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY)
-                            {
-                                return Err(GlobalVariableError::UnsupportedCapability(
-                                    Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY,
-                                ));
-                            }
+                                .contains(Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY) =>
+                        {
+                            return Err(GlobalVariableError::UnsupportedCapability(
+                                Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY,
+                            ));
                         }
-                        crate::TypeInner::AccelerationStructure { .. } => {
+                        crate::TypeInner::AccelerationStructure { .. }
                             if !self
                                 .capabilities
-                                .contains(Capabilities::ACCELERATION_STRUCTURE_BINDING_ARRAY)
-                            {
-                                return Err(GlobalVariableError::UnsupportedCapability(
-                                    Capabilities::ACCELERATION_STRUCTURE_BINDING_ARRAY,
-                                ));
-                            }
+                                .contains(Capabilities::ACCELERATION_STRUCTURE_BINDING_ARRAY) =>
+                        {
+                            return Err(GlobalVariableError::UnsupportedCapability(
+                                Capabilities::ACCELERATION_STRUCTURE_BINDING_ARRAY,
+                            ));
                         }
-                        crate::TypeInner::RayQuery { .. } => {
+                        crate::TypeInner::RayQuery { .. } | crate::TypeInner::HitObject => {
                             // This should have been rejected in `validate_type`.
-                            unreachable!("binding arrays of ray queries are not supported");
+                            unreachable!(
+                                "binding arrays of ray queries or hit objects are not supported"
+                            );
                         }
                         _ => {
                             // Fall through to the regular validation, which will reject `base`
@@ -1001,6 +1018,12 @@ impl super::Validator {
             _ => var.ty,
         };
         let type_info = &self.types[inner_ty.index()];
+
+        // Hit objects may only be local variables, so reject them in every
+        // address space.
+        if matches!(gctx.types[inner_ty].inner, crate::TypeInner::HitObject) {
+            return Err(GlobalVariableError::InvalidType(var.space));
+        }
 
         let (required_type_flags, is_resource) = match var.space {
             crate::AddressSpace::Function => {
@@ -1055,21 +1078,21 @@ impl super::Validator {
                                 | crate::StorageFormat::Rgba16Unorm
                                 | crate::StorageFormat::Rgba16Snorm,
                             ..
-                        } => {
-                            if !self
-                                .capabilities
-                                .contains(Capabilities::STORAGE_TEXTURE_16BIT_NORM_FORMATS)
-                            {
-                                return Err(GlobalVariableError::UnsupportedCapability(
-                                    Capabilities::STORAGE_TEXTURE_16BIT_NORM_FORMATS,
-                                ));
-                            }
+                        } if !self
+                            .capabilities
+                            .contains(Capabilities::STORAGE_TEXTURE_16BIT_NORM_FORMATS) =>
+                        {
+                            return Err(GlobalVariableError::UnsupportedCapability(
+                                Capabilities::STORAGE_TEXTURE_16BIT_NORM_FORMATS,
+                            ));
                         }
                         _ => {}
                     },
+                    crate::TypeInner::RayQuery { .. } => {
+                        return Err(GlobalVariableError::InvalidBinding);
+                    }
                     crate::TypeInner::Sampler { .. }
-                    | crate::TypeInner::AccelerationStructure { .. }
-                    | crate::TypeInner::RayQuery { .. } => {}
+                    | crate::TypeInner::AccelerationStructure { .. } => {}
                     _ => {
                         return Err(GlobalVariableError::InvalidType(var.space));
                     }

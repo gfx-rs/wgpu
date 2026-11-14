@@ -261,6 +261,7 @@ impl crate::framework::Example for Example {
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
             queue.write_texture(
                 texture.as_image_copy(),
@@ -287,7 +288,7 @@ impl crate::framework::Example for Example {
         });
 
         let globals = Globals {
-            mvp: glam::Mat4::orthographic_rh(
+            mvp: glam::camera::rh::proj::directx::orthographic(
                 0.0,
                 config.width as f32,
                 0.0,
@@ -390,7 +391,7 @@ impl crate::framework::Example for Example {
         self.extent = [sc_desc.width, sc_desc.height];
 
         let globals = Globals {
-            mvp: glam::Mat4::orthographic_rh(
+            mvp: glam::camera::rh::proj::directx::orthographic(
                 0.0,
                 sc_desc.width as f32,
                 0.0,

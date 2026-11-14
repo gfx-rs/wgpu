@@ -111,7 +111,6 @@ impl Surface<'_> {
     ///
     /// # Panics
     ///
-    /// - An old [`SurfaceTexture`] is still alive referencing an old surface.
     /// - Texture format requested is unsupported on the surface.
     /// - The requested color space is unsupported for the requested format
     ///   (see [`SurfaceCapabilities::format_capabilities`]).
@@ -160,6 +159,7 @@ impl Surface<'_> {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: TextureDimension::D2,
+                texture_binding_view_dimension: None,
                 view_formats: &[],
             })
         };

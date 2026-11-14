@@ -30,11 +30,7 @@ static BAD_BUFFER_MAP: GpuTestConfiguration = GpuTestConfiguration::new()
             || buffer.slice(..).map_async(wgpu::MapMode::Write, |_| {}),
             Some("Buffer with '' label is invalid"),
         );
-        fail(
-            &ctx.device,
-            || buffer.unmap(),
-            Some("Buffer with '' label is invalid"),
-        );
+        valid(&ctx.device, || buffer.unmap());
         valid(&ctx.device, || buffer.destroy());
         valid(&ctx.device, || buffer.destroy());
     });
@@ -59,6 +55,7 @@ static BAD_TEXTURE_CREATE_VIEW: GpuTestConfiguration = GpuTestConfiguration::new
                     format: wgpu::TextureFormat::Rgba8UnormSrgb,
                     usage: wgpu::TextureUsages::all(),
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 })
             },
             Some("dimension x is zero"),
@@ -95,6 +92,7 @@ static BAD_TEXTURE_WRITE: GpuTestConfiguration = GpuTestConfiguration::new()
                     format: wgpu::TextureFormat::Rgba8Unorm,
                     usage: wgpu::TextureUsages::COPY_DST,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 })
             },
             Some("mip level count"),

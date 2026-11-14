@@ -232,6 +232,7 @@ impl core::fmt::Display for ExpectedToken<'_> {
                 Token::Attribute => Kind::Str("@"),
                 Token::Number(_) => Kind::Str("number"),
                 Token::Word(s) => Kind::Str(s),
+                Token::String(_) => Kind::Str("string literal"),
                 Token::Operation(c) => Kind::FormatChar("operation (`", c, "`)"),
                 Token::LogicalOperation(c) => Kind::FormatChar("logical operation (`", c, "`)"),
                 Token::ShiftOperation(c) => {
@@ -396,6 +397,7 @@ pub(crate) enum Error<'a> {
     InvalidAtomicOperandType(Span),
     InvalidAtomicAccess(Span),
     InvalidRayQueryPointer(Span),
+    InvalidHitObjectPointer(Span),
     NotPointer(Span),
     NotReference(&'static str, Span),
     InvalidAssignment {
@@ -523,12 +525,21 @@ pub(crate) enum Error<'a> {
     FunctionMustUseReturnsVoid(Span, Span),
     FunctionMustUseOnNonFunction(Span),
     InvalidWorkGroupUniformLoad(Span),
+    InvalidStringLiteral {
+        span: Span,
+        description: &'static str,
+    },
+    ExpectedStringLiteral {
+        span: Span,
+        description: &'static str,
+    },
     Internal(&'static str),
     ExpectedConstExprConcreteIntegerScalar(Span),
     ExpectedNonNegative(Span),
     ExpectedPositiveArrayLength(Span),
     MissingWorkgroupSize(Span),
     ConstantEvaluatorError(Box<ConstantEvaluatorError>, Span),
+    TypeMismatch(Box<TypeMismatchError>),
     AutoConversion(Box<AutoConversionError>),
     AutoConversionLeafScalar(Box<AutoConversionLeafScalarError>),
     ConcretizationFailed(Box<ConcretizationFailedError>),
@@ -604,6 +615,7 @@ pub(crate) enum Error<'a> {
     MissingIncomingPayload(Span),
     UnterminatedBlockComment(Span),
     RayQueryWithInitializer(Span),
+    HitObjectWithInitializer(Span),
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -623,6 +635,17 @@ impl From<&'static str> for DiagnosticAttributeNotSupportedPosition {
     fn from(display_plural: &'static str) -> Self {
         Self::Other { display_plural }
     }
+}
+
+/// A value's concrete type differs from the type required by its context.
+#[derive(Clone, Debug)]
+pub(crate) struct TypeMismatchError {
+    /// Where the required type comes from.
+    pub dest_span: Span,
+    pub dest_type: String,
+    /// The value whose type is wrong.
+    pub source_span: Span,
+    pub source_type: String,
 }
 
 #[derive(Clone, Debug)]
@@ -697,6 +720,7 @@ impl<'a> Error<'a> {
                 | Error::InvalidAtomicOperandType(span)
                 | Error::InvalidAtomicAccess(span)
                 | Error::InvalidRayQueryPointer(span)
+                | Error::InvalidHitObjectPointer(span)
                 | Error::NotPointer(span)
                 | Error::InvalidSwitchSelector { span }
                 | Error::InvalidSwitchCase { span }
@@ -770,6 +794,10 @@ impl<'a> Error<'a> {
                     Error::InvalidRayQueryPointer(_) => (
                         "ray query operation is done on a pointer to a non-ray-query",
                         "ray query pointer is invalid"
+                    ),
+                    Error::InvalidHitObjectPointer(_) => (
+                        "hit object operation is done on a pointer to a non-hit-object",
+                        "hit object pointer is invalid"
                     ),
                     Error::NotPointer(_) => (
                         "the operand of the `*` operator must be a pointer",
@@ -1349,11 +1377,44 @@ impl<'a> Error<'a> {
                 notes: vec!["passed type must be a workgroup pointer".into()],
                 message: "incorrect type passed to workgroupUniformLoad".into(),
             },
+            Error::InvalidStringLiteral { span, description } => ParseError {
+                message: description.to_string().into(),
+                labels: vec![(*span, "invalid string literal".into())],
+                notes: vec![],
+            },
+            Error::ExpectedStringLiteral { span, description } => ParseError {
+                message: description.to_string().into(),
+                labels: vec![(*span, "expected a string literal".into())],
+                notes: vec![],
+            },
             Error::Internal(message) => ParseError {
                 notes: vec![(*message).into()],
                 message: "internal WGSL front end error".into(),
                 labels: vec![],
             },
+            Error::TypeMismatch(ref error) => {
+                let TypeMismatchError {
+                    dest_span,
+                    ref dest_type,
+                    source_span,
+                    ref source_type,
+                } = **error;
+                let mut labels = vec![(
+                    source_span,
+                    format!("this expression has type `{source_type}`").into(),
+                )];
+                if dest_span != source_span {
+                    labels.push((
+                        dest_span,
+                        format!("a value of type `{dest_type}` is required here").into(),
+                    ));
+                }
+                ParseError {
+                    message: format!("expected `{dest_type}`, found `{source_type}`").into(),
+                    labels,
+                    notes: vec![],
+                }
+            }
             Error::AutoConversion(ref error) => {
                 // destructuring ensures all fields are handled
                 let AutoConversionError {
@@ -1688,6 +1749,14 @@ impl<'a> Error<'a> {
                 labels: vec![(
                     *span,
                     "variables with type `ray_query` are special and so cannot have initializers".into(),
+                )],
+                notes: vec![],
+            },
+            Error::HitObjectWithInitializer(span) => ParseError {
+                message: "Hit object with initialize".into(),
+                labels: vec![(
+                    *span,
+                    "variables with type `hit_object` are special and so cannot have initializers".into(),
                 )],
                 notes: vec![],
             },
