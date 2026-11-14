@@ -1290,10 +1290,10 @@ impl crate::Device for super::Device {
         // If clamp is not 1, we know anisotropy is supported up to 16x
         if desc.anisotropy_clamp != 1 {
             unsafe {
-                gl.sampler_parameter_i32(
+                gl.sampler_parameter_f32(
                     raw,
                     glow::TEXTURE_MAX_ANISOTROPY,
-                    desc.anisotropy_clamp as i32,
+                    f32::from(desc.anisotropy_clamp),
                 )
             };
         }
