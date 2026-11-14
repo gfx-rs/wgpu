@@ -567,14 +567,6 @@ bitflags::bitflags!(
         /// and task shaders that zero-initialize workgroup memory with `OpVariable`
         /// initializers, so polyfill it in those stages.
         const POLYFILL_MESH_TASK_WORKGROUP_ZERO_INIT = 1 << 3;
-        /// Imagination's proprietary driver (observed on the PowerVR GPU of the Google Pixel 10)
-        /// crashes in `vkQueueSubmit` when `VkTimelineSemaphoreSubmitInfo` is chained and one of
-        /// its value lists is empty, although the spec only requires values for lists that
-        /// contain a timeline semaphore.
-        ///
-        /// We pass a value for every wait and signal semaphore in that case. The driver
-        /// ignores values for binary semaphores.
-        const PAD_TIMELINE_SEMAPHORE_VALUES = 1 << 4;
     }
 );
 
@@ -1639,9 +1631,6 @@ impl crate::Queue for Queue {
             &mut signal_semaphores,
             vk_info,
             &mut vk_timeline_info,
-            self.device
-                .workarounds
-                .contains(Workarounds::PAD_TIMELINE_SEMAPHORE_VALUES),
         );
 
         let submit_chain = self.next_submit_chain.lock().take();

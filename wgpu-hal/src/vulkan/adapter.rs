@@ -2374,10 +2374,6 @@ impl super::Instance {
                 super::Workarounds::POLYFILL_MESH_TASK_WORKGROUP_ZERO_INIT,
                 phd_capabilities.is_driver(vk::DriverId::AMD_PROPRIETARY),
             );
-            workarounds.set(
-                super::Workarounds::PAD_TIMELINE_SEMAPHORE_VALUES,
-                phd_capabilities.is_driver(vk::DriverId::IMAGINATION_PROPRIETARY),
-            );
         };
 
         if let Some(driver) = phd_capabilities.driver {
