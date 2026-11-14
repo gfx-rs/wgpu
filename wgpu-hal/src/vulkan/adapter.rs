@@ -687,6 +687,7 @@ impl PhysicalDeviceFeatures {
             | F::UNRESTRICTED_BYTES_PER_ROW;
 
         let mut dl_flags = Df::empty()
+            | Df::ARBITRARY_BINDING_VIEW_DIMENSIONS
             | Df::BASE_VERTEX
             | Df::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED
             | Df::COMPARISON_SAMPLERS
@@ -2368,6 +2369,10 @@ impl super::Instance {
             workarounds.set(
                 super::Workarounds::FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16,
                 phd_capabilities.properties.vendor_id == db::nvidia::VENDOR,
+            );
+            workarounds.set(
+                super::Workarounds::POLYFILL_MESH_TASK_WORKGROUP_ZERO_INIT,
+                phd_capabilities.is_driver(vk::DriverId::AMD_PROPRIETARY),
             );
         };
 

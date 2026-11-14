@@ -29,6 +29,20 @@ fn device_class_responds_to(device: &ProtocolObject<dyn MTLDevice>, sel: Sel) ->
     AnyObject::class(device.as_ref()).responds_to(sel)
 }
 
+/// Whether the render ICB probe may run on this device. Apple's paravirtual
+/// device aborts the process instead of failing the probe, and on Macs with
+/// Tier 1 argument buffers compiling the probe's ICB argument buffer aborts the
+/// shader compiler.
+fn render_icb_probe_allowed(
+    is_virtual: bool,
+    os_type: super::OsType,
+    argument_buffers: Option<MTLArgumentBuffersTier>,
+) -> bool {
+    let tier1_mac =
+        os_type == super::OsType::Macos && argument_buffers == Some(MTLArgumentBuffersTier::Tier1);
+    !is_virtual && !tier1_mac
+}
+
 /// Maximum number of command buffers for `MTLCommandQueue`s that we create.
 ///
 /// If a [new command buffer] is requested when Metal has run out of command
@@ -824,9 +838,10 @@ impl super::CapabilitiesQuery {
         // only means they keep taking the per-draw indirect loop. The probe
         // chooses a lowering, never a capability.
         //
-        // Apple's paravirtual device is excluded up front because its driver
-        // aborts the process instead of failing the probe.
-        let indirect_command_buffers_rendering = !is_virtual
+        // Devices that crash on the probe instead of failing it are excluded up
+        // front; see `render_icb_probe_allowed`.
+        let probe_allowed = render_icb_probe_allowed(is_virtual, os_type, argument_buffers);
+        let indirect_command_buffers_rendering = probe_allowed
             && available!(
                 macos = 10.15,
                 ios = 13.0,
@@ -1978,5 +1993,23 @@ impl super::OsType {
         } else {
             Self::Ios
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::OsType;
+    use super::{render_icb_probe_allowed, MTLArgumentBuffersTier};
+
+    #[test]
+    fn render_icb_probe_skipped_on_tier1_macs() {
+        let tier1 = Some(MTLArgumentBuffersTier::Tier1);
+        let tier2 = Some(MTLArgumentBuffersTier::Tier2);
+        assert!(!render_icb_probe_allowed(false, OsType::Macos, tier1));
+        assert!(render_icb_probe_allowed(false, OsType::Macos, tier2));
+        assert!(render_icb_probe_allowed(false, OsType::Ios, tier1));
+        assert!(render_icb_probe_allowed(false, OsType::Ios, tier2));
+        assert!(!render_icb_probe_allowed(true, OsType::Macos, tier2));
+        assert!(!render_icb_probe_allowed(true, OsType::Ios, tier2));
     }
 }
