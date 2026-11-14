@@ -15,7 +15,7 @@ void f_u0028_b1_u003b(
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
         if (!loop_init) {
             bool _e1 = cond;
-            if (!(cond)) {
+            if (!(_e1)) {
                 break;
             }
         }

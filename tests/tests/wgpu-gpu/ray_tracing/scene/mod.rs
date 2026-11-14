@@ -64,7 +64,7 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
     });
 
     for j in 0..max_instances {
-        tlas[j as usize] = Some(wgpu::TlasInstance::new(
+        tlas[j as usize] = Some(wgpu::TlasInstance::from_blas_transformed(
             &blas,
             mesh_gen::affine_to_rows(&Affine3A::from_rotation_translation(
                 Quat::from_rotation_y(45.9_f32.to_radians()),
@@ -74,8 +74,6 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
                     z: 0.0,
                 },
             )),
-            0,
-            0xff,
         ));
     }
 

@@ -33,9 +33,9 @@ use crate::{
     },
     command, conv,
     device::{
-        bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
-        BufferMapPendingClosure, DeviceLostInvocation, MapMode, MissingDownlevelFlags,
-        MissingFeatures, RenderPassContext,
+        bgl, create_validator, life::WaitIdleError, map_buffer, stage_compiler::StageCompiler,
+        AttachmentData, BufferMapPendingClosure, DeviceLostInvocation, MapMode,
+        MissingDownlevelFlags, MissingFeatures, RenderPassContext,
     },
     error::ErrorSink,
     hal_label,
@@ -45,7 +45,9 @@ use crate::{
     },
     instance::{Adapter, RequestDeviceError},
     lock::{rank, Mutex, RwLock},
-    pipeline::{self, shader_module_error_into_compilation_info, ColorStateError},
+    pipeline::{
+        self, shader_module_error_into_compilation_info, ColorStateError, PassthroughInterface,
+    },
     pool::ResourcePool,
     resource::{
         self, Buffer, BufferState, ExternalTexture, ExternalTextureState, Labeled, ParentDevice,
@@ -56,7 +58,7 @@ use crate::{
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     timestamp_normalization::TIMESTAMP_NORMALIZATION_BUFFER_USES,
     track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
-    validation::{self, check_color_attachment_count, PassthroughInterface, ShaderMetaData},
+    validation::{self, check_color_attachment_count},
     weak_vec::WeakVec,
     FastHashMap, LabelHelpers,
 };
@@ -1247,7 +1249,7 @@ impl Device {
             .usage
             .intersects(wgt::BufferUsages::BLAS_INPUT | wgt::BufferUsages::TLAS_INPUT)
         {
-            self.require_features(wgt::Features::EXPERIMENTAL_RAY_QUERY)?;
+            self.require_acceleration_structures()?;
         }
 
         if desc.usage.contains(wgt::BufferUsages::INDEX)
@@ -1532,6 +1534,7 @@ impl Device {
         buffer: &Arc<Buffer>,
         offset: wgt::BufferAddress,
         data: &[u8],
+        mode: MapMode,
     ) -> resource::BufferAccessResult {
         use crate::resource::RawResourceAccess;
 
@@ -1584,7 +1587,7 @@ impl Device {
 
         unsafe { device.raw().unmap_buffer(raw_buf) };
 
-        Ok(())
+        Ok(mode)
     }
 
     /// # Safety
@@ -1664,6 +1667,7 @@ impl Device {
             format_features,
             resource::TextureClearMode::None,
             !cleared, // inverted so it marks the tracker properly
+            self.resolve_texture_binding_view_dimension(desc),
         );
 
         let texture = Arc::new(texture);
@@ -1825,7 +1829,9 @@ impl Device {
         desc: &resource::TextureDescriptor,
     ) -> Result<(wgt::TextureFormatFeatures, Vec<TextureFormat>), resource::CreateTextureError>
     {
-        use resource::{CreateTextureError, TextureDimensionError};
+        use resource::{
+            CreateTextureError, TextureBindingViewDimensionError, TextureDimensionError,
+        };
 
         self.check_is_valid()?;
 
@@ -2100,7 +2106,69 @@ impl Device {
             self.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
         }
 
+        if !self
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::ARBITRARY_BINDING_VIEW_DIMENSIONS)
+        {
+            if let Some(texture_binding_view_dimension) = desc.texture_binding_view_dimension {
+                match texture_binding_view_dimension {
+                    TextureViewDimension::D2 => {
+                        if desc.size.depth_or_array_layers != 1 {
+                            return Err(CreateTextureError::InvalidTextureBindingViewDimension(
+                                TextureBindingViewDimensionError::InvalidLayerCount {
+                                    dimension: texture_binding_view_dimension,
+                                    required: 1,
+                                    actual: desc.size.depth_or_array_layers,
+                                },
+                            ));
+                        }
+                    }
+                    TextureViewDimension::Cube => {
+                        if desc.size.depth_or_array_layers != 6 {
+                            return Err(CreateTextureError::InvalidTextureBindingViewDimension(
+                                TextureBindingViewDimensionError::InvalidLayerCount {
+                                    dimension: texture_binding_view_dimension,
+                                    required: 6,
+                                    actual: desc.size.depth_or_array_layers,
+                                },
+                            ));
+                        }
+                    }
+                    TextureViewDimension::CubeArray => {
+                        self.require_downlevel_flags(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES)?;
+                        if !desc.size.depth_or_array_layers.is_multiple_of(6) {
+                            return Err(CreateTextureError::InvalidTextureBindingViewDimension(
+                                TextureBindingViewDimensionError::InvalidCubeArrayLayerCount(
+                                    desc.size.depth_or_array_layers,
+                                ),
+                            ));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         Ok((format_features, hal_view_formats))
+    }
+
+    fn resolve_texture_binding_view_dimension(
+        &self,
+        desc: &resource::TextureDescriptor,
+    ) -> Option<TextureViewDimension> {
+        if self
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::ARBITRARY_BINDING_VIEW_DIMENSIONS)
+        {
+            None
+        } else {
+            Some(
+                desc.texture_binding_view_dimension
+                    .unwrap_or_else(|| desc.default_view_dimension()),
+            )
+        }
     }
 
     fn create_texture_inner(
@@ -2110,6 +2178,8 @@ impl Device {
         let (format_features, hal_view_formats) = self.validate_texture_descriptor_inner(desc)?;
 
         let hal_usage = conv::map_texture_usage_for_texture(desc, &format_features);
+
+        let texture_binding_view_dimension = self.resolve_texture_binding_view_dimension(desc);
 
         let hal_desc = hal::TextureDescriptor {
             label: desc.label.to_hal(self.instance_flags),
@@ -2121,6 +2191,7 @@ impl Device {
             usage: hal_usage,
             memory_flags: hal::MemoryFlags::empty(),
             view_formats: hal_view_formats,
+            texture_binding_view_dimension,
         };
 
         let raw_texture = unsafe { self.raw().create_texture(&hal_desc) }
@@ -2145,45 +2216,17 @@ impl Device {
                 self.instance_flags,
             );
 
-            let mut clear_views = SmallVec::new();
-            for mip_level in 0..desc.mip_level_count {
-                for array_layer in 0..desc.size.depth_or_array_layers {
-                    macro_rules! push_clear_view {
-                        ($format:expr, $aspect:expr) => {
-                            let desc = hal::TextureViewDescriptor {
-                                label: clear_label,
-                                format: $format,
-                                dimension: TextureViewDimension::D2,
-                                usage,
-                                range: wgt::ImageSubresourceRange {
-                                    aspect: $aspect,
-                                    base_mip_level: mip_level,
-                                    mip_level_count: Some(1),
-                                    base_array_layer: array_layer,
-                                    array_layer_count: Some(1),
-                                },
-                                swizzle: wgt::TextureComponentSwizzle::default(),
-                            };
-                            clear_views.push(ManuallyDrop::new(
-                                unsafe {
-                                    self.raw().create_texture_view(raw_texture.as_ref(), &desc)
-                                }
-                                .map_err(|e| self.handle_hal_error(e))?,
-                            ));
-                        };
-                    }
-
-                    if let Some(planes) = desc.format.planes() {
-                        for plane in 0..planes {
-                            let aspect = wgt::TextureAspect::from_plane(plane).unwrap();
-                            let format = desc.format.aspect_specific_format(aspect).unwrap();
-                            push_clear_view!(format, aspect);
-                        }
-                    } else {
-                        push_clear_view!(desc.format, wgt::TextureAspect::All);
-                    }
-                }
-            }
+            let clear_views = resource::ClearViews::new(
+                clear_label,
+                usage,
+                desc.format,
+                desc.mip_level_count,
+                desc.size.depth_or_array_layers,
+                |desc| {
+                    unsafe { self.raw().create_texture_view(raw_texture.as_ref(), desc) }
+                        .map_err(|e| self.handle_hal_error(e))
+                },
+            )?;
             resource::TextureClearMode::RenderPass {
                 clear_views,
                 is_color,
@@ -2200,6 +2243,7 @@ impl Device {
             format_features,
             clear_mode,
             true,
+            texture_binding_view_dimension,
         );
 
         let texture = Arc::new(texture);
@@ -2689,35 +2733,17 @@ impl Device {
             })
         })?;
 
-        let interface = validation::Interface::new(&module, &info, self.limits.clone());
-        let hal_shader = hal::ShaderInput::Naga(hal::NagaShader {
-            module,
-            info,
-            debug_source,
-        });
-        let hal_desc = hal::ShaderModuleDescriptor {
-            label: desc.label.to_hal(self.instance_flags),
-            runtime_checks: desc.runtime_checks,
-        };
-        let raw = match unsafe { self.raw().create_shader_module(&hal_desc, hal_shader) } {
-            Ok(raw) => raw,
-            Err(error) => {
-                return Err(match error {
-                    hal::ShaderError::Device(error) => {
-                        pipeline::CreateShaderModuleError::Device(self.handle_hal_error(error))
-                    }
-                    hal::ShaderError::Compilation(ref msg) => {
-                        log::error!("Shader error: {msg}");
-                        pipeline::CreateShaderModuleError::Generation
-                    }
-                })
-            }
-        };
-
+        // Defer creating the `wgpu_hal` shader module until pipeline creation,
+        // when we can apply the pipeline's override values and validate the
+        // result.
         let module = pipeline::ShaderModule {
-            state: ResourceState::Valid(pipeline::ShaderModuleState {
-                raw,
-                interface: ShaderMetaData::Interface(interface),
+            state: ResourceState::Valid(pipeline::ShaderModuleState::NagaModule {
+                shader: hal::NagaShader {
+                    module,
+                    info,
+                    debug_source,
+                },
+                runtime_checks: desc.runtime_checks,
             }),
             device: self.clone(),
             label: desc.label.to_string(),
@@ -2875,15 +2901,15 @@ impl Device {
         };
 
         let module = pipeline::ShaderModule {
-            state: ResourceState::Valid(pipeline::ShaderModuleState {
+            state: ResourceState::Valid(pipeline::ShaderModuleState::Passthrough {
                 raw,
-                interface: ShaderMetaData::Passthrough(PassthroughInterface {
+                interface: PassthroughInterface {
                     entry_point_names: descriptor
                         .entry_points
                         .iter()
                         .map(|e| e.name.to_string())
                         .collect(),
-                }),
+                },
             }),
             device: self.clone(),
             label: descriptor.label.to_string(),
@@ -2959,7 +2985,7 @@ impl Device {
 
     /// Generate information about late-validated buffer bindings for pipelines.
     //TODO: should this be combined with `get_introspection_bind_group_layouts` in some way?
-    fn make_late_sized_buffer_groups(
+    pub(super) fn make_late_sized_buffer_groups(
         shader_binding_sizes: &FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         layout: &binding_model::PipelineLayout,
     ) -> ArrayVec<pipeline::LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }> {
@@ -3220,11 +3246,12 @@ impl Device {
                     )
                 }
                 Bt::AccelerationStructure { vertex_return } => {
-                    self.require_features(wgt::Features::EXPERIMENTAL_RAY_QUERY)
-                        .map_err(|e| CreateBindGroupLayoutError::Entry {
+                    self.require_acceleration_structures().map_err(|e| {
+                        CreateBindGroupLayoutError::Entry {
                             binding: entry.binding,
                             error: e.into(),
-                        })?;
+                        }
+                    })?;
                     if vertex_return {
                         self.require_features(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)
                             .map_err(|e| CreateBindGroupLayoutError::Entry {
@@ -4187,6 +4214,17 @@ impl Device {
                         view_dimension: view.desc.dimension,
                     });
                 }
+                if let Some(texture_binding_view_dimension) =
+                    view.parent.texture_binding_view_dimension()
+                {
+                    if texture_binding_view_dimension != view.desc.dimension {
+                        return Err(Error::InvalidTextureBindingViewDimension {
+                            binding,
+                            view_dimension: view.desc.dimension,
+                            texture_binding_view_dimension,
+                        });
+                    }
+                }
                 view.check_usage(wgt::TextureUsages::TEXTURE_BINDING)?;
                 let depth_stencil_uses = if view.desc.aspects() == hal::FormatAspects::DEPTH {
                     wgt::TextureUses::DEPTH_SAMPLED
@@ -4215,6 +4253,17 @@ impl Device {
                         layout_dimension: view_dimension,
                         view_dimension: view.desc.dimension,
                     });
+                }
+                if let Some(texture_binding_view_dimension) =
+                    view.parent.texture_binding_view_dimension()
+                {
+                    if texture_binding_view_dimension != view.desc.dimension {
+                        return Err(Error::InvalidTextureBindingViewDimension {
+                            binding,
+                            view_dimension: view.desc.dimension,
+                            texture_binding_view_dimension,
+                        });
+                    }
                 }
 
                 let mip_level_count = view.selector.mips.end - view.selector.mips.start;
@@ -4422,7 +4471,7 @@ impl Device {
         Ok(layout)
     }
 
-    fn create_derived_pipeline_layout(
+    pub(super) fn create_derived_pipeline_layout(
         self: &Arc<Self>,
         mut derived_group_layouts: Box<ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>>,
         immediate_size: u32,
@@ -4543,11 +4592,6 @@ impl Device {
 
         self.require_downlevel_flags(wgt::DownlevelFlags::COMPUTE_SHADERS)?;
 
-        let shader_module = desc.stage.module;
-
-        let shader_module_state = shader_module.state()?;
-        shader_module.same_device(self)?;
-
         let is_auto_layout = desc.layout.is_none();
 
         // Get the pipeline layout from the desc if it is provided.
@@ -4560,66 +4604,32 @@ impl Device {
             None => None,
         };
 
-        if shader_module_state.interface.interface().is_none() && pipeline_layout.is_none() {
-            return Err(pipeline::CreatePipelineError::Implicit(
-                pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::COMPUTE),
-            ));
-        }
+        let mut compiler =
+            StageCompiler::new(self, pipeline_layout, validation::StageIo::default(), None);
+        let compute_stage =
+            compiler.compile(&desc.stage, validation::ShaderStageForValidation::Compute)?;
 
-        let mut binding_layout_source = match pipeline_layout {
-            Some(pipeline_layout) => validation::BindingLayoutSource::Provided(pipeline_layout),
-            None => validation::BindingLayoutSource::new_derived(&self.limits),
-        };
-        let mut minimum_binding_sizes = FastHashMap::default();
-        let mut io = validation::StageIo::default();
+        let resources = compiler.resources;
 
-        let final_entry_point_name;
-
-        {
-            let stage = validation::ShaderStageForValidation::Compute;
-            let stage_err = |error: validation::StageError| pipeline::CreatePipelineError::Stage {
-                stage: wgt::ShaderStages::COMPUTE,
-                error,
-            };
-
-            final_entry_point_name = shader_module
-                .finalize_entry_point_name(
-                    stage.to_naga(),
-                    desc.stage.entry_point.as_ref().map(|ep| ep.as_ref()),
-                )
-                .map_err(stage_err)?;
-
-            if let Some(interface) = shader_module_state.interface.interface() {
-                io = interface
-                    .check_stage(
-                        &mut binding_layout_source,
-                        &mut minimum_binding_sizes,
-                        &final_entry_point_name,
-                        stage,
-                        io,
-                        None,
-                    )
-                    .map_err(stage_err)?;
-            }
-        }
-
-        let pipeline_layout = match binding_layout_source {
+        let pipeline_layout = match resources.layout {
             validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
             validation::BindingLayoutSource::Derived(entries) => {
-                self.create_derived_pipeline_layout(entries, io.immediates.size())?
+                self.create_derived_pipeline_layout(entries, resources.immediates.size())?
             }
         };
 
         let naga::valid::ImmediateUsage::Valid {
             slots: immediate_slots_required,
             size: _,
-        } = io.immediates
+        } = resources.immediates
         else {
             unreachable!("Immediates exceeding maxImmediateSize should have been rejected");
         };
 
-        let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&minimum_binding_sizes, &pipeline_layout);
+        let late_sized_buffer_groups = Device::make_late_sized_buffer_groups(
+            &resources.minimum_binding_sizes,
+            &pipeline_layout,
+        );
 
         let cache = match desc.cache {
             Some(cache) => {
@@ -4633,23 +4643,19 @@ impl Device {
         let pipeline_desc = hal::ComputePipelineDescriptor {
             label: desc.label.to_hal(self.instance_flags),
             layout: pipeline_layout.raw()?,
-            stage: hal::ProgrammableStage {
-                module: shader_module_state.raw.as_ref(),
-                entry_point: final_entry_point_name.as_ref(),
-                constants: &desc.stage.constants,
-                zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
-            },
+            stage: compute_stage.to_hal(),
             cache: cache.as_ref().map(|it| it.raw()).transpose()?,
         };
 
         let raw = unsafe { self.raw().create_compute_pipeline(&pipeline_desc) }
             .map_err(|error| self.handle_hal_pipeline_error(error))?;
+        drop(compute_stage);
 
         let pipeline = pipeline::ComputePipeline {
             state: ResourceState::Valid(pipeline::ComputePipelineState {
                 raw: ManuallyDrop::new(raw),
                 layout: pipeline_layout.clone(),
-                _shader_module: shader_module,
+                _shader_module: desc.stage.module,
             }),
             device: self.clone(),
             late_sized_buffer_groups,
@@ -4736,8 +4742,6 @@ impl Device {
 
         self.check_is_valid()?;
 
-        let mut minimum_binding_sizes = FastHashMap::default();
-
         let color_targets = desc
             .fragment
             .as_ref()
@@ -4760,7 +4764,6 @@ impl Device {
         }
 
         let mut io = validation::StageIo::default();
-        let mut validated_stages = wgt::ShaderStages::empty();
 
         let mut vertex_steps;
         let mut hal_vertex_buffer_layouts;
@@ -5139,11 +5142,6 @@ impl Device {
             None => None,
         };
 
-        let mut binding_layout_source = match pipeline_layout {
-            Some(pipeline_layout) => validation::BindingLayoutSource::Provided(pipeline_layout),
-            None => validation::BindingLayoutSource::new_derived(&self.limits),
-        };
-
         let samples = {
             let sc = desc.multisample.count;
             if sc == 0 || sc > 32 || !sc.is_power_of_two() {
@@ -5152,237 +5150,59 @@ impl Device {
             sc
         };
 
-        let mut vertex_stage = None;
-        let mut task_stage = None;
-        let mut mesh_stage = None;
-        let mut _vertex_entry_point_name = String::new();
-        let mut _task_entry_point_name = String::new();
-        let mut _mesh_entry_point_name = String::new();
-        let mut passthrough_stages = wgt::ShaderStages::empty();
+        // Validate and compile each programmable shader stage.
+        let mut compiler =
+            StageCompiler::new(self, pipeline_layout, io, Some(desc.primitive.topology));
+        let vertex_stage;
+        let task_stage;
+        let mesh_stage;
+
         match desc.vertex {
             pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) => {
-                vertex_stage = {
-                    let stage_desc = &vertex.stage;
-                    let stage = validation::ShaderStageForValidation::Vertex {
-                        topology: desc.primitive.topology,
-                        compare_function: desc.depth_stencil.as_ref().and_then(|d| d.depth_compare),
-                    };
-                    let stage_bit = stage.to_wgt_bit();
-                    let stage_err = |error| pipeline::CreatePipelineError::Stage {
-                        stage: stage_bit,
-                        error,
-                    };
-
-                    let vertex_shader_module = &stage_desc.module;
-                    let vertex_shader_module_state = vertex_shader_module
-                        .state()
-                        .map_err(Into::into)
-                        .map_err(stage_err)?;
-                    vertex_shader_module.same_device(self)?;
-
-                    if vertex_shader_module_state.interface.interface().is_none() {
-                        passthrough_stages |= stage_bit;
-                    }
-
-                    _vertex_entry_point_name = vertex_shader_module
-                        .finalize_entry_point_name(
-                            stage.to_naga(),
-                            stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
-                        )
-                        .map_err(stage_err)?;
-
-                    if let Some(interface) = vertex_shader_module_state.interface.interface() {
-                        io = interface
-                            .check_stage(
-                                &mut binding_layout_source,
-                                &mut minimum_binding_sizes,
-                                &_vertex_entry_point_name,
-                                stage,
-                                io,
-                                Some(desc.primitive.topology),
-                            )
-                            .map_err(stage_err)?;
-                        validated_stages |= stage_bit;
-                    }
-                    Some(hal::ProgrammableStage {
-                        module: vertex_shader_module_state.raw.as_ref(),
-                        entry_point: &_vertex_entry_point_name,
-                        constants: &stage_desc.constants,
-                        zero_initialize_workgroup_memory: stage_desc
-                            .zero_initialize_workgroup_memory,
-                    })
+                let stage = validation::ShaderStageForValidation::Vertex {
+                    topology: desc.primitive.topology,
+                    compare_function: desc.depth_stencil.as_ref().and_then(|d| d.depth_compare),
                 };
+                vertex_stage = Some(compiler.compile(&vertex.stage, stage)?);
+                task_stage = None;
+                mesh_stage = None;
             }
             pipeline::RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
                 self.require_features(wgt::Features::EXPERIMENTAL_MESH_SHADER)?;
 
-                task_stage = if let Some(task) = task {
-                    let stage_desc = &task.stage;
-                    let stage = validation::ShaderStageForValidation::Task;
-                    let stage_bit = stage.to_wgt_bit();
-                    let stage_err = |error| pipeline::CreatePipelineError::Stage {
-                        stage: stage_bit,
-                        error,
-                    };
-
-                    let task_shader_module = &stage_desc.module;
-                    let task_shader_module_state = task_shader_module
-                        .state()
-                        .map_err(Into::into)
-                        .map_err(stage_err)?;
-                    task_shader_module.same_device(self)?;
-
-                    if task_shader_module_state.interface.interface().is_none() {
-                        passthrough_stages |= stage_bit;
-                    }
-
-                    _task_entry_point_name = task_shader_module
-                        .finalize_entry_point_name(
-                            stage.to_naga(),
-                            stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
-                        )
-                        .map_err(stage_err)?;
-
-                    if let Some(interface) = task_shader_module_state.interface.interface() {
-                        io = interface
-                            .check_stage(
-                                &mut binding_layout_source,
-                                &mut minimum_binding_sizes,
-                                &_task_entry_point_name,
-                                stage,
-                                io,
-                                Some(desc.primitive.topology),
-                            )
-                            .map_err(stage_err)?;
-                        validated_stages |= stage_bit;
-                    }
-                    Some(hal::ProgrammableStage {
-                        module: task_shader_module_state.raw.as_ref(),
-                        entry_point: &_task_entry_point_name,
-                        constants: &stage_desc.constants,
-                        zero_initialize_workgroup_memory: stage_desc
-                            .zero_initialize_workgroup_memory,
-                    })
-                } else {
-                    None
+                vertex_stage = None;
+                task_stage = match task {
+                    Some(task) => Some(
+                        compiler
+                            .compile(&task.stage, validation::ShaderStageForValidation::Task)?,
+                    ),
+                    None => None,
                 };
-                mesh_stage = {
-                    let stage_desc = &mesh.stage;
-                    let stage = validation::ShaderStageForValidation::Mesh;
-                    let stage_bit = stage.to_wgt_bit();
-                    let stage_err = |error| pipeline::CreatePipelineError::Stage {
-                        stage: stage_bit,
-                        error,
-                    };
-
-                    let mesh_shader_module = &stage_desc.module;
-                    let mesh_shader_module_state = mesh_shader_module
-                        .state()
-                        .map_err(Into::into)
-                        .map_err(stage_err)?;
-                    mesh_shader_module.same_device(self)?;
-
-                    if mesh_shader_module_state.interface.interface().is_none() {
-                        passthrough_stages |= stage_bit;
-                    }
-
-                    _mesh_entry_point_name = mesh_shader_module
-                        .finalize_entry_point_name(
-                            stage.to_naga(),
-                            stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
-                        )
-                        .map_err(stage_err)?;
-
-                    if let Some(interface) = mesh_shader_module_state.interface.interface() {
-                        io = interface
-                            .check_stage(
-                                &mut binding_layout_source,
-                                &mut minimum_binding_sizes,
-                                &_mesh_entry_point_name,
-                                stage,
-                                io,
-                                Some(desc.primitive.topology),
-                            )
-                            .map_err(stage_err)?;
-                        validated_stages |= stage_bit;
-                    }
-                    Some(hal::ProgrammableStage {
-                        module: mesh_shader_module_state.raw.as_ref(),
-                        entry_point: &_mesh_entry_point_name,
-                        constants: &stage_desc.constants,
-                        zero_initialize_workgroup_memory: stage_desc
-                            .zero_initialize_workgroup_memory,
-                    })
-                };
+                mesh_stage = Some(
+                    compiler.compile(&mesh.stage, validation::ShaderStageForValidation::Mesh)?,
+                );
             }
         }
 
-        let fragment_entry_point_name;
         let fragment_stage = match desc.fragment {
-            Some(ref fragment_state) => {
+            Some(ref fragment) => {
                 let stage = validation::ShaderStageForValidation::Fragment {
                     dual_source_blending,
                     has_depth_attachment,
                 };
-                let stage_bit = stage.to_wgt_bit();
-                let stage_err = |error| pipeline::CreatePipelineError::Stage {
-                    stage: stage_bit,
-                    error,
-                };
-
-                let shader_module = &fragment_state.stage.module;
-                let shader_module_state = shader_module
-                    .state()
-                    .map_err(Into::into)
-                    .map_err(stage_err)?;
-                shader_module.same_device(self)?;
-
-                if shader_module_state.interface.interface().is_none() {
-                    passthrough_stages |= stage_bit;
-                }
-
-                fragment_entry_point_name = shader_module
-                    .finalize_entry_point_name(
-                        stage.to_naga(),
-                        fragment_state
-                            .stage
-                            .entry_point
-                            .as_ref()
-                            .map(|ep| ep.as_ref()),
-                    )
-                    .map_err(stage_err)?;
-
-                if let Some(interface) = shader_module_state.interface.interface() {
-                    io = interface
-                        .check_stage(
-                            &mut binding_layout_source,
-                            &mut minimum_binding_sizes,
-                            &fragment_entry_point_name,
-                            stage,
-                            io,
-                            Some(desc.primitive.topology),
-                        )
-                        .map_err(stage_err)?;
-                    validated_stages |= stage_bit;
-                }
-
-                Some(hal::ProgrammableStage {
-                    module: shader_module_state.raw.as_ref(),
-                    entry_point: &fragment_entry_point_name,
-                    constants: &fragment_state.stage.constants,
-                    zero_initialize_workgroup_memory: fragment_state
-                        .stage
-                        .zero_initialize_workgroup_memory,
-                })
+                Some(compiler.compile(&fragment.stage, stage)?)
             }
             None => None,
         };
 
-        if !passthrough_stages.is_empty() && is_auto_layout {
-            return Err(pipeline::CreatePipelineError::Implicit(
-                pipeline::ImplicitLayoutError::Passthrough(passthrough_stages),
-            ));
-        }
+        // Extract the information the `StageCompiler` has accumulated about the
+        // overall pipeline.
+        let StageCompiler {
+            resources,
+            io,
+            validated: validated_stages,
+            ..
+        } = compiler;
 
         let mut active_color_outputs = 0u64;
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
@@ -5398,7 +5218,7 @@ impl Device {
                             "The fragment stage {:?} output @location({}) values are ignored",
                             fragment_stage
                                 .as_ref()
-                                .map_or("", |stage| stage.entry_point),
+                                .map_or("", |stage| stage.entry_point.as_str()),
                             i
                         );
                     }
@@ -5415,25 +5235,17 @@ impl Device {
             }
         }
 
-        let last_stage = match desc.fragment {
-            Some(_) => wgt::ShaderStages::FRAGMENT,
-            None => wgt::ShaderStages::VERTEX,
-        };
-        if is_auto_layout && !validated_stages.contains(last_stage) {
-            return Err(pipeline::ImplicitLayoutError::ReflectionError(last_stage).into());
-        }
-
-        let pipeline_layout = match binding_layout_source {
+        let pipeline_layout = match resources.layout {
             validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
             validation::BindingLayoutSource::Derived(entries) => {
-                self.create_derived_pipeline_layout(entries, io.immediates.size())?
+                self.create_derived_pipeline_layout(entries, resources.immediates.size())?
             }
         };
 
         let naga::valid::ImmediateUsage::Valid {
             slots: immediate_slots_required,
             size: _,
-        } = io.immediates
+        } = resources.immediates
         else {
             unreachable!("Immediates exceeding maxImmediateSize should have been rejected");
         };
@@ -5485,7 +5297,7 @@ impl Device {
             .flags
             .contains(wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED)
         {
-            for (binding, size) in minimum_binding_sizes.iter() {
+            for (binding, size) in resources.minimum_binding_sizes.iter() {
                 if size.get() % 16 != 0 {
                     return Err(pipeline::RenderError::UnalignedShader {
                         binding: binding.binding,
@@ -5497,8 +5309,10 @@ impl Device {
             }
         }
 
-        let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&minimum_binding_sizes, &pipeline_layout);
+        let late_sized_buffer_groups = Device::make_late_sized_buffer_groups(
+            &resources.minimum_binding_sizes,
+            &pipeline_layout,
+        );
 
         let cache = match desc.cache {
             Some(cache) => {
@@ -5516,19 +5330,19 @@ impl Device {
                 label: desc.label.to_hal(self.instance_flags),
                 layout: pipeline_layout.raw()?,
                 vertex_processor: match vertex_stage {
-                    Some(vertex_stage) => hal::VertexProcessor::Standard {
+                    Some(ref vertex_stage) => hal::VertexProcessor::Standard {
                         vertex_buffers: &hal_vertex_buffer_layouts,
-                        vertex_stage,
+                        vertex_stage: vertex_stage.to_hal(),
                     },
                     None => hal::VertexProcessor::Mesh {
-                        task_stage,
-                        mesh_stage: mesh_stage.unwrap(),
+                        task_stage: task_stage.as_ref().map(|stage| stage.to_hal()),
+                        mesh_stage: mesh_stage.as_ref().unwrap().to_hal(),
                     },
                 },
                 primitive: desc.primitive,
                 depth_stencil: desc.depth_stencil.clone(),
                 multisample: desc.multisample,
-                fragment_stage,
+                fragment_stage: fragment_stage.as_ref().map(|stage| stage.to_hal()),
                 color_targets,
                 multiview_mask: desc.multiview_mask,
                 cache: cache.as_ref().map(|it| it.raw()).transpose()?,
@@ -5536,6 +5350,7 @@ impl Device {
             unsafe { self.raw().create_render_pipeline(&pipeline_desc) }
                 .map_err(|err| self.handle_hal_pipeline_error(err))?
         };
+        drop((vertex_stage, task_stage, mesh_stage, fragment_stage));
 
         let pass_context = RenderPassContext {
             attachments: AttachmentData {

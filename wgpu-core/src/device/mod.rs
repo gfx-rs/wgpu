@@ -5,7 +5,7 @@ use crate::{
     binding_model,
     ray_tracing::BlasCompactReadyPendingClosure,
     resource::{
-        Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, Labeled,
+        Buffer, BufferAccessError, BufferAccessResult, BufferMapCallback, Labeled,
         RawResourceAccess, ResourceErrorIdent,
     },
     snatch::SnatchGuard,
@@ -25,6 +25,7 @@ mod life;
 pub mod queue;
 pub mod ray_tracing;
 pub mod resource;
+mod stage_compiler;
 pub(crate) mod surface_config;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
@@ -163,7 +164,7 @@ impl RenderPassContext {
     }
 }
 
-pub type BufferMapPendingClosure = (BufferMapOperation, BufferAccessResult);
+pub type BufferMapPendingClosure = (Option<BufferMapCallback>, BufferAccessResult);
 
 #[must_use]
 #[derive(Default)]
@@ -189,8 +190,8 @@ impl UserClosures {
 
         // Mappings _must_ be fired before submissions, as the spec requires all mapping callbacks that are registered before
         // a on_submitted_work_done callback to be fired before the on_submitted_work_done callback.
-        for (mut operation, status) in self.mappings {
-            if let Some(callback) = operation.callback.take() {
+        for (mut callback, status) in self.mappings {
+            if let Some(callback) = callback.take() {
                 callback(status);
             }
         }

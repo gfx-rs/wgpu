@@ -534,6 +534,7 @@ impl<'a, W: Write> Writer<'a, W> {
             | TypeInner::Sampler { .. }
             | TypeInner::AccelerationStructure { .. }
             | TypeInner::RayQuery { .. }
+            | TypeInner::HitObject
             | TypeInner::BindingArray { .. }
             | TypeInner::CooperativeMatrix { .. } => {
                 return Err(Error::Custom(format!("Unable to write type {inner:?}")))
@@ -2281,7 +2282,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 writeln!(self.out, ");")?;
             }
             Statement::CooperativeStore { .. } => unimplemented!(),
-            Statement::RayPipelineFunction(_) => unimplemented!(),
+            Statement::RayPipelineFunction(_) | Statement::HitObject { .. } => unimplemented!(),
             Statement::DebugPrintf { .. } => unimplemented!(),
         }
 
@@ -2776,25 +2777,8 @@ impl<'a, W: Write> Writer<'a, W> {
                                 write!(self.out, "textureSize(")?;
                                 self.write_expr(image, ctx)?;
                                 if let Some(expr) = level {
-                                    let cast_to_int = matches!(
-                                        *ctx.resolve_type(expr, &self.module.types),
-                                        TypeInner::Scalar(crate::Scalar {
-                                            kind: crate::ScalarKind::Uint,
-                                            ..
-                                        })
-                                    );
-
                                     write!(self.out, ", ")?;
-
-                                    if cast_to_int {
-                                        write!(self.out, "int(")?;
-                                    }
-
-                                    self.write_expr(expr, ctx)?;
-
-                                    if cast_to_int {
-                                        write!(self.out, ")")?;
-                                    }
+                                    self.write_expr_as_int(expr, ctx)?;
                                 } else if !multi {
                                     // All textureSize calls requires an lod argument
                                     // except for multisampled samplers
@@ -3758,92 +3742,66 @@ impl<'a, W: Write> Writer<'a, W> {
                     write!(self.out, ")")?
                 }
             }
-            // `As` is always a call.
-            // If `convert` is true the function name is the type
-            // Else the function name is one of the glsl provided bitcast functions
-            Expression::As {
-                expr,
-                kind: target_kind,
-                convert,
-            } => {
+            // `As` is always a call, whose name is the target type.
+            Expression::As { expr, target } => {
                 let inner = ctx.resolve_type(expr, &self.module.types);
-                match convert {
-                    Some(width) => {
-                        // this is similar to `write_type`, but with the target kind
-                        let scalar = glsl_scalar(crate::Scalar {
-                            kind: target_kind,
-                            width,
-                        })?;
-                        match *inner {
-                            TypeInner::Matrix { columns, rows, .. } => write!(
-                                self.out,
-                                "{}mat{}x{}",
-                                scalar.prefix, columns as u8, rows as u8
-                            )?,
-                            TypeInner::Vector { size, .. } => {
-                                write!(self.out, "{}vec{}", scalar.prefix, size as u8)?
-                            }
-                            _ => write!(self.out, "{}", scalar.full)?,
-                        }
-
-                        write!(self.out, "(")?;
-                        self.write_expr(expr, ctx)?;
-                        write!(self.out, ")")?
+                // this is similar to `write_type`, but with the target scalar
+                let scalar = glsl_scalar(target)?;
+                match *inner {
+                    TypeInner::Matrix { columns, rows, .. } => write!(
+                        self.out,
+                        "{}mat{}x{}",
+                        scalar.prefix, columns as u8, rows as u8
+                    )?,
+                    TypeInner::Vector { size, .. } => {
+                        write!(self.out, "{}vec{}", scalar.prefix, size as u8)?
                     }
-                    None => {
-                        use crate::ScalarKind as Sk;
-
-                        let target_vector_type = match *inner {
-                            TypeInner::Vector { size, scalar } => Some(TypeInner::Vector {
-                                size,
-                                scalar: crate::Scalar {
-                                    kind: target_kind,
-                                    width: scalar.width,
-                                },
-                            }),
-                            _ => None,
-                        };
-
-                        let source_kind = inner.scalar_kind().unwrap();
-
-                        match (source_kind, target_kind, target_vector_type) {
-                            // No conversion needed
-                            (Sk::Sint, Sk::Sint, _)
-                            | (Sk::Uint, Sk::Uint, _)
-                            | (Sk::Float, Sk::Float, _)
-                            | (Sk::Bool, Sk::Bool, _) => {
-                                self.write_expr(expr, ctx)?;
-                                return Ok(());
-                            }
-
-                            // Cast to/from floats
-                            (Sk::Float, Sk::Sint, _) => write!(self.out, "floatBitsToInt")?,
-                            (Sk::Float, Sk::Uint, _) => write!(self.out, "floatBitsToUint")?,
-                            (Sk::Sint, Sk::Float, _) => write!(self.out, "intBitsToFloat")?,
-                            (Sk::Uint, Sk::Float, _) => write!(self.out, "uintBitsToFloat")?,
-
-                            // Cast between vector types
-                            (_, _, Some(vector)) => {
-                                self.write_value_type(&vector)?;
-                            }
-
-                            // There is no way to bitcast between Uint/Sint in glsl. Use constructor conversion
-                            (Sk::Uint | Sk::Bool, Sk::Sint, None) => write!(self.out, "int")?,
-                            (Sk::Sint | Sk::Bool, Sk::Uint, None) => write!(self.out, "uint")?,
-                            (Sk::Bool, Sk::Float, None) => write!(self.out, "float")?,
-                            (Sk::Sint | Sk::Uint | Sk::Float, Sk::Bool, None) => {
-                                write!(self.out, "bool")?
-                            }
-
-                            (Sk::AbstractInt | Sk::AbstractFloat, _, _)
-                            | (_, Sk::AbstractInt | Sk::AbstractFloat, _) => unreachable!(),
-                        };
-
-                        write!(self.out, "(")?;
-                        self.write_expr(expr, ctx)?;
-                        write!(self.out, ")")?;
-                    }
+                    _ => write!(self.out, "{}", scalar.full)?,
                 }
+
+                write!(self.out, "(")?;
+                self.write_expr(expr, ctx)?;
+                write!(self.out, ")")?
+            }
+            // `Bitcast` is a call to one of the glsl provided bitcast functions,
+            // or to a constructor when only the signedness of an integer changes.
+            Expression::Bitcast { expr, ty } => {
+                use crate::ScalarKind as Sk;
+
+                let inner = ctx.resolve_type(expr, &self.module.types);
+                let target = &self.module.types[ty].inner;
+
+                if inner == target {
+                    return self.write_expr(expr, ctx);
+                }
+
+                let unsupported =
+                    || Error::Custom(format!("GLSL cannot bitcast from {inner:?} to {target:?}"));
+                let (Some((src_size, src)), Some((dst_size, dst))) = (
+                    inner.vector_size_and_scalar(),
+                    target.vector_size_and_scalar(),
+                ) else {
+                    return Err(unsupported());
+                };
+                if src_size != dst_size {
+                    return Err(unsupported());
+                }
+
+                match (src.kind, dst.kind) {
+                    (Sk::Float, Sk::Sint) if src.width == 4 => write!(self.out, "floatBitsToInt")?,
+                    (Sk::Float, Sk::Uint) if src.width == 4 => write!(self.out, "floatBitsToUint")?,
+                    (Sk::Sint, Sk::Float) if src.width == 4 => write!(self.out, "intBitsToFloat")?,
+                    (Sk::Uint, Sk::Float) if src.width == 4 => write!(self.out, "uintBitsToFloat")?,
+                    // There is no way to bitcast between Uint/Sint in glsl. Use constructor conversion
+                    (Sk::Uint, Sk::Sint) | (Sk::Sint, Sk::Uint) => {
+                        self.write_value_type(target)?;
+                    }
+                    _ => return Err(unsupported()),
+                };
+
+                write!(self.out, "(")?;
+                self.write_expr(expr, ctx)?;
+                write!(self.out, ")")?;
             }
             // These expressions never show up in `Emit`.
             Expression::CallResult(_)
@@ -3861,8 +3819,39 @@ impl<'a, W: Write> Writer<'a, W> {
             // not supported yet
             Expression::RayQueryGetIntersection { .. }
             | Expression::RayQueryVertexPositions { .. }
+            | Expression::HitObjectQuery { .. }
             | Expression::CooperativeLoad { .. }
             | Expression::CooperativeMultiplyAdd { .. } => unreachable!(),
+        }
+
+        Ok(())
+    }
+
+    /// Writes `expr`, wrapped in `int(...)` if it is an unsigned scalar.
+    ///
+    /// GLSL image functions only take `int` levels and sample indices, while WGSL also
+    /// allows `u32`.
+    fn write_expr_as_int(
+        &mut self,
+        expr: Handle<crate::Expression>,
+        ctx: &back::FunctionCtx,
+    ) -> BackendResult {
+        let cast_to_int = matches!(
+            *ctx.resolve_type(expr, &self.module.types),
+            TypeInner::Scalar(crate::Scalar {
+                kind: crate::ScalarKind::Uint,
+                ..
+            })
+        );
+
+        if cast_to_int {
+            write!(self.out, "int(")?;
+        }
+
+        self.write_expr(expr, ctx)?;
+
+        if cast_to_int {
+            write!(self.out, ")")?;
         }
 
         Ok(())
@@ -3884,7 +3873,7 @@ impl<'a, W: Write> Writer<'a, W> {
             CLAMPED_LOD_SUFFIX
         )?;
         // Write the lod that will be clamped
-        self.write_expr(level_expr, ctx)?;
+        self.write_expr_as_int(level_expr, ctx)?;
         // Set the min value to 0 and start a call to `textureQueryLevels` to get
         // the maximum value
         write!(self.out, ", 0, textureQueryLevels(")?;
@@ -4224,7 +4213,7 @@ impl<'a, W: Write> Writer<'a, W> {
             if let Some(level_expr) = level {
                 // Separate the image from the lod
                 write!(self.out, ", ")?;
-                self.write_expr(level_expr, ctx)?;
+                self.write_expr_as_int(level_expr, ctx)?;
             }
             // Close the `textureSize` call
             write!(self.out, ")")?;
@@ -4294,7 +4283,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // the number of samples the image has.
             if let Some(sample_expr) = sample {
                 write!(self.out, ", clamp(")?;
-                self.write_expr(sample_expr, ctx)?;
+                self.write_expr_as_int(sample_expr, ctx)?;
                 // Set the min value to 0 and start the call to `textureSamples`
                 write!(self.out, ", 0, textureSamples(")?;
                 self.write_expr(image, ctx)?;
@@ -4303,28 +4292,10 @@ impl<'a, W: Write> Writer<'a, W> {
                 writeln!(self.out, ") - 1)")?;
             }
         } else if let Some(sample_or_level) = sample.or(level) {
-            // GLSL only support SInt on this field while WGSL support also UInt
-            let cast_to_int = matches!(
-                *ctx.resolve_type(sample_or_level, &self.module.types),
-                TypeInner::Scalar(crate::Scalar {
-                    kind: crate::ScalarKind::Uint,
-                    ..
-                })
-            );
-
             // If no bounds checking is need just add the sample or level argument
             // after the coordinates
             write!(self.out, ", ")?;
-
-            if cast_to_int {
-                write!(self.out, "int(")?;
-            }
-
-            self.write_expr(sample_or_level, ctx)?;
-
-            if cast_to_int {
-                write!(self.out, ")")?;
-            }
+            self.write_expr_as_int(sample_or_level, ctx)?;
         }
 
         // Close the image load function.
