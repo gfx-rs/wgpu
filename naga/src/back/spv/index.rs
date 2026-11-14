@@ -9,7 +9,10 @@ use super::{
 };
 use crate::{
     arena::Handle,
-    proc::{index::GuardedIndex, BoundsCheckPolicy},
+    proc::{
+        index::{GuardedIndex, IndexableLength},
+        BoundsCheckPolicy,
+    },
 };
 
 /// The results of performing a bounds check.
@@ -285,10 +288,8 @@ impl BlockContext<'_> {
     ) -> Result<MaybeKnown<u32>, Error> {
         let sequence_ty = self.fun_info[sequence].ty.inner_with(&self.ir_module.types);
         match sequence_ty.indexable_length_resolved(self.ir_module) {
-            Ok(crate::proc::IndexableLength::Known(known_length)) => {
-                Ok(MaybeKnown::Known(known_length))
-            }
-            Ok(crate::proc::IndexableLength::Dynamic) => {
+            Ok(IndexableLength::Known(known_length)) => Ok(MaybeKnown::Known(known_length)),
+            Ok(IndexableLength::Dynamic) => {
                 if let Some(size) = self.binding_array_layout_size(sequence) {
                     return Ok(MaybeKnown::Known(size));
                 }
@@ -534,6 +535,18 @@ impl BlockContext<'_> {
         // If the value of `index` is known at compile time, find it now.
         index.try_resolve_to_constant(&self.ir_function.expressions, self.ir_module);
 
+        // A negative constant is invalid as an index operand, and the unsigned bounds
+        // checks see it as a huge value. `u32::MAX` is out of bounds for every length.
+        if let GuardedIndex::Expression(expr) = index {
+            if let Err(crate::proc::ConstValueError::Negative) = self
+                .ir_module
+                .to_ctx()
+                .get_const_val_from::<u32, _>(expr, &self.ir_function.expressions)
+            {
+                index = GuardedIndex::Known(u32::MAX);
+            }
+        }
+
         let policy = self.writer.bounds_check_policies.choose_policy(
             base,
             &self.ir_module.types,
@@ -546,7 +559,20 @@ impl BlockContext<'_> {
                 self.write_index_comparison(base, index, block)?
             }
             BoundsCheckPolicy::Unchecked => match index {
-                GuardedIndex::Known(value) => BoundsCheckResult::KnownInBounds(value),
+                // A known index can still be out of bounds. Use the last element
+                // instead, as an out-of-range literal operand is invalid SPIR-V.
+                GuardedIndex::Known(value) => match crate::proc::index::access_needs_check(
+                    base,
+                    index,
+                    self.ir_module,
+                    &self.ir_function.expressions,
+                    self.fun_info,
+                ) {
+                    Some(IndexableLength::Known(length)) => {
+                        BoundsCheckResult::KnownInBounds(length - 1)
+                    }
+                    _ => BoundsCheckResult::KnownInBounds(value),
+                },
                 GuardedIndex::Expression(expr) => BoundsCheckResult::Computed(self.cached[expr]),
             },
         })

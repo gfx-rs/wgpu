@@ -887,21 +887,23 @@ impl BlockContext<'_> {
                     )?,
                     crate::TypeInner::Array { .. } | crate::TypeInner::Matrix { .. } => {
                         // See if `index` is known at compile time.
-                        match GuardedIndex::from_expression(
+                        let index = GuardedIndex::from_expression(
                             index,
                             &self.ir_function.expressions,
                             self.ir_module,
-                        ) {
-                            GuardedIndex::Known(value) => {
+                        );
+                        let in_bounds = crate::proc::index::access_needs_check(
+                            base,
+                            index,
+                            self.ir_module,
+                            &self.ir_function.expressions,
+                            self.fun_info,
+                        )
+                        .is_none();
+                        match index {
+                            GuardedIndex::Known(value) if in_bounds => {
                                 // If `index` is known and in bounds, we can just use
                                 // `OpCompositeExtract`.
-                                //
-                                // At the moment, validation rejects programs if this
-                                // index is out of bounds, so we don't need bounds checks.
-                                // However, that rejection is incorrect, since WGSL says
-                                // that `let` bindings are not constant expressions
-                                // (#6396). So eventually we will need to emulate bounds
-                                // checks here.
                                 let id = self.gen_id();
                                 let base_id = self.cached[base];
                                 block.body.push(Instruction::composite_extract(
@@ -912,13 +914,14 @@ impl BlockContext<'_> {
                                 ));
                                 id
                             }
-                            GuardedIndex::Expression(_) => {
+                            _ => {
                                 // We are subscripting an array or matrix that is not
-                                // behind a pointer, using an index computed at runtime.
-                                // SPIR-V has no instructions that do this, so the best we
-                                // can do is spill the value to a new temporary variable,
-                                // at which point we can get a pointer to that and just
-                                // use `OpAccessChain` in the usual way.
+                                // behind a pointer, using an index computed at runtime
+                                // or known to be out of bounds. SPIR-V has no
+                                // instructions that do this, so the best we can do is
+                                // spill the value to a new temporary variable, at which
+                                // point we can get a pointer to that and use
+                                // `OpAccessChain`, which applies the bounds check policy.
                                 self.spill_to_internal_variable(base, block);
 
                                 // Since the base was spilled, mark this access to it as
