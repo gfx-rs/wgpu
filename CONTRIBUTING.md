@@ -179,16 +179,17 @@ However, the author submitting the PR must fully adhere to [Change Ownership](#c
 The author is responsible for the code, regardless of how it was created.
 Do not use "LLM generated" as a justification for low quality code.
 
-Additionally, please write Issue and PR descriptions and large explanatory
-comment blocks yourself. These need to be read by maintainers and maintainer
-time is at a premium, so be respectful of maintainers time by not giving
-them unadulterated LLM content to read.
+Additionally, issue and PR descriptions and GitHub comments, as well as long explanatory code comments,
+must be written by a human. Having looked over or paraphrased an LLM's output is not sufficient.
+Maintainers use descriptions as evidence that the author understands the contribution.
+Short descriptions are fine for most changes. LLM translation from another language is allowed.
+If you used an LLM for translation, say so in the description or comment.
 
 #### Undue Burden
 
 We reserve the right to close any PRs that cause an undue burden on
 the maintainership. This could include, but is not limited to, [massive PRs](#large-pull-requests-are-risky),
-[LLM slop](#llms-ai), or contributions not in good faith.
+[PRs that do not follow the LLM policy](#llms-ai), or contributions not in good faith.
 
 #### Designing new features
 
