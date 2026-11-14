@@ -243,7 +243,8 @@ impl super::Device {
     ///
     /// - `fd`, `drm_format`, `stride`, `offset` and `drm_modifier` must describe
     ///   the same DMA-BUF allocation.
-    /// - `desc.format` must correctly describe `drm_format`.
+    /// - `desc` must be valid (consider calling `wgpu_core::Device::validate_texture_descriptor`)
+    ///    and must accurately describe the texture being imported (including `drm_format`)
     /// - Only one 2D plane, one array layer, one mip level and one sample are
     ///   currently supported.
     /// - Synchronization with the DMA-BUF producer must be handled separately.
