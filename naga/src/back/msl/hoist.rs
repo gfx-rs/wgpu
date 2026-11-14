@@ -136,6 +136,7 @@ fn definitions(
             }
             | St::WorkGroupUniformLoad { result, .. }
             | St::SubgroupBallot { result, .. }
+            | St::SubgroupBallotFindBit { result, .. }
             | St::SubgroupGather { result, .. }
             | St::SubgroupCollectiveOperation { result, .. } => {
                 defined.insert(result);
