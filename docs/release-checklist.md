@@ -27,7 +27,6 @@ Day of Release:
 - Bump the wgpu dependency numbers in the following places:
   - `Cargo.toml`
   - `examples/standalone/*`
-  - `examples/bug-repro/*`
 - Grep for the previous version to ensure various documentation links are updated.
   - For example, if the previous version was v24.0.0, grep for `v24` and `24.0`
 - Ensure `glow` and `rspirv` are updated to the latest version if needed.
@@ -45,9 +44,10 @@ Day of Release:
   ```
 - If there were any newly published crates, ensure `github:gfx-rs:wgpu` is added as an owner of that crate.
 - Create a new signed tag called `vX.Y.Z` and push it to the repo.
-  - For each crate being released (viz., every `publish`-able crate that is not `deno*`), create a new tag of the form `{crate_name}-vX.Y.X`.
+  - For each crate being released (viz., every `publish`-able crate that is not `deno*`), create a new tag of the form `{crate_name}-vX.Y.Z`.
+  - Push at most 25 tags in one push. A repository setting rejects a push that updates more.
 - Create a new release on the `wgpu` repo with the changelog from this version, targeting that tag
-- Create a branch with the with the new version `vX` and push it to the repo.
+- Create a branch with the new version `vX` and push it to the repo.
   - On this branch, remove the [!NOTE] at the top of [examples/README.md].
 - Complete the release's milestone on GitHub.
 - Create a new milestone for the next release, in 12 weeks time.
@@ -67,15 +67,18 @@ Day of Release:
 ## Patch Release Process
 
 - Enumerate all PRs that haven't been backported yet. These use the `PR: needs back-porting` label. [GH Link](https://github.com/gfx-rs/wgpu/pulls?q=sort%3Aupdated-desc+is%3Apr+label%3A%22PR%3A+needs+back-porting%22)
-- On _your own branch_ based on the latest release branch. Cherry-pick the PRs that need to be backported. When modifying the commits, use --append to retain their original authorship.
-- Remove the `needs-backport` label from the PRs.
+- Enumerate all open PRs that target the release branch. Review them, then include the approved ones.
+- On _your own branch_ based on the latest release branch. Cherry-pick the PRs that need to be backported. Keep the original author of each commit.
+- Remove the `PR: needs back-porting` label from the PRs.
 - Fix the changelogs items and add a new header for the patch release with the release version and date.
+- Update the version number in the root `Cargo.toml` to the new version. Do not change the versions of the workspace dependencies, so that users can roll back a single crate.
 - Create a PR with all of the version changes and changelog updates into the release branch.
+  - If CI on the release branch fails for causes that are not related to the release, such as retired runner images, fix it in this PR.
 - While waiting on the PR, do a dry run of publishing.
   ```bash
     cargo publish --dry-run --workspace --all-features --exclude deno_webgpu
   ```
-- Once the PR is CI clean and publish worked, (force) merge it.
+- Once the PR is CI clean and publish worked, fast-forward the release branch to it manually.
 - Checkout the version branch with the merged PR.
 - Publish! These commands can be pasted directly into your terminal in a single command, and they will publish everything.
   ```bash
@@ -83,6 +86,8 @@ Day of Release:
   ```
 - Create a new release on the `wgpu` repo with the relevant changelog included, based on a new tag called `vX.Y.Z` in the release branch.
   - For each crate released, also create a tag `{crate_name}-vX.Y.Z`.
-- Backport the changelog and version bumps to the `trunk` branch.
+  - Push at most 25 tags in one push. A repository setting rejects a push that updates more.
+- Close the PRs into the release branch that the release PR replaced.
+- Forward port the changelog and any release checklist changes to the `trunk` branch.
   - Ensure that any items in the newly-released changelog don't appear in the "unreleased" section of the trunk changelog.
 - Update the release checklist with any needed changes.
