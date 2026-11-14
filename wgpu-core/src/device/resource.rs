@@ -838,6 +838,11 @@ impl Device {
         self.adapter.backend()
     }
 
+    /// Returns a reference to the adapter this device was created from.
+    pub fn adapter(&self) -> &Arc<Adapter> {
+        &self.adapter
+    }
+
     /// Return true if `self` is still valid.
     ///
     /// Note that a `false` result here does *not* guarantee that no further activity will
