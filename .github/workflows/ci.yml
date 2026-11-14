@@ -1026,7 +1026,7 @@ jobs:
           cargo --locked fmt -- --check
 
       - name: Install Tombi
-        uses: tombi-toml/setup-tombi@865293658362cc5a3c0ba075e875af683d39fb44 # v1.9.9
+        uses: tombi-toml/setup-tombi@8ddc6b91b6fa3ad0ce192a68b409930851e4886c # v1.11.2
         with:
           version: "1.1.3"
 
@@ -1034,7 +1034,7 @@ jobs:
         run: tombi format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@7f9d0819ca1c008ade73f4b41fa9d258d48f605b # v1.51.1
+        uses: crate-ci/typos@276087d9a4f06398b3e04825487805e2d7375888 # v1.52.2
 
   check-cts-runner:
     # runtime is normally 2 minutes

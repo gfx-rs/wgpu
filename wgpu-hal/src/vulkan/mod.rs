@@ -563,6 +563,10 @@ bitflags::bitflags!(
         /// As such, we need to make sure all calls to vkCmdFillBuffer are aligned to 16 bytes
         /// if they cover a range of 4096 bytes or more.
         const FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16 = 1 << 2;
+        /// AMD's proprietary driver fails with VK_ERROR_INITIALIZATION_FAILED on mesh
+        /// and task shaders that zero-initialize workgroup memory with `OpVariable`
+        /// initializers, so polyfill it in those stages.
+        const POLYFILL_MESH_TASK_WORKGROUP_ZERO_INIT = 1 << 3;
     }
 );
 
