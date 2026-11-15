@@ -56,3 +56,78 @@ fn device_and_buffers() {
     device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
     assert!(done2.load(Relaxed));
 }
+
+/// Validated indirect draws do not panic on noop.
+#[test]
+fn draw_indirect_with_indirect_validation() {
+    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(
+            "@vertex fn vs() -> @builtin(position) vec4f { return vec4f(); }
+             @fragment fn fs() -> @location(0) vec4f { return vec4f(); }"
+                .into(),
+        ),
+    });
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: None,
+        layout: None,
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: None,
+            compilation_options: Default::default(),
+            buffers: &[],
+        },
+        primitive: Default::default(),
+        depth_stencil: None,
+        multisample: Default::default(),
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: None,
+            compilation_options: Default::default(),
+            targets: &[Some(wgpu::TextureFormat::Rgba8Unorm.into())],
+        }),
+        multiview_mask: None,
+        cache: None,
+    });
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+        texture_binding_view_dimension: None,
+    });
+    let view = texture.create_view(&Default::default());
+    let indirect = device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 16,
+        usage: wgpu::BufferUsages::INDIRECT,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = device.create_command_encoder(&Default::default());
+    {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: Default::default(),
+            })],
+            ..Default::default()
+        });
+        pass.set_pipeline(&pipeline);
+        pass.draw_indirect(&indirect, 0);
+    }
+    queue.submit([encoder.finish()]);
+    device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+}

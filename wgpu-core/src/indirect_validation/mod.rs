@@ -100,7 +100,7 @@ impl BindGroups {
         )?;
         let draw = indirect_validation.draw.create_src_bind_group(
             device.raw(),
-            &device.adapter.limits(),
+            &device.adapter.raw.capabilities.limits,
             buffer_size,
             buffer,
             device.instance_flags,
