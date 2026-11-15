@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 81
+; Bound: 86
 OpCapability Shader
 OpCapability Float16
 OpCapability StorageBuffer16BitAccess
@@ -10,108 +10,113 @@ OpCapability StorageInputOutput16
 OpExtension "SPV_KHR_16bit_storage"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %13 "main"
-OpExecutionMode %13 LocalSize 1 1 1
+OpEntryPoint GLCompute %18 "main"
+OpExecutionMode %18 LocalSize 1 1 1
 %2 = OpTypeVoid
-%3 = OpTypeInt 32 1
-%4 = OpTypeFloat 32
-%5 = OpTypeInt 32 0
-%7 = OpTypeFloat 16
-%6 = OpTypeVector %7 2
-%8 = OpTypeVector %7 4
-%9 = OpTypeVector %3 2
-%10 = OpTypeVector %5 2
-%11 = OpTypeVector %4 2
-%14 = OpTypeFunction %2
-%15 = OpConstant  %3  1
-%16 = OpConstant  %7  0.000000000000000000000000000000000000000021524
-%17 = OpConstant  %4  1
-%18 = OpConstant  %5  4294967295
-%19 = OpConstant  %7  0.000000000000000000000000000000000000000022959
-%20 = OpConstantComposite  %6  %16 %19
-%21 = OpConstant  %7  0.000000000000000000000000000000000000000023676
-%22 = OpConstant  %7  0.000000000000000000000000000000000000000024394
-%23 = OpConstantComposite  %8  %16 %19 %21 %22
-%24 = OpConstant  %3  0
-%25 = OpConstant  %5  0
-%26 = OpConstant  %4  0
-%27 = OpConstantComposite  %9  %24 %24
-%28 = OpConstantComposite  %10  %25 %25
-%29 = OpConstantComposite  %11  %26 %26
-%30 = OpConstant  %3  2
-%31 = OpConstantComposite  %9  %15 %30
-%32 = OpConstant  %5  1
-%33 = OpConstantComposite  %10  %18 %32
-%35 = OpTypePointer Function %6
-%37 = OpTypePointer Function %8
-%39 = OpTypePointer Function %3
-%41 = OpTypePointer Function %5
-%43 = OpTypePointer Function %4
-%45 = OpTypePointer Function %9
-%47 = OpTypePointer Function %10
-%49 = OpTypePointer Function %11
-%13 = OpFunction  %2  None %14
-%12 = OpLabel
-%46 = OpVariable  %47  Function %28
-%40 = OpVariable  %41  Function %25
-%34 = OpVariable  %35  Function %20
-%48 = OpVariable  %49  Function %29
-%42 = OpVariable  %43  Function %26
-%36 = OpVariable  %37  Function %23
-%44 = OpVariable  %45  Function %27
-%38 = OpVariable  %39  Function %24
-OpBranch %50
-%50 = OpLabel
-%51 = OpLoad  %6  %34
-%52 = OpBitcast  %3  %51
-OpStore %38 %52
-%53 = OpLoad  %6  %34
-%54 = OpBitcast  %5  %53
-OpStore %40 %54
-%55 = OpLoad  %6  %34
-%56 = OpBitcast  %4  %55
-OpStore %42 %56
-%57 = OpLoad  %8  %36
-%58 = OpBitcast  %9  %57
-OpStore %44 %58
-%59 = OpLoad  %8  %36
-%60 = OpBitcast  %10  %59
-OpStore %46 %60
-%61 = OpLoad  %8  %36
-%62 = OpBitcast  %11  %61
-OpStore %48 %62
-%63 = OpLoad  %3  %38
-%64 = OpBitcast  %6  %63
-OpStore %34 %64
-%65 = OpLoad  %5  %40
-%66 = OpBitcast  %6  %65
-OpStore %34 %66
-%67 = OpLoad  %4  %42
-%68 = OpBitcast  %6  %67
-OpStore %34 %68
-%69 = OpLoad  %9  %44
-%70 = OpBitcast  %8  %69
-OpStore %36 %70
-%71 = OpLoad  %10  %46
-%72 = OpBitcast  %8  %71
-OpStore %36 %72
-%73 = OpLoad  %11  %48
-%74 = OpBitcast  %8  %73
-OpStore %36 %74
-%75 = OpLoad  %6  %34
-OpStore %34 %75
-%76 = OpLoad  %5  %40
-OpStore %40 %76
-OpStore %40 %18
-%77 = OpBitcast  %4  %15
-OpStore %42 %77
-%78 = OpBitcast  %3  %17
-OpStore %38 %78
-%79 = OpBitcast  %6  %15
-OpStore %34 %79
-OpStore %34 %20
-%80 = OpBitcast  %8  %31
-OpStore %36 %80
-OpStore %46 %33
+%3 = OpTypeInt 32 0
+%5 = OpTypeFloat 16
+%4 = OpTypeVector %5 2
+%6 = OpTypeVector %5 4
+%7 = OpTypeVector %3 2
+%8 = OpTypeInt 32 1
+%9 = OpTypeFloat 32
+%10 = OpTypeVector %8 2
+%11 = OpTypeVector %9 2
+%12 = OpConstant  %3  1006648320
+%13 = OpConstant  %5  0.000000000000000000000000000000000000000000001
+%14 = OpConstant  %5  0
+%15 = OpConstantComposite  %6  %13 %14 %13 %14
+%16 = OpConstantComposite  %7  %12 %12
+%19 = OpTypeFunction %2
+%20 = OpConstant  %8  1
+%21 = OpConstant  %5  0.000000000000000000000000000000000000000021524
+%22 = OpConstant  %9  1
+%23 = OpConstant  %3  4294967295
+%24 = OpConstant  %5  0.000000000000000000000000000000000000000022959
+%25 = OpConstantComposite  %4  %21 %24
+%26 = OpConstant  %5  0.000000000000000000000000000000000000000023676
+%27 = OpConstant  %5  0.000000000000000000000000000000000000000024394
+%28 = OpConstantComposite  %6  %21 %24 %26 %27
+%29 = OpConstant  %8  0
+%30 = OpConstant  %3  0
+%31 = OpConstant  %9  0
+%32 = OpConstantComposite  %10  %29 %29
+%33 = OpConstantComposite  %7  %30 %30
+%34 = OpConstantComposite  %11  %31 %31
+%35 = OpConstant  %8  2
+%36 = OpConstantComposite  %10  %20 %35
+%37 = OpConstant  %3  1
+%38 = OpConstantComposite  %7  %23 %37
+%40 = OpTypePointer Function %4
+%42 = OpTypePointer Function %6
+%44 = OpTypePointer Function %8
+%46 = OpTypePointer Function %3
+%48 = OpTypePointer Function %9
+%50 = OpTypePointer Function %10
+%52 = OpTypePointer Function %7
+%54 = OpTypePointer Function %11
+%18 = OpFunction  %2  None %19
+%17 = OpLabel
+%51 = OpVariable  %52  Function %33
+%45 = OpVariable  %46  Function %30
+%39 = OpVariable  %40  Function %25
+%53 = OpVariable  %54  Function %34
+%47 = OpVariable  %48  Function %31
+%41 = OpVariable  %42  Function %28
+%49 = OpVariable  %50  Function %32
+%43 = OpVariable  %44  Function %29
+OpBranch %55
+%55 = OpLabel
+%56 = OpLoad  %4  %39
+%57 = OpBitcast  %8  %56
+OpStore %43 %57
+%58 = OpLoad  %4  %39
+%59 = OpBitcast  %3  %58
+OpStore %45 %59
+%60 = OpLoad  %4  %39
+%61 = OpBitcast  %9  %60
+OpStore %47 %61
+%62 = OpLoad  %6  %41
+%63 = OpBitcast  %10  %62
+OpStore %49 %63
+%64 = OpLoad  %6  %41
+%65 = OpBitcast  %7  %64
+OpStore %51 %65
+%66 = OpLoad  %6  %41
+%67 = OpBitcast  %11  %66
+OpStore %53 %67
+%68 = OpLoad  %8  %43
+%69 = OpBitcast  %4  %68
+OpStore %39 %69
+%70 = OpLoad  %3  %45
+%71 = OpBitcast  %4  %70
+OpStore %39 %71
+%72 = OpLoad  %9  %47
+%73 = OpBitcast  %4  %72
+OpStore %39 %73
+%74 = OpLoad  %10  %49
+%75 = OpBitcast  %6  %74
+OpStore %41 %75
+%76 = OpLoad  %7  %51
+%77 = OpBitcast  %6  %76
+OpStore %41 %77
+%78 = OpLoad  %11  %53
+%79 = OpBitcast  %6  %78
+OpStore %41 %79
+%80 = OpLoad  %4  %39
+OpStore %39 %80
+%81 = OpLoad  %3  %45
+OpStore %45 %81
+OpStore %45 %23
+%82 = OpBitcast  %9  %20
+OpStore %47 %82
+%83 = OpBitcast  %8  %22
+OpStore %43 %83
+%84 = OpBitcast  %4  %20
+OpStore %39 %84
+OpStore %39 %25
+%85 = OpBitcast  %6  %36
+OpStore %41 %85
+OpStore %51 %38
 OpReturn
 OpFunctionEnd

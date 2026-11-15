@@ -4,6 +4,9 @@
 
 using metal::uint;
 
+constant uint bitcast_vec2_to_scalar = 1006648320u;
+constant metal::half4 bitcast_vec2_to_vec4_ = metal::half4(0.000000059604645h, 0.0h, 0.000000059604645h, 0.0h);
+constant metal::uint2 bitcast_vec4_to_vec2_ = metal::uint2(1006648320u, 1006648320u);
 
 kernel void main_(
 ) {

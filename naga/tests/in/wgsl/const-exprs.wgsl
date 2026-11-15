@@ -1,4 +1,3 @@
-enable f16;
 const TWO: u32 = 2u;
 const THREE: i32 = 3i;
 const TRUE = true;
@@ -152,7 +151,7 @@ fn abstract_access(i: u32) {
     var d: i32 = ABSTRACT_VECTOR[i];
 }
 
-const bitcast_scalar  = bitcast<u32>(4.0);
-const bitcast_vec_to_scalar  = bitcast<u32>(vec2<f16>(1.0));
-const bitcast_vec4_to_vec2  = bitcast<vec2<u32>>(vec4<f16>(1.0));
+const bitcast_id  = bitcast<f32>(1.0);
+const bitcast_scalar  = bitcast<u32>(1.0);
+const bitcast_vec2_to_vec2  = bitcast<vec2<u32>>(vec2<f32>(1.0));
 const bitcast_vec4_to_vec4  = bitcast<vec4<u32>>(vec4<f32>(1.0));

@@ -21,9 +21,9 @@ const float phi_sun = 6.282;
 const vec4 DIV = vec4(0.44444445, 0.0, 0.0, 0.0);
 const vec2 add_vec = vec2(4.0, 5.0);
 const bvec2 compare_vec = bvec2(true, false);
-const uint bitcast_scalar = 1082130432u;
-const uint bitcast_vec_to_scalar = 1006648320u;
-const uvec2 bitcast_vec4_to_vec2_ = uvec2(1006648320u, 1006648320u);
+const float bitcast_id = 1.0;
+const uint bitcast_scalar = 1065353216u;
+const uvec2 bitcast_vec2_to_vec2_ = uvec2(1065353216u, 1065353216u);
 const uvec4 bitcast_vec4_to_vec4_ = uvec4(1065353216u, 1065353216u, 1065353216u, 1065353216u);
 
 

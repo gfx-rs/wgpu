@@ -1,48 +1,48 @@
 #version 460
 layout(local_size_x = 2, local_size_y = 3, local_size_z = 1) in;
 
-const int _161[9] = int[](1, 2, 3, 4, 5, 6, 7, 8, 9);
+const int _159[9] = int[](1, 2, 3, 4, 5, 6, 7, 8, 9);
 
-void _41()
+void _40()
 {
-    ivec4 _44 = ivec4(4, 3, 2, 1);
+    ivec4 _43 = ivec4(4, 3, 2, 1);
 }
 
-void _48()
+void _47()
 {
-    int _49 = 2;
+    int _48 = 2;
 }
 
-void _53()
+void _52()
 {
-    int _55 = 6;
+    int _54 = 6;
 }
 
-void _58()
+void _57()
 {
-    ivec4 _67 = ivec4(0);
-    int _62 = 0;
-    int _66 = 70;
-    int _61 = 30;
-    int _64 = 0;
-    _62 = _61;
-    _64 = _62;
-    _67 = ivec4(_61, _62, _64, _66);
+    ivec4 _66 = ivec4(0);
+    int _61 = 0;
+    int _65 = 70;
+    int _60 = 30;
+    int _63 = 0;
+    _61 = _60;
+    _63 = _61;
+    _66 = ivec4(_60, _61, _63, _65);
 }
 
-void _78()
+void _77()
 {
-    ivec4 _81 = ivec4(-4);
+    ivec4 _80 = ivec4(-4);
 }
 
-void _84()
+void _83()
 {
-    ivec4 _85 = ivec4(-4);
+    ivec4 _84 = ivec4(-4);
 }
 
-uint _89(int _88)
+uint _88(int _87)
 {
-    switch (_88)
+    switch (_87)
     {
         case 0:
         {
@@ -64,70 +64,70 @@ uint _89(int _88)
     return 0u;
 }
 
-void _103()
+void _102()
 {
-    vec4 _107 = vec4(2.0, 1.0, 1.0, 1.0);
+    vec4 _105 = vec4(2.0, 1.0, 1.0, 1.0);
 }
 
-void _111()
+void _109()
 {
-    float _112[2] = float[](0.0, 0.0);
+    float _110[2] = float[](0.0, 0.0);
 }
 
-void _117()
+void _115()
 {
-    ivec3 _121 = ivec3(1);
-    ivec3 _123 = ivec3(0, 1, 2);
-    ivec3 _124 = ivec3(1, 0, 2);
+    ivec3 _119 = ivec3(1);
+    ivec3 _121 = ivec3(0, 1, 2);
+    ivec3 _122 = ivec3(1, 0, 2);
 }
 
-void _127()
+void _125()
 {
-    bool _135 = false;
-    bool _132 = true;
-    bool _128 = false;
-    bool _136 = true;
     bool _133 = false;
     bool _130 = true;
+    bool _126 = false;
     bool _134 = true;
     bool _131 = false;
+    bool _128 = true;
+    bool _132 = true;
+    bool _129 = false;
 }
 
-void _139()
+void _137()
 {
-    int _149 = 70;
-    uint _145 = 4u;
-    int _151 = -4;
-    uint _148 = 12u;
-    int _144 = 4;
-    uint _150 = 70u;
-    int _147 = 12;
+    int _147 = 70;
+    uint _143 = 4u;
+    int _149 = -4;
+    uint _146 = 12u;
+    int _142 = 4;
+    uint _148 = 70u;
+    int _145 = 12;
 }
 
-void _155(uint _154)
+void _153(uint _152)
 {
-    uint _165 = 1u;
-    int _168 = 0;
-    float _163 = 1.0;
+    uint _163 = 1u;
     int _166 = 0;
-    _166 = _161[_154];
-    _168 = ivec4(1, 2, 3, 4)[_154];
+    float _161 = 1.0;
+    int _164 = 0;
+    _164 = _159[_152];
+    _166 = ivec4(1, 2, 3, 4)[_152];
 }
 
 void main()
 {
-    _41();
-    _48();
-    _53();
-    _58();
-    _78();
-    _84();
-    _103();
-    _111();
-    _117();
-    _127();
-    _139();
-    _111();
-    _155(1u);
+    _40();
+    _47();
+    _52();
+    _57();
+    _77();
+    _83();
+    _102();
+    _109();
+    _115();
+    _125();
+    _137();
+    _109();
+    _153(1u);
 }
 

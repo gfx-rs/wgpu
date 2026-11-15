@@ -1,5 +1,9 @@
 enable f16;
 
+const bitcast_vec2_to_scalar: u32 = 1006648320u;
+const bitcast_vec2_to_vec4_: vec4<f16> = vec4<f16>(0.000000059604645h, 0h, 0.000000059604645h, 0h);
+const bitcast_vec4_to_vec2_: vec2<u32> = vec2<u32>(1006648320u, 1006648320u);
+
 @compute @workgroup_size(1, 1, 1)
 fn main() {
     var h2_: vec2<f16> = vec2<f16>(1h, 2h);

@@ -977,6 +977,8 @@ pub enum ConstantEvaluatorError {
     CooperativeOperation,
     #[error("Type is too large")]
     TypeTooLarge(Handle<Type>),
+    #[error("Cannot bitcast `{from}` to `{to}`. Types should be the same size")]
+    InvalidBitcastArgs { from: String, to: String },
 }
 
 impl<'a> ConstantEvaluator<'a> {
@@ -2732,19 +2734,28 @@ impl<'a> ConstantEvaluator<'a> {
                 Literal::I32(v) => out.extend_from_slice(&v.to_le_bytes()),
                 Literal::U64(v) => out.extend_from_slice(&v.to_le_bytes()),
                 Literal::I64(v) => out.extend_from_slice(&v.to_le_bytes()),
-                _ => (),
+                _ => {
+                    return Err(ConstantEvaluatorError::NotImplemented(format!(
+                        "Extracting bytes from {:?} is not implemented",
+                        literal
+                    )));
+                }
             },
             Expression::Compose { ty: _, components } => {
                 for component in components.iter() {
                     out.extend_from_slice(&self.expression_to_bytes(*component, span)?);
                 }
             }
-            _ => (),
+            _ => {
+                return Err(ConstantEvaluatorError::NotImplemented(format!(
+                    "Extracting bytes from {:?} is not implemented",
+                    self.expressions[expr]
+                )));
+            }
         };
         Ok(out)
     }
 
-    // caller of the function should make sure the sizes align
     pub fn literal_from_bytes(
         &mut self,
         scalar: crate::Scalar,
@@ -2778,7 +2789,10 @@ impl<'a> ConstantEvaluator<'a> {
             (ScalarKind::Float, 8) => {
                 Ok(Literal::F64(f64::from_le_bytes(bytes.try_into().unwrap())))
             }
-            _ => Err(ConstantEvaluatorError::TypeNotConstructible),
+            _ => Err(ConstantEvaluatorError::NotImplemented(format!(
+                "Building {:?} literal with width {:?} is not implemented",
+                scalar.kind, scalar.width
+            ))),
         }
     }
 
@@ -2791,7 +2805,7 @@ impl<'a> ConstantEvaluator<'a> {
         let expr = self.eval_zero_value_and_splat(expr, span)?;
         let target_ty = &self.types[ty].inner.clone();
         let bytes = self.expression_to_bytes(expr, span)?;
-        let error = ConstantEvaluatorError::InvalidCastArg {
+        let error = ConstantEvaluatorError::InvalidBitcastArgs {
             from: format!("{:?}", expr),
             to: format!("{:?}", target_ty),
         };

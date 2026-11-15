@@ -14,9 +14,9 @@ static const float phi_sun = 6.282;
 static const float4 DIV = float4(0.44444445, 0.0, 0.0, 0.0);
 static const float2 add_vec = float2(4.0, 5.0);
 static const bool2 compare_vec = bool2(true, false);
-static const uint bitcast_scalar = 1082130432u;
-static const uint bitcast_vec_to_scalar = 1006648320u;
-static const uint2 bitcast_vec4_to_vec2_ = uint2(1006648320u, 1006648320u);
+static const float bitcast_id = 1.0;
+static const uint bitcast_scalar = 1065353216u;
+static const uint2 bitcast_vec2_to_vec2_ = uint2(1065353216u, 1065353216u);
 static const uint4 bitcast_vec4_to_vec4_ = uint4(1065353216u, 1065353216u, 1065353216u, 1065353216u);
 
 void swizzle_of_compose()

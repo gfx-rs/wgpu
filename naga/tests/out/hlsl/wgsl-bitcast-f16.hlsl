@@ -5,6 +5,10 @@ struct NagaConstants {
 };
 ConstantBuffer<NagaConstants> _NagaConstants: register(b0, space1);
 
+static const uint bitcast_vec2_to_scalar = 1006648320u;
+static const half4 bitcast_vec2_to_vec4_ = half4(5.9604645e-8h, 0.0h, 5.9604645e-8h, 0.0h);
+static const uint2 bitcast_vec4_to_vec2_ = uint2(1006648320u, 1006648320u);
+
 int naga_bitcast_half2_to_int(half2 value) {
     uint16_t2 bits = asuint16(value);
     return asint((uint(bits.x) | (uint(bits.y) << 16)));

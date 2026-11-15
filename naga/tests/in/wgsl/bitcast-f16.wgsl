@@ -1,5 +1,9 @@
 enable f16;
 
+const bitcast_vec2_to_scalar  = bitcast<u32>(vec2<f16>(1.0));
+const bitcast_vec2_to_vec4  = bitcast<vec4<f16>>(vec2<u32>(1u));
+const bitcast_vec4_to_vec2  = bitcast<vec2<u32>>(vec4<f16>(1.0));
+
 @compute @workgroup_size(1)
 fn main() {
     let one_i = 1;

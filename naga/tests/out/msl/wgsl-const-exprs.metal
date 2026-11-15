@@ -26,9 +26,9 @@ constant float phi_sun = 6.282;
 constant metal::float4 DIV = metal::float4(0.44444445, 0.0, 0.0, 0.0);
 constant metal::float2 add_vec = metal::float2(4.0, 5.0);
 constant metal::bool2 compare_vec = metal::bool2(true, false);
-constant uint bitcast_scalar = 1082130432u;
-constant uint bitcast_vec_to_scalar = 1006648320u;
-constant metal::uint2 bitcast_vec4_to_vec2_ = metal::uint2(1006648320u, 1006648320u);
+constant float bitcast_id = 1.0;
+constant uint bitcast_scalar = 1065353216u;
+constant metal::uint2 bitcast_vec2_to_vec2_ = metal::uint2(1065353216u, 1065353216u);
 constant metal::uint4 bitcast_vec4_to_vec4_ = metal::uint4(1065353216u, 1065353216u, 1065353216u, 1065353216u);
 
 void swizzle_of_compose(
