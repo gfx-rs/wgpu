@@ -2721,7 +2721,7 @@ impl<'a> ConstantEvaluator<'a> {
     ) -> Result<Vec<u8>, ConstantEvaluatorError> {
         let expr = self.eval_zero_value_and_splat(expr, span)?;
         let mut out = Vec::new();
-        match &self.expressions[expr].clone() {
+        match self.expressions[expr].clone() {
             Expression::Literal(literal) => match literal {
                 Literal::F64(v) => out.extend_from_slice(&v.to_le_bytes()),
                 Literal::F32(v) => out.extend_from_slice(&v.to_le_bytes()),
@@ -2736,12 +2736,12 @@ impl<'a> ConstantEvaluator<'a> {
             },
             Expression::Compose { ty: _, components } => {
                 for component in components.iter() {
-                    out.extend_from_slice(&mut self.expression_to_bytes(*component, span)?);
+                    out.extend_from_slice(&self.expression_to_bytes(*component, span)?);
                 }
             }
             _ => (),
         };
-        return Ok(out);
+        Ok(out)
     }
 
     // caller of the function should make sure the sizes align
@@ -2749,7 +2749,7 @@ impl<'a> ConstantEvaluator<'a> {
         &mut self,
         scalar: crate::Scalar,
         bytes: &[u8],
-    ) -> Result<Literal, ()> {
+    ) -> Result<Literal, ConstantEvaluatorError> {
         match (scalar.kind, scalar.width) {
             (ScalarKind::Uint, 2) => {
                 Ok(Literal::U16(u16::from_le_bytes(bytes.try_into().unwrap())))
@@ -2778,7 +2778,7 @@ impl<'a> ConstantEvaluator<'a> {
             (ScalarKind::Float, 8) => {
                 Ok(Literal::F64(f64::from_le_bytes(bytes.try_into().unwrap())))
             }
-            _ => Err(()),
+            _ => Err(ConstantEvaluatorError::TypeNotConstructible),
         }
     }
 
@@ -2796,26 +2796,22 @@ impl<'a> ConstantEvaluator<'a> {
             to: format!("{:?}", target_ty),
         };
 
-        match target_ty {
+        match *target_ty {
             TypeInner::Scalar(scalar) => {
                 if scalar.width as usize != bytes.len() {
                     return Err(error);
                 }
-                let lit = self
-                    .literal_from_bytes(*scalar, &bytes)
-                    .map_err(|_| error.clone())?;
+                let lit = self.literal_from_bytes(scalar, &bytes)?;
                 self.register_evaluated_expr(Expression::Literal(lit), span)
             }
             TypeInner::Vector { size, scalar } => {
-                if *size as usize * scalar.width as usize != bytes.len() {
+                if size as usize * scalar.width as usize != bytes.len() {
                     return Err(error);
                 }
                 let components = bytes
                     .chunks_exact(scalar.width as usize)
                     .map(|chunk| {
-                        let lit = self
-                            .literal_from_bytes(*scalar, &chunk)
-                            .map_err(|_| error.clone())?;
+                        let lit = self.literal_from_bytes(scalar, chunk)?;
                         self.register_evaluated_expr(Expression::Literal(lit), span)
                     })
                     .collect::<Result<Vec<Handle<Expression>>, _>>()?;
