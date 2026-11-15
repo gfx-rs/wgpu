@@ -2503,6 +2503,14 @@ impl Device {
         })?;
 
         let interface = validation::Interface::new(&module, &info, self.limits.clone());
+        let overridable = if module.overrides.is_empty() {
+            None
+        } else {
+            Some(Box::new(pipeline::OverridableModule {
+                module: module.as_ref().clone(),
+                info: info.clone(),
+            }))
+        };
         let hal_shader = hal::ShaderInput::Naga(hal::NagaShader {
             module,
             info,
@@ -2531,6 +2539,7 @@ impl Device {
             raw: ManuallyDrop::new(raw),
             device: self.clone(),
             interface: ShaderMetaData::Interface(interface),
+            overridable,
             label: desc.label.to_string(),
         };
 
@@ -2637,6 +2646,7 @@ impl Device {
                     .map(|e| e.name.to_string())
                     .collect(),
             }),
+            overridable: None,
             label: descriptor.label.to_string(),
         };
 
@@ -4058,7 +4068,16 @@ impl Device {
                 desc.stage.entry_point.as_ref().map(|ep| ep.as_ref()),
             )?;
 
-            if let Some(interface) = shader_module.interface.interface() {
+            let overridden = shader_module
+                .interface_with_overrides(
+                    stage.to_naga(),
+                    &final_entry_point_name,
+                    &desc.stage.constants,
+                )
+                .map_err(|error| {
+                    pipeline::CreateComputePipelineError::PipelineConstants(error.to_string())
+                })?;
+            if let Some(interface) = overridden.as_ref().or(shader_module.interface.interface()) {
                 let _ = interface.check_stage(
                     &mut binding_layout_source,
                     &mut shader_binding_sizes,
@@ -4614,7 +4633,22 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(interface) = vertex_shader_module.interface.interface() {
+                    let overridden = vertex_shader_module
+                        .interface_with_overrides(
+                            stage.to_naga(),
+                            &_vertex_entry_point_name,
+                            &stage_desc.constants,
+                        )
+                        .map_err(|error| {
+                            pipeline::CreateRenderPipelineError::PipelineConstants {
+                                stage: stage_bit,
+                                error: error.to_string(),
+                            }
+                        })?;
+                    if let Some(interface) = overridden
+                        .as_ref()
+                        .or(vertex_shader_module.interface.interface())
+                    {
                         immediate_slots_required |= interface
                             .immediate_slots_required(stage.to_naga(), &_vertex_entry_point_name);
                         io = interface
@@ -4660,7 +4694,22 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(interface) = task_shader_module.interface.interface() {
+                    let overridden = task_shader_module
+                        .interface_with_overrides(
+                            stage.to_naga(),
+                            &_task_entry_point_name,
+                            &stage_desc.constants,
+                        )
+                        .map_err(|error| {
+                            pipeline::CreateRenderPipelineError::PipelineConstants {
+                                stage: stage_bit,
+                                error: error.to_string(),
+                            }
+                        })?;
+                    if let Some(interface) = overridden
+                        .as_ref()
+                        .or(task_shader_module.interface.interface())
+                    {
                         immediate_slots_required |= interface
                             .immediate_slots_required(stage.to_naga(), &_task_entry_point_name);
                         io = interface
@@ -4704,7 +4753,22 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(interface) = mesh_shader_module.interface.interface() {
+                    let overridden = mesh_shader_module
+                        .interface_with_overrides(
+                            stage.to_naga(),
+                            &_mesh_entry_point_name,
+                            &stage_desc.constants,
+                        )
+                        .map_err(|error| {
+                            pipeline::CreateRenderPipelineError::PipelineConstants {
+                                stage: stage_bit,
+                                error: error.to_string(),
+                            }
+                        })?;
+                    if let Some(interface) = overridden
+                        .as_ref()
+                        .or(mesh_shader_module.interface.interface())
+                    {
                         immediate_slots_required |= interface
                             .immediate_slots_required(stage.to_naga(), &_mesh_entry_point_name);
                         io = interface
@@ -4758,7 +4822,20 @@ impl Device {
                     )
                     .map_err(stage_err)?;
 
-                if let Some(interface) = shader_module.interface.interface() {
+                let overridden = shader_module
+                    .interface_with_overrides(
+                        stage.to_naga(),
+                        &fragment_entry_point_name,
+                        &fragment_state.stage.constants,
+                    )
+                    .map_err(
+                        |error| pipeline::CreateRenderPipelineError::PipelineConstants {
+                            stage: stage_bit,
+                            error: error.to_string(),
+                        },
+                    )?;
+                if let Some(interface) = overridden.as_ref().or(shader_module.interface.interface())
+                {
                     immediate_slots_required |= interface
                         .immediate_slots_required(stage.to_naga(), &fragment_entry_point_name);
                     io = interface

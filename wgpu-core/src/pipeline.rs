@@ -67,8 +67,21 @@ pub struct ShaderModule {
     pub(crate) raw: ManuallyDrop<Box<dyn hal::DynShaderModule>>,
     pub(crate) device: Arc<Device>,
     pub(crate) interface: ShaderMetaData,
+    /// If this is a Naga module that uses pipeline-overridable constants, a
+    /// copy of the validated module, so that pipeline creation can validate
+    /// each stage with its override values applied.
+    ///
+    /// See [`ShaderModule::interface_with_overrides`].
+    pub(crate) overridable: Option<Box<OverridableModule>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
+}
+
+/// A validated Naga module that uses pipeline-overridable constants.
+#[derive(Debug)]
+pub(crate) struct OverridableModule {
+    pub(crate) module: naga::Module,
+    pub(crate) info: naga::valid::ModuleInfo,
 }
 
 impl Drop for ShaderModule {
@@ -90,6 +103,59 @@ crate::impl_storage_item!(ShaderModule);
 impl ShaderModule {
     pub(crate) fn raw(&self) -> &dyn hal::DynShaderModule {
         self.raw.as_ref()
+    }
+
+    /// Build an [`Interface`] for validating a stage with overrides applied.
+    ///
+    /// Properties of a stage that pipeline creation must validate, like
+    /// workgroup sizes, may depend on the values of pipeline-overridable
+    /// constants. The [`Interface`] in `self.interface` was built before any
+    /// override values were known, so it cannot be used to validate such
+    /// properties.
+    ///
+    /// If this module uses pipeline-overridable constants, apply `constants`
+    /// to the module's `entry_point` for `stage`, and return an [`Interface`]
+    /// built from the result. This also reports errors in `constants`
+    /// itself, such as missing or unknown overrides.
+    ///
+    /// Otherwise, return `Ok(None)`, and the caller should use the
+    /// [`Interface`] in `self.interface` (if any).
+    ///
+    /// [`Interface`]: validation::Interface
+    pub(crate) fn interface_with_overrides(
+        &self,
+        stage: naga::ShaderStage,
+        entry_point: &str,
+        constants: &naga::back::PipelineConstants,
+    ) -> Result<Option<validation::Interface>, naga::back::pipeline_constants::PipelineConstantError>
+    {
+        let Some(ref overridable) = self.overridable else {
+            // A Naga module with no overrides accepts no override values.
+            // Passthrough modules are handled by `wgpu_hal`.
+            if let ShaderMetaData::Interface(_) = self.interface {
+                if let Some(name) = constants.keys().next() {
+                    return Err(
+                        naga::back::pipeline_constants::PipelineConstantError::NotFound(
+                            name.clone(),
+                        ),
+                    );
+                }
+            }
+            return Ok(None);
+        };
+
+        let (module, info) = naga::back::pipeline_constants::process_overrides(
+            &overridable.module,
+            &overridable.info,
+            Some((stage, entry_point)),
+            constants,
+        )?;
+
+        Ok(Some(validation::Interface::new(
+            &module,
+            &info,
+            self.device.limits.clone(),
+        )))
     }
 
     pub(crate) fn finalize_entry_point_name(
