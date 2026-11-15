@@ -825,7 +825,8 @@ impl Surface for DxgiSurface {
             device: Arc::clone(&device.shared),
             swapchain,
             waitable,
-            waited_for_frame: false,
+            // A new waitable object can be awaited `maximum_frame_latency` times before stall.
+            pending_present_count: config.maximum_frame_latency as usize,
             config: config.clone(),
             buffers,
             noop_pipeline,
@@ -964,9 +965,9 @@ impl DxgiSurface {
 pub(crate) struct DxgiSwapchain {
     swapchain: IDXGISwapChain3,
     waitable: OwnedHandle,
-    /// An acquire waited on `waitable` and no successful present gave that frame back yet. A
-    /// discarded or failed acquire leaves this set, so the next acquire does not wait again.
-    waited_for_frame: bool,
+    /// Number of waits on `waitable` that will complete without stalling. Only a successful
+    /// present adds one, so an acquire after a discarded or failed acquire does not stall.
+    pending_present_count: usize,
     config: crate::SurfaceConfiguration,
 
     buffers: Vec<BackBuffer>,
@@ -1074,11 +1075,11 @@ impl Swapchain for DxgiSwapchain {
         timeout: Option<Duration>,
         _fence: &crate::vulkan::Fence,
     ) -> Result<crate::AcquiredSurfaceTexture<crate::api::Vulkan>, crate::SurfaceError> {
-        if !self.waited_for_frame {
+        if let Some(remaining) = self.pending_present_count.checked_sub(1) {
             if !dxgi::swapchain::wait_for_waitable(Some(self.waitable.0), timeout)? {
                 return Err(crate::SurfaceError::Timeout);
             }
-            self.waited_for_frame = true;
+            self.pending_present_count = remaining;
         }
 
         let index = unsafe { self.swapchain.GetCurrentBackBufferIndex() } as usize;
@@ -1198,7 +1199,7 @@ impl Swapchain for DxgiSwapchain {
             .ok()
             .into_device_result("IDXGISwapChain::Present");
         if present_result.is_ok() {
-            self.waited_for_frame = false;
+            self.pending_present_count += 1;
         }
 
         // This `Signal` tracks the present list's GPU completion, not the flip (no fence observes
