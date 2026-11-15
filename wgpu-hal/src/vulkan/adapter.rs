@@ -1382,6 +1382,11 @@ impl PhysicalDeviceProperties {
             extensions.push(khr::swapchain_mutable_format::NAME);
         }
 
+        // Optional `VK_KHR_incremental_present`
+        if self.supports_extension(khr::incremental_present::NAME) {
+            extensions.push(khr::incremental_present::NAME);
+        }
+
         // Optional `VK_EXT_robustness2`
         if self.supports_extension(ext::robustness2::NAME) {
             extensions.push(ext::robustness2::NAME);
@@ -2543,6 +2548,8 @@ impl super::Instance {
                 || phd_capabilities.supports_extension(khr::load_store_op_none::NAME)
                 || phd_capabilities.supports_extension(ash::qcom::render_pass_store_ops::NAME)
                 || phd_capabilities.supports_extension(ext::load_store_op_none::NAME),
+            incremental_present: phd_capabilities
+                .supports_extension(khr::incremental_present::NAME),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -3250,6 +3257,18 @@ impl crate::Adapter for super::Adapter {
             Tfc::STORAGE_ATOMIC,
             features.intersects(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC),
         );
+        // Multi-planar images are created with `EXTENDED_USAGE`, so views of
+        // the planes are limited by the plane view formats, not by this format.
+        if format.is_multi_planar_format() && !flags.is_empty() {
+            let plane_caps = |aspect| unsafe {
+                self.texture_format_capabilities(format.aspect_specific_format(aspect).unwrap())
+            };
+            return (flags & (Tfc::COPY_SRC | Tfc::COPY_DST))
+                | (plane_caps(wgt::TextureAspect::Plane0)
+                    & plane_caps(wgt::TextureAspect::Plane1)
+                    & Tfc::VALID_FOR_MULTI_PLANAR);
+        }
+
         // Vulkan is very permissive about MSAA
         flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.is_compressed());
 

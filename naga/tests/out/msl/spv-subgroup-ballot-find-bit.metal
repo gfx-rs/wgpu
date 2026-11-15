@@ -13,7 +13,7 @@ void function(
     device type_1& global_1
 ) {
     uint _e3 = global;
-    metal::uint4 _e5 = metal::uint4((uint64_t)metal::simd_ballot(_e3 != 0u), 0, 0, 0);
+    metal::uint4 _e5 = metal::uint4(as_type<metal::uint2>((uint64_t)metal::simd_ballot(_e3 != 0u)), 0, 0);
     uint unnamed = _e5.x;
     uint unnamed_1 = _e5.y;
     uint unnamed_2 = _e5.z;

@@ -265,6 +265,24 @@ pub fn derive_image_layout(usage: wgt::TextureUses, format: wgt::TextureFormat) 
     }
 }
 
+pub fn map_damage_rects(damage_rects: &[wgt::Rect<u32>]) -> Vec<vk::RectLayerKHR> {
+    damage_rects
+        .iter()
+        .map(|rect| {
+            vk::RectLayerKHR::default()
+                .offset(vk::Offset2D {
+                    x: rect.x as i32,
+                    y: rect.y as i32,
+                })
+                .extent(vk::Extent2D {
+                    width: rect.w,
+                    height: rect.h,
+                })
+                .layer(0)
+        })
+        .collect()
+}
+
 pub fn map_queue_family(family: crate::QueueFamily) -> u32 {
     match family {
         crate::QueueFamily::Explicit(index) => index,

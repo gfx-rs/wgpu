@@ -73,6 +73,9 @@ impl SemaphoreList {
     ///   `timeline_info`, set its `pSignalSemaphoreValues` to this
     ///   list's values, and add it to `submit_info`s extension chain.
     ///
+    /// - If either list contains a timeline semaphore, give every
+    ///   semaphore in both lists a value.
+    ///
     /// Return the revised `submit_info` value.
     pub fn add_to_submit<'info, 'semaphores: 'info>(
         wait_semaphores: &'semaphores mut Self,
@@ -87,6 +90,18 @@ impl SemaphoreList {
         assert!(matches!(signal_semaphores.mode, SemaphoreListMode::Signal));
 
         let timeline_info = timeline_info.write(vk::TimelineSemaphoreSubmitInfo::default());
+
+        // Some drivers read a value for every semaphore when the timeline info is
+        // chained, and ignore the value counts. Seen on Imagination's proprietary
+        // driver (Pixel 10, Moto G54, Teclast P50AI) and on the Android 16 emulator
+        // (gfxstream).
+        // Vulkan ignores the values of binary semaphores.
+        //
+        // More info: https://github.com/gfx-rs/wgpu/pull/10677
+        if !wait_semaphores.values.is_empty() || !signal_semaphores.values.is_empty() {
+            wait_semaphores.pad_values();
+            signal_semaphores.pad_values();
+        }
 
         let mut uses_timeline = false;
 
