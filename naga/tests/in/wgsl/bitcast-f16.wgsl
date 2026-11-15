@@ -2,6 +2,11 @@ enable f16;
 
 @compute @workgroup_size(1)
 fn main() {
+    let one_i = 1;
+    let one_i_h = 1h;
+    let one_f = 1.0;
+    let u = 4294967295;
+
     var h2 = vec2<f16>(1.0h, 2.0h);
     var h4 = vec4<f16>(1.0h, 2.0h, 3.0h, 4.0h);
 
@@ -31,11 +36,11 @@ fn main() {
     h2 = bitcast<vec2<f16>>(h2);
     u1 = bitcast<u32>(u1);
 
-    u1 = bitcast<u32>(4294967295);
-    f1 = bitcast<f32>(1);
-    i1 = bitcast<i32>(1.0);
-    h2 = bitcast<vec2<f16>>(1);
-    h2 = bitcast<vec2<f16>>(vec2(1, 2));
-    h4 = bitcast<vec4<f16>>(vec2(1, 2));
-    u2 = bitcast<vec2<u32>>(vec2(4294967295, 1));
+    u1 = bitcast<u32>(u);
+    f1 = bitcast<f32>(one_i);
+    i1 = bitcast<i32>(one_f);
+    h2 = bitcast<vec2<f16>>(one_i);
+    h2 = bitcast<vec2<f16>>(vec2(one_i_h, 2));
+    h4 = bitcast<vec4<f16>>(vec2(one_i, 2));
+    u2 = bitcast<vec2<u32>>(vec2(u, 1));
 }
