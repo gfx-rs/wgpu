@@ -182,6 +182,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Add `@builtin(hit_barycentrics)`, a `vec2<f32>` readable in `@any_hit` and `@closest_hit` ray tracing pipeline shaders, holding two of the barycentric coordinates of the hit point on the triangle (the third is `1.0 - x - y`). Currently only supported with the SPIR-V backend. By @JMS55 in [#10193](https://github.com/gfx-rs/wgpu/pull/10193).
 - Add the `wgpu_ray_tracing_invocation_reorder` WGSL enable-extension and the matching `Capabilities::RAY_TRACING_INVOCATION_REORDER`, exposing hit objects and shader invocation reordering. It provides the `hit_object` type, which records the result of a ray traversal without running any hit or miss shader, various `hitObject*` built-in functions, and `reorderThread`, which reorders invocations of a `@ray_generation` shader to improve coherence. Currently only supported with the SPIR-V backend. Enable it with `Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER`, which also requires `Features::EXPERIMENTAL_RAY_TRACING_PIPELINES` and is supported on Vulkan with [VK_EXT_ray_tracing_invocation_reorder](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_ray_tracing_invocation_reorder.html). `reorderThread` may be a no-op. Check whether `Adapter::ray_tracing_invocation_reorder_mode` reports `RayTracingInvocationReorderMode::Reorder` to see if invocations will be reordered. By @JMS55 in [#10311](https://github.com/gfx-rs/wgpu/pull/10311) and [#10871](https://github.com/gfx-rs/wgpu/pull/10871).
 - Support WGSL `bitcast` between `vec2<f16>` and 32-bit scalars, between `vec4<f16>` and `vec2` of 32-bit scalars, between `f16` and `i16`/`u16` (with `wgpu_int16`), and the corresponding SPIR-V `OpBitcast`s. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
+- Support SPIR-V's `OpGroupNonUniformBallotFindLSB`/`MSB` and GLSL's `subgroupBallotFindLSB`/`MSB` with the new `Statement::SubgroupBallotFindBit`. HLSL, MSL, and WGSL output use a polyfill. The GLSL frontend now also accepts `gl_SubgroupSize` and `gl_SubgroupInvocationID`. By @nazar-pc in [#9966](https://github.com/gfx-rs/wgpu/pull/9966).
 
 #### Hal
 
@@ -310,6 +311,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix GLSL output for WGSL vector `select` with integer or boolean values on WebGL 2 and older OpenGL. By @arcusbuilds in [#10457](https://github.com/gfx-rs/wgpu/pull/10457).
 - Generate correct SPIR-V for nested structs containing two-row matrices. By @jimblandy in [#10846](https://github.com/gfx-rs/wgpu/pull/10846)
 - Fix ambiguous `metal::select` calls in the Metal backend's division/remainder zero guards for 64-bit integers: the guards now emit `L`/`uL` suffixed literals (e.g. `metal::select(rhs, 1uL, rhs == 0uL)`) so MSL generated for `i64`/`u64` `/` and `%` compiles. By @Statesman-forge in [#10278](https://github.com/gfx-rs/wgpu/pull/10278).
+- In the MSL backend, `subgroupBallot` now keeps lanes 32-63, which were lost on GPUs with 64-wide SIMD groups (AMD GPUs on macOS). By @ErkoRisthein in [#10797](https://github.com/gfx-rs/wgpu/pull/10797).
 
 #### Validation
 
@@ -344,6 +346,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Sanitize shader labels before passing them to DXC as the source name. Fixes compilation when label contains a `:`. By @lucasmerlin in [#10134](https://github.com/gfx-rs/wgpu/pull/10134).
 - Fix a use-after-free when several threads create pipelines from the same shader with FXC. The shader cache now holds copies of the bytecode, not FXC's blobs, whose reference count is not thread-safe. By @xorza in [#10805](https://github.com/gfx-rs/wgpu/pull/10805).
 - Fix a 1 second stall in `Surface::get_current_texture` after a surface texture was dropped without being presented. By @DouglasDwyer in [#10511](https://github.com/gfx-rs/wgpu/pull/10511).
+- Present with `DXGI_PRESENT_RESTART` the first time after a swapchain is created or resized, discarding queued frames of the old size that DWM would otherwise show stretched while the window is being resized. By @DouglasDwyer in [#10548](https://github.com/gfx-rs/wgpu/pull/10548).
 
 #### Vulkan
 

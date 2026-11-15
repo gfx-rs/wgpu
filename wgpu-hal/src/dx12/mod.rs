@@ -506,6 +506,7 @@ struct SwapChain {
     present_mode: wgt::PresentMode,
     format: wgt::TextureFormat,
     size: wgt::Extent3d,
+    restart_pending: bool,
 }
 
 enum SurfaceTarget {
@@ -1611,6 +1612,7 @@ impl crate::Surface for Surface {
             present_mode: config.present_mode,
             format: config.format,
             size: config.extent,
+            restart_pending: true,
         });
 
         Ok(())
@@ -1751,10 +1753,23 @@ impl crate::Queue for Queue {
             m => unreachable!("Cannot make surface with present mode {m:?}"),
         };
 
-        profiling::scope!("IDXGISwapchain3::Present");
-        unsafe { sc.raw.Present(interval, flags) }
-            .ok()
-            .into_device_result("Present")?;
+        if sc.restart_pending {
+            sc.restart_pending = false;
+
+            // Frames queued before a resize have the old size, and DWM would stretch them to the
+            // new window size if they were shown after the window changed size. Presenting with
+            // `DXGI_PRESENT_RESTART` drops those stale frames. See also:
+            // https://github.com/bigfatbrowncat/noflicker_directx_window
+            profiling::scope!("IDXGISwapchain3::Present(RESTART)");
+            unsafe { sc.raw.Present(1, Dxgi::DXGI_PRESENT_RESTART) }
+                .ok()
+                .into_device_result("Present(RESTART)")?;
+        } else {
+            profiling::scope!("IDXGISwapchain3::Present");
+            unsafe { sc.raw.Present(interval, flags) }
+                .ok()
+                .into_device_result("Present")?;
+        }
         sc.pending_present_count += 1;
 
         Ok(())
