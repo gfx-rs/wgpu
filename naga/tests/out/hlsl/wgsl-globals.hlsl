@@ -95,6 +95,7 @@ void test_msl_packed_vec3_()
     float3 l0_ = data.v3_;
     float2 l1_ = data.v3_.zx;
     test_msl_packed_vec3_as_arg(data.v3_);
+    uint3 bc = asuint(data.v3_);
     float3 mvm0_ = mul(ZeroValuefloat3x3(), data.v3_);
     float3 mvm1_ = mul(data.v3_, ZeroValuefloat3x3());
     float3 svm0_ = (data.v3_ * 2.0);

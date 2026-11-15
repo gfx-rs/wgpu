@@ -45,6 +45,7 @@ void test_msl_packed_vec3_() {
     vec3 l0_ = data.v3_;
     vec2 l1_ = data.v3_.zx;
     test_msl_packed_vec3_as_arg(data.v3_);
+    uvec3 bc = floatBitsToUint(data.v3_);
     vec3 mvm0_ = (data.v3_ * mat3x3(0.0));
     vec3 mvm1_ = (mat3x3(0.0) * data.v3_);
     vec3 svm0_ = (data.v3_ * 2.0);

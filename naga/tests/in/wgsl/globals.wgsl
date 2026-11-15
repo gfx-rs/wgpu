@@ -48,6 +48,7 @@ fn test_msl_packed_vec3() {
     let l0 = data.v3;
     let l1 = data.v3.zx;
     test_msl_packed_vec3_as_arg(data.v3);
+    let bc = bitcast<vec3<u32>>(data.v3);
 
     // matrix vector multiplication
     let mvm0 = data.v3 * mat3x3<f32>();
