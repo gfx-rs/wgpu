@@ -3174,7 +3174,12 @@ impl<W: Write> Writer<W> {
                     }
                 }
                 write!(self.out, ">(")?;
-                self.put_expression(expr, context, true)?;
+                self.put_wrapped_expression_for_packed_vec3_access(
+                    expr,
+                    context,
+                    true,
+                    &Self::put_expression,
+                )?;
                 write!(self.out, ")")?;
             }
             // These have no inline form, so they are only ever read through
