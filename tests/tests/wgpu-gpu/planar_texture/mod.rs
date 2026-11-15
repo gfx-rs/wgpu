@@ -12,6 +12,10 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
         NV12_TEXTURE_COPYING,
         P010_TEXTURE_COPYING,
         NV12_PLANE_TO_SINGLE_PLANE_COPY,
+        NV12_FORMAT_FEATURES_MATCH_CREATE_TEXTURE,
+        NV12_ADAPTER_FORMAT_FEATURES_MATCH_CREATE_TEXTURE,
+        P010_FORMAT_FEATURES_MATCH_CREATE_TEXTURE,
+        P010_ADAPTER_FORMAT_FEATURES_MATCH_CREATE_TEXTURE,
     ]);
 }
 
@@ -219,6 +223,84 @@ fn test_planar_texture_rendering(
     }
 
     ctx.queue.submit([encoder.finish()]);
+}
+
+// Helper function to check that `create_texture` accepts exactly the usages
+// in the format features that the device validates against, and that the
+// adapter reports every usage that is guaranteed.
+async fn test_format_features_match_create_texture(
+    ctx: &TestingContext,
+    format: wgpu::TextureFormat,
+) {
+    let features = ctx.device.features();
+    let adapter_usages = ctx
+        .adapter
+        .get_texture_format_features(format)
+        .allowed_usages;
+    let guaranteed_usages = format.guaranteed_format_features(features).allowed_usages;
+    let uses_adapter_features = features
+        .contains(wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
+        || !ctx
+            .adapter_downlevel_capabilities
+            .flags
+            .contains(wgpu::DownlevelFlags::WEBGPU_TEXTURE_FORMAT_SUPPORT);
+    let expected_usages = if uses_adapter_features {
+        adapter_usages
+    } else {
+        guaranteed_usages
+    };
+
+    let mut mismatches = Vec::new();
+    for usage in [
+        wgpu::TextureUsages::COPY_SRC,
+        wgpu::TextureUsages::COPY_DST,
+        wgpu::TextureUsages::TEXTURE_BINDING,
+        wgpu::TextureUsages::STORAGE_BINDING,
+        wgpu::TextureUsages::RENDER_ATTACHMENT,
+    ] {
+        let scope = ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
+        let _ = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            dimension: wgpu::TextureDimension::D2,
+            size: wgpu::Extent3d {
+                width: 256,
+                height: 128,
+                depth_or_array_layers: 1,
+            },
+            format,
+            usage,
+            mip_level_count: 1,
+            sample_count: 1,
+            view_formats: &[],
+            texture_binding_view_dimension: None,
+        });
+        let created = scope.pop().await.is_none();
+        if created != expected_usages.contains(usage) {
+            mismatches.push(format!(
+                "{usage:?}: create_texture {}, but the expected format features {}",
+                if created { "succeeded" } else { "failed" },
+                if created {
+                    "do not allow it"
+                } else {
+                    "allow it"
+                },
+            ));
+        }
+        if !uses_adapter_features
+            && guaranteed_usages.contains(usage)
+            && !adapter_usages.contains(usage)
+        {
+            mismatches.push(format!(
+                "{usage:?}: guaranteed, but get_texture_format_features does not allow it"
+            ));
+        }
+    }
+
+    assert!(
+        mismatches.is_empty(),
+        "{format:?} usage mismatches:\n{}",
+        mismatches.join("\n")
+    );
 }
 
 /// Ensures that creation and sampling of an NV12 format texture works as
@@ -664,3 +746,52 @@ static P010_TEXTURE_COPYING: GpuTestConfiguration = GpuTestConfiguration::new()
         );
         ctx.queue.submit([command_encoder.finish()]);
     });
+
+/// Ensures that `create_texture` accepts the guaranteed NV12 usages, and that
+/// the adapter reports them.
+#[apply(gpu_test!)]
+static NV12_FORMAT_FEATURES_MATCH_CREATE_TEXTURE: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_FORMAT_NV12))
+        .run_async(|ctx| async move {
+            test_format_features_match_create_texture(&ctx, wgpu::TextureFormat::NV12).await;
+        });
+
+/// Ensures that `create_texture` accepts the NV12 usages reported by
+/// `get_texture_format_features` with adapter-specific format features.
+#[apply(gpu_test!)]
+static NV12_ADAPTER_FORMAT_FEATURES_MATCH_CREATE_TEXTURE: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().features(
+            wgpu::Features::TEXTURE_FORMAT_NV12
+                | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+        ))
+        .run_async(|ctx| async move {
+            test_format_features_match_create_texture(&ctx, wgpu::TextureFormat::NV12).await;
+        });
+
+/// Ensures that `create_texture` accepts the guaranteed P010 usages, and that
+/// the adapter reports them.
+#[apply(gpu_test!)]
+static P010_FORMAT_FEATURES_MATCH_CREATE_TEXTURE: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().features(
+            wgpu::Features::TEXTURE_FORMAT_P010 | wgpu::Features::TEXTURE_FORMAT_16BIT_NORM,
+        ))
+        .run_async(|ctx| async move {
+            test_format_features_match_create_texture(&ctx, wgpu::TextureFormat::P010).await;
+        });
+
+/// Ensures that `create_texture` accepts the P010 usages reported by
+/// `get_texture_format_features` with adapter-specific format features.
+#[apply(gpu_test!)]
+static P010_ADAPTER_FORMAT_FEATURES_MATCH_CREATE_TEXTURE: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().features(
+            wgpu::Features::TEXTURE_FORMAT_P010
+                | wgpu::Features::TEXTURE_FORMAT_16BIT_NORM
+                | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+        ))
+        .run_async(|ctx| async move {
+            test_format_features_match_create_texture(&ctx, wgpu::TextureFormat::P010).await;
+        });

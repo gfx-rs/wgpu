@@ -1108,7 +1108,16 @@ impl Adapter {
     ) -> wgt::TextureFormatFeatures {
         use hal::TextureFormatCapabilities as Tfc;
 
-        let caps = unsafe { self.raw.adapter.texture_format_capabilities(format) };
+        let mut caps = unsafe { self.raw.adapter.texture_format_capabilities(format) };
+
+        // Storage bindings of multi-planar textures are not supported.
+        if format.is_multi_planar_format() {
+            caps -= Tfc::STORAGE_READ_ONLY
+                | Tfc::STORAGE_WRITE_ONLY
+                | Tfc::STORAGE_READ_WRITE
+                | Tfc::STORAGE_ATOMIC;
+        }
+
         let mut allowed_usages = wgt::TextureUsages::empty();
 
         allowed_usages.set(wgt::TextureUsages::COPY_SRC, caps.contains(Tfc::COPY_SRC));
