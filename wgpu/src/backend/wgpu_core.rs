@@ -885,6 +885,9 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                     ImplementedLanguageExtension::ImmediateAddressSpace => {
                         crate::WgslLanguageFeatures::ImmediateAddressSpace
                     }
+                    ImplementedLanguageExtension::TextureAndSamplerLet => {
+                        crate::WgslLanguageFeatures::TextureAndSamplerLet
+                    }
                 }
             },
         )

@@ -60,7 +60,6 @@ webgpu:shader,execution,expression,call,builtin,textureDimensions:* // dx12, htt
 webgpu:shader,execution,expression,call,builtin,textureNumSamples:* // dx12, fails intermittently on WARP < 1.0.17
 webgpu:shader,execution,robust_access_vertex:vertex_buffer_access:* // metal paravirt GPU only, https://github.com/gfx-rs/wgpu/issues/8023
 
-webgpu:shader,validation,decl,let:* // texture/sampler let
 webgpu:shader,validation,decl,override:* // 93%, unrestricted_pointer_parameters not implemented, https://github.com/gfx-rs/wgpu/issues/5158
 webgpu:shader,validation,decl,var:* // 99%, https://github.com/gfx-rs/wgpu/issues/8925 (trailing comma), atomics in read-only storage, shader stage restrictions
 webgpu:shader,validation,expression,access,array:* // 97%, runtime indexing with compile-time-known values, https://github.com/gfx-rs/wgpu/issues/4390
@@ -132,7 +131,6 @@ webgpu:shader,validation,parse,requires:have_all_language_features:feature="line
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="subgroup_id"
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="subgroup_uniformity"
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="swizzle_assignment" // https://github.com/gfx-rs/wgpu/issues/9159
-webgpu:shader,validation,parse,requires:have_all_language_features:feature="texture_and_sampler_let"
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="texture_formats_tier1" // https://github.com/gfx-rs/wgpu/issues/8962
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="uniform_buffer_standard_layout"
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="unrestricted_pointer_parameters" // https://github.com/gfx-rs/wgpu/issues/5158

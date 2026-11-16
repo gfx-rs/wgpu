@@ -1769,6 +1769,9 @@ impl dispatch::InstanceInterface for ContextWebGpu {
                     "immediate_address_space" => {
                         Some(crate::WgslLanguageFeatures::ImmediateAddressSpace)
                     }
+                    "texture_and_sampler_let" => {
+                        Some(crate::WgslLanguageFeatures::TextureAndSamplerLet)
+                    }
                     _ => None,
                 })
                 .for_each(|wlf| {
