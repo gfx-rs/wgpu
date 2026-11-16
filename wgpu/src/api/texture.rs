@@ -211,13 +211,6 @@ impl Texture {
 impl Texture {
     /// Create a new texture of wgpu from a wgpu-core texture.
     ///
-    /// The returned `Texture` is another handle to the same wgpu-core texture
-    /// and reports the descriptor it was created with. The texture stays
-    /// alive while any handle exists, but [`Texture::destroy`] through any
-    /// handle destroys it for all of them. Use it only with a [`Device`] and
-    /// [`Queue`] on the same wgpu-core device; ordering against work submitted
-    /// through other handles follows normal queue submission order.
-    ///
     /// # Arguments
     ///
     /// - `core_texture` - wgpu-core texture.

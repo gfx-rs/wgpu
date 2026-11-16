@@ -979,22 +979,10 @@ impl Device {
 impl Device {
     /// Create a new device of wgpu from a wgpu-core device.
     ///
-    /// The returned `Device` is another handle to the same wgpu-core device,
-    /// which may also be used through other wrappers (for example a WebGPU
-    /// binding built directly on wgpu-core, or another `wgpu::Device` from
-    /// [`Device::as_core`]). The device stays alive while any handle exists.
-    /// State that belongs to the wgpu-core device is shared by all handles:
-    ///
-    /// - error scopes (per thread) and the handler set with
-    ///   [`Device::on_uncaptured_error`], so an error raised through one
-    ///   handle may be reported to a scope or handler installed through
-    ///   another, and installing a handler replaces the previous one;
-    /// - the callback set with [`Device::set_device_lost_callback`], which is a
-    ///   single slot, and [`Device::destroy`], which destroys the device for
-    ///   every handle.
-    ///
-    /// [`Device::destroy`] first unmaps only the buffers created through the
-    /// handle it is called on.
+    /// Error scopes, the [uncaptured error handler](Device::on_uncaptured_error)
+    /// and the single [device lost callback](Device::set_device_lost_callback)
+    /// belong to the wgpu-core device, so they are shared with every other user
+    /// of `core_device`.
     ///
     /// # Arguments
     ///
