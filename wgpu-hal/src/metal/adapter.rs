@@ -763,7 +763,7 @@ impl super::CapabilitiesQuery {
             macos = 11.0,
             ios = 14.0,
             tvos = 14.0,
-            watchos = 10.0,
+            watchos = 11.0,
             visionos = 1.0
         ) && device.supportsCounterSampling(MTLCounterSamplingPoint::AtStageBoundary)
         {
@@ -786,7 +786,7 @@ impl super::CapabilitiesQuery {
             macos = 10.13,
             ios = 11.0,
             tvos = 11.0,
-            watchos = 10.0,
+            watchos = 11.0,
             visionos = 1.0
         )
         .then(|| device.argumentBuffersSupport());
