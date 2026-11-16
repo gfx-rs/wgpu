@@ -724,7 +724,7 @@ impl super::CapabilitiesQuery {
             macos = 10.15,
             ios = 13.0,
             tvos = 13.0,
-            watchos = 10.0,
+            watchos = 11.0,
             visionos = 1.0
         );
         let metal3 = family_check && device.supportsFamily(MTLGPUFamily::Metal3);
@@ -744,7 +744,7 @@ impl super::CapabilitiesQuery {
             macos = 10.13,
             ios = 11.0,
             tvos = 11.0,
-            watchos = 10.0,
+            watchos = 11.0,
             visionos = 1.0
         ) {
             device.readWriteTextureSupport()
