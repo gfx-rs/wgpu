@@ -66,6 +66,7 @@ async fn shared_texture_outlives_producer(ctx: TestingContext) {
         format: wgpu::TextureFormat::R8Unorm,
         usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let expected: Vec<u8> = (0..WIDTH * HEIGHT).map(|i| (i % 251) as u8).collect();
     ctx.queue.write_texture(
@@ -159,6 +160,7 @@ static SHARED_DEVICE_SHARES_ERROR_SCOPES: GpuTestConfiguration = GpuTestConfigur
             format: wgpu::TextureFormat::R8Unorm,
             usage: wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         assert!(
             scope.pop().await.is_some(),
