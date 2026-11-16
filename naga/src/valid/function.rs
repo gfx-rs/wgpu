@@ -223,6 +223,8 @@ pub enum FunctionError {
     InvalidCooperativeStoreTarget(Handle<crate::Expression>),
     #[error("Cooperative load/store data pointer has invalid type")]
     InvalidCooperativeDataPointer(Handle<crate::Expression>),
+    #[error("Cooperative store stride must be a `u32` scalar")]
+    InvalidCooperativeDataStride(Handle<crate::Expression>),
     #[error("Emit statement should not cover \"result\" expressions like {0:?}")]
     EmitResult(Handle<crate::Expression>),
     #[error("Expression not visited by the appropriate statement")]
@@ -1764,7 +1766,16 @@ impl super::Validator {
                             }
                         };
 
-                    let ptr_ty = context.resolve_pointer_type(data.pointer);
+                    match *context.resolve_type_inner(data.stride, &self.valid_expression_set)? {
+                        Ti::Scalar(crate::Scalar::U32) => {}
+                        _ => {
+                            return Err(FunctionError::InvalidCooperativeDataStride(data.stride)
+                                .with_span_handle(data.stride, context.expressions))
+                        }
+                    }
+
+                    let ptr_ty =
+                        context.resolve_type_inner(data.pointer, &self.valid_expression_set)?;
                     let ptr_scalar = ptr_ty
                         .pointer_base_type()
                         .and_then(|tr| tr.inner_with(context.types).scalar());
