@@ -1601,12 +1601,12 @@ impl crate::Queue for Queue {
                 signal_semaphores.push_signal(SemaphoreType::Timeline(raw, signal_value));
             }
             Fence::FencePool(ref pool) => {
-                let pool = pool_guard.insert(pool.write());
+                let locked_pool = pool_guard.insert(pool.write());
                 let FencePool {
                     ref mut active,
                     ref mut free,
                     ..
-                } = **pool;
+                } = **locked_pool;
                 let shared_fence = match free.pop() {
                     Some(raw) => Arc::new(raw),
                     None => unsafe {
