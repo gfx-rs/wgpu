@@ -159,7 +159,7 @@ bitflags::bitflags!(
     #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct AccelerationStructureGeometryFlags: u8 {
-        /// Is OPAQUE (is there no alpha test). This disables any-hit shaders on a ray tracing pipeline
+        /// Is OPAQUE (there is no alpha test). This disables any-hit shaders on a ray tracing pipeline
         /// and automatically commits triangle intersections when using ray queries, meaning it does not
         /// have to return to user code.
         const OPAQUE = 1 << 0;
