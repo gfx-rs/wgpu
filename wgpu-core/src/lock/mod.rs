@@ -17,17 +17,20 @@
 //!   uninstrumented, no-overhead wrappers around the standard lock
 //!   types.
 //!
-//! If the `wgpu_validate_locks` config is set (either directly, i.e. with
-//! `RUSTFLAGS='--cfg wgpu_validate_locks'`, or via the
-//! `wgpu_validate_locks_debug` `cfg` alias in `build.rs` that conditionally
-//! enables it when debug assertions are also enabled), `wgpu-core` uses the
-//! [`ranked`] module's locks. `.config/cargo.toml` in the `wgpu` tree specifies
-//! `wgpu_validate_locks_debug`, so lock validation is active by default in
+//! To get `ranked`, build with the `wgpu_validate_locks` config set, perhaps
+//! with `RUSTFLAGS='--cfg wgpu_validate_locks'`. The `"std"` feature must also
+//! be enabled, as `ranked` needs thread-local storage.
+//!
+//! To get `ranked` only when debug assertions are also enabled, build with the
+//! `wgpu_validate_locks_debug` config set. The `wgpu` crate selects this via
+//! its `.cargo/config.toml` file, so lock validation is active by default in
 //! `wgpu` CI and `wgpu` development trees, but not in `wgpu`-using applications
 //! unless specifically requested.
 //!
-//! If the `observe_locks` feature is enabled, `wgpu-core` uses the
-//! [`observing`] module's locks.
+//! To get `observing`, enable the `"observe_locks"` feature. This also enables
+//! `"std"`. You must also ensure that `wgpu_validate_locks` is not set, as that
+//! takes precedence --- and it's enabled automatically in debug builds for
+//! `wgpu`, as explained above.
 //!
 //! Otherwise, `wgpu-core` uses the [`vanilla`] module's locks.
 //!
