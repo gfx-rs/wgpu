@@ -311,11 +311,11 @@ impl Writer {
 
     /// Request the capabilities and extensions any cooperative matrix use needs.
     pub(super) fn require_cooperative_matrix(&mut self) -> Result<(), Error> {
-        self.require_any(
-            "cooperative matrix",
-            &[spirv::Capability::CooperativeMatrixKHR],
-        )?;
-        self.require_any("memory model", &[spirv::Capability::VulkanMemoryModel])?;
+        self.require_all(&[
+            spirv::Capability::CooperativeMatrixKHR,
+            spirv::Capability::VulkanMemoryModel,
+        ])
+        .map_err(|cap| Error::MissingCapabilities("cooperative matrix", vec![cap]))?;
         self.use_extension("SPV_KHR_cooperative_matrix");
         self.use_extension("SPV_KHR_vulkan_memory_model");
         Ok(())
