@@ -159,14 +159,11 @@ bitflags::bitflags!(
     #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct AccelerationStructureGeometryFlags: u8 {
-        /// Is OPAQUE (is there no alpha test) recommended as currently in naga there is no
-        /// candidate intersections yet so currently BLASes without this flag will not have hits.
-        /// Not enabling this makes the BLAS unable to be interacted with in WGSL.
+        /// Is OPAQUE (is there no alpha test). This disables any-hit shaders on a ray tracing pipeline
+        /// and automatically commits triangle intersections when using ray queries, meaning it does not
+        /// have to return to user code.
         const OPAQUE = 1 << 0;
-        /// NO_DUPLICATE_ANY_HIT_INVOCATION, not useful unless using hal with wgpu, ray-tracing
-        /// pipelines are not supported in wgpu so any-hit shaders do not exist. For when any-hit
-        /// shaders are implemented (or experienced users who combine this with an underlying library:
-        /// for any primitive (triangle or AABB) multiple any-hit shaders sometimes may be invoked
+        /// For any primitive (triangle or AABB) multiple any-hit shaders sometimes may be invoked
         /// (especially in AABBs like a sphere), if this flag in present only one hit on a primitive may
         /// invoke an any-hit shader.
         const NO_DUPLICATE_ANY_HIT_INVOCATION = 1 << 1;
