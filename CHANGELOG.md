@@ -290,6 +290,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Make `TextureBlitter` respect the `sample_type` when performing downsampling. Previously, `FilterMode::Nearest` was always used when copying a larger texture to a smaller one. By @DouglasDwyer in [#10657](https://github.com/gfx-rs/wgpu/pull/10657)
 - Fixed some cases where `Adapter::get_texture_format_features` and `TextureFormat::guaranteed_format_features` did not match the validation applied by `create_texture`. By @andyleiserson in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
 - `STORAGE_BINDING` usage is no longer allowed for multi-planar textures. It was previously accepted, but was untested, and likely broken. By @andyleiserson in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
+- Make `wgpu-core` build with `--no-default-features` by fixing the logic in `wgpu_core::lock`. By @jimblandy in [#10972](https://github.com/gfx-rs/wgpu/pull/10972).
 
 #### naga
 

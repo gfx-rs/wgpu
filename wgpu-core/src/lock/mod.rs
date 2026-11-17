@@ -40,24 +40,41 @@
 
 pub mod rank;
 
+// Include all the implementations in the build whenever they can be
+// compiled, even if they're not selected, to catch errors and help
+// `rust-analyzer` find references.
+
 #[cfg(feature = "std")] // requires thread-locals to work
 #[cfg_attr(not(wgpu_validate_locks), allow(dead_code))]
 mod ranked;
 
+// The `observing` module requires the `serde` and `ron` dependencies
+// and the "std" feature for thread-locals. All are enabled by the
+// `"observe_locks"` feature.
 #[cfg(feature = "observe_locks")]
 #[cfg_attr(wgpu_validate_locks, allow(dead_code))]
 mod observing;
 
-#[cfg_attr(any(wgpu_validate_locks, feature = "observe_locks"), allow(dead_code))]
+// If "std" is not enabled, then none of the other modules can be built.
+#[cfg_attr(
+    all(feature = "std", any(wgpu_validate_locks, feature = "observe_locks")),
+    allow(dead_code)
+)]
 mod vanilla;
 
-#[cfg(wgpu_validate_locks)]
+#[cfg(all(wgpu_validate_locks, feature = "std"))]
 use ranked as chosen;
 
 #[cfg(all(not(wgpu_validate_locks), feature = "observe_locks"))]
 use observing as chosen;
 
-#[cfg(not(any(wgpu_validate_locks, feature = "observe_locks")))]
+// We must use `vanilla`:
+// - whenever `"std"` is not selected, and
+// - whenever neither of the instrumented locks are enabled.
+#[cfg(any(
+    not(feature = "std"),
+    not(any(wgpu_validate_locks, feature = "observe_locks"))
+))]
 use vanilla as chosen;
 
 pub use chosen::{Mutex, MutexGuard, RankData, RwLock, RwLockReadGuard, RwLockWriteGuard};
