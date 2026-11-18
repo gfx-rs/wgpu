@@ -14,7 +14,7 @@ OpCapability GroupNonUniformShuffle
 OpExtension "SPV_KHR_16bit_storage"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %377 "main" %374 %392
+OpEntryPoint GLCompute %377 "main" %374 %391
 OpExecutionMode %377 LocalSize 64 1 1
 OpMemberDecorate %14 0 Offset 0
 OpMemberDecorate %14 1 Offset 4
@@ -56,7 +56,7 @@ OpDecorate %38 Binding 4
 OpDecorate %39 Block
 OpMemberDecorate %39 0 Offset 0
 OpDecorate %374 BuiltIn SubgroupLocalInvocationId
-OpDecorate %392 BuiltIn LocalInvocationIndex
+OpDecorate %391 BuiltIn LocalInvocationIndex
 %2 = OpTypeVoid
 %3 = OpTypeInt 16 1
 %4 = OpTypeInt 16 0
@@ -168,8 +168,8 @@ OpDecorate %392 BuiltIn LocalInvocationIndex
 %385 = OpConstant  %3  60
 %387 = OpConstantNull  %3
 %389 = OpConstantNull  %4
-%391 = OpConstantNull  %4
-%392 = OpVariable  %375  Input
+%391 = OpVariable  %375  Input
+%393 = OpConstantNull  %4
 %397 = OpConstant  %5  264
 %403 = OpConstant  %5  11
 %43 = OpFunction  %3  None %44
@@ -523,12 +523,12 @@ OpFunctionEnd
 %383 = OpAccessChain  %81  %38 %77
 OpBranch %390
 %390 = OpLabel
-%393 = OpLoad  %5  %392
-%394 = OpIEqual  %48  %393 %77
+%392 = OpLoad  %5  %391
+%394 = OpIEqual  %48  %392 %77
 OpSelectionMerge %395 None
 OpBranchConditional %394 %396 %395
 %396 = OpLabel
-OpStore %41 %391
+OpStore %41 %393
 OpBranch %395
 %395 = OpLabel
 OpControlBarrier %16 %16 %397

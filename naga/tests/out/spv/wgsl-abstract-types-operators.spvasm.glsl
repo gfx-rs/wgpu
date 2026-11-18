@@ -53,9 +53,9 @@ void _105()
 
 void main()
 {
-    if (gl_LocalInvocationIndex == 0u)
+    for (uint _123 = gl_LocalInvocationIndex; _123 < 64u; _123++)
     {
-        _17 = uint[](0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
+        _17[_123] = 0u;
     }
     barrier();
     _20();

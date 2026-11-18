@@ -16,33 +16,37 @@ void main()
     bool _31 = false;
     bool _34 = false;
     bool _36 = false;
+    for (uint _49 = gl_LocalInvocationIndex; _49 < 2u; _49 += 64u)
+    {
+        _14._m1[_49] = 0;
+    }
     if (gl_LocalInvocationIndex == 0u)
     {
         _10 = 0u;
         _12 = 0;
-        _14 = _7(0u, int[](0, 0));
+        _14._m0 = 0u;
     }
     barrier();
-    uint _56 = atomicOr(_10, uint((gl_WorkGroupID.x + (gl_WorkGroupID.y * 32768u)) >= 64u));
-    int _58 = atomicAdd(_12, 1);
+    uint _64 = atomicOr(_10, uint((gl_WorkGroupID.x + (gl_WorkGroupID.y * 32768u)) >= 64u));
+    int _66 = atomicAdd(_12, 1);
     atomicExchange(_14._m0, 1u);
-    int _61 = atomicAdd(_14._m1[0u], 1);
+    int _69 = atomicAdd(_14._m1[0u], 1);
     barrier();
     barrier();
-    uint _63 = atomicAdd(_10, 0u);
+    uint _71 = atomicAdd(_10, 0u);
     barrier();
     barrier();
-    int _64 = atomicAdd(_12, 0);
+    int _72 = atomicAdd(_12, 0);
     barrier();
     barrier();
-    uint _66 = atomicAdd(_14._m0, 0u);
+    uint _74 = atomicAdd(_14._m0, 0u);
     barrier();
     barrier();
-    int _68 = atomicAdd(_14._m1[0u], 0);
+    int _76 = atomicAdd(_14._m1[0u], 0);
     barrier();
-    if (_63 == 0u)
+    if (_71 == 0u)
     {
-        _31 = _64 > 0;
+        _31 = _72 > 0;
     }
     else
     {
@@ -50,7 +54,7 @@ void main()
     }
     if (_31)
     {
-        _34 = _66 > 0u;
+        _34 = _74 > 0u;
     }
     else
     {
@@ -58,7 +62,7 @@ void main()
     }
     if (_34)
     {
-        _36 = _68 > 0;
+        _36 = _76 > 0;
     }
     else
     {
