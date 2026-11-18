@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/changelog.yml"
       - "CHANGELOG.md"
+      - "changelog.d/**"
       - "xtask/**/*"
     types:
       - opened
@@ -48,8 +49,8 @@ jobs:
           persist-credentials: false
 
       # NOTE: Keep label name(s) in sync. with `xtask`'s implementation.
-      - name: Run `cargo xtask changelog check-legacy`
+      - name: Run `cargo xtask changelog check`
         env:
           GITHUB_EVENT_PULL_REQUEST_BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
-          cargo xtask changelog check-legacy "origin/${GITHUB_EVENT_PULL_REQUEST_BASE_REF}" ${{ contains(github.event.pull_request.labels.*.name, 'changelog: released entry changed') && '--allow-released-changes' || ''  }}
+          cargo xtask changelog check "origin/${GITHUB_EVENT_PULL_REQUEST_BASE_REF}" ${{ contains(github.event.pull_request.labels.*.name, 'changelog: released entry changed') && '--allow-released-changes' || ''  }}

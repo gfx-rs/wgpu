@@ -14,8 +14,7 @@ use super::find_odd_characters;
 
 const DIRECTORY: &str = "changelog.d";
 const CHANGELOG: &str = "CHANGELOG.md";
-const UNRELEASED: &str =
-    "\n## Unreleased\n\nSee [changelog.d](changelog.d/) for unreleased changes.\n\n";
+const UNRELEASED: &str = "\n## [Unreleased](changelog.d/)\n\n";
 const REPOSITORY: &str = "gfx-rs/wgpu";
 
 pub(super) const CATEGORIES: &str = "major, added, changes, bug-fixes, performance, documentation, dependency-updates, deno-webgpu, examples, testing";
@@ -582,6 +581,10 @@ fn release_offset(changelog: &str, version: &str) -> Result<(usize, &'static str
                 .map(|start| (start + marker.len(), newline))
         })
         .context("the fragment workflow is not active in CHANGELOG.md")?;
+    ensure!(
+        changelog[offset..].starts_with("## "),
+        "move the old Unreleased entries into a release section before using fragments"
+    );
     let mut fence = None;
     for line in changelog[offset..].lines() {
         let delimiter = line
@@ -904,5 +907,7 @@ mod tests {
     fn release_requires_cutover() {
         let changelog = "# Change Log\n\n## Unreleased\n\n### Major changes\n";
         assert!(release_offset(changelog, "v31.0.0").is_err());
+        let changelog = format!("# Change Log\n{UNRELEASED}### Major changes\n");
+        assert!(release_offset(&changelog, "v31.0.0").is_err());
     }
 }

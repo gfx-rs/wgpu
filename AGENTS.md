@@ -72,4 +72,6 @@ All changes are expected to pass CI. The commands below are useful local checks,
 
 ## Changelog
 
-We maintain a changelog in CHANGELOG.md. Changes should be noted in the changelog if they are user-visible (changes to documented public APIs, significant bug fixes, or new functionality). We generally do not consider changes to wgpu-core, wgpu-hal, wgpu-core-remote, or wgpu-core-remote-types worthy of changelogs, unless a `wgpu` user is expected to interface with them directly. Changelog descriptions should be concise. If you are not sure whether something should be in the CHANGELOG or you are not sure how to describe the change, ask the user for guidance.
+Add a changelog fragment for user-visible changes to documented public APIs, significant bug fixes, or new functionality. Use `cargo xtask changelog new` to create a fragment and `cargo xtask changelog preview <slug>` to check it. See [changelog.d/README.md](changelog.d/README.md).
+
+Changes to wgpu-core, wgpu-hal, wgpu-core-remote, and wgpu-core-remote-types usually need a fragment only if a `wgpu` user is expected to use them directly. Keep entries concise. If you are unsure whether to add a fragment or how to describe the change, ask the user.
