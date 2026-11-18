@@ -954,6 +954,10 @@ pub struct Writer {
     force_loop_bounding: bool,
     use_storage_input_output_16: bool,
     emit_int_div_checks: bool,
+    buffer_sizes: Option<BufferSizes>,
+    /// Where [`BufferSizes`] are read from, once declared: the push constant
+    /// variable, the index of its `u32` array member, and that member's offset.
+    buffer_sizes_var: Option<(Word, u32, u32)>,
     void_type: Word,
     tuple_of_u32s_ty_id: Option<Word>,
     //TODO: convert most of these into vectors, addressable by handle indices
@@ -1051,6 +1055,13 @@ bitflags::bitflags! {
         /// Note: VK_KHR_shader_non_semantic_info must be enabled. This will have no
         /// effect if `options.trace_ray_argument_validation` is set to false.
         const PRINT_ON_TRACE_RAYS_FAIL = 0x40;
+
+        /// Declare the [`NumWorkGroups`] input builtin in compute shaders that
+        /// don't use it. Qualcomm's Adreno 5xx driver skips an indirect dispatch
+        /// whose arguments an earlier dispatch wrote unless the shader declares it.
+        ///
+        /// [`NumWorkGroups`]: crate::BuiltIn::NumWorkGroups
+        const FORCE_NUM_WORKGROUPS = 0x80;
     }
 }
 
@@ -1129,6 +1140,25 @@ pub struct Options<'a> {
     /// implementation-defined results when the divisor is zero. Appropriate
     /// for compute shaders where the developer guarantees non-zero divisors.
     pub emit_int_div_checks: bool,
+
+    /// If set, read the lengths of runtime-sized arrays in storage buffers from
+    /// push constants instead of using `OpArrayLength`.
+    pub buffer_sizes: Option<BufferSizes>,
+}
+
+/// Where the sizes of storage buffer bindings are read from, for drivers whose
+/// `OpArrayLength` is unreliable.
+///
+/// The sizes are `u32` byte counts in the push constant block. If the module has
+/// an immediate variable, they are in a member after it, so the block can't hold
+/// sizes at offsets the immediate data covers. Bindings without a size, and
+/// modules with more than one immediate variable, still use `OpArrayLength`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct BufferSizes {
+    /// Size of the push constant block, in bytes.
+    pub push_constant_size: u32,
+    /// Byte offset of each storage buffer binding's size in the block.
+    pub offsets: alloc::collections::BTreeMap<crate::ResourceBinding, u32>,
 }
 
 impl Default for Options<'_> {
@@ -1155,6 +1185,7 @@ impl Default for Options<'_> {
             task_dispatch_limits: None,
             mesh_shader_primitive_indices_clamp: true,
             emit_int_div_checks: true,
+            buffer_sizes: None,
         }
     }
 }

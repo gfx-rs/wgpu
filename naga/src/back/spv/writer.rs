@@ -97,6 +97,8 @@ impl Writer {
             trace_ray_argument_validation: options.trace_ray_argument_validation,
             use_storage_input_output_16: options.use_storage_input_output_16,
             emit_int_div_checks: options.emit_int_div_checks,
+            buffer_sizes: options.buffer_sizes.clone(),
+            buffer_sizes_var: None,
             void_type,
             tuple_of_u32s_ty_id: None,
             lookup_type: crate::FastHashMap::default(),
@@ -142,6 +144,7 @@ impl Writer {
             super::f16_polyfill::F16IoPolyfill::new(options.use_storage_input_output_16);
         self.task_dispatch_limits = options.task_dispatch_limits;
         self.mesh_shader_primitive_indices_clamp = options.mesh_shader_primitive_indices_clamp;
+        self.buffer_sizes = options.buffer_sizes.clone();
         Ok(())
     }
 
@@ -184,8 +187,10 @@ impl Writer {
             task_dispatch_limits: self.task_dispatch_limits,
             mesh_shader_primitive_indices_clamp: self.mesh_shader_primitive_indices_clamp,
             emit_int_div_checks: self.emit_int_div_checks,
+            buffer_sizes: take(&mut self.buffer_sizes),
 
             // Initialized afresh:
+            buffer_sizes_var: None,
             id_gen,
             void_type,
             tuple_of_u32s_ty_id: None,
@@ -508,6 +513,50 @@ impl Writer {
             self.tuple_of_u32s_ty_id = Some(id);
             id
         }
+    }
+
+    /// Returns where [`super::BufferSizes`] are read from, declaring a push
+    /// constant variable for them on first use if the module has no immediates.
+    pub(super) fn get_buffer_sizes_var(&mut self, push_constant_size: u32) -> (Word, u32, u32) {
+        if let Some(location) = self.buffer_sizes_var {
+            return location;
+        }
+        let u32_type_id = self.get_u32_type_id();
+        let length_id = self.get_index_constant(push_constant_size / 4);
+        let array_type_id = self.id_gen.next();
+        Instruction::type_array(array_type_id, u32_type_id, length_id)
+            .to_words(&mut self.logical_layout.declarations);
+        self.decorate(array_type_id, spirv::Decoration::ArrayStride, &[4]);
+        let struct_type_id = self.id_gen.next();
+        Instruction::type_struct(struct_type_id, &[array_type_id])
+            .to_words(&mut self.logical_layout.declarations);
+        self.decorate(struct_type_id, spirv::Decoration::Block, &[]);
+        self.annotations.push(Instruction::member_decorate(
+            struct_type_id,
+            0,
+            spirv::Decoration::Offset,
+            &[0],
+        ));
+        let pointer_type_id = self.id_gen.next();
+        Instruction::type_pointer(
+            pointer_type_id,
+            spirv::StorageClass::PushConstant,
+            struct_type_id,
+        )
+        .to_words(&mut self.logical_layout.declarations);
+        let var_id = self.id_gen.next();
+        Instruction::variable(
+            pointer_type_id,
+            var_id,
+            spirv::StorageClass::PushConstant,
+            None,
+        )
+        .to_words(&mut self.logical_layout.declarations);
+        if self.flags.contains(WriterFlags::DEBUG) {
+            self.debugs.push(Instruction::name(var_id, "buffer_sizes"));
+        }
+        self.buffer_sizes_var = Some((var_id, 0, 0));
+        (var_id, 0, 0)
     }
 
     pub(super) fn decorate(&mut self, id: Word, decoration: spirv::Decoration, operands: &[Word]) {
@@ -1539,6 +1588,30 @@ impl Writer {
         };
 
         if let Some(ref mut iface) = interface {
+            if self.flags.contains(WriterFlags::FORCE_NUM_WORKGROUPS)
+                && iface.stage == crate::ShaderStage::Compute
+                && !ir_function.arguments.iter().any(|argument| {
+                    contains_builtin(
+                        argument.binding.as_ref(),
+                        argument.ty,
+                        &ir_module.types,
+                        crate::BuiltIn::NumWorkGroups,
+                    )
+                })
+            {
+                let vec3u_type_id = self.get_vec3u_type_id();
+                let pointer_type_id =
+                    self.get_pointer_type_id(vec3u_type_id, spirv::StorageClass::Input);
+                let var_id = self.id_gen.next();
+                Instruction::variable(pointer_type_id, var_id, spirv::StorageClass::Input, None)
+                    .to_words(&mut self.logical_layout.declarations);
+                self.decorate(
+                    var_id,
+                    spirv::Decoration::BuiltIn,
+                    &[spirv::BuiltIn::NumWorkgroups as u32],
+                );
+                iface.varying_ids.push(var_id);
+            }
             if let Some(task_payload) = iface.task_payload {
                 iface
                     .varying_ids
@@ -2029,6 +2102,14 @@ impl Writer {
         ) {
             if let Some(id) = self.hit_object_attribute_var {
                 interface_ids.push(id);
+            }
+        }
+
+        if self.lang_version() >= (1, 4) {
+            if let Some((id, _, _)) = self.buffer_sizes_var {
+                if !interface_ids.contains(&id) {
+                    interface_ids.push(id);
+                }
             }
         }
 
@@ -3665,7 +3746,47 @@ impl Writer {
                     };
                     self.decorate_struct_member(wrapper_type_id, 0, &member, &ir_module.types)?;
 
-                    Instruction::type_struct(wrapper_type_id, &[inner_type_id])
+                    let mut member_type_ids = vec![inner_type_id];
+                    // An entry point can use only one push constant block, so put the
+                    // buffer sizes after the immediate data.
+                    if let Some(push_constant_size) = self
+                        .buffer_sizes
+                        .as_ref()
+                        .map(|buffer_sizes| buffer_sizes.push_constant_size)
+                        .filter(|_| {
+                            global_variable.space == crate::AddressSpace::Immediate
+                                && ir_module
+                                    .global_variables
+                                    .iter()
+                                    .filter(|&(_, var)| var.space == crate::AddressSpace::Immediate)
+                                    .count()
+                                    == 1
+                        })
+                    {
+                        let offset = ir_module.types[global_variable.ty]
+                            .inner
+                            .size(ir_module.to_ctx())
+                            .next_multiple_of(4);
+                        if offset < push_constant_size {
+                            let u32_type_id = self.get_u32_type_id();
+                            let length_id =
+                                self.get_index_constant((push_constant_size - offset) / 4);
+                            let array_type_id = self.id_gen.next();
+                            Instruction::type_array(array_type_id, u32_type_id, length_id)
+                                .to_words(&mut self.logical_layout.declarations);
+                            self.decorate(array_type_id, Decoration::ArrayStride, &[4]);
+                            self.annotations.push(Instruction::member_decorate(
+                                wrapper_type_id,
+                                1,
+                                Decoration::Offset,
+                                &[offset],
+                            ));
+                            member_type_ids.push(array_type_id);
+                            self.buffer_sizes_var = Some((id, 1, offset));
+                        }
+                    }
+
+                    Instruction::type_struct(wrapper_type_id, &member_type_ids)
                         .to_words(&mut self.logical_layout.declarations);
                 }
             }
