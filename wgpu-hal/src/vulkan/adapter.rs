@@ -2843,6 +2843,10 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::Float16);
             }
 
+            if features.contains(wgt::Features::SHADER_F64) {
+                capabilities.push(spv::Capability::Float64);
+            }
+
             if features.contains(wgt::Features::SHADER_I16) {
                 capabilities.push(spv::Capability::Int16);
             }

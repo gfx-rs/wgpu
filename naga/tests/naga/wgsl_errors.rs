@@ -1149,12 +1149,13 @@ fn matrix_with_bad_type() {
 fn matrix_constructor_inferred() {
     check(
         r#"
+            enable wgpu_f64;
             const m: mat2x2<f64> = mat2x2<f32>(vec2(0), vec2(1));
         "#,
         r#"error: the type of `m` is expected to be `mat2x2<f64>`, but got `mat2x2<f32>`
-  ┌─ wgsl:2:19
+  ┌─ wgsl:3:19
   │
-2 │             const m: mat2x2<f64> = mat2x2<f32>(vec2(0), vec2(1));
+3 │             const m: mat2x2<f64> = mat2x2<f32>(vec2(0), vec2(1));
   │                   ^ definition of `m`
 
 "#,
