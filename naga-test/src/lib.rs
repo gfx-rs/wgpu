@@ -182,6 +182,7 @@ impl SpirvOutParameters {
             mesh_shader_primitive_indices_clamp: shared_info.mesh_output_validation,
             trace_ray_argument_validation: true,
             emit_int_div_checks: self.emit_int_div_checks,
+            buffer_sizes: None,
         }
     }
 }

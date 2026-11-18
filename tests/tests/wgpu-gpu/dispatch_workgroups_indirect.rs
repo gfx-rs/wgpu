@@ -1,3 +1,4 @@
+use wgpu::util::DeviceExt as _;
 use wgpu_test::{
     apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
@@ -8,6 +9,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         DISCARD_DISPATCH,
         RESET_BIND_GROUPS,
         ZERO_SIZED_BUFFER,
+        UNIFORM_WITHOUT_NUM_WORKGROUPS,
     ]);
 }
 
@@ -332,3 +334,102 @@ async fn run_test(ctx: &TestingContext, num_workgroups: &[u32; 3]) -> [u32; 3] {
 
     res.unwrap()
 }
+
+/// Make sure that an indirect dispatch runs a shader that reads a uniform buffer but
+/// not the `num_workgroups` builtin. Qualcomm's Adreno 5xx driver skipped it.
+#[apply(gpu_test!)]
+static UNIFORM_WITHOUT_NUM_WORKGROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(
+                wgpu::DownlevelFlags::COMPUTE_SHADERS | wgpu::DownlevelFlags::INDIRECT_EXECUTION,
+            )
+            .limits(wgpu::Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| async move {
+        let module = ctx
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(
+                    "
+                    @group(0) @binding(0) var<uniform> value: vec4u;
+                    @group(0) @binding(1) var<storage, read_write> out: array<u32, 4>;
+
+                    @compute @workgroup_size(1)
+                    fn main() {
+                        out[0] = value.x;
+                    }
+                    "
+                    .into(),
+                ),
+            });
+        let pipeline = ctx
+            .device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: None,
+                layout: None,
+                module: &module,
+                entry_point: Some("main"),
+                compilation_options: Default::default(),
+                cache: None,
+            });
+        let uniform = ctx
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: bytemuck::cast_slice(&[42u32, 0, 0, 0]),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+        let out = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 16,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let readback = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 16,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let indirect = ctx
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: bytemuck::cast_slice(&[1u32, 1, 1]),
+                usage: wgpu::BufferUsages::INDIRECT,
+            });
+        let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: out.as_entire_binding(),
+                },
+            ],
+        });
+
+        let mut encoder = ctx.device.create_command_encoder(&Default::default());
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&Default::default());
+            compute_pass.set_pipeline(&pipeline);
+            compute_pass.set_bind_group(0, &bind_group, &[]);
+            compute_pass.dispatch_workgroups_indirect(&indirect, 0);
+        }
+        encoder.copy_buffer_to_buffer(&out, 0, &readback, 0, 16);
+        ctx.queue.submit(Some(encoder.finish()));
+
+        readback.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
+        let view = readback.slice(..).get_mapped_range().unwrap();
+        let result: &[u32] = bytemuck::cast_slice(&view);
+        assert_eq!(result[0], 42);
+    });

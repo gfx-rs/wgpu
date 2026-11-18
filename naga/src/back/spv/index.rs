@@ -220,6 +220,14 @@ impl BlockContext<'_> {
             }
         };
 
+        if binding_array_index_id.is_none() {
+            if let Some(length_id) =
+                self.write_buffer_sizes_array_length(global_handle, opt_last_member_index, block)?
+            {
+                return Ok(length_id);
+            }
+        }
+
         let structure_id = match binding_array_index_id {
             // We are indexing inside a binding array, generate the access op.
             Some(index_id) => {
@@ -251,6 +259,99 @@ impl BlockContext<'_> {
         ));
 
         Ok(length_id)
+    }
+
+    /// Computes the length of a runtime-sized array from [`super::BufferSizes`],
+    /// if the options provide this global's buffer size.
+    fn write_buffer_sizes_array_length(
+        &mut self,
+        global_handle: Handle<crate::GlobalVariable>,
+        last_member_index: Option<u32>,
+        block: &mut Block,
+    ) -> Result<Option<Word>, Error> {
+        let Some(ref buffer_sizes) = self.writer.buffer_sizes else {
+            return Ok(None);
+        };
+        let global = &self.ir_module.global_variables[global_handle];
+        let Some(size_offset) = global
+            .binding
+            .as_ref()
+            .and_then(|binding| buffer_sizes.offsets.get(binding))
+            .copied()
+        else {
+            return Ok(None);
+        };
+        let push_constant_size = buffer_sizes.push_constant_size;
+        let has_immediates = self
+            .ir_module
+            .global_variables
+            .iter()
+            .any(|(_, var)| var.space == crate::AddressSpace::Immediate);
+        let (var_id, member_index, member_offset) = match self.writer.buffer_sizes_var {
+            Some(location) => location,
+            // The immediate variable's wrapper has no room for the sizes.
+            None if has_immediates => return Ok(None),
+            None => self.writer.get_buffer_sizes_var(push_constant_size),
+        };
+        let Some(size_index) = size_offset.checked_sub(member_offset) else {
+            return Ok(None);
+        };
+
+        let (array_offset, array_ty) =
+            match (&self.ir_module.types[global.ty].inner, last_member_index) {
+                (&crate::TypeInner::Struct { ref members, .. }, Some(index)) => {
+                    let member = &members[index as usize];
+                    (member.offset, member.ty)
+                }
+                (_, None) => (0, global.ty),
+                _ => {
+                    return Err(Error::Validation(
+                        "array length expression: bad buffer size member inference",
+                    ))
+                }
+            };
+        let crate::TypeInner::Array { stride, .. } = self.ir_module.types[array_ty].inner else {
+            return Err(Error::Validation("array length expression: not an array"));
+        };
+
+        let u32_type_id = self.writer.get_u32_type_id();
+        let pointer_type_id = self
+            .writer
+            .get_pointer_type_id(u32_type_id, spirv::StorageClass::PushConstant);
+        let member_id = self.writer.get_index_constant(member_index);
+        let index_id = self.writer.get_index_constant(size_index / 4);
+        let pointer_id = self.gen_id();
+        block.body.push(Instruction::access_chain(
+            pointer_type_id,
+            pointer_id,
+            var_id,
+            &[member_id, index_id],
+        ));
+        let size_id = self.gen_id();
+        block
+            .body
+            .push(Instruction::load(u32_type_id, size_id, pointer_id, None));
+
+        // Same as `OpArrayLength`: whole elements that fit after the array's offset.
+        let offset_id = self.writer.get_index_constant(array_offset);
+        let stride_id = self.writer.get_index_constant(stride);
+        let remaining_id = self.gen_id();
+        block.body.push(Instruction::binary(
+            spirv::Op::ISub,
+            u32_type_id,
+            remaining_id,
+            size_id,
+            offset_id,
+        ));
+        let length_id = self.gen_id();
+        block.body.push(Instruction::binary(
+            spirv::Op::UDiv,
+            u32_type_id,
+            length_id,
+            remaining_id,
+            stride_id,
+        ));
+        Ok(Some(length_id))
     }
 
     /// If `sequence` refers to an unbounded binding array global, return its
