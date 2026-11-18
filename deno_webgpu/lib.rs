@@ -33,6 +33,7 @@ mod compute_pass;
 mod compute_pipeline;
 mod device;
 mod error;
+mod external_memory;
 mod pipeline_layout;
 mod query_set;
 mod queue;
@@ -194,7 +195,9 @@ impl GPU {
       if let Some(instance) = state.try_borrow::<Instance>() {
         instance.clone()
       } else {
-        let mut flags = wgpu_types::InstanceFlags::from_build_config();
+        // WebGPU reports timestamp queries in nanoseconds.
+        let mut flags = wgpu_types::InstanceFlags::from_build_config()
+          | wgpu_types::InstanceFlags::AUTOMATIC_TIMESTAMP_NORMALIZATION;
         let strict_compliance = std::env::var(STRICT_COMPLIANCE_ENV_VAR)
           .is_ok_and(|value| {
             !matches!(value.to_ascii_lowercase().as_str(), "false" | "no" | "0")
