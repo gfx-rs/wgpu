@@ -5,6 +5,8 @@ use core::{mem, ops::Range};
 use hashbrown::hash_map::Entry;
 
 const ALLOCATION_GRANULARITY: u32 = 1;
+/// Free command buffers only if they went unused at every reset in this window.
+const TRIM_WINDOW: u32 = 64;
 const DST_IMAGE_LAYOUT: vk::ImageLayout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
 
 impl super::Texture {
@@ -200,7 +202,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
         // Keep only what this encoding used, or the encoder holds its busiest
         // submission's buffers for the life of the device. Mesa only returns
-        // their memory on a trim, not on free.
+        // their memory on a trim, not on free. Every buffer was just reset, so
+        // it doesn't matter which `unused` buffers are freed.
+        self.min_unused = self.min_unused.min(unused);
+        self.resets_since_trim += 1;
+        if self.resets_since_trim < TRIM_WINDOW {
+            return;
+        }
+        self.resets_since_trim = 0;
+        let unused = mem::replace(&mut self.min_unused, usize::MAX);
         if unused > 0 {
             let excess = self.free.split_off(self.free.len() - unused);
             unsafe {

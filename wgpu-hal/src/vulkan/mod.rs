@@ -1235,6 +1235,10 @@ pub struct CommandEncoder {
     /// These could be in any Vulkan state except "pending".
     discarded: Vec<vk::CommandBuffer>,
 
+    /// Fewest buffers left in `free` at any reset since the last trim.
+    min_unused: usize,
+    resets_since_trim: u32,
+
     /// If this is true, the active renderpass enabled a debug span,
     /// and needs to be disabled on renderpass close.
     rpass_debug_marker_active: bool,
