@@ -261,6 +261,13 @@ struct Function {
     /// List of local variables used as a counters to ensure that all loops are bounded.
     force_loop_bounding_vars: Vec<LocalVariable>,
 
+    /// Temporaries holding the explicitly laid out side of an aggregate copy
+    /// to or from layout-free `Workgroup` memory, by SPIR-V type id.
+    ///
+    /// Only used before SPIR-V 1.4. See
+    /// [`BlockContext::write_workgroup_copy`].
+    workgroup_copy_temporaries: crate::FastIndexMap<Word, LocalVariable>,
+
     /// A map from a Naga expression to the temporary SPIR-V variable we have
     /// spilled its value to, if any.
     ///
@@ -969,6 +976,9 @@ pub struct Writer {
     cached_constants: crate::FastHashMap<CachedConstant, Word>,
     global_variables: HandleVec<crate::GlobalVariable, GlobalVariable>,
     std140_compat_uniform_types: crate::FastHashMap<Handle<crate::Type>, Std140CompatTypeInfo>,
+    /// SPIR-V ids of undecorated clones for Workgroup types that are also used
+    /// by a buffer. Absent, or equal to the default id, means no clone was needed.
+    workgroup_type_ids: crate::FastHashMap<Handle<crate::Type>, Word>,
     fake_missing_bindings: bool,
     binding_map: BindingMap,
 

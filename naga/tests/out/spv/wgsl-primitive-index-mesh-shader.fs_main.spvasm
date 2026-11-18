@@ -9,15 +9,6 @@ OpExtension "SPV_EXT_mesh_shader"
 OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %20 "fs_main" %15 %18
 OpExecutionMode %20 OriginUpperLeft
-OpMemberDecorate %5 0 Offset 0
-OpMemberDecorate %8 0 Offset 0
-OpMemberDecorate %8 1 Offset 12
-OpDecorate %9 ArrayStride 16
-OpDecorate %11 ArrayStride 16
-OpMemberDecorate %13 0 Offset 0
-OpMemberDecorate %13 1 Offset 48
-OpMemberDecorate %13 2 Offset 64
-OpMemberDecorate %13 3 Offset 68
 OpDecorate %15 BuiltIn PrimitiveId
 OpDecorate %15 Flat
 OpDecorate %18 Location 0

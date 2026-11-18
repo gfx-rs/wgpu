@@ -2880,6 +2880,352 @@ impl BlockContext<'_> {
         }
     }
 
+    fn layoutless_workgroup_type_id(&mut self, ty: Handle<crate::Type>) -> Option<Word> {
+        let id = *self.writer.workgroup_type_ids.get(&ty)?;
+        (id != self.writer.get_handle_type_id(ty)).then_some(id)
+    }
+
+    fn maybe_convert_value_for_workgroup_store(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+        value: Handle<crate::Expression>,
+        block: &mut Block,
+    ) -> Result<Word, Error> {
+        let value_id = self.cached[value];
+        let crate::TypeInner::Pointer { base, space } =
+            *self.fun_info[pointer].ty.inner_with(&self.ir_module.types)
+        else {
+            return Ok(value_id);
+        };
+        if !space.forbids_explicit_layout() {
+            return Ok(value_id);
+        }
+        self.writer
+            .convert_workgroup_value(self.ir_module, base, value_id, true, block)
+    }
+
+    /// If loads and stores through `pointer` have to convert between layouts
+    /// with [`write_workgroup_copy`], return the pointee type and the
+    /// pointer's storage class.
+    ///
+    /// [`write_workgroup_copy`]: Self::write_workgroup_copy
+    fn workgroup_copy_pointee(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+    ) -> Option<(Handle<crate::Type>, spirv::StorageClass)> {
+        let crate::TypeInner::Pointer { base, space } =
+            *self.fun_info[pointer].ty.inner_with(&self.ir_module.types)
+        else {
+            return None;
+        };
+        (space.forbids_explicit_layout()
+            && self
+                .writer
+                .workgroup_conversion_needs_copy(self.ir_module, base))
+        .then(|| (base, map_storage_class(space)))
+    }
+
+    /// Return this function's temporary for the regular type of `ty`.
+    fn workgroup_copy_temporary(&mut self, ty: Handle<crate::Type>) -> Word {
+        let type_id = self.writer.get_handle_type_id(ty);
+        let class = spirv::StorageClass::Function;
+        let pointer_type_id = self.writer.get_pointer_type_id(type_id, class);
+        let id_gen = &mut self.writer.id_gen;
+        self.function
+            .workgroup_copy_temporaries
+            .entry(type_id)
+            .or_insert_with(|| {
+                let id = id_gen.next();
+                super::LocalVariable {
+                    id,
+                    instruction: Instruction::variable(pointer_type_id, id, class, None),
+                }
+            })
+            .id
+    }
+
+    /// Copy a value of type `ty` from `source` to `target`, converting between
+    /// its regular type and its layout-free `Workgroup` type.
+    ///
+    /// Used before SPIR-V 1.4, which has no `OpCopyLogical`, for types that
+    /// contain arrays. One of the pointers is in `workgroup_class` and has the
+    /// layout-free type; the other is a `Function` temporary of the regular
+    /// type. `to_workgroup` selects the former as the target.
+    ///
+    /// Arrays are copied by a loop in the current function, so the size of the
+    /// generated code does not depend on their length. The loop goes through
+    /// pointers to the elements, so that an explicitly laid out array is never
+    /// a function argument or result: the Adreno 540 Vulkan driver reads an
+    /// `ArrayStride`-decorated array passed by value with its natural stride.
+    ///
+    /// On return, `block` is the block following the copy.
+    fn write_workgroup_copy(
+        &mut self,
+        ty: Handle<crate::Type>,
+        source: Word,
+        target: Word,
+        to_workgroup: bool,
+        workgroup_class: spirv::StorageClass,
+        block: &mut Block,
+    ) -> Result<(), Error> {
+        let function_class = spirv::StorageClass::Function;
+        let (source_class, target_class) = if to_workgroup {
+            (function_class, workgroup_class)
+        } else {
+            (workgroup_class, function_class)
+        };
+
+        if !self
+            .writer
+            .workgroup_conversion_needs_copy(self.ir_module, ty)
+        {
+            let regular = self.writer.get_handle_type_id(ty);
+            let source_type = if to_workgroup {
+                regular
+            } else {
+                self.layoutless_workgroup_type_id(ty).unwrap_or(regular)
+            };
+            let loaded = self.gen_id();
+            block
+                .body
+                .push(Instruction::load(source_type, loaded, source, None));
+            let converted = self.writer.convert_workgroup_value(
+                self.ir_module,
+                ty,
+                loaded,
+                to_workgroup,
+                block,
+            )?;
+            block.body.push(Instruction::store(target, converted, None));
+            return Ok(());
+        }
+
+        // Pointer types for a component of the source and of the target.
+        let component_pointer_types = |ctx: &mut Self, component: Handle<crate::Type>| {
+            let regular = ctx.writer.get_handle_type_id(component);
+            let layoutless = ctx
+                .layoutless_workgroup_type_id(component)
+                .unwrap_or(regular);
+            let (source_type, target_type) = if to_workgroup {
+                (regular, layoutless)
+            } else {
+                (layoutless, regular)
+            };
+            (
+                ctx.writer.get_pointer_type_id(source_type, source_class),
+                ctx.writer.get_pointer_type_id(target_type, target_class),
+            )
+        };
+
+        match self.ir_module.types[ty].inner {
+            crate::TypeInner::Array { base, size, .. } => {
+                let crate::proc::IndexableLength::Known(length) =
+                    size.resolve(self.ir_module.to_ctx())?
+                else {
+                    unreachable!("runtime-sized arrays cannot be loaded or stored");
+                };
+                let (source_pointer_type, target_pointer_type) =
+                    component_pointer_types(self, base);
+                let uint_type = self.writer.get_u32_type_id();
+                let bool_type = self.writer.get_bool_type_id();
+                let zero = self.get_index_constant(0);
+                let one = self.get_index_constant(1);
+                let count = self.get_index_constant(length);
+
+                let header = self.gen_id();
+                let body = self.gen_id();
+                let continuing = self.gen_id();
+                let merge = self.gen_id();
+                let index = self.gen_id();
+                let next_index = self.gen_id();
+                let condition = self.gen_id();
+
+                let preheader = block.label_id;
+                self.function.consume(
+                    core::mem::replace(block, Block::new(header)),
+                    Instruction::branch(header),
+                );
+                block.body.push(Instruction::phi(
+                    uint_type,
+                    index,
+                    &[(zero, preheader), (next_index, continuing)],
+                ));
+                block.body.push(Instruction::binary(
+                    spirv::Op::ULessThan,
+                    bool_type,
+                    condition,
+                    index,
+                    count,
+                ));
+                block.body.push(Instruction::loop_merge(
+                    merge,
+                    continuing,
+                    spirv::SelectionControl::NONE,
+                ));
+                self.function.consume(
+                    core::mem::replace(block, Block::new(body)),
+                    Instruction::branch_conditional(condition, body, merge),
+                );
+
+                let source_element = self.gen_id();
+                let target_element = self.gen_id();
+                block.body.push(Instruction::access_chain(
+                    source_pointer_type,
+                    source_element,
+                    source,
+                    &[index],
+                ));
+                block.body.push(Instruction::access_chain(
+                    target_pointer_type,
+                    target_element,
+                    target,
+                    &[index],
+                ));
+                self.write_workgroup_copy(
+                    base,
+                    source_element,
+                    target_element,
+                    to_workgroup,
+                    workgroup_class,
+                    block,
+                )?;
+                self.function.consume(
+                    core::mem::replace(block, Block::new(continuing)),
+                    Instruction::branch(continuing),
+                );
+
+                block.body.push(Instruction::binary(
+                    spirv::Op::IAdd,
+                    uint_type,
+                    next_index,
+                    index,
+                    one,
+                ));
+                self.function.consume(
+                    core::mem::replace(block, Block::new(merge)),
+                    Instruction::branch(header),
+                );
+            }
+            crate::TypeInner::Struct { ref members, .. } => {
+                for (index, member) in members.iter().enumerate() {
+                    let (source_pointer_type, target_pointer_type) =
+                        component_pointer_types(self, member.ty);
+                    let index = self.get_index_constant(index as u32);
+                    let source_member = self.gen_id();
+                    let target_member = self.gen_id();
+                    block.body.push(Instruction::access_chain(
+                        source_pointer_type,
+                        source_member,
+                        source,
+                        &[index],
+                    ));
+                    block.body.push(Instruction::access_chain(
+                        target_pointer_type,
+                        target_member,
+                        target,
+                        &[index],
+                    ));
+                    self.write_workgroup_copy(
+                        member.ty,
+                        source_member,
+                        target_member,
+                        to_workgroup,
+                        workgroup_class,
+                        block,
+                    )?;
+                }
+            }
+            _ => unreachable!("only arrays and structs have distinct workgroup types"),
+        }
+        Ok(())
+    }
+
+    /// Store `value` through the `Workgroup` pointer `pointer` with
+    /// [`write_workgroup_copy`].
+    ///
+    /// [`write_workgroup_copy`]: Self::write_workgroup_copy
+    fn write_workgroup_store_by_copy(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+        value: Handle<crate::Expression>,
+        ty: Handle<crate::Type>,
+        class: spirv::StorageClass,
+        block: &mut Block,
+    ) -> Result<(), Error> {
+        let temporary = self.workgroup_copy_temporary(ty);
+        block
+            .body
+            .push(Instruction::store(temporary, self.cached[value], None));
+        match self.write_access_chain(pointer, block, AccessTypeAdjustment::None)? {
+            ExpressionPointer::Ready { pointer_id } => {
+                self.write_workgroup_copy(ty, temporary, pointer_id, true, class, block)
+            }
+            ExpressionPointer::Conditional { condition, access } => {
+                let mut selection = Selection::start(block, ());
+                selection.if_true(self, condition, ());
+                let pointer_id = access.result_id.unwrap();
+                selection.block().body.push(access);
+                self.write_workgroup_copy(
+                    ty,
+                    temporary,
+                    pointer_id,
+                    true,
+                    class,
+                    selection.block(),
+                )?;
+                selection.finish(self, ());
+                Ok(())
+            }
+        }
+    }
+
+    /// Load a value of the regular type of `ty` through the `Workgroup`
+    /// pointer `pointer` with [`write_workgroup_copy`].
+    ///
+    /// [`write_workgroup_copy`]: Self::write_workgroup_copy
+    fn write_workgroup_load_by_copy(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+        ty: Handle<crate::Type>,
+        class: spirv::StorageClass,
+        block: &mut Block,
+    ) -> Result<Word, Error> {
+        let result_type_id = self.writer.get_handle_type_id(ty);
+        let temporary = self.workgroup_copy_temporary(ty);
+        match self.write_access_chain(pointer, block, AccessTypeAdjustment::None)? {
+            ExpressionPointer::Ready { pointer_id } => {
+                self.write_workgroup_copy(ty, pointer_id, temporary, false, class, block)?;
+                let id = self.gen_id();
+                block
+                    .body
+                    .push(Instruction::load(result_type_id, id, temporary, None));
+                Ok(id)
+            }
+            ExpressionPointer::Conditional { condition, access } => {
+                // As in `write_conditional_indexed_load`: zero when out of bounds.
+                let null_id = self.writer.get_constant_null(result_type_id);
+                let mut selection = Selection::start(block, result_type_id);
+                selection.if_true(self, condition, null_id);
+                let pointer_id = access.result_id.unwrap();
+                selection.block().body.push(access);
+                self.write_workgroup_copy(
+                    ty,
+                    pointer_id,
+                    temporary,
+                    false,
+                    class,
+                    selection.block(),
+                )?;
+                let id = self.gen_id();
+                selection
+                    .block()
+                    .body
+                    .push(Instruction::load(result_type_id, id, temporary, None));
+                Ok(selection.finish(self, id))
+            }
+        }
+    }
+
     fn write_checked_load(
         &mut self,
         pointer: Handle<crate::Expression>,
@@ -2897,6 +3243,8 @@ impl BlockContext<'_> {
             self.maybe_write_load_uniform_matcx2_struct_member(pointer, block)?
         {
             Ok(result_id)
+        } else if let Some((ty, class)) = self.workgroup_copy_pointee(pointer) {
+            self.write_workgroup_load_by_copy(pointer, ty, class, block)
         } else {
             // If `pointer` refers to a uniform address space pointer to a type
             // which was declared using a std140 compatible type variant (i.e.
@@ -2908,30 +3256,38 @@ impl BlockContext<'_> {
                 r#type: Handle<crate::Type>,
             }
             let mut wrapped_load = None;
+            let mut workgroup_load_type_id = None;
+            let mut workgroup_load_type = None;
             if let crate::TypeInner::Pointer {
                 base: pointer_base_type,
-                space: crate::AddressSpace::Uniform,
+                space,
             } = *self.fun_info[pointer].ty.inner_with(&self.ir_module.types)
             {
-                if self
-                    .writer
-                    .std140_compat_uniform_types
-                    .contains_key(&pointer_base_type)
+                if space == crate::AddressSpace::Uniform
+                    && self
+                        .writer
+                        .std140_compat_uniform_types
+                        .contains_key(&pointer_base_type)
                 {
                     wrapped_load = Some(WrappedLoad {
                         access_type_adjustment: AccessTypeAdjustment::UseStd140CompatType,
                         r#type: pointer_base_type,
                     });
-                };
+                } else if space.forbids_explicit_layout() {
+                    workgroup_load_type_id = self.layoutless_workgroup_type_id(pointer_base_type);
+                    workgroup_load_type = Some(pointer_base_type);
+                }
             };
 
-            let (load_type_id, access_type_adjustment) = match wrapped_load {
-                Some(ref wrapped_load) => (
-                    self.writer.std140_compat_uniform_types[&wrapped_load.r#type].type_id,
-                    wrapped_load.access_type_adjustment,
-                ),
-                None => (result_type_id, access_type_adjustment),
-            };
+            let (load_type_id, access_type_adjustment) =
+                match (wrapped_load.as_ref(), workgroup_load_type_id) {
+                    (Some(wrapped_load), _) => (
+                        self.writer.std140_compat_uniform_types[&wrapped_load.r#type].type_id,
+                        wrapped_load.access_type_adjustment,
+                    ),
+                    (None, Some(wg_type_id)) => (wg_type_id, access_type_adjustment),
+                    (None, None) => (result_type_id, access_type_adjustment),
+                };
 
             let load_id = match self.write_access_chain(pointer, block, access_type_adjustment)? {
                 ExpressionPointer::Ready { pointer_id } => {
@@ -3003,6 +3359,13 @@ impl BlockContext<'_> {
                     ));
                     Ok(result_id)
                 }
+                None if workgroup_load_type_id.is_some() => self.writer.convert_workgroup_value(
+                    self.ir_module,
+                    workgroup_load_type.unwrap(),
+                    load_id,
+                    false,
+                    block,
+                ),
                 None => Ok(load_id),
             }
         }
@@ -3896,7 +4259,12 @@ impl BlockContext<'_> {
                     self.writer.write_memory_barrier(flags, &mut block);
                 }
                 Statement::Store { pointer, value } => {
-                    let value_id = self.cached[value];
+                    if let Some((ty, class)) = self.workgroup_copy_pointee(pointer) {
+                        self.write_workgroup_store_by_copy(pointer, value, ty, class, &mut block)?;
+                        continue;
+                    }
+                    let value_id =
+                        self.maybe_convert_value_for_workgroup_store(pointer, value, &mut block)?;
                     match self.write_access_chain(
                         pointer,
                         &mut block,
