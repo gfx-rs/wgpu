@@ -59,6 +59,8 @@ pub struct GPUDevice {
 
   // Weak reference to the JS object so we can attach a finalizer.
   pub(crate) weak: std::sync::OnceLock<v8::Weak<v8::Object>>,
+
+  pub(crate) external_memory: crate::external_memory::PendingRelease,
 }
 
 impl GPUDevice {
@@ -158,6 +160,7 @@ impl GPUDevice {
   #[cppgc]
   fn create_buffer(
     &self,
+    scope: &mut v8::HandleScope,
     #[webidl] descriptor: super::buffer::GPUBufferDescriptor,
   ) -> Result<GPUBuffer, JsErrorBox> {
     // wgpu-core would also check this, but it needs to be reported via a JS
@@ -193,6 +196,11 @@ impl GPUDevice {
     Ok(GPUBuffer {
       wgpu_buffer,
       wgpu_device: self.wgpu_device.clone(),
+      external_memory: crate::external_memory::ExternalAllocation::new(
+        scope,
+        &self.external_memory,
+        descriptor.size,
+      ),
       usage: descriptor.usage,
       map_state: RefCell::new(if descriptor.mapped_at_creation {
         BufferMapState::Mapped {
@@ -229,6 +237,7 @@ impl GPUDevice {
   #[cppgc]
   fn create_texture(
     &self,
+    scope: &mut v8::HandleScope,
     #[webidl] descriptor: super::texture::GPUTextureDescriptor,
   ) -> Result<GPUTexture, JsErrorBox> {
     // Validation of the usage needs to happen on the device timeline, so
@@ -264,10 +273,16 @@ impl GPUDevice {
     }
 
     let wgpu_texture = self.wgpu_device.create_texture(&wgpu_descriptor);
+    let external_memory = crate::external_memory::ExternalAllocation::new(
+      scope,
+      &self.external_memory,
+      crate::external_memory::texture_size(&wgpu_descriptor),
+    );
 
     Ok(GPUTexture {
       wgpu_texture,
       default_view: Default::default(),
+      external_memory: Some(external_memory),
       dimension: descriptor.dimension,
       format: descriptor.format,
       usage: GPUTextureUsageFlags(usage),

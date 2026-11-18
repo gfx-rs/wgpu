@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 
 use deno_core::op2;
+use deno_core::v8;
 use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
@@ -50,6 +51,10 @@ pub struct GPUTexture {
   pub dimension: GPUTextureDimension,
   pub format: GPUTextureFormat,
   pub usage: GPUTextureUsageFlags,
+
+  /// `None` for surface textures, which the surface owns.
+  pub(crate) external_memory:
+    Option<crate::external_memory::ExternalAllocation>,
 }
 
 impl GPUTexture {
@@ -126,8 +131,11 @@ impl GPUTexture {
   }
   #[fast]
   #[undefined]
-  fn destroy(&self) {
+  fn destroy(&self, scope: &mut v8::HandleScope) {
     self.wgpu_texture.destroy();
+    if let Some(external_memory) = &self.external_memory {
+      external_memory.release(scope);
+    }
   }
 
   #[reentrant]

@@ -402,6 +402,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 #### deno_webgpu
 
 - Timestamp queries are reported in nanoseconds, as WebGPU requires, on GPUs whose timestamp period is not 1 ns. By @matthargett in [#10979](https://github.com/gfx-rs/wgpu/pull/10979).
+- Buffer and texture allocations are reported to V8 as external memory, so unreferenced GPU resources are garbage collected before GPU memory runs out. By @matthargett in [#10979](https://github.com/gfx-rs/wgpu/pull/10979).
 
 ### Performance
 

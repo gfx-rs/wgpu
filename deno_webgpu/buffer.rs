@@ -109,6 +109,8 @@ pub struct GPUBuffer {
   pub map_state: RefCell<BufferMapState>,
   /// None if buffer is not mappable or OOM while creating the buffer
   pub data: RefCell<Option<Vec<u8>>>,
+
+  pub(crate) external_memory: crate::external_memory::ExternalAllocation,
 }
 
 impl WebIdlInterfaceConverter for GPUBuffer {
@@ -392,6 +394,7 @@ impl GPUBuffer {
     self.unmap_inner(scope)?;
     self.data.replace(None);
     self.wgpu_buffer.destroy();
+    self.external_memory.release(scope);
     Ok(())
   }
 }
