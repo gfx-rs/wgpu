@@ -35,6 +35,30 @@ const QUERY_SET_OOM_DETECTION_IMPL: Backends = Backends::DX12;
 /// Nr of resources tests will try to create before failing.
 const LOOP_BOUND: u32 = 1_000_000;
 
+/// Vulkan predicts OOM only with `VK_EXT_memory_budget`. Without it, these tests allocate until
+/// the process, or on some devices the kernel, runs out of memory.
+fn oom_detection_available(ctx: &wgpu_test::TestingContext) -> bool {
+    match ctx.adapter_info.backend {
+        #[cfg(any(
+            target_os = "windows",
+            target_os = "linux",
+            target_os = "android",
+            target_os = "freebsd",
+            target_os = "macos"
+        ))]
+        wgpu::Backend::Vulkan => {
+            // SAFETY: the hal device is only used to read its enabled extensions.
+            let device = unsafe { ctx.device.as_hal::<wgpu::hal::vulkan::Api>() };
+            device.is_some_and(|device| {
+                device
+                    .enabled_device_extensions()
+                    .contains(&c"VK_EXT_memory_budget")
+            })
+        }
+        _ => true,
+    }
+}
+
 #[apply(gpu_test!)]
 static TEXTURE_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
@@ -44,6 +68,9 @@ static TEXTURE_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
             .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
     )
     .run_async(|ctx| async move {
+        if !oom_detection_available(&ctx) {
+            return;
+        }
         let mut textures = Vec::new();
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
@@ -84,6 +111,9 @@ static BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
             .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
     )
     .run_async(|ctx| async move {
+        if !oom_detection_available(&ctx) {
+            return;
+        }
         let mut buffers = Vec::new();
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
@@ -115,6 +145,9 @@ static MAPPING_BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new
             .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
     )
     .run_async(|ctx| async move {
+        if !oom_detection_available(&ctx) {
+            return;
+        }
         let mut buffers = Vec::new();
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
@@ -147,6 +180,9 @@ static QUERY_SET_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
             .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
     )
     .run_async(|ctx| async move {
+        if !oom_detection_available(&ctx) {
+            return;
+        }
         let mut query_sets = Vec::new();
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
@@ -178,6 +214,9 @@ static BLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
             .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
     )
     .run_async(|ctx| async move {
+        if !oom_detection_available(&ctx) {
+            return;
+        }
         let mut blases = Vec::new();
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
@@ -220,6 +259,9 @@ static TLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
             .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
     )
     .run_async(|ctx| async move {
+        if !oom_detection_available(&ctx) {
+            return;
+        }
         let mut tlases = Vec::new();
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
