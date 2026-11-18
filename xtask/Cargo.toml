@@ -12,13 +12,16 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 ] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-# The dependencies in this config have no transitive dependencies.
 anyhow.workspace = true
 cfg-if.workspace = true
 env_logger.workspace = true
+jiff = { version = "0.2.46", default-features = false, features = ["std"] }
 regex-lite.workspace = true
 log.workspace = true
 pico-args.workspace = true
+serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+tempfile.workspace = true
+toml.workspace = true
 xshell.workspace = true
 ureq.workspace = true

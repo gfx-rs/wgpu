@@ -1,11 +1,67 @@
-use std::sync::OnceLock;
+use std::{io, sync::OnceLock};
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use pico_args::Arguments;
 use regex_lite::Regex;
 use xshell::Shell;
 
-pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
+mod fragments;
+
+pub(crate) fn print_help() {
+    use fragments::{AREAS, CATEGORIES};
+
+    println!(
+        "\
+Usage: cargo xtask changelog <COMMAND>
+
+Commands:
+  new [<slug> [<category> [<area>]]]
+    Create changelog.d/<slug>.md. Prompts for missing arguments.
+    Press Enter to use the general area. Major changes have no area.
+
+    Categories: {CATEGORIES}
+    Areas: {AREAS}
+
+  preview [<slug> | changelog.d/<slug>.md] [--trunk <ref>]
+    Validate and print one fragment or the full Unreleased section. Works offline.
+    The full preview uses local trunk history for ordering. Drafts follow merged entries.
+
+  check [<base-ref>] [--allow-released-changes]
+    Validate fragments and reject changes to CHANGELOG.md since the merge base
+    with <base-ref> (default: trunk). Use --allow-released-changes for PRs with
+    the 'changelog: released entry changed' label.
+
+  release <vX.Y.Z> [--trunk <ref>]
+    Assemble committed fragments in CHANGELOG.md and remove the fragment files.
+    Requires the fragment workflow to be active, current trunk history, and gh for PR credit.
+
+  check-legacy [<base-ref> [<to-commit>]] [--allow-released-changes]
+    Check the old changelog format. Changes outside Unreleased are errors.
+    By default, compare the working tree against its merge base with trunk.
+    Use --allow-released-changes to report issues as warnings.
+
+Options:
+  --trunk <ref>  Use this ref for trunk history (default: trunk).
+  -h, --help     Print help"
+    );
+}
+
+pub(crate) fn run(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
+    match args.subcommand()?.as_deref() {
+        Some("check") => fragments::check(&shell, args),
+        Some("check-legacy") => check_changelog(shell, args),
+        Some("new") => fragments::new(&shell, args, io::stdin().lock(), io::stderr().lock()),
+        Some("preview") => fragments::preview(&shell, args),
+        Some("release") => fragments::release(&shell, args),
+        None if args.finish().is_empty() => {
+            print_help();
+            Ok(())
+        }
+        _ => bail!("expected a changelog command; see `cargo xtask changelog --help`"),
+    }
+}
+
+fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     const CHANGELOG_PATH_RELATIVE: &str = "./CHANGELOG.md";
     let allow_released_changes = args.contains("--allow-released-changes");
 
