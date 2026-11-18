@@ -42,6 +42,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Bug Fixes
+
+#### Vulkan
+
+- Fix crash on older Vulkan drivers when `poolSizeCount == 0`. By @lucasmerlin in [#10124](https://github.com/gfx-rs/wgpu/pull/10124), backported in [#10985](https://github.com/gfx-rs/wgpu/pull/10985).
+
 ## v30.0.2 (2026-11-12)
 
 ### Bug Fixes
