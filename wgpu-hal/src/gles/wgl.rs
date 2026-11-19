@@ -451,10 +451,13 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
                                     "failed to retrieve instance thread message: {}",
                                     Error::from_thread()
                                 );
-                                break;
                             }
-                            0 => break,
-                            _ if message.message == INSTANCE_THREAD_SHUTDOWN => break,
+                            0 => log::warn!("ignoring WM_QUIT on instance thread"),
+                            _ if message.hwnd == dc.window
+                                && message.message == INSTANCE_THREAD_SHUTDOWN =>
+                            {
+                                break
+                            }
                             _ => {
                                 unsafe { WindowsAndMessaging::DispatchMessageA(&message) };
                             }
