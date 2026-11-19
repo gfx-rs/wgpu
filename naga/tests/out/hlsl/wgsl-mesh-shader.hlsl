@@ -92,7 +92,12 @@ uint3 _ts_main(uint local_invocation_index : SV_GroupIndex)
 [numthreads(1, 1, 1)]
 void ts_main(uint local_invocation_index : SV_GroupIndex) {
     if (local_invocation_index == 0) {
-        taskPayload = (TaskPayload)0;
+        taskPayload.colorMask = (float4)0;
+    }
+    if (local_invocation_index == 0) {
+        taskPayload.visible = (bool)0;
+    }
+    if (local_invocation_index == 0) {
         workgroupData = (float)0;
     }
     GroupMemoryBarrierWithGroupSync();
@@ -122,7 +127,10 @@ uint3 _ts_divergent(uint3 thread_id : SV_GroupThreadID, uint local_invocation_in
 [numthreads(2, 1, 1)]
 void ts_divergent(uint3 thread_id : SV_GroupThreadID, uint local_invocation_index_1 : SV_GroupIndex) {
     if (local_invocation_index_1 == 0) {
-        taskPayload = (TaskPayload)0;
+        taskPayload.colorMask = (float4)0;
+    }
+    if (local_invocation_index_1 == 0) {
+        taskPayload.visible = (bool)0;
     }
     GroupMemoryBarrierWithGroupSync();
     uint3 gridSize_1 = _ts_divergent(thread_id, local_invocation_index_1);
@@ -164,7 +172,37 @@ void _ms_main(in TaskPayload taskPayload, uint local_invocation_index_2 : SV_Gro
 void ms_main(uint local_invocation_index_2 : SV_GroupIndex, out indices uint3 triangleIndices[1], out vertices MeshVertexOutput_ms_main vertices_[3], out primitives MeshPrimitiveOutput_ms_main primitives_[1], in payload TaskPayload taskPayload) {
     if (local_invocation_index_2 == 0) {
         workgroupData = (float)0;
-        mesh_output = (MeshOutput)0;
+    }
+    [loop]
+    for (uint zero_flat_index = local_invocation_index_2; zero_flat_index < 3u; zero_flat_index += 1u) {
+        uint zero_index = zero_flat_index;
+        mesh_output.vertices_[zero_index].position = (float4)0;
+    }
+    [loop]
+    for (uint zero_flat_index_1 = local_invocation_index_2; zero_flat_index_1 < 3u; zero_flat_index_1 += 1u) {
+        uint zero_index = zero_flat_index_1;
+        mesh_output.vertices_[zero_index].color = (float4)0;
+    }
+    [loop]
+    for (uint zero_flat_index_2 = local_invocation_index_2; zero_flat_index_2 < 1u; zero_flat_index_2 += 1u) {
+        uint zero_index_1 = zero_flat_index_2;
+        mesh_output.primitives_[zero_index_1].indices_ = (uint3)0;
+    }
+    [loop]
+    for (uint zero_flat_index_3 = local_invocation_index_2; zero_flat_index_3 < 1u; zero_flat_index_3 += 1u) {
+        uint zero_index_1 = zero_flat_index_3;
+        mesh_output.primitives_[zero_index_1].cull = (bool)0;
+    }
+    [loop]
+    for (uint zero_flat_index_4 = local_invocation_index_2; zero_flat_index_4 < 1u; zero_flat_index_4 += 1u) {
+        uint zero_index_1 = zero_flat_index_4;
+        mesh_output.primitives_[zero_index_1].colorMask = (float4)0;
+    }
+    if (local_invocation_index_2 == 0) {
+        mesh_output.vertex_count = (uint)0;
+    }
+    if (local_invocation_index_2 == 0) {
+        mesh_output.primitive_count = (uint)0;
     }
     GroupMemoryBarrierWithGroupSync();
     _ms_main(taskPayload, local_invocation_index_2);
@@ -202,7 +240,37 @@ void _ms_no_ts(uint local_invocation_index_3 : SV_GroupIndex)
 void ms_no_ts(uint local_invocation_index_3 : SV_GroupIndex, out indices uint3 triangleIndices_1[1], out vertices MeshVertexOutput_ms_no_ts vertices_1[3], out primitives MeshPrimitiveOutput_ms_no_ts primitives_1[1]) {
     if (local_invocation_index_3 == 0) {
         workgroupData = (float)0;
-        mesh_output = (MeshOutput)0;
+    }
+    [loop]
+    for (uint zero_flat_index_5 = local_invocation_index_3; zero_flat_index_5 < 3u; zero_flat_index_5 += 1u) {
+        uint zero_index_2 = zero_flat_index_5;
+        mesh_output.vertices_[zero_index_2].position = (float4)0;
+    }
+    [loop]
+    for (uint zero_flat_index_6 = local_invocation_index_3; zero_flat_index_6 < 3u; zero_flat_index_6 += 1u) {
+        uint zero_index_2 = zero_flat_index_6;
+        mesh_output.vertices_[zero_index_2].color = (float4)0;
+    }
+    [loop]
+    for (uint zero_flat_index_7 = local_invocation_index_3; zero_flat_index_7 < 1u; zero_flat_index_7 += 1u) {
+        uint zero_index_3 = zero_flat_index_7;
+        mesh_output.primitives_[zero_index_3].indices_ = (uint3)0;
+    }
+    [loop]
+    for (uint zero_flat_index_8 = local_invocation_index_3; zero_flat_index_8 < 1u; zero_flat_index_8 += 1u) {
+        uint zero_index_3 = zero_flat_index_8;
+        mesh_output.primitives_[zero_index_3].cull = (bool)0;
+    }
+    [loop]
+    for (uint zero_flat_index_9 = local_invocation_index_3; zero_flat_index_9 < 1u; zero_flat_index_9 += 1u) {
+        uint zero_index_3 = zero_flat_index_9;
+        mesh_output.primitives_[zero_index_3].colorMask = (float4)0;
+    }
+    if (local_invocation_index_3 == 0) {
+        mesh_output.vertex_count = (uint)0;
+    }
+    if (local_invocation_index_3 == 0) {
+        mesh_output.primitive_count = (uint)0;
     }
     GroupMemoryBarrierWithGroupSync();
     _ms_no_ts(local_invocation_index_3);
@@ -244,7 +312,37 @@ void _ms_divergent(uint3 thread_id_1 : SV_GroupThreadID, uint local_invocation_i
 void ms_divergent(uint3 thread_id_1 : SV_GroupThreadID, uint local_invocation_index_4 : SV_GroupIndex, out indices uint3 triangleIndices_2[1], out vertices MeshVertexOutput_ms_divergent vertices_2[3], out primitives MeshPrimitiveOutput_ms_divergent primitives_2[1]) {
     if (local_invocation_index_4 == 0) {
         workgroupData = (float)0;
-        mesh_output = (MeshOutput)0;
+    }
+    [loop]
+    for (uint zero_flat_index_10 = local_invocation_index_4; zero_flat_index_10 < 3u; zero_flat_index_10 += 2u) {
+        uint zero_index_4 = zero_flat_index_10;
+        mesh_output.vertices_[zero_index_4].position = (float4)0;
+    }
+    [loop]
+    for (uint zero_flat_index_11 = local_invocation_index_4; zero_flat_index_11 < 3u; zero_flat_index_11 += 2u) {
+        uint zero_index_4 = zero_flat_index_11;
+        mesh_output.vertices_[zero_index_4].color = (float4)0;
+    }
+    [loop]
+    for (uint zero_flat_index_12 = local_invocation_index_4; zero_flat_index_12 < 1u; zero_flat_index_12 += 2u) {
+        uint zero_index_5 = zero_flat_index_12;
+        mesh_output.primitives_[zero_index_5].indices_ = (uint3)0;
+    }
+    [loop]
+    for (uint zero_flat_index_13 = local_invocation_index_4; zero_flat_index_13 < 1u; zero_flat_index_13 += 2u) {
+        uint zero_index_5 = zero_flat_index_13;
+        mesh_output.primitives_[zero_index_5].cull = (bool)0;
+    }
+    [loop]
+    for (uint zero_flat_index_14 = local_invocation_index_4; zero_flat_index_14 < 1u; zero_flat_index_14 += 2u) {
+        uint zero_index_5 = zero_flat_index_14;
+        mesh_output.primitives_[zero_index_5].colorMask = (float4)0;
+    }
+    if (local_invocation_index_4 == 0) {
+        mesh_output.vertex_count = (uint)0;
+    }
+    if (local_invocation_index_4 == 0) {
+        mesh_output.primitive_count = (uint)0;
     }
     GroupMemoryBarrierWithGroupSync();
     _ms_divergent(thread_id_1, local_invocation_index_4);
@@ -263,7 +361,7 @@ void ms_divergent(uint3 thread_id_1 : SV_GroupThreadID, uint local_invocation_in
 
 float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
 {
-    VertexOutput vertex = { fragmentinput_fs_main.position_3, fragmentinput_fs_main.color_3 };
+    VertexOutput vertex = { float4(fragmentinput_fs_main.position_3.xyz, 1.0 / fragmentinput_fs_main.position_3.w), fragmentinput_fs_main.color_3 };
     PrimitiveInput primitive = { fragmentinput_fs_main.colorMask_3 };
     return (vertex.color * primitive.colorMask);
 }

@@ -18,6 +18,48 @@ use super::{conv, PrivateCapabilities};
 use crate::auxil::map_naga_stage;
 use crate::TlasInstance;
 
+/// An error importing a texture into the GLES backend.
+#[cfg(all(unix, native))]
+#[derive(Debug, thiserror::Error)]
+pub enum ImportTextureError {
+    /// The device reported an error.
+    #[error(transparent)]
+    Device(#[from] crate::DeviceError),
+    /// The descriptor requests an unsupported texture configuration.
+    #[error("DMA-BUF GLES import supports only a single-layer, single-sampled 2D texture with one mip level")]
+    UnsupportedTextureDescriptor,
+    /// An import parameter cannot be represented as EGLint.
+    #[error("Import parameter {0} does not fit EGLint")]
+    ParameterOutOfRange(&'static str),
+    /// The device was not created from an EGL context.
+    #[error("GLES device was not created from an EGL context")]
+    MissingEglContext,
+    /// The device does not expose an EGL display.
+    #[error("GLES device does not expose an EGLDisplay")]
+    MissingEglDisplay,
+    /// A required EXT_IMAGE_DMA_BUF_IMPORT extension is not supported.
+    #[error("EXT_IMAGE_DMA_BUF_IMPORT is not supported")]
+    MissingImageDmaBufImportExtension,
+    /// A required EXT_IMAGE_DMA_BUF_IMPORT_MODIFIERS extension is not supported.
+    #[error("EXT_IMAGE_DMA_BUF_IMPORT_MODIFIERS is not supported")]
+    MissingImageDmaBufImportModifiersExtension,
+    /// A required GL or EGL function is unavailable.
+    #[error("GL or EGL entry point {0} is unavailable")]
+    MissingEntryPoint(&'static str),
+    /// EGL image creation failed.
+    #[error("eglCreateImageKHR failed: {0:?}")]
+    EglImageCreation(#[source] Option<khronos_egl::Error>),
+    /// EGL image destruction failed.
+    #[error("eglDestroyImageKHR failed: {0:?}")]
+    EglImageDestruction(#[source] Option<khronos_egl::Error>),
+    /// GL texture creation failed.
+    #[error("Failed to create GL texture: {0}")]
+    GlTextureCreation(String),
+    /// Failed to bind or configure the imported texture.
+    #[error("Failed to bind or configure the imported texture with error {gl_error:#x}")]
+    BindAndConfigure { gl_error: u32 },
+}
+
 type ShaderStage<'a> = (
     naga::ShaderStage,
     &'a crate::ProgrammableStage<'a, super::ShaderModule>,
@@ -63,7 +105,7 @@ impl CompilationContext<'_> {
             log::trace!(
                 "Rebind buffer: {:?} -> {}, register={:?}, slot={}",
                 var.name.as_ref(),
-                &name,
+                name,
                 register,
                 slot
             );
@@ -175,6 +217,254 @@ impl super::Device {
             format_desc: self.shared.describe_texture_format(desc.format),
             copy_size: desc.copy_extent(),
         }
+    }
+
+    /// Imports a single-plane DMA-BUF as a GLES `GL_TEXTURE_2D` without copying.
+    /// `None` for `drm_modifier` requests an implicit layout.
+    /// The supplied FD is closed on both success and failure. The EGL image is
+    /// destroyed after binding; the GL texture retains the imported storage.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ImportTextureError`] if the texture configuration is unsupported,
+    /// an import parameter does not fit EGLint, required EGL resources, extensions
+    /// or entry points are unavailable, or a GL or EGL operation fails.
+    ///
+    /// # Safety
+    ///
+    /// - `fd`, `drm_format`, `stride`, `offset` and `drm_modifier` must describe
+    ///   the same DMA-BUF allocation.
+    /// - `desc` must be valid (consider calling `wgpu_core::Device::validate_texture_descriptor`)
+    ///   and must accurately describe the texture being imported (including `drm_format`)
+    /// - Only one 2D plane, one array layer, one mip level and one sample are
+    ///   currently supported.
+    /// - Synchronization with the DMA-BUF producer must be handled separately.
+    #[cfg(all(unix, native))]
+    pub unsafe fn texture_from_dmabuf_fd(
+        &self,
+        fd: std::os::fd::OwnedFd,
+        desc: &crate::TextureDescriptor,
+        drm_format: u32,
+        drm_modifier: Option<u64>,
+        stride: u64,
+        offset: u64,
+    ) -> Result<super::Texture, ImportTextureError> {
+        use core::ffi::c_void;
+        use core::ptr;
+        use glow::HasContext as _;
+        use std::os::fd::AsRawFd as _;
+
+        const LINUX_DMA_BUF_EXT: khronos_egl::Enum = 0x3270;
+        const LINUX_DRM_FOURCC_EXT: khronos_egl::Int = 0x3271;
+        const DMA_BUF_PLANE0_FD_EXT: khronos_egl::Int = 0x3272;
+        const DMA_BUF_PLANE0_OFFSET_EXT: khronos_egl::Int = 0x3273;
+        const DMA_BUF_PLANE0_PITCH_EXT: khronos_egl::Int = 0x3274;
+        const DMA_BUF_PLANE0_MODIFIER_LO_EXT: khronos_egl::Int = 0x3443;
+        const DMA_BUF_PLANE0_MODIFIER_HI_EXT: khronos_egl::Int = 0x3444;
+
+        let context = self.context();
+        let raw_texture = {
+            // Release the context lock once the GL import operations are complete.
+            let gl = context.lock();
+            let error = unsafe { gl.get_error() };
+            if error != glow::NO_ERROR {
+                log::warn!("Pre-existing GL error blocks DMA-BUF texture import: {error:#x}");
+                return Err(ImportTextureError::Device(crate::DeviceError::Unexpected));
+            }
+
+            if desc.dimension != wgt::TextureDimension::D2
+                || desc.size.depth_or_array_layers != 1
+                || desc.mip_level_count != 1
+                || desc.sample_count != 1
+                || desc.format.is_multi_planar_format()
+            {
+                return Err(ImportTextureError::UnsupportedTextureDescriptor);
+            }
+
+            let width = i32::try_from(desc.size.width)
+                .map_err(|_| ImportTextureError::ParameterOutOfRange("width"))?;
+
+            let height = i32::try_from(desc.size.height)
+                .map_err(|_| ImportTextureError::ParameterOutOfRange("height"))?;
+
+            let stride = i32::try_from(stride)
+                .map_err(|_| ImportTextureError::ParameterOutOfRange("stride"))?;
+
+            let offset = i32::try_from(offset)
+                .map_err(|_| ImportTextureError::ParameterOutOfRange("offset"))?;
+
+            let drm_format = i32::try_from(drm_format)
+                .map_err(|_| ImportTextureError::ParameterOutOfRange("drm_format"))?;
+
+            let egl = context
+                .egl_instance()
+                .ok_or(ImportTextureError::MissingEglContext)?;
+
+            let display = *context
+                .raw_display()
+                .ok_or(ImportTextureError::MissingEglDisplay)?;
+
+            let caps = self.shared.private_caps;
+            if !caps.contains(PrivateCapabilities::EGL_IMAGE_DMA_BUF_IMPORT) {
+                return Err(ImportTextureError::MissingImageDmaBufImportExtension);
+            }
+
+            if drm_modifier.is_some()
+                && !caps.contains(PrivateCapabilities::EGL_IMAGE_DMA_BUF_IMPORT_MODIFIERS)
+            {
+                return Err(ImportTextureError::MissingImageDmaBufImportModifiersExtension);
+            }
+
+            let create_image: unsafe extern "system" fn(
+                display: *mut c_void,
+                context: *mut c_void,
+                target: u32,
+                buffer: *mut c_void,
+                attributes: *const i32,
+            ) -> *mut c_void = {
+                let address = egl
+                    .get_proc_address("eglCreateImageKHR")
+                    .ok_or(ImportTextureError::MissingEntryPoint("eglCreateImageKHR"))?;
+
+                unsafe { core::mem::transmute(address) }
+            };
+
+            let destroy_image: unsafe extern "system" fn(
+                display: *mut c_void,
+                image: *mut c_void,
+            ) -> u32 = {
+                let address = egl
+                    .get_proc_address("eglDestroyImageKHR")
+                    .ok_or(ImportTextureError::MissingEntryPoint("eglDestroyImageKHR"))?;
+
+                unsafe { core::mem::transmute(address) }
+            };
+
+            let image_target_texture: unsafe extern "system" fn(target: u32, image: *mut c_void) = {
+                let address = egl.get_proc_address("glEGLImageTargetTexture2DOES").ok_or(
+                    ImportTextureError::MissingEntryPoint("glEGLImageTargetTexture2DOES"),
+                )?;
+
+                unsafe { core::mem::transmute(address) }
+            };
+
+            let mut attributes = vec![
+                khronos_egl::WIDTH,
+                width,
+                khronos_egl::HEIGHT,
+                height,
+                LINUX_DRM_FOURCC_EXT,
+                drm_format,
+                DMA_BUF_PLANE0_FD_EXT,
+                fd.as_raw_fd(),
+                DMA_BUF_PLANE0_OFFSET_EXT,
+                offset,
+                DMA_BUF_PLANE0_PITCH_EXT,
+                stride,
+            ];
+
+            if let Some(modifier) = drm_modifier {
+                let modifier_low = modifier as u32;
+                let modifier_high = (modifier >> 32) as u32;
+
+                attributes.extend_from_slice(&[
+                    DMA_BUF_PLANE0_MODIFIER_LO_EXT,
+                    modifier_low as i32,
+                    DMA_BUF_PLANE0_MODIFIER_HI_EXT,
+                    modifier_high as i32,
+                ]);
+            }
+
+            attributes.push(khronos_egl::NONE);
+
+            let egl_image = unsafe {
+                create_image(
+                    display.as_ptr(),
+                    ptr::null_mut(),
+                    LINUX_DMA_BUF_EXT,
+                    ptr::null_mut(),
+                    attributes.as_ptr(),
+                )
+            };
+
+            if egl_image.is_null() {
+                /*
+                 * EGL never takes ownership of the fd. OwnedFd closes it
+                 * automatically when this function returns.
+                 */
+                return Err(ImportTextureError::EglImageCreation(egl.get_error()));
+            }
+
+            let raw_texture = match unsafe { gl.create_texture() } {
+                Ok(texture) => texture,
+                Err(error) => {
+                    if unsafe { destroy_image(display.as_ptr(), egl_image) } == 0 {
+                        log::error!(
+                            "eglDestroyImageKHR failed after GL texture creation failure: {:?}",
+                            egl.get_error()
+                        );
+                    }
+
+                    return Err(ImportTextureError::GlTextureCreation(error));
+                }
+            };
+
+            let gl_error = unsafe {
+                let mut error = gl.get_error();
+                if error == glow::NO_ERROR {
+                    gl.bind_texture(glow::TEXTURE_2D, Some(raw_texture));
+                    error = gl.get_error();
+                }
+
+                if error == glow::NO_ERROR {
+                    image_target_texture(glow::TEXTURE_2D, egl_image);
+                    error = gl.get_error();
+                }
+
+                if error == glow::NO_ERROR {
+                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_BASE_LEVEL, 0);
+                    error = gl.get_error();
+                }
+
+                if error == glow::NO_ERROR {
+                    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAX_LEVEL, 0);
+                    error = gl.get_error();
+                }
+
+                if error == glow::NO_ERROR {
+                    gl.bind_texture(glow::TEXTURE_2D, None);
+                    error = gl.get_error();
+                }
+
+                error
+            };
+
+            if gl_error != glow::NO_ERROR {
+                unsafe {
+                    gl.delete_texture(raw_texture);
+                }
+
+                if unsafe { destroy_image(display.as_ptr(), egl_image) } == 0 {
+                    log::error!(
+                        "eglDestroyImageKHR failed after GL texture import failure: {:?}",
+                        egl.get_error()
+                    );
+                }
+
+                return Err(ImportTextureError::BindAndConfigure { gl_error });
+            }
+
+            // The GL texture retains the image storage, so the EGLImage is no longer needed.
+            if unsafe { destroy_image(display.as_ptr(), egl_image) } == 0 {
+                let error = egl.get_error();
+                unsafe { gl.delete_texture(raw_texture) };
+                return Err(ImportTextureError::EglImageDestruction(error));
+            }
+
+            raw_texture
+        };
+
+        Ok(unsafe { self.texture_from_raw(raw_texture.0, desc, None) })
     }
 
     /// Wrap an existing `WebGlTexture` as a wgpu-hal texture, without copying.
@@ -1224,7 +1514,7 @@ impl crate::Device for super::Device {
     ) -> Result<super::TextureView, crate::DeviceError> {
         self.counters.texture_views.add(1);
         Ok(super::TextureView {
-            //TODO: use `conv::map_view_dimension(desc.dimension)`?
+            //TODO: use `super::Texture::target_for_view_dimension(desc.dimension)`?
             inner: texture.inner.clone(),
             aspects: crate::FormatAspects::new(texture.format, desc.range.aspect),
             mip_levels: desc.range.mip_range(texture.mip_level_count),
@@ -1290,10 +1580,10 @@ impl crate::Device for super::Device {
         // If clamp is not 1, we know anisotropy is supported up to 16x
         if desc.anisotropy_clamp != 1 {
             unsafe {
-                gl.sampler_parameter_i32(
+                gl.sampler_parameter_f32(
                     raw,
                     glow::TEXTURE_MAX_ANISOTROPY,
-                    desc.anisotropy_clamp as i32,
+                    f32::from(desc.anisotropy_clamp),
                 )
             };
         }
@@ -1509,7 +1799,12 @@ impl crate::Device for super::Device {
                     }
                     let (raw, target) = view.inner.as_native();
 
-                    super::Texture::log_failing_target_heuristics(view_dimension, target);
+                    // GLES adapters should always have a valid binding view dimension specified,
+                    // validated at the core layer.
+                    debug_assert_eq!(
+                        target,
+                        super::Texture::target_for_view_dimension(view_dimension)
+                    );
 
                     super::RawBinding::Texture {
                         raw,

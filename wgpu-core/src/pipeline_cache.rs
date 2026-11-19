@@ -162,7 +162,7 @@ struct PipelineCacheHeader {
     ///
     /// This should e.g. contain driver version and/or intermediate compiler versions
     validation_key: [u8; 16],
-    /// The length of the data which is sent to/recieved from the backend
+    /// The length of the data which is sent to/received from the backend
     data_size: u64,
     /// Space reserved for a hash of the data in future
     ///

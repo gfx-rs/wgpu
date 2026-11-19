@@ -64,7 +64,7 @@ FragmentOutput ConstructFragmentOutput(float arg0, uint arg1, float arg2) {
 
 FragmentOutput fragment(FragmentInput_fragment fragmentinput_fragment)
 {
-    VertexOutput in_ = { fragmentinput_fragment.position_1, fragmentinput_fragment._varying_1 };
+    VertexOutput in_ = { float4(fragmentinput_fragment.position_1.xyz, 1.0 / fragmentinput_fragment.position_1.w), fragmentinput_fragment._varying_1 };
     bool front_facing = fragmentinput_fragment.front_facing_1;
     uint sample_index = fragmentinput_fragment.sample_index_1;
     uint sample_mask = fragmentinput_fragment.sample_mask_1;
@@ -77,8 +77,10 @@ FragmentOutput fragment(FragmentInput_fragment fragmentinput_fragment)
 [numthreads(1, 1, 1)]
 void compute(uint3 global_id : SV_DispatchThreadID, uint3 local_id : SV_GroupThreadID, uint local_index : SV_GroupIndex, uint3 wg_id : SV_GroupID, uint3 num_wgs : SV_GroupID)
 {
-    if (local_index == 0) {
-        output = (uint[1])0;
+    [loop]
+    for (uint zero_flat_index = local_index; zero_flat_index < 1u; zero_flat_index += 1u) {
+        uint zero_index = zero_flat_index;
+        output[zero_index] = (uint)0;
     }
     GroupMemoryBarrierWithGroupSync();
     output[0] = ((((global_id.x + local_id.x) + local_index) + wg_id.x) + uint3(_NagaConstants.first_vertex, _NagaConstants.first_instance, _NagaConstants.other).x);

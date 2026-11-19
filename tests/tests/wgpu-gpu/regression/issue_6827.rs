@@ -53,6 +53,7 @@ async fn run_test(ctx: TestingContext, use_many_writes: bool) {
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::COPY_SRC,
             label: None,
+            texture_binding_view_dimension: None,
         })
     };
 

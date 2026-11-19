@@ -28,7 +28,7 @@ const _: () = {
 #[repr(transparent)]
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(into = "SerialId", try_from = "SerialId")]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RawId(NonZeroU64);
 
 impl RawId {
@@ -70,6 +70,7 @@ impl From<RawId> for SerialId {
     }
 }
 
+#[derive(Debug)]
 pub struct ZeroIdError;
 
 impl fmt::Display for ZeroIdError {
@@ -211,6 +212,7 @@ ids! {
     pub type ShaderModuleId ShaderModule;
     pub type RenderPipelineId RenderPipeline;
     pub type ComputePipelineId ComputePipeline;
+    pub type RayTracingPipelineId RayTracingPipeline;
     pub type PipelineCacheId PipelineCache;
     pub type CommandEncoderId CommandEncoder;
     pub type CommandBufferId CommandBuffer;
