@@ -25,6 +25,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
         MISALIGNED_BUILD,
         TOO_SMALL_STRIDE_BUILD,
         BLAS_FIRST_VERTEX,
+        INVALID_INSTANCE_FLAGS,
     ]);
 }
 
@@ -903,4 +904,33 @@ fn blas_first_vertex(ctx: TestingContext) {
     encoder.build_acceleration_structures([&entry], []);
 
     ctx.queue.submit([encoder.finish()]);
+}
+
+#[apply(gpu_test!)]
+static INVALID_INSTANCE_FLAGS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .limits(acceleration_structure_limits())
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY),
+    )
+    .run_sync(invalid_instance_flags);
+
+// Check that instance flags that are both forcing opaqueness on and off in the same instance are rejected when building.
+fn invalid_instance_flags(ctx: TestingContext) {
+    let mut as_ctx = super::AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::empty(),
+        AccelerationStructureFlags::empty(),
+    );
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default());
+
+    as_ctx.tlas[0].as_mut().unwrap().flags = wgpu::AccelerationStructureInstanceFlags::FORCE_NO_OPAQUE | wgpu::AccelerationStructureInstanceFlags::FORCE_OPAQUE;
+
+    encoder.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas]);
+
+    fail(&ctx.device, || ctx.queue.submit([encoder.finish()]), None);
 }
