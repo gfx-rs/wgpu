@@ -367,7 +367,6 @@ pub struct CooperativeMatrixProperties {
 ///
 /// Reordering is a performance hint, not a capability: `reorderThread` is valid on any adapter
 /// supporting [`Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER`], whatever mode it reports.
-#[repr(u8)]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
