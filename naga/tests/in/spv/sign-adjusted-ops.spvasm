@@ -1,0 +1,52 @@
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpMemberDecorate %B 0 Offset 0
+               OpMemberDecorate %B 1 Offset 4
+               OpMemberDecorate %B 2 Offset 8
+               OpMemberDecorate %B 3 Offset 12
+               OpDecorate %B BufferBlock
+               OpDecorate %buf DescriptorSet 0
+               OpDecorate %buf Binding 0
+       %void = OpTypeVoid
+         %fn = OpTypeFunction %void
+       %uint = OpTypeInt 32 0
+        %int = OpTypeInt 32 1
+       %bool = OpTypeBool
+          %B = OpTypeStruct %uint %int %uint %int
+        %pB = OpTypePointer Uniform %B
+       %buf = OpVariable %pB Uniform
+        %c0 = OpConstant %int 0
+        %c1 = OpConstant %int 1
+        %c2 = OpConstant %int 2
+        %c3 = OpConstant %int 3
+        %u3 = OpConstant %uint 3
+      %p_u = OpTypePointer Uniform %uint
+      %p_i = OpTypePointer Uniform %int
+       %main = OpFunction %void None %fn
+      %entry = OpLabel
+       %pa = OpAccessChain %p_u %buf %c0
+       %pb = OpAccessChain %p_i %buf %c1
+       %pc = OpAccessChain %p_u %buf %c2
+       %pd = OpAccessChain %p_i %buf %c3
+         %a = OpLoad %uint %pa
+         %b = OpLoad %int %pb
+         %c = OpLoad %uint %pc
+         %d = OpLoad %int %pd
+        %neg = OpSNegate %int %a
+               OpStore %pb %neg
+        %add = OpIAdd %uint %a %b
+               OpStore %pc %add
+        %lt = OpULessThan %bool %a %b
+        %shl = OpShiftLeftLogical %uint %c %d
+               OpStore %pa %shl
+        %ext = OpBitFieldUExtract %uint %c %b %d
+               OpStore %pa %ext
+        %ins = OpBitFieldInsert %uint %c %a %b %d
+               OpStore %pc %ins
+               OpSelectionMerge %m None
+               OpSwitch %a %m 1 %m
+          %m = OpLabel
+               OpReturn
+               OpFunctionEnd

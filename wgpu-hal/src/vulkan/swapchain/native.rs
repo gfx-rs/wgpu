@@ -278,11 +278,16 @@ impl Surface for NativeSurface {
         let images = unsafe { functor.get_swapchain_images(raw) }
             .map_err(crate::vulkan::map_host_device_oom_err)?;
 
-        // This fence is only used to throttle acquisition on Windows. It is very important to
+        // This fence is only used to throttle FIFO acquisition on Windows. It is very important to
         // avoid bad frame pacing when the Vulkan driver is using a DXGI swapchain. See
         // https://github.com/gfx-rs/wgpu/issues/8310 and
-        // https://github.com/gfx-rs/wgpu/issues/8354 for more details.
-        let fence = if cfg!(target_os = "windows") {
+        // https://github.com/gfx-rs/wgpu/issues/8354 for more details. In other present modes it
+        // only adds acquire latency, see https://github.com/gfx-rs/wgpu/issues/9559.
+        let fence = if cfg!(target_os = "windows")
+            && matches!(
+                config.present_mode,
+                wgt::PresentMode::Fifo | wgt::PresentMode::FifoRelaxed
+            ) {
             let raw = unsafe {
                 device
                     .shared
@@ -604,6 +609,7 @@ impl Swapchain for NativeSwapchain {
         &mut self,
         queue: &crate::vulkan::Queue,
         texture: crate::vulkan::SurfaceTexture,
+        damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), crate::SurfaceError> {
         let metadata = texture
             .metadata
@@ -635,7 +641,7 @@ impl Swapchain for NativeSwapchain {
 
         let mut display_timing;
         let present_times;
-        let mut vk_info = if let Some(present_time) = self.next_present_time.take() {
+        let vk_info = if let Some(present_time) = self.next_present_time.take() {
             debug_assert!(
                 self.device
                     .enabled_extensions
@@ -649,6 +655,20 @@ impl Swapchain for NativeSwapchain {
         } else {
             vk_info
         };
+
+        let rects: Vec<vk::RectLayerKHR>;
+        let present_region;
+        let mut present_regions;
+        let mut vk_info =
+            if self.device.private_caps.incremental_present && !damage_rects.is_empty() {
+                rects = conv::map_damage_rects(damage_rects);
+                present_region = vk::PresentRegionKHR::default().rectangles(&rects);
+                present_regions = vk::PresentRegionsKHR::default()
+                    .regions(core::slice::from_ref(&present_region));
+                vk_info.push_next(&mut present_regions)
+            } else {
+                vk_info
+            };
 
         if let Some(chain) = self.next_present_chain.take() {
             // SAFETY: The contract on `Surface::set_next_present_chain()` keeps the chain

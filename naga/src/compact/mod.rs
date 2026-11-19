@@ -135,6 +135,11 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
             if let Some(task_payload) = e.task_payload {
                 module_tracer.global_variables_used.insert(task_payload);
             }
+            if let Some(incoming_ray_payload) = e.incoming_ray_payload {
+                module_tracer
+                    .global_variables_used
+                    .insert(incoming_ray_payload);
+            }
             if let Some(ref mesh_info) = e.mesh_info {
                 module_tracer
                     .global_variables_used
@@ -380,6 +385,9 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
         );
         if let Some(ref mut task_payload) = entry.task_payload {
             module_map.globals.adjust(task_payload);
+        }
+        if let Some(ref mut incoming_ray_payload) = entry.incoming_ray_payload {
+            module_map.globals.adjust(incoming_ray_payload);
         }
         if let Some(ref mut mesh_info) = entry.mesh_info {
             module_map.globals.adjust(&mut mesh_info.output_variable);
@@ -938,8 +946,7 @@ fn array_length_override_mutual() {
     let init = module.global_expressions.append(
         Ex::As {
             expr: sum,
-            kind: crate::ScalarKind::Uint,
-            convert: None,
+            target: crate::Scalar::U32,
         },
         nowhere,
     );
@@ -1273,8 +1280,7 @@ fn unnamed_override_type() {
     let named_init = module.global_expressions.append(
         crate::Expression::As {
             expr: unnamed_override_expr,
-            kind: crate::ScalarKind::Sint,
-            convert: None,
+            target: crate::Scalar::I32,
         },
         nowhere,
     );

@@ -228,11 +228,11 @@ impl ExpressionTracer<'_> {
                 self.expressions_used.insert_iter(arg2);
                 self.expressions_used.insert_iter(arg3);
             }
-            Ex::As {
-                expr,
-                kind: _,
-                convert: _,
-            } => {
+            Ex::As { expr, target: _ } => {
+                self.expressions_used.insert(expr);
+            }
+            Ex::Bitcast { expr, ty } => {
+                self.types_used.insert(ty);
                 self.expressions_used.insert(expr);
             }
             Ex::ArrayLength(expr) => {
@@ -252,6 +252,9 @@ impl ExpressionTracer<'_> {
                 committed: _,
             } => {
                 self.expressions_used.insert(query);
+            }
+            Ex::HitObjectQuery { hit_object, .. } => {
+                self.expressions_used.insert(hit_object);
             }
             Ex::CooperativeLoad { ref data, .. } => {
                 self.expressions_used.insert(data.pointer);
@@ -407,9 +410,15 @@ impl ModuleMap {
             }
             Ex::As {
                 ref mut expr,
-                kind: _,
-                convert: _,
+                target: _,
             } => adjust(expr),
+            Ex::Bitcast {
+                ref mut expr,
+                ref mut ty,
+            } => {
+                adjust(expr);
+                self.types.adjust(ty);
+            }
             Ex::CallResult(ref mut function) => {
                 self.functions.adjust(function);
             }
@@ -428,6 +437,10 @@ impl ModuleMap {
                 ref mut query,
                 committed: _,
             } => adjust(query),
+            Ex::HitObjectQuery {
+                ref mut hit_object,
+                query: _,
+            } => adjust(hit_object),
             Ex::CooperativeLoad { ref mut data, .. } => {
                 adjust(&mut data.pointer);
                 adjust(&mut data.stride);

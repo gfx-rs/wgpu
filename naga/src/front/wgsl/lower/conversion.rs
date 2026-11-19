@@ -152,8 +152,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         } else {
             let cast = crate::Expression::As {
                 expr,
-                kind: goal_scalar.kind,
-                convert: Some(goal_scalar.width),
+                target: goal_scalar,
             };
             self.append_expression(cast, expr_span)
         }
@@ -233,8 +232,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         if inner.scalar() != Some(goal) {
             let cast = crate::Expression::As {
                 expr: *expr,
-                kind: goal.kind,
-                convert: Some(goal.width),
+                target: goal,
             };
             let expr_span = self.get_expression_span(*expr);
             *expr = self.append_expression(cast, expr_span)?;
@@ -400,6 +398,7 @@ impl crate::TypeInner {
             | Ti::Sampler { .. }
             | Ti::AccelerationStructure { .. }
             | Ti::RayQuery { .. }
+            | Ti::HitObject
             | Ti::BindingArray { .. } => None,
         }
     }
@@ -427,6 +426,7 @@ impl crate::TypeInner {
             | Ti::Sampler { .. }
             | Ti::AccelerationStructure { .. }
             | Ti::RayQuery { .. }
+            | Ti::HitObject
             | Ti::BindingArray { .. } => None,
         }
     }

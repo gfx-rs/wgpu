@@ -95,19 +95,11 @@ impl<W: fmt::Write> super::Writer<'_, W> {
         }
         writeln!(self.out, ") {{")?;
         if need_workgroup_variables_initialization {
-            writeln!(
-                self.out,
-                "{}if ({} == 0) {{",
-                back::INDENT,
-                args.local_invocation_index,
-            )?;
             self.write_workgroup_variables_initialization(
                 func_ctx,
                 module,
-                module.entry_points[ep_index as usize].stage,
+                &args.local_invocation_index,
             )?;
-            writeln!(self.out, "{}}}", back::INDENT)?;
-            self.write_control_barrier(crate::Barrier::WORK_GROUP, back::Level(1))?;
         }
         write!(self.out, "{}{nested_name}(", back::INDENT)?;
         args.write_call_args(&mut self.out)?;
@@ -236,25 +228,14 @@ impl<W: fmt::Write> super::Writer<'_, W> {
         entry_point: &crate::EntryPoint,
         args: NestedEntryPointArgs,
     ) -> BackendResult {
-        let back::FunctionType::EntryPoint(ep_index) = func_ctx.ty else {
-            unreachable!()
-        };
         // Task shader wrapper
         writeln!(self.out, ") {{")?;
         if need_workgroup_variables_initialization {
-            writeln!(
-                self.out,
-                "{}if ({} == 0) {{",
-                back::INDENT,
-                args.local_invocation_index,
-            )?;
             self.write_workgroup_variables_initialization(
                 func_ctx,
                 module,
-                module.entry_points[ep_index as usize].stage,
+                &args.local_invocation_index,
             )?;
-            writeln!(self.out, "{}}}", back::INDENT)?;
-            self.write_control_barrier(crate::Barrier::WORK_GROUP, back::Level(1))?;
         }
         let grid_size = self.namer.call("gridSize");
         write!(

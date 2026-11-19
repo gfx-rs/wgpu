@@ -283,6 +283,7 @@ impl crate::Queue for Context {
         &self,
         surface: &Context,
         texture: Resource,
+        _damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), crate::SurfaceError> {
         Ok(())
     }
