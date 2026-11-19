@@ -345,6 +345,7 @@ struct InstanceDevice {
     window: Foundation::HWND,
 }
 
+/// Posted to the hidden window to stop its thread.
 const INSTANCE_THREAD_SHUTDOWN: u32 = WindowsAndMessaging::WM_APP;
 
 impl Drop for InstanceDevice {
