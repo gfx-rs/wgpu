@@ -320,6 +320,7 @@ impl Surface for NativeSurface {
             device: Arc::clone(&device.shared),
             images,
             fence,
+            pending_acquire: None,
             config: config.clone(),
             acquire_semaphores,
             next_acquire_index: 0,
@@ -346,6 +347,16 @@ pub(crate) struct NativeSwapchain {
     images: Vec<vk::Image>,
     /// Fence used to wait on the acquired image.
     fence: Option<vk::Fence>,
+    /// The image index and suboptimal flag from a [`vkAcquireNextImageKHR`]
+    /// call whose [`fence`] wait timed out.
+    ///
+    /// The image stays acquired, and its acquire semaphore and the fence stay
+    /// pending, so the next acquire waits on the fence again for this image
+    /// instead of acquiring another.
+    ///
+    /// [`vkAcquireNextImageKHR`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#vkAcquireNextImageKHR
+    /// [`fence`]: NativeSwapchain::fence
+    pending_acquire: Option<(u32, bool)>,
     config: crate::SurfaceConfiguration,
 
     /// Semaphores used between image acquisition and the first submission
@@ -450,6 +461,10 @@ impl Swapchain for NativeSwapchain {
         };
 
         if let Some(fence) = self.fence {
+            // An acquire that timed out left its fence signal pending.
+            if self.pending_acquire.take().is_some() {
+                let _ = unsafe { device.shared.raw.wait_for_fences(&[fence], true, u64::MAX) };
+            }
             unsafe { device.shared.raw.destroy_fence(fence, None) }
         }
 
@@ -514,15 +529,20 @@ impl Swapchain for NativeSwapchain {
         let acquire_fence = self.fence.unwrap_or_else(vk::Fence::null);
 
         // will block if no image is available
-        let (index, suboptimal) = match unsafe {
-            profiling::scope!("vkAcquireNextImageKHR");
-            self.functor.acquire_next_image(
-                self.raw,
-                timeout_ns,
-                acquire_semaphore_guard.acquire,
-                acquire_fence,
-            )
-        } {
+        let acquired = match self.pending_acquire.take() {
+            // The last acquire timed out waiting on this image's fence.
+            Some(acquired) => Ok(acquired),
+            None => unsafe {
+                profiling::scope!("vkAcquireNextImageKHR");
+                self.functor.acquire_next_image(
+                    self.raw,
+                    timeout_ns,
+                    acquire_semaphore_guard.acquire,
+                    acquire_fence,
+                )
+            },
+        };
+        let (index, suboptimal) = match acquired {
             // We treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android.
             // See the comment in `Queue::present`.
             #[cfg(target_os = "android")]
@@ -546,10 +566,18 @@ impl Swapchain for NativeSwapchain {
         if let Some(fence) = self.fence {
             unsafe {
                 // The `wait_all` argument must be `true` to avoid crash on some Android devices. See https://github.com/gfx-rs/wgpu/pull/8769
-                self.device
-                    .raw
-                    .wait_for_fences(&[fence], true, timeout_ns)
-                    .map_err(map_host_device_oom_and_lost_err)?;
+                match self.device.raw.wait_for_fences(&[fence], true, timeout_ns) {
+                    Ok(()) => {}
+                    // The image is acquired, but the presentation engine
+                    // hasn't released it yet. Keep it for the next acquire,
+                    // since this fence and the acquire semaphore are still
+                    // pending.
+                    Err(vk::Result::TIMEOUT) => {
+                        self.pending_acquire = Some((index, suboptimal));
+                        return Err(crate::SurfaceError::Timeout);
+                    }
+                    Err(other) => return Err(map_host_device_oom_and_lost_err(other).into()),
+                }
 
                 self.device
                     .raw
