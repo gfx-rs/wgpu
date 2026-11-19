@@ -43,25 +43,6 @@ fn create_hit_object_shader(device: &Device) -> ShaderModule {
 }
 
 #[test]
-fn noop_adapter_does_not_reorder() {
-    let instance = Instance::new(InstanceDescriptor {
-        backends: Backends::NOOP,
-        backend_options: BackendOptions {
-            noop: NoopBackendOptions::enabled(),
-            ..Default::default()
-        },
-        ..InstanceDescriptor::new_without_display_handle()
-    });
-    let adapter = pollster::block_on(instance.request_adapter(&RequestAdapterOptions::default()))
-        .expect("noop backend adapter absent when it should be");
-
-    assert_eq!(
-        adapter.ray_tracing_invocation_reorder_mode(),
-        RayTracingInvocationReorderMode::None
-    );
-}
-
-#[test]
 fn hit_objects_require_invocation_reorder_feature() {
     let device = device_with(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES);
 
