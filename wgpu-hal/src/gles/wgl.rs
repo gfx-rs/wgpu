@@ -342,16 +342,16 @@ fn get_global_window_class() -> Result<CString, crate::InstanceError> {
 
 struct InstanceDevice {
     dc: Gdi::HDC,
+    window: Foundation::HWND,
 }
 
 const INSTANCE_THREAD_SHUTDOWN: u32 = WindowsAndMessaging::WM_APP;
 
 impl Drop for InstanceDevice {
     fn drop(&mut self) {
-        let window = unsafe { Gdi::WindowFromDC(self.dc) };
         if let Err(e) = unsafe {
             WindowsAndMessaging::PostMessageA(
-                Some(window),
+                Some(self.window),
                 INSTANCE_THREAD_SHUTDOWN,
                 Foundation::WPARAM::default(),
                 Foundation::LPARAM::default(),
@@ -365,7 +365,7 @@ impl Drop for InstanceDevice {
 fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
     #[derive(Clone, Copy)]
     // TODO: We can get these SendSync definitions in the upstream metadata if this is the case
-    struct SendDc(Gdi::HDC);
+    struct SendDc(Gdi::HDC, Foundation::HWND);
     unsafe impl Sync for SendDc {}
     unsafe impl Send for SendDc {}
 
@@ -440,7 +440,7 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
 
             match setup {
                 Ok((_window, dc)) => {
-                    setup_tx.send(Ok(SendDc(dc.device))).unwrap();
+                    setup_tx.send(Ok(SendDc(dc.device, dc.window))).unwrap();
                     loop {
                         let mut message = unsafe { mem::zeroed::<WindowsAndMessaging::MSG>() };
                         match unsafe {
@@ -473,9 +473,9 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
             crate::InstanceError::with_source(String::from("unable to create instance thread"), e)
         })?;
 
-    let dc = setup_rx.recv().unwrap()?.0;
+    let SendDc(dc, window) = setup_rx.recv().unwrap()?;
 
-    Ok(InstanceDevice { dc })
+    Ok(InstanceDevice { dc, window })
 }
 
 impl crate::Instance for Instance {
