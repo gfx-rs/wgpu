@@ -1615,20 +1615,6 @@ fn float16_capability_and_enable() {
             ..
         })
     }
-
-    // Functions that operate on `f16`-precision values stored in `f32`s.
-    check_validation! {
-        "fn foo() -> f32 { return quantizeToF16(1.0f); }",
-        "fn foo() -> u32 { return pack2x16float(vec2(1.0f, 2.0f)); }",
-        "fn foo() -> vec2<f32> { return unpack2x16float(0x7c007c00); }":
-        Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::Expression {
-                source: naga::valid::ExpressionError::MissingCapabilities(Capabilities::SHADER_FLOAT16_IN_FLOAT32),
-                ..
-            },
-            ..
-        })
-    }
 }
 
 #[test]

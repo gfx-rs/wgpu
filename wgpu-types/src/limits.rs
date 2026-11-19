@@ -1277,12 +1277,6 @@ bitflags::bitflags! {
         /// - GL ES / WebGL
         const NONBLOCKING_QUERY_RESOLVE = 1 << 22;
 
-        /// Allows shaders to use `quantizeToF16`, `pack2x16float`, and `unpack2x16float`, which
-        /// operate on `f16`-precision values stored in `f32`s.
-        ///
-        /// Not supported by Vulkan on Mesa when [`Features::SHADER_F16`] is absent.
-        const SHADER_F16_IN_F32 = 1 << 23;
-
         /// Supports features introduced in MSL 2.1.
         const MSL2_1 = 1 << 24;
 
@@ -1312,6 +1306,7 @@ bitflags::bitflags! {
         ///
         /// See <https://gpuweb.github.io/gpuweb/#dom-gpudevice-createtexture>
         const ARBITRARY_BINDING_VIEW_DIMENSIONS = 1 << 27;
+        // Free flag slot at 1 << 23
     }
 }
 
