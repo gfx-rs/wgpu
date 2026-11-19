@@ -160,14 +160,15 @@ pub enum CompositeAlphaMode {
 ///
 /// # Terminology
 ///
-/// Each variant is described by four properties:
+/// The named color spaces are described by four properties. For
+/// [`PassThrough`](Self::PassThrough), the application determines these properties.
 ///
 /// * **Primaries** (the *gamut*): the chromaticities of the red, green, and
 ///   blue that color values address, and so the range of colors that can be
 ///   expressed. [BT.709] (the sRGB / HDTV primaries) is the standard-gamut set;
 ///   [Display P3] and [BT.2020] are progressively wider.
 /// * **White point**: the chromaticity produced by equal red, green, and blue.
-///   Every color space here uses [D65], the standard daylight white.
+///   The named color spaces here use [D65], the standard daylight white.
 /// * **Transfer function** (the *OETF*): how stored values map to light, such
 ///   as the [sRGB] transfer function, a linear transfer, or an HDR transfer
 ///   function like [PQ] or [HLG]. Your shader applies this encoding transfer
@@ -176,7 +177,7 @@ pub enum CompositeAlphaMode {
 ///   for you), wgpu does **not** encode for you: the values your shader writes
 ///   to the surface texture must already be in whatever encoding the chosen
 ///   color space expects (linear for a linear transfer). The [HDR surface
-///   example] shows the encoder each variant expects.
+///   example] shows encoders for the named color spaces.
 /// * **Dynamic range**: standard dynamic range (SDR), where `1.0` is reference
 ///   (SDR) white and values outside 0.0..=1.0 are clamped, or high dynamic
 ///   range (HDR), where `(1.0, 1.0, 1.0)` is SDR reference white and values
@@ -414,6 +415,31 @@ pub enum SurfaceColorSpace {
     ///   neither of which has an encoded-extended-Display-P3 swapchain color
     ///   space.
     ExtendedDisplayP3 = 7,
+
+    /// Presentation without a predefined color space.
+    ///
+    /// The application must ensure that the surface's stored color values match
+    /// the encoding and color space expected by the window system. Rendering to
+    /// an `*Srgb` texture view still applies hardware sRGB encoding.
+    /// [`Auto`](Self::Auto) never selects this color space.
+    ///
+    /// This maps to [`VK_COLOR_SPACE_PASS_THROUGH_EXT`] on Vulkan and a `nil`
+    /// [`CAMetalLayer.colorspace`] on Metal.
+    ///
+    /// On Metal, this disables color matching and extended dynamic range content.
+    ///
+    /// On Vulkan with Wayland, this lets the application manage surface color,
+    /// if supported by the compositor. Configure `PassThrough` before creating
+    /// an application-owned `wp_color_management_surface_v1`, and destroy that
+    /// object before configuring another color space. Otherwise, it can conflict
+    /// with Vulkan's own color-management object and cause a fatal
+    /// `surface_exists` protocol error.
+    ///
+    /// * **Supported on**: Vulkan (where the driver exposes it), Metal.
+    ///
+    /// [`VK_COLOR_SPACE_PASS_THROUGH_EXT`]: https://registry.khronos.org/vulkan/specs/latest/man/html/VkColorSpaceKHR.html
+    /// [`CAMetalLayer.colorspace`]: https://developer.apple.com/documentation/quartzcore/cametallayer/colorspace
+    PassThrough = 8,
 }
 
 impl SurfaceColorSpace {
@@ -423,6 +449,7 @@ impl SurfaceColorSpace {
     pub const fn to_color_spaces(self) -> Option<SurfaceColorSpaces> {
         match self {
             Self::Auto => None,
+            Self::PassThrough => Some(SurfaceColorSpaces::PASS_THROUGH),
             Self::Srgb => Some(SurfaceColorSpaces::SRGB),
             Self::ExtendedSrgbLinear => Some(SurfaceColorSpaces::EXTENDED_SRGB_LINEAR),
             Self::DisplayP3 => Some(SurfaceColorSpaces::DISPLAY_P3),
@@ -442,6 +469,9 @@ impl SurfaceColorSpace {
     /// to the backend and is the SDR-safe default, so check the resolved color
     /// space if you need certainty.
     ///
+    /// [`PassThrough`](Self::PassThrough) returns `false` because its dynamic
+    /// range is defined by the application and unknown to wgpu.
+    ///
     /// Use this to branch after picking a color space from
     /// [`SurfaceCapabilities`]: an HDR result is the one whose highlights you
     /// scale by [`DisplayHdrInfo::tone_map_headroom`].
@@ -453,7 +483,7 @@ impl SurfaceColorSpace {
             | Self::ExtendedDisplayP3
             | Self::Bt2100Pq
             | Self::Bt2100Hlg => true,
-            Self::Auto | Self::Srgb | Self::DisplayP3 => false,
+            Self::Auto | Self::Srgb | Self::DisplayP3 | Self::PassThrough => false,
         }
     }
 }
@@ -483,6 +513,8 @@ bitflags::bitflags! {
         const EXTENDED_SRGB = 1 << 5;
         /// [`SurfaceColorSpace::ExtendedDisplayP3`] is supported.
         const EXTENDED_DISPLAY_P3 = 1 << 6;
+        /// [`SurfaceColorSpace::PassThrough`] is supported.
+        const PASS_THROUGH = 1 << 7;
     }
 }
 
