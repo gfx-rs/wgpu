@@ -251,7 +251,7 @@ static WAIT_ON_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::new()
 
         let index = ctx.queue.submit(Some(cmd_buf));
         ctx.async_poll(PollType::Wait {
-            submission_index: Some(index),
+            submission_index: index,
             timeout: None,
         })
         .await
@@ -266,7 +266,7 @@ static WAIT_ON_SUBMISSION_WITH_TIMEOUT: GpuTestConfiguration = GpuTestConfigurat
 
         let index = ctx.queue.submit(Some(cmd_buf));
         ctx.async_poll(PollType::Wait {
-            submission_index: Some(index),
+            submission_index: index,
             timeout: Some(Duration::from_secs(1)),
         })
         .await
@@ -281,7 +281,7 @@ static WAIT_ON_SUBMISSION_WITH_TIMEOUT_MAX: GpuTestConfiguration = GpuTestConfig
 
         let index = ctx.queue.submit(Some(cmd_buf));
         ctx.async_poll(PollType::Wait {
-            submission_index: Some(index),
+            submission_index: index,
             timeout: Some(Duration::MAX),
         })
         .await
@@ -296,13 +296,13 @@ static DOUBLE_WAIT_ON_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::n
 
         let index = ctx.queue.submit(Some(cmd_buf));
         ctx.async_poll(PollType::Wait {
-            submission_index: Some(index.clone()),
+            submission_index: index.clone(),
             timeout: None,
         })
         .await
         .unwrap();
         ctx.async_poll(PollType::Wait {
-            submission_index: Some(index),
+            submission_index: index,
             timeout: None,
         })
         .await
@@ -319,13 +319,13 @@ static WAIT_OUT_OF_ORDER: GpuTestConfiguration = GpuTestConfiguration::new()
         let index1 = ctx.queue.submit(Some(cmd_buf1));
         let index2 = ctx.queue.submit(Some(cmd_buf2));
         ctx.async_poll(PollType::Wait {
-            submission_index: Some(index2),
+            submission_index: index2,
             timeout: None,
         })
         .await
         .unwrap();
         ctx.async_poll(PollType::Wait {
-            submission_index: Some(index1),
+            submission_index: index1,
             timeout: None,
         })
         .await
@@ -383,10 +383,18 @@ async fn wait_after_bad_submission(ctx: TestingContext) {
 /// > operation you have already presented to the device is going to store in
 /// > `fence`.
 ///
+/// `wgpu::Queue::submit` returns `None` for a failed submission, and
+/// `wgpu::Device::poll` only accepts indices returned by successful
+/// submissions, so the hole index cannot be used through the `wgpu` API. This
+/// test therefore submits and polls through the underlying wgpu-core queue and
+/// device, where a submission index is a plain `u64` we can construct
+/// ourselves.
+///
 /// Regression test for <https://github.com/gfx-rs/wgpu/issues/9498>.
 #[apply(gpu_test!)]
 static WAIT_ON_FAILED_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(wgpu_test::TestParameters::default())
+    // Needs the wgpu-core backend.
+    .parameters(TestParameters::default().skip(FailureCase::backend(Backends::BROWSER_WEBGPU)))
     .run_async(wait_on_failed_submission);
 
 async fn wait_on_failed_submission(ctx: TestingContext) {
@@ -397,17 +405,21 @@ async fn wait_on_failed_submission(ctx: TestingContext) {
             .await;
 
     // 1. Successful empty submit. Advances `last_successful_submission_index`.
-    let _idx_before = queue2.submit([]);
+    let idx_before = queue2
+        .as_core()
+        .unwrap()
+        .submit(&[])
+        .expect("empty submission should succeed");
 
     // 2. Failed submit (cross-device cmd buffer). Burns an index but does not
-    //    advance `last_successful_submission_index`. Capture the returned
-    //    index using an error scope so the validation error is not fatal.
+    //    advance `last_successful_submission_index`. Use an error scope so the
+    //    validation error is not fatal.
     let command_buffer_wrong_device = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default())
         .finish();
     let scope = device2.push_error_scope(wgpu::ErrorFilter::Validation);
-    let bad_index = queue2.submit([command_buffer_wrong_device]);
+    queue2.submit([command_buffer_wrong_device]);
     let scope_error = scope.pop().await;
     assert!(
         scope_error.is_some(),
@@ -442,14 +454,25 @@ async fn wait_on_failed_submission(ctx: TestingContext) {
     for _ in 0..16 {
         encoder.copy_buffer_to_buffer(&src, 0, &dst, 0, Some(big_size));
     }
-    let _idx_after = queue2.submit([encoder.finish()]);
+    // `wgpu` returns no index for the failed submission, so submit through
+    // wgpu-core to get the index right after it.
+    let idx_after = queue2
+        .as_core()
+        .unwrap()
+        .submit(&[encoder.finish().as_core().unwrap()])
+        .expect("submission should succeed");
+
+    // Each submission attempt consumes exactly one index, so the failed one
+    // sits between the two successful ones.
+    let bad_index = idx_after - 1;
+    assert!(idx_before < bad_index);
 
     // 4. The interesting wait: pass the hole index to `poll(Wait)`. The
     //    wgpu-core guard sees `bad_index <= last_successful_submission_index`
     //    and lets it through to the HAL `wait`, which is being asked to wait
     //    on a fence value no operation actually presented. Must not panic or
     //    hang.
-    let result = device2.poll(wgpu::PollType::Wait {
+    let result = device2.as_core().unwrap().poll(wgpu_types::PollType::Wait {
         submission_index: Some(bad_index),
         timeout: Some(Duration::from_secs(5)),
     });

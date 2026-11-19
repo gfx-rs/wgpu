@@ -1,0 +1,44 @@
+name: Cancel closed PR runs
+
+# Closing a pull request does not cancel its runs. When a check fails in the
+# merge queue, Mergify closes the merge queue pull request, and this workflow
+# cancels its other runs.
+on:
+  # `pull_request_target` is necessary because the token of a fork
+  # `pull_request` run cannot cancel runs. The trigger is dangerous only if the
+  # workflow uses code or data from the pull request. This workflow does not
+  # check out the pull request. It uses only the head branch name and commit
+  # hash, and it passes them through environment variables as arguments to `gh`.
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
+    types: [closed]
+
+jobs:
+  cancel:
+    # runtime is normally 10 seconds
+    timeout-minutes: 5
+
+    name: Cancel runs
+    runs-on: ubuntu-26.04
+
+    permissions:
+      actions: write
+
+    steps:
+      - name: Cancel unfinished runs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          ids=$(gh run list --event pull_request --branch "$BRANCH" --commit "$SHA" --limit 100 \
+            --json databaseId,status --jq '.[] | select(.status != "completed") | .databaseId')
+
+          for id in $ids; do
+            echo "Cancelling run $id"
+            # A run can complete before we cancel it, so ignore errors.
+            gh run cancel "$id" || true
+          done

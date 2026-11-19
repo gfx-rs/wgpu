@@ -318,8 +318,10 @@
                 ),
                 As(
                     expr: 21,
-                    kind: Float,
-                    convert: Some(4),
+                    target: (
+                        kind: Float,
+                        width: 4,
+                    ),
                 ),
                 Swizzle(
                     size: Quad,

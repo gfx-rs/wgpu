@@ -6,6 +6,8 @@ pub struct BindingInfo {
     pub binding: u32,
     /// If the binding is an unsized binding array, this overrides the size.
     pub binding_array_size: Option<u32>,
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub external_texture: bool,
 }
 
 // Using `BTreeMap` instead of `HashMap` so that we can hash itself.

@@ -30,6 +30,7 @@ use crate::{
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     lock::{rank, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
     ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError},
+    ray_tracing_pipeline,
     resource::{
         Blas, BlasCompactState, BlasDescriptor, BlasState, Buffer, BufferAccessError,
         BufferMapState, DestroyedBuffer, DestroyedQuerySet, DestroyedResourceError,
@@ -128,9 +129,7 @@ impl Queue {
         texture: &Arc<Texture>,
     ) -> Result<(), DeviceError> {
         let snatch_guard = self.device.snatchable_lock.read();
-        let submission = self
-            .allocate_submission(snatch_guard)
-            .map_err(|(_index, e)| e)?;
+        let submission = self.allocate_submission(snatch_guard)?;
         let device = &self.device;
 
         // If the texture is uninitialized it needs to be cleared before presenting
@@ -358,6 +357,9 @@ pub(crate) struct EncoderInFlight {
     pub(crate) pending_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
     /// These are the BLASes that have been tracked by `PendingWrites`.
     pub(crate) pending_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
+    /// These are the shader binding data buffers that have been tracked by `PendingWrites`.
+    /// Only need to keep these live while the writes wait.
+    _pending_shader_binding_data: Vec<Arc<ray_tracing_pipeline::ShaderBindingData>>,
 }
 
 /// A private command encoder for writes made directly on the device
@@ -400,6 +402,9 @@ pub(crate) struct PendingWrites {
     dst_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
     dst_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
     copied_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
+    /// Buffers of shader binding data that have been written to when creating their
+    /// ray tracing pipelines.
+    written_shader_binding_data: Vec<Arc<ray_tracing_pipeline::ShaderBindingData>>,
     instance_flags: wgt::InstanceFlags,
 
     /// Staging buffers that are the source of a copy recorded in
@@ -451,6 +456,7 @@ impl PendingWrites {
             instance_flags,
             hoisted_staging_buffers: Vec::new(),
             hoisted_buffer_barriers: Vec::new(),
+            written_shader_binding_data: Vec::new(),
         }
     }
 
@@ -467,6 +473,10 @@ impl PendingWrites {
     pub fn insert_blas(&mut self, blas: &Arc<Blas>) {
         self.copied_blas_s
             .insert(blas.tracker_index(), blas.clone());
+    }
+
+    pub fn use_shader_binding_data(&mut self, sbd: &Arc<ray_tracing_pipeline::ShaderBindingData>) {
+        self.written_shader_binding_data.push(sbd.clone())
     }
 
     pub fn contains_buffer(&self, buffer: &Arc<Buffer>) -> bool {
@@ -611,6 +621,7 @@ impl PendingWrites {
             let pending_buffers = mem::take(&mut self.dst_buffers);
             let pending_textures = mem::take(&mut self.dst_textures);
             let pending_blas_s = mem::take(&mut self.copied_blas_s);
+            let pending_shader_binding_data = mem::take(&mut self.written_shader_binding_data);
 
             let cmd_buf = unsafe { self.command_encoder.end_encoding() }
                 .map_err(|e| device.handle_hal_error(e))?;
@@ -637,6 +648,7 @@ impl PendingWrites {
                 pending_buffers,
                 pending_textures,
                 pending_blas_s,
+                _pending_shader_binding_data: pending_shader_binding_data,
             };
 
             let staging_buffers = self.record_hoisted_barriers(&mut encoder, snatch_guard)?;
@@ -649,6 +661,7 @@ impl PendingWrites {
             self.dst_buffers.clear();
             self.dst_textures.clear();
             self.copied_blas_s.clear();
+            self.written_shader_binding_data.clear();
             Ok(None)
         }
     }
@@ -1141,6 +1154,7 @@ impl Queue {
             &dst.desc,
             data_layout,
             false, // alignment not required for buffer offset or bytes per row
+            self.device.features,
         )?;
 
         // Note: `_source_bytes_per_array_layer` is ignored since we
@@ -1570,9 +1584,7 @@ impl Queue {
         buffer: &Arc<Buffer>,
         snatch_guard: SnatchGuard,
     ) -> Result<(), BufferAccessError> {
-        let submission = self
-            .allocate_submission(snatch_guard)
-            .map_err(|(_index, e)| e)?;
+        let submission = self.allocate_submission(snatch_guard)?;
 
         let pending_writes = self.pending_writes.lock();
         if !pending_writes.contains_buffer(buffer) {
@@ -1586,9 +1598,7 @@ impl Queue {
 
     fn flush_pending_writes(&self) -> Result<Option<SubmissionIndex>, DeviceError> {
         let snatch_guard = self.device.snatchable_lock.read();
-        let submission = self
-            .allocate_submission(snatch_guard)
-            .map_err(|(_index, e)| e)?;
+        let submission = self.allocate_submission(snatch_guard)?;
         let submit_index = submission.index;
         let pending_writes = self.pending_writes.lock();
         if pending_writes.is_recording {
@@ -1629,20 +1639,21 @@ impl Queue {
     fn submit_inner(
         &self,
         command_buffers: &[Arc<CommandBuffer>],
-    ) -> Result<SubmissionIndex, (SubmissionIndex, QueueSubmitError)> {
+    ) -> Result<SubmissionIndex, Box<(Option<SubmissionIndex>, QueueSubmitError)>> {
         profiling::scope!("Queue::submit");
         api_log!("Queue::submit");
 
         let snatch_guard = self.device.snatchable_lock.read();
         let mut submission = self
             .allocate_submission(snatch_guard)
-            .map_err(|(index, e)| (index, e.into()))?;
+            .map_err(|e| (None, e.into()))?;
         let submit_index = submission.index;
 
         // If we encounter an error after we have started updating global state and before
         // successful submission, we must lose the device to avoid continuing with
         // potentially inaccurate resource state.
         let mut lose_device_on_error = false;
+        let mut successfully_submitted = false;
 
         let res = 'error: {
             let mut used_surface_textures = track::TextureUsageScope::default();
@@ -1839,6 +1850,7 @@ impl Queue {
                         pending_buffers: FastHashMap::default(),
                         pending_textures: FastHashMap::default(),
                         pending_blas_s: FastHashMap::default(),
+                        _pending_shader_binding_data: Vec::new(),
                     });
                 }
             }
@@ -1849,6 +1861,7 @@ impl Queue {
                 Ok(result) => result,
                 Err(e) => break 'error Err(e.into()),
             };
+            successfully_submitted = true;
 
             profiling::scope!("cleanup");
 
@@ -1884,7 +1897,10 @@ impl Queue {
                 if lose_device_on_error {
                     self.device.lose("submission failed");
                 }
-                return Err((submit_index, e));
+                return Err(Box::new((
+                    successfully_submitted.then_some(submit_index),
+                    e,
+                )));
             }
         };
 
@@ -1898,10 +1914,11 @@ impl Queue {
         Ok(submit_index)
     }
 
-    pub fn submit(&self, command_buffers: &[Arc<CommandBuffer>]) -> SubmissionIndex {
+    pub fn submit(&self, command_buffers: &[Arc<CommandBuffer>]) -> Option<SubmissionIndex> {
         match self.submit_inner(command_buffers) {
-            Ok(submit_index) => submit_index,
-            Err((submit_index, e)) => {
+            Ok(submit_index) => Some(submit_index),
+            Err(e) => {
+                let (submit_index, e) = *e;
                 self.device
                     .handle_error(e, Some(self.label()), "Queue::submit");
                 submit_index
@@ -1934,14 +1951,12 @@ impl Queue {
     fn allocate_submission<'a>(
         &'a self,
         snatch_guard: SnatchGuard<'a>,
-    ) -> Result<PendingSubmission<'a>, (SubmissionIndex, DeviceError)> {
+    ) -> Result<PendingSubmission<'a>, DeviceError> {
         let mut command_index_guard = self.device.command_indices.write();
         command_index_guard.active_submission_index += 1;
         let index = command_index_guard.active_submission_index;
 
-        if let Err(e) = self.device.check_is_valid() {
-            return Err((index, e));
-        }
+        self.device.check_is_valid()?;
 
         let submission = PendingSubmission {
             queue: self,
@@ -2154,8 +2169,7 @@ impl Queue {
 
         self.device.check_is_valid()?;
 
-        self.device
-            .require_features(wgpu_types::Features::EXPERIMENTAL_RAY_QUERY)?;
+        self.device.require_acceleration_structures()?;
 
         blas.check_is_valid()?;
         self.same_device_as(blas.as_ref())?;

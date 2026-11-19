@@ -28,6 +28,7 @@ targets = [
 ]
 
 [dependencies]
+bitflags = { workspace = true, features = ["serde"] }
 hashbrown = { workspace = true }
 naga-types = { workspace = true }
 serde = { workspace = true }
