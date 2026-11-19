@@ -397,13 +397,14 @@ static INVOCATION_REORDER_OUTPUT: GpuTestConfiguration = GpuTestConfiguration::n
     )
     .run_sync(invocation_reorder_output);
 
-/// Trace a ray into a hit object, reorder on it, and run the shader it recorded.
+/// Trace rays into hit objects, reorder on them, and run the shaders they recorded.
 ///
-/// The acceleration structure holds a single degenerate triangle, so the ray always misses and
-/// the miss shader is the one `hitObjectExecuteShader` runs.
+/// The acceleration structure holds one triangle at `z = 1`. Invocation 0 traces away from it
+/// and misses. Invocation 1 traces into it and hits.
 fn invocation_reorder_output(ctx: TestingContext) {
-    let as_ctx = super::AsBuildContext::new(
+    let as_ctx = super::AsBuildContext::with_vertices(
         &ctx,
+        [[-1.0, -1.0, 1.0], [1.0, -1.0, 1.0], [0.0, 1.0, 1.0]],
         AccelerationStructureFlags::empty(),
         AccelerationStructureFlags::empty(),
     );
@@ -421,18 +422,19 @@ fn invocation_reorder_output(ctx: TestingContext) {
         var<ray_payload> payload: u32;
 
         @group(0) @binding(0) var acc_struct: acceleration_structure;
-        @group(0) @binding(1) var<storage, read_write> out: u32;
+        @group(0) @binding(1) var<storage, read_write> out: array<u32, 2>;
 
         @ray_generation
-        fn gen() {
+        fn gen(@builtin(ray_invocation_id) id: vec3<u32>) {
             var ho: hit_object;
             payload = 0u;
 
-            hitObjectTraceRay(&ho, acc_struct, RayDesc(0u, 0xFFu, 0.001, 100.0, vec3f(0.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0)), &payload);
+            let dir = select(vec3f(0.0, 0.0, -1.0), vec3f(0.0, 0.0, 1.0), id.x == 1u);
+            hitObjectTraceRay(&ho, acc_struct, RayDesc(0u, 0xFFu, 0.001, 100.0, vec3f(0.0, 0.0, 0.0), dir), &payload);
             reorderThread(&ho);
             hitObjectExecuteShader(&ho, &payload);
 
-            out = payload + select(0u, 2u, hitObjectIsMiss(&ho));
+            out[id.x] = payload + select(0u, 2u, hitObjectIsMiss(&ho)) + select(0u, 4u, hitObjectIsHit(&ho));
         }
     ";
 
@@ -504,14 +506,14 @@ fn invocation_reorder_output(ctx: TestingContext) {
 
     let out_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-        size: size_of::<u32>() as _,
+        size: size_of::<[u32; 2]>() as _,
         usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
         mapped_at_creation: false,
     });
 
     let readback = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-        size: size_of::<u32>() as _,
+        size: size_of::<[u32; 2]>() as _,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
@@ -537,7 +539,7 @@ fn invocation_reorder_output(ctx: TestingContext) {
         let mut pass = encoder.begin_ray_tracing_pass(&RayTracingPassDescriptor::default());
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        pass.trace_rays(1, 1, 1);
+        pass.trace_rays(2, 1, 1);
     }
 
     encoder.copy_buffer_to_buffer(&out_buffer, 0, &readback, 0, out_buffer.size());
@@ -557,8 +559,9 @@ fn invocation_reorder_output(ctx: TestingContext) {
 
     let range = readback.get_mapped_range(..).unwrap();
 
-    // 1 from the miss shader, 2 because the hit object recorded a miss.
-    assert_eq!(range[0], 3)
+    // Miss: 1 from the miss shader, 2 because the hit object recorded a miss.
+    // Hit: 8 from the closest-hit shader, 4 because the hit object recorded a hit.
+    assert_eq!(bytemuck::cast_slice::<u8, u32>(&range), [3, 12])
 }
 
 #[apply(gpu_test!)]
