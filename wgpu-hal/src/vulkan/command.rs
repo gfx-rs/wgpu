@@ -990,6 +990,23 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 dynamic_offsets,
             )
         };
+        if let Some(&(offset, count)) = layout
+            .buffer_sizes
+            .as_ref()
+            .and_then(|sizes| sizes.groups.get(index as usize))
+        {
+            if count != 0 {
+                unsafe {
+                    self.device.raw.cmd_push_constants(
+                        self.active,
+                        layout.raw,
+                        vk::ShaderStageFlags::ALL,
+                        offset,
+                        bytemuck::cast_slice(&group.buffer_sizes[..count]),
+                    )
+                };
+            }
+        }
     }
     unsafe fn set_immediates(
         &mut self,
