@@ -629,6 +629,66 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
         );
     }
 
+    // Struct-typed members at offsets that are not multiples of 16.
+    //
+    // Outside of the uniform address space, a nested struct has no special alignment: it
+    // is placed at the next multiple of its own alignment (here 4), directly after the
+    // previous member. HLSL constant buffers instead start every nested struct on a new
+    // 16-byte register, so backends that load such data from a `ConstantBuffer` (immediates
+    // on DX12) have to make up for the difference.
+    //
+    // The uniform address space forbids this layout (the gap after a struct member must
+    // be at least `roundUp(16, SizeOf(S))`), so there is nothing to test there.
+    if storage_type != InputStorageType::Uniform {
+        let header = String::from("struct Inner { a: u32, b: u32 }");
+
+        tests.push(
+            ShaderTest::new(
+                String::from("nested struct after scalar"),
+                String::from("x: u32, inner: Inner, y: u32"),
+                String::from(
+                    "\
+                    output[0] = input.x;
+                    output[1] = input.inner.a;
+                    output[2] = input.inner.b;
+                    output[3] = input.y;
+                ",
+                ),
+                &input_values,
+                &[
+                    0, // x
+                    1, 2, // inner
+                    3, // y
+                ],
+            )
+            .header(header.clone()),
+        );
+
+        tests.push(
+            ShaderTest::new(
+                String::from("nested struct after vec3"),
+                String::from("v: vec3<u32>, inner: Inner, y: u32"),
+                String::from(
+                    "\
+                    output[0] = input.v.x;
+                    output[1] = input.v.y;
+                    output[2] = input.v.z;
+                    output[3] = input.inner.a;
+                    output[4] = input.inner.b;
+                    output[5] = input.y;
+                ",
+                ),
+                &input_values,
+                &[
+                    0, 1, 2, // v
+                    3, 4, // inner
+                    5, // y
+                ],
+            )
+            .header(header),
+        );
+    }
+
     tests
 }
 

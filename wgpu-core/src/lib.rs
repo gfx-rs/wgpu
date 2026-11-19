@@ -7,8 +7,6 @@
 //!
 
 #![no_std]
-// `-Znext-solver` requires deeper recursion limits (at least for now) to prove Send/Sync
-#![recursion_limit = "256"]
 // When we have no backends, we end up with a lot of dead or otherwise unreachable code.
 #![cfg_attr(
     all(
@@ -86,6 +84,7 @@ mod pipeline_cache;
 mod pool;
 pub mod present;
 pub mod ray_tracing;
+pub mod ray_tracing_pipeline;
 pub mod resource;
 mod snatch;
 pub mod storage;

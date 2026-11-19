@@ -415,6 +415,210 @@ fn builtin_cross_product_args() {
 }
 
 #[test]
+fn builtin_sign_unsigned_arg() {
+    use naga::{MathFunction, Type, TypeInner, VectorSize};
+
+    fn variant(scalar: Scalar) -> Result<ModuleInfo, Box<valid::ValidationError>> {
+        let span = naga::Span::default();
+        let mut module = Module::default();
+        let ty_vec4 = module.types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Vector {
+                    size: VectorSize::Quad,
+                    scalar,
+                },
+            },
+            span,
+        );
+
+        let mut fun = Function {
+            result: Some(naga::ir::FunctionResult {
+                ty: ty_vec4,
+                binding: None,
+            }),
+            ..Function::default()
+        };
+        let ex_zero = fun.expressions.append(Expression::ZeroValue(ty_vec4), span);
+        let ex_sign = fun.expressions.append(
+            Expression::Math {
+                fun: MathFunction::Sign,
+                arg: ex_zero,
+                arg1: None,
+                arg2: None,
+                arg3: None,
+            },
+            span,
+        );
+
+        fun.body.push(
+            naga::Statement::Emit(naga::Range::new_from_bounds(ex_sign, ex_sign)),
+            span,
+        );
+        fun.body.push(
+            naga::Statement::Return {
+                value: Some(ex_sign),
+            },
+            span,
+        );
+
+        module.functions.append(fun, span);
+
+        valid::Validator::new(ValidationFlags::default(), Capabilities::all())
+            .validate(&module)
+            .map_err(|err| Box::new(err.into_inner()))
+    }
+
+    variant(Scalar::I32).expect("module should validate");
+    assert!(matches!(
+        variant(Scalar::U32).map_err(|e| *e),
+        Err(valid::ValidationError::Function {
+            source: valid::FunctionError::Expression {
+                source: valid::ExpressionError::Type(
+                    naga::proc::ResolveError::BuiltinArgumentsInvalid(_)
+                ),
+                ..
+            },
+            ..
+        })
+    ));
+}
+
+#[test]
+fn bitcast_operand_and_result_types() {
+    use naga::{Type, TypeInner, VectorSize};
+
+    fn variant(src: TypeInner, dst: TypeInner) -> Result<ModuleInfo, Box<valid::ValidationError>> {
+        let span = naga::Span::default();
+        let mut module = Module::default();
+        let ty_src = module.types.insert(
+            Type {
+                name: None,
+                inner: src,
+            },
+            span,
+        );
+        let ty_dst = module.types.insert(
+            Type {
+                name: None,
+                inner: dst,
+            },
+            span,
+        );
+
+        let mut fun = Function {
+            result: Some(naga::ir::FunctionResult {
+                ty: ty_dst,
+                binding: None,
+            }),
+            ..Function::default()
+        };
+        let ex_zero = fun.expressions.append(Expression::ZeroValue(ty_src), span);
+        let ex_bitcast = fun.expressions.append(
+            Expression::Bitcast {
+                expr: ex_zero,
+                ty: ty_dst,
+            },
+            span,
+        );
+        fun.body.push(
+            naga::Statement::Emit(naga::Range::new_from_bounds(ex_bitcast, ex_bitcast)),
+            span,
+        );
+        fun.body.push(
+            naga::Statement::Return {
+                value: Some(ex_bitcast),
+            },
+            span,
+        );
+        module.functions.append(fun, span);
+
+        valid::Validator::new(ValidationFlags::default(), Capabilities::all())
+            .validate(&module)
+            .map_err(|err| Box::new(err.into_inner()))
+    }
+
+    let vector = |size, scalar| TypeInner::Vector { size, scalar };
+    let scalar = TypeInner::Scalar;
+
+    for (src, dst) in [
+        (scalar(Scalar::U32), scalar(Scalar::F32)),
+        (scalar(Scalar::F32), scalar(Scalar::I32)),
+        (scalar(Scalar::U64), scalar(Scalar::I64)),
+        (
+            vector(VectorSize::Tri, Scalar::U32),
+            vector(VectorSize::Tri, Scalar::F32),
+        ),
+        (vector(VectorSize::Bi, Scalar::F16), scalar(Scalar::U32)),
+        (scalar(Scalar::I32), vector(VectorSize::Bi, Scalar::F16)),
+        (
+            vector(VectorSize::Quad, Scalar::F16),
+            vector(VectorSize::Bi, Scalar::F32),
+        ),
+        (
+            vector(VectorSize::Bi, Scalar::U32),
+            vector(VectorSize::Quad, Scalar::F16),
+        ),
+        (scalar(Scalar::F16), scalar(Scalar::I16)),
+        (scalar(Scalar::U16), scalar(Scalar::F16)),
+        (
+            vector(VectorSize::Bi, Scalar::F16),
+            vector(VectorSize::Bi, Scalar::U16),
+        ),
+        (
+            vector(VectorSize::Tri, Scalar::I16),
+            vector(VectorSize::Tri, Scalar::F16),
+        ),
+        (scalar(Scalar::U32), scalar(Scalar::U32)),
+    ] {
+        variant(src.clone(), dst.clone())
+            .unwrap_or_else(|err| panic!("bitcast from {src:?} to {dst:?} should be valid: {err}"));
+    }
+
+    for (src, dst) in [
+        (scalar(Scalar::U32), scalar(Scalar::BOOL)),
+        (scalar(Scalar::BOOL), scalar(Scalar::U32)),
+        (scalar(Scalar::U32), scalar(Scalar::U64)),
+        (
+            vector(VectorSize::Bi, Scalar::U32),
+            vector(VectorSize::Tri, Scalar::U32),
+        ),
+        (vector(VectorSize::Tri, Scalar::F16), scalar(Scalar::U32)),
+        (vector(VectorSize::Bi, Scalar::F16), scalar(Scalar::U64)),
+        (scalar(Scalar::F16), scalar(Scalar::I32)),
+        (
+            vector(VectorSize::Bi, Scalar::I16),
+            vector(VectorSize::Quad, Scalar::F16),
+        ),
+        (
+            TypeInner::Matrix {
+                columns: VectorSize::Bi,
+                rows: VectorSize::Bi,
+                scalar: Scalar::F32,
+            },
+            vector(VectorSize::Quad, Scalar::F32),
+        ),
+    ] {
+        let err = variant(src.clone(), dst.clone()).expect_err(&format!(
+            "bitcast from {src:?} to {dst:?} should be invalid"
+        ));
+        assert!(
+            matches!(
+                *err,
+                valid::ValidationError::Function {
+                    source: valid::FunctionError::Expression {
+                        source: valid::ExpressionError::InvalidBitcast(_),
+                        ..
+                    },
+                    ..
+                }
+            ),
+            "unexpected error for bitcast from {src:?} to {dst:?}: {err:?}"
+        );
+    }
+}
+
+#[test]
 fn incompatible_interpolation_and_sampling_types() {
     use dummy_interpolation_shader::DummyInterpolationShader;
 
@@ -1944,4 +2148,55 @@ fn functions_share_name() {
     )
     .validate(&module)
     .expect("module should be valid");
+}
+
+/// Walk `words` instruction by instruction, using each instruction header's word count, and check
+/// that the walk lands exactly on the end of the module.
+#[track_caller]
+fn assert_spv_instruction_lengths_consistent(words: &[u32]) {
+    const HEADER_WORDS: usize = 5;
+
+    let mut offset = HEADER_WORDS;
+    while offset < words.len() {
+        let word_count = (words[offset] >> 16) as usize;
+        assert_ne!(word_count, 0, "instruction at word {offset} has no length");
+        offset += word_count;
+    }
+    assert_eq!(
+        offset,
+        words.len(),
+        "instruction lengths overrun the module"
+    );
+}
+
+/// NOTE: `OpEntryPoint` spends three words on its header, execution model, and function id. The
+/// nul-terminated name must fit in what remains.
+const LONGEST_SPV_ENTRY_POINT_NAME_LEN: usize = (u16::MAX as usize - 3) * 4 - 1;
+
+fn write_spv_with_entry_point_name_len(name_len: usize) -> Vec<u32> {
+    let name = "e".repeat(name_len);
+    let source = format!("@compute @workgroup_size(1) fn {name}() {{}}");
+
+    let module = naga::front::wgsl::parse_str(&source).unwrap();
+    let info = naga::valid::Validator::new(Default::default(), Default::default())
+        .validate(&module)
+        .unwrap();
+
+    naga::back::spv::write_vec(&module, &info, &Default::default(), None).unwrap()
+}
+
+/// Ensure we behave when entry-point name is at its limit.
+#[test]
+fn spv_longest_entry_point_name() {
+    let words = write_spv_with_entry_point_name_len(LONGEST_SPV_ENTRY_POINT_NAME_LEN);
+    assert_spv_instruction_lengths_consistent(&words);
+}
+
+/// Ensure we panic when an entry-point name is too long for `OpEntryPoint`.
+#[test]
+#[should_panic(
+    expected = "EntryPoint instruction is 65536 words long, but SPIR-V instructions are limited to 65535 words"
+)]
+fn spv_entry_point_name_too_long() {
+    write_spv_with_entry_point_name_len(LONGEST_SPV_ENTRY_POINT_NAME_LEN + 1);
 }

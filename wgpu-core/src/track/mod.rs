@@ -106,7 +106,7 @@ mod texture;
 use crate::{
     binding_model, command,
     lock::{rank, Mutex},
-    pipeline,
+    pipeline, ray_tracing_pipeline,
     resource::{self, Labeled, RawResourceAccess, ResourceErrorIdent, Trackable},
     snatch::SnatchGuard,
     track::blas::BlasTracker,
@@ -146,7 +146,7 @@ impl TrackerIndex {
 /// wgpu-core internally use some array-like storage for tracking resources.
 /// To that end, there needs to be a uniquely assigned index for each live resource
 /// of a certain type. This index is separate from the resource ID for various reasons:
-/// - There can be multiple resource IDs pointing the the same resource.
+/// - There can be multiple resource IDs pointing to the same resource.
 /// - IDs of dead handles can be recycled while resources are internally held alive (and tracked).
 /// - The plan is to remove IDs in the long run
 ///   ([#5121](https://github.com/gfx-rs/wgpu/issues/5121)).
@@ -232,6 +232,7 @@ pub(crate) struct TrackerIndexAllocators {
     pub bind_groups: Arc<SharedTrackerIndexAllocator>,
     pub compute_pipelines: Arc<SharedTrackerIndexAllocator>,
     pub render_pipelines: Arc<SharedTrackerIndexAllocator>,
+    pub ray_tracing_pipelines: Arc<SharedTrackerIndexAllocator>,
     pub bundles: Arc<SharedTrackerIndexAllocator>,
     pub query_sets: Arc<SharedTrackerIndexAllocator>,
     pub blas_s: Arc<SharedTrackerIndexAllocator>,
@@ -248,6 +249,7 @@ impl TrackerIndexAllocators {
             bind_groups: Arc::new(SharedTrackerIndexAllocator::new()),
             compute_pipelines: Arc::new(SharedTrackerIndexAllocator::new()),
             render_pipelines: Arc::new(SharedTrackerIndexAllocator::new()),
+            ray_tracing_pipelines: Arc::new(SharedTrackerIndexAllocator::new()),
             bundles: Arc::new(SharedTrackerIndexAllocator::new()),
             query_sets: Arc::new(SharedTrackerIndexAllocator::new()),
             blas_s: Arc::new(SharedTrackerIndexAllocator::new()),
@@ -648,6 +650,7 @@ pub(crate) struct Tracker {
 
     pub compute_pipelines: StatelessTracker<pipeline::ComputePipeline>,
     pub render_pipelines: StatelessTracker<pipeline::RenderPipeline>,
+    pub ray_tracing_pipelines: StatelessTracker<ray_tracing_pipeline::RayTracingPipeline>,
     pub bundles: StatelessTracker<command::RenderBundle>,
     pub query_sets: QuerySetTracker,
 }
@@ -666,6 +669,7 @@ impl Tracker {
             bind_groups: StatelessTracker::new(),
             compute_pipelines: StatelessTracker::new(),
             render_pipelines: StatelessTracker::new(),
+            ray_tracing_pipelines: StatelessTracker::new(),
             bundles: StatelessTracker::new(),
             query_sets: QuerySetTracker::new(),
         }

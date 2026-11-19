@@ -84,6 +84,7 @@ flagged as errors as well. This is called [Contagious Invalidity].
 */
 
 use alloc::sync::Arc;
+use core::fmt;
 
 use crate::registry::Registry;
 use wgpu_core::{
@@ -138,6 +139,15 @@ pub struct Hub {
     pub(crate) render_passes: Registry<RenderPass>,
     pub(crate) compute_passes: Registry<ComputePass>,
     pub(crate) render_bundle_encoders: Registry<RenderBundleEncoder>,
+}
+
+impl fmt::Debug for Hub {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Placeholder impl just so that Debug is always implemented, even though not all of our
+        // fields implement Debug.
+        // If you find a need for printing actual data here, feel free to add it.
+        f.debug_struct("Hub").finish_non_exhaustive()
+    }
 }
 
 impl Hub {

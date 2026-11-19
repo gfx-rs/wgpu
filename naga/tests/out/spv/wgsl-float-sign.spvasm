@@ -1,0 +1,73 @@
+; SPIR-V
+; Version: 1.0
+; Generator: rspirv
+; Bound: 48
+OpCapability Shader
+OpExtension "SPV_KHR_storage_buffer_storage_class"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %17 "main"
+OpExecutionMode %17 LocalSize 1 1 1
+OpDecorate %4 ArrayStride 4
+OpDecorate %8 ArrayStride 4
+OpDecorate %10 DescriptorSet 0
+OpDecorate %10 Binding 0
+OpDecorate %11 Block
+OpMemberDecorate %11 0 Offset 0
+OpDecorate %13 DescriptorSet 0
+OpDecorate %13 Binding 1
+OpDecorate %14 Block
+OpMemberDecorate %14 0 Offset 0
+%2 = OpTypeVoid
+%3 = OpTypeFloat 32
+%6 = OpTypeInt 32 0
+%5 = OpConstant  %6  4
+%4 = OpTypeArray %3 %5
+%7 = OpTypeInt 32 1
+%8 = OpTypeArray %7 %5
+%9 = OpTypeVector %3 2
+%11 = OpTypeStruct %4
+%12 = OpTypePointer StorageBuffer %11
+%10 = OpVariable  %12  StorageBuffer
+%14 = OpTypeStruct %8
+%15 = OpTypePointer StorageBuffer %14
+%13 = OpVariable  %15  StorageBuffer
+%18 = OpTypeFunction %2
+%19 = OpTypePointer StorageBuffer %4
+%20 = OpConstant  %6  0
+%22 = OpTypePointer StorageBuffer %8
+%25 = OpTypePointer StorageBuffer %3
+%26 = OpConstant  %6  1
+%31 = OpConstant  %6  2
+%34 = OpConstant  %6  3
+%43 = OpTypePointer StorageBuffer %7
+%17 = OpFunction  %2  None %18
+%16 = OpLabel
+%21 = OpAccessChain  %19  %10 %20
+%23 = OpAccessChain  %22  %13 %20
+OpBranch %24
+%24 = OpLabel
+%27 = OpAccessChain  %25  %21 %26
+%28 = OpLoad  %3  %27
+%29 = OpExtInst  %3  %1 FSign %28
+%30 = OpAccessChain  %25  %21 %20
+OpStore %30 %29
+%32 = OpAccessChain  %25  %21 %31
+%33 = OpLoad  %3  %32
+%35 = OpAccessChain  %25  %21 %34
+%36 = OpLoad  %3  %35
+%37 = OpCompositeConstruct  %9  %33 %36
+%38 = OpExtInst  %9  %1 FSign %37
+%39 = OpCompositeExtract  %3  %38 0
+%40 = OpAccessChain  %25  %21 %31
+OpStore %40 %39
+%41 = OpCompositeExtract  %3  %38 1
+%42 = OpAccessChain  %25  %21 %34
+OpStore %42 %41
+%44 = OpAccessChain  %43  %23 %26
+%45 = OpLoad  %7  %44
+%46 = OpExtInst  %7  %1 SSign %45
+%47 = OpAccessChain  %43  %23 %20
+OpStore %47 %46
+OpReturn
+OpFunctionEnd

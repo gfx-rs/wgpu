@@ -337,8 +337,10 @@
                 ),
                 As(
                     expr: 8,
-                    kind: Float,
-                    convert: Some(4),
+                    target: (
+                        kind: Float,
+                        width: 4,
+                    ),
                 ),
             ],
             named_expressions: {

@@ -21,7 +21,7 @@ impl ScratchBuffer {
                     label: hal_label(Some("(wgpu) scratch buffer"), device.instance_flags),
                     size: size.get(),
                     usage: BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
-                    memory_flags: hal::MemoryFlags::empty(),
+                    memory_flags: hal::MemoryFlags::TRANSIENT,
                 })
                 .map_err(DeviceError::from_hal)?
         };

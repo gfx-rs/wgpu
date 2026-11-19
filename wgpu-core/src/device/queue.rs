@@ -2,7 +2,6 @@
 use alloc::string::ToString as _;
 use alloc::{boxed::Box, string::String, sync::Arc, vec, vec::Vec};
 use core::{
-    iter,
     mem::{self, ManuallyDrop},
     num::NonZeroU64,
     ptr::NonNull,
@@ -31,6 +30,7 @@ use crate::{
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     lock::{rank, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
     ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError},
+    ray_tracing_pipeline,
     resource::{
         Blas, BlasCompactState, BlasDescriptor, BlasState, Buffer, BufferAccessError,
         BufferMapState, DestroyedBuffer, DestroyedQuerySet, DestroyedResourceError,
@@ -129,9 +129,7 @@ impl Queue {
         texture: &Arc<Texture>,
     ) -> Result<(), DeviceError> {
         let snatch_guard = self.device.snatchable_lock.read();
-        let submission = self
-            .allocate_submission(snatch_guard)
-            .map_err(|(_index, e)| e)?;
+        let submission = self.allocate_submission(snatch_guard)?;
         let device = &self.device;
 
         // If the texture is uninitialized it needs to be cleared before presenting
@@ -354,6 +352,9 @@ pub(crate) struct EncoderInFlight {
     pub(crate) pending_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
     /// These are the BLASes that have been tracked by `PendingWrites`.
     pub(crate) pending_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
+    /// These are the shader binding data buffers that have been tracked by `PendingWrites`.
+    /// Only need to keep these live while the writes wait.
+    _pending_shader_binding_data: Vec<Arc<ray_tracing_pipeline::ShaderBindingData>>,
 }
 
 /// A private command encoder for writes made directly on the device
@@ -396,7 +397,43 @@ pub(crate) struct PendingWrites {
     dst_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
     dst_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
     copied_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
+    /// Buffers of shader binding data that have been written to when creating their
+    /// ray tracing pipelines.
+    written_shader_binding_data: Vec<Arc<ray_tracing_pipeline::ShaderBindingData>>,
     instance_flags: wgt::InstanceFlags,
+
+    /// Staging buffers that are the source of a copy recorded in
+    /// `command_encoder`, and so need a `MAP_WRITE` -> `COPY_SRC` transition.
+    ///
+    /// See [`hoisted_buffer_barriers`] for why these are not recorded
+    /// immediately. Moved to `temp_resources` in [`pre_submit`].
+    ///
+    /// [`hoisted_buffer_barriers`]: PendingWrites::hoisted_buffer_barriers
+    /// [`pre_submit`]: PendingWrites::pre_submit
+    hoisted_staging_buffers: Vec<FlushedStagingBuffer>,
+
+    /// Buffer transitions that must happen before the copies recorded in
+    /// `command_encoder`.
+    ///
+    /// Recording a barrier immediately before each copy means that a frame
+    /// which calls `Queue::write_buffer` a few dozen times ends up with many
+    /// back-to-back barrier/copy pairs, when a single barrier covering every
+    /// buffer would have done just as well.
+    ///
+    /// Instead we accumulate the transitions here and record them all at once,
+    /// into a command buffer that [`pre_submit`] places in front of
+    /// `command_encoder`'s.
+    ///
+    /// Only a buffer's *first* transition in a batch may be hoisted like this.
+    /// A buffer written more than once per batch gets a second, `COPY_DST` ->
+    /// `COPY_DST` transition from the tracker (unless the adapter reports
+    /// `COPY_DST` as an ordered usage), and that barrier exists precisely to
+    /// separate the two copies, so it has to stay where it was recorded. See
+    /// [`hoist_buffer_barrier`].
+    ///
+    /// [`pre_submit`]: PendingWrites::pre_submit
+    /// [`hoist_buffer_barrier`]: PendingWrites::hoist_buffer_barrier
+    hoisted_buffer_barriers: Vec<(Arc<Buffer>, hal::StateTransition<wgt::BufferUses>)>,
 }
 
 impl PendingWrites {
@@ -412,6 +449,9 @@ impl PendingWrites {
             dst_textures: FastHashMap::default(),
             copied_blas_s: FastHashMap::default(),
             instance_flags,
+            hoisted_staging_buffers: Vec::new(),
+            hoisted_buffer_barriers: Vec::new(),
+            written_shader_binding_data: Vec::new(),
         }
     }
 
@@ -430,6 +470,10 @@ impl PendingWrites {
             .insert(blas.tracker_index(), blas.clone());
     }
 
+    pub fn use_shader_binding_data(&mut self, sbd: &Arc<ray_tracing_pipeline::ShaderBindingData>) {
+        self.written_shader_binding_data.push(sbd.clone())
+    }
+
     pub fn contains_buffer(&self, buffer: &Arc<Buffer>) -> bool {
         self.dst_buffers.contains_key(&buffer.tracker_index())
     }
@@ -442,9 +486,45 @@ impl PendingWrites {
         self.temp_resources.push(resource);
     }
 
+    /// Take ownership of a staging buffer that is the source of a copy
+    /// recorded into this batch.
+    ///
+    /// This also queues up the staging buffer's `MAP_WRITE` -> `COPY_SRC`
+    /// transition, so callers must not record one themselves.
     pub fn consume(&mut self, buffer: FlushedStagingBuffer) {
-        self.temp_resources
-            .push(TempResource::StagingBuffer(buffer));
+        self.hoisted_staging_buffers.push(buffer);
+    }
+
+    /// Queue up a buffer transition to be recorded ahead of this batch's
+    /// copies.
+    ///
+    /// Returns the transition instead if it cannot be hoisted, in which case
+    /// the caller must record it immediately, before its own copy. This happens
+    /// when this batch has already copied into `buffer`: the transition is then
+    /// a `COPY_DST` -> `COPY_DST` write-after-write barrier separating the
+    /// earlier copy from the caller's, as hoisting it to the front of the
+    /// batch would leave the two copies unsynchronized.
+    ///
+    /// See [`hoisted_buffer_barriers`].
+    ///
+    /// [`hoisted_buffer_barriers`]: PendingWrites::hoisted_buffer_barriers
+    #[must_use]
+    fn hoist_buffer_barrier(
+        &mut self,
+        buffer: &Arc<Buffer>,
+        transition: Option<track::PendingTransition<wgt::BufferUses>>,
+    ) -> Option<track::PendingTransition<wgt::BufferUses>> {
+        let transition = transition?;
+
+        // `dst_buffers` is only populated once a copy has been recorded, so
+        // true here means an earlier copy in this batch already wrote `buffer`.
+        if self.dst_buffers.contains_key(&buffer.tracker_index()) {
+            return Some(transition);
+        }
+
+        self.hoisted_buffer_barriers
+            .push((buffer.clone(), transition.usage));
+        None
     }
 
     pub fn clear_buffer(
@@ -454,19 +534,21 @@ impl PendingWrites {
         range: core::ops::Range<wgt::BufferAddress>,
         snatch_guard: &SnatchGuard,
     ) -> Result<(), QueueWriteError> {
-        let barriers = {
+        let transition = {
             let mut trackers = device.trackers.lock();
             trackers
                 .buffers
                 .set_single(buffer, wgt::BufferUses::COPY_DST)
-                .map(|pending| pending.into_hal(buffer, snatch_guard))
         };
+        let inline_transition = self.hoist_buffer_barrier(buffer, transition);
 
         let dst_raw = buffer.try_raw(snatch_guard)?;
 
         let encoder = self.activate();
         unsafe {
-            encoder.transition_buffers(barriers.as_slice());
+            if let Some(transition) = inline_transition {
+                encoder.transition_buffers(&[transition.into_hal(buffer, snatch_guard)]);
+            }
             encoder.clear_buffer(dst_raw, range.clone());
         }
 
@@ -479,16 +561,62 @@ impl PendingWrites {
         Ok(())
     }
 
+    /// Record every transition this batch of writes needs as a single barrier,
+    /// into a command buffer placed ahead of the one holding the batch's
+    /// copies.
+    ///
+    /// Returns the staging buffers whose transitions were recorded. The caller
+    /// is responsible for keeping them alive until the submission completes.
+    fn record_hoisted_barriers(
+        &mut self,
+        encoder: &mut EncoderInFlight,
+        snatch_guard: &SnatchGuard,
+    ) -> Result<Vec<FlushedStagingBuffer>, DeviceError> {
+        let staging_buffers = mem::take(&mut self.hoisted_staging_buffers);
+        let buffer_barriers = mem::take(&mut self.hoisted_buffer_barriers);
+
+        let barriers = staging_buffers
+            .iter()
+            .map(|staging_buffer| hal::BufferBarrier {
+                buffer: staging_buffer.raw(),
+                usage: hal::StateTransition {
+                    from: wgt::BufferUses::MAP_WRITE,
+                    to: wgt::BufferUses::COPY_SRC,
+                },
+            })
+            .chain(buffer_barriers.iter().filter_map(|(buffer, usage)| {
+                // The buffer may have been destroyed since the copy was
+                // recorded, in which case there is nothing to sync.
+                Some(hal::BufferBarrier {
+                    buffer: buffer.raw(snatch_guard)?,
+                    usage: usage.clone(),
+                })
+            }))
+            .collect::<Vec<_>>();
+
+        if !barriers.is_empty() {
+            encoder
+                .inner
+                .open_pass(Some("(wgpu internal) PendingWrites Transit"))?;
+            unsafe { encoder.inner.raw.transition_buffers(&barriers) };
+            encoder.inner.close_and_push_front()?;
+        }
+
+        Ok(staging_buffers)
+    }
+
     fn pre_submit(
         &mut self,
         command_allocator: &CommandAllocator,
         device: &Arc<Device>,
         queue: &Queue,
+        snatch_guard: &SnatchGuard,
     ) -> Result<Option<EncoderInFlight>, DeviceError> {
         if self.is_recording {
             let pending_buffers = mem::take(&mut self.dst_buffers);
             let pending_textures = mem::take(&mut self.dst_textures);
             let pending_blas_s = mem::take(&mut self.copied_blas_s);
+            let pending_shader_binding_data = mem::take(&mut self.written_shader_binding_data);
 
             let cmd_buf = unsafe { self.command_encoder.end_encoding() }
                 .map_err(|e| device.handle_hal_error(e))?;
@@ -498,7 +626,7 @@ impl PendingWrites {
                 .acquire_encoder(device.raw(), queue.raw())
                 .map_err(|e| device.handle_hal_error(e))?;
 
-            let encoder = EncoderInFlight {
+            let mut encoder = EncoderInFlight {
                 inner: crate::command::InnerCommandEncoder {
                     raw: ManuallyDrop::new(mem::replace(&mut self.command_encoder, new_encoder)),
                     list: vec![cmd_buf],
@@ -515,12 +643,20 @@ impl PendingWrites {
                 pending_buffers,
                 pending_textures,
                 pending_blas_s,
+                _pending_shader_binding_data: pending_shader_binding_data,
             };
+
+            let staging_buffers = self.record_hoisted_barriers(&mut encoder, snatch_guard)?;
+            encoder
+                .temp_resources
+                .extend(staging_buffers.into_iter().map(TempResource::StagingBuffer));
+
             Ok(Some(encoder))
         } else {
             self.dst_buffers.clear();
             self.dst_textures.clear();
             self.copied_blas_s.clear();
+            self.written_shader_binding_data.clear();
             Ok(None)
         }
     }
@@ -876,7 +1012,7 @@ impl Queue {
         buffer_offset: u64,
         buffer_size: u64,
     ) -> Result<(), TransferError> {
-        if !matches!(&*buffer.map_state.lock(), BufferMapState::Idle) {
+        if !matches!(&*buffer.map_state.read(), BufferMapState::Idle) {
             return Err(TransferError::BufferNotAvailable);
         }
         buffer.check_usage(wgt::BufferUsages::COPY_DST)?;
@@ -934,18 +1070,14 @@ impl Queue {
             dst_offset: buffer_offset,
             size: staging_buffer.size,
         };
-        let barriers = iter::once(hal::BufferBarrier {
-            buffer: staging_buffer.raw(),
-            usage: hal::StateTransition {
-                from: wgt::BufferUses::MAP_WRITE,
-                to: wgt::BufferUses::COPY_SRC,
-            },
-        })
-        .chain(transition.map(|pending| pending.into_hal(&buffer, snatch_guard)))
-        .collect::<Vec<_>>();
+        // The staging buffer's own `MAP_WRITE` -> `COPY_SRC` transition is
+        // hoisted by `PendingWrites::consume`, which our caller invokes.
+        let inline_transition = pending_writes.hoist_buffer_barrier(&buffer, transition);
         let encoder = pending_writes.activate();
         unsafe {
-            encoder.transition_buffers(&barriers);
+            if let Some(transition) = inline_transition {
+                encoder.transition_buffers(&[transition.into_hal(&buffer, snatch_guard)]);
+            }
             encoder.copy_buffer_to_buffer(staging_buffer.raw(), dst_raw, &[region]);
         }
 
@@ -1017,6 +1149,7 @@ impl Queue {
             &dst.desc,
             data_layout,
             false, // alignment not required for buffer offset or bytes per row
+            self.device.features,
         )?;
 
         // Note: `_source_bytes_per_array_layer` is ignored since we
@@ -1186,14 +1319,6 @@ impl Queue {
             .collect::<Vec<_>>();
 
         {
-            let buffer_barrier = hal::BufferBarrier {
-                buffer: staging_buffer.raw(),
-                usage: hal::StateTransition {
-                    from: wgt::BufferUses::MAP_WRITE,
-                    to: wgt::BufferUses::COPY_SRC,
-                },
-            };
-
             let mut trackers = self.device.trackers.lock();
             let transition =
                 trackers
@@ -1203,9 +1328,11 @@ impl Queue {
                 .map(|pending| pending.into_hal(dst_raw))
                 .collect::<Vec<_>>();
 
+            // The staging buffer's `MAP_WRITE` -> `COPY_SRC` transition is
+            // hoisted to the front of the batch by `PendingWrites::consume`,
+            // below.
             unsafe {
                 encoder.transition_textures(&texture_barriers);
-                encoder.transition_buffers(&[buffer_barrier]);
                 encoder.copy_buffer_to_texture(staging_buffer.raw(), dst_raw, &regions);
             }
         }
@@ -1437,7 +1564,7 @@ impl Queue {
                 source,
                 dst_raw_webgl,
                 premultiplied_alpha,
-                iter::once(regions),
+                core::iter::once(regions),
             );
         }
 
@@ -1452,9 +1579,7 @@ impl Queue {
         buffer: &Arc<Buffer>,
         snatch_guard: SnatchGuard,
     ) -> Result<(), BufferAccessError> {
-        let submission = self
-            .allocate_submission(snatch_guard)
-            .map_err(|(_index, e)| e)?;
+        let submission = self.allocate_submission(snatch_guard)?;
 
         let pending_writes = self.pending_writes.lock();
         if !pending_writes.contains_buffer(buffer) {
@@ -1468,9 +1593,7 @@ impl Queue {
 
     fn flush_pending_writes(&self) -> Result<Option<SubmissionIndex>, DeviceError> {
         let snatch_guard = self.device.snatchable_lock.read();
-        let submission = self
-            .allocate_submission(snatch_guard)
-            .map_err(|(_index, e)| e)?;
+        let submission = self.allocate_submission(snatch_guard)?;
         let submit_index = submission.index;
         let pending_writes = self.pending_writes.lock();
         if pending_writes.is_recording {
@@ -1511,20 +1634,21 @@ impl Queue {
     fn submit_inner(
         &self,
         command_buffers: &[Arc<CommandBuffer>],
-    ) -> Result<SubmissionIndex, (SubmissionIndex, QueueSubmitError)> {
+    ) -> Result<SubmissionIndex, Box<(Option<SubmissionIndex>, QueueSubmitError)>> {
         profiling::scope!("Queue::submit");
         api_log!("Queue::submit");
 
         let snatch_guard = self.device.snatchable_lock.read();
         let mut submission = self
             .allocate_submission(snatch_guard)
-            .map_err(|(index, e)| (index, e.into()))?;
+            .map_err(|e| (None, e.into()))?;
         let submit_index = submission.index;
 
         // If we encounter an error after we have started updating global state and before
         // successful submission, we must lose the device to avoid continuing with
         // potentially inaccurate resource state.
         let mut lose_device_on_error = false;
+        let mut successfully_submitted = false;
 
         let res = 'error: {
             let mut used_surface_textures = track::TextureUsageScope::default();
@@ -1721,6 +1845,7 @@ impl Queue {
                         pending_buffers: FastHashMap::default(),
                         pending_textures: FastHashMap::default(),
                         pending_blas_s: FastHashMap::default(),
+                        _pending_shader_binding_data: Vec::new(),
                     });
                 }
             }
@@ -1731,6 +1856,7 @@ impl Queue {
                 Ok(result) => result,
                 Err(e) => break 'error Err(e.into()),
             };
+            successfully_submitted = true;
 
             profiling::scope!("cleanup");
 
@@ -1766,7 +1892,10 @@ impl Queue {
                 if lose_device_on_error {
                     self.device.lose("submission failed");
                 }
-                return Err((submit_index, e));
+                return Err(Box::new((
+                    successfully_submitted.then_some(submit_index),
+                    e,
+                )));
             }
         };
 
@@ -1780,10 +1909,11 @@ impl Queue {
         Ok(submit_index)
     }
 
-    pub fn submit(&self, command_buffers: &[Arc<CommandBuffer>]) -> SubmissionIndex {
+    pub fn submit(&self, command_buffers: &[Arc<CommandBuffer>]) -> Option<SubmissionIndex> {
         match self.submit_inner(command_buffers) {
-            Ok(submit_index) => submit_index,
-            Err((submit_index, e)) => {
+            Ok(submit_index) => Some(submit_index),
+            Err(e) => {
+                let (submit_index, e) = *e;
                 self.device
                     .handle_error(e, Some(self.label()), "Queue::submit");
                 submit_index
@@ -1816,14 +1946,12 @@ impl Queue {
     fn allocate_submission<'a>(
         &'a self,
         snatch_guard: SnatchGuard<'a>,
-    ) -> Result<PendingSubmission<'a>, (SubmissionIndex, DeviceError)> {
+    ) -> Result<PendingSubmission<'a>, DeviceError> {
         let mut command_index_guard = self.device.command_indices.write();
         command_index_guard.active_submission_index += 1;
         let index = command_index_guard.active_submission_index;
 
-        if let Err(e) = self.device.check_is_valid() {
-            return Err((index, e));
-        }
+        self.device.check_is_valid()?;
 
         let submission = PendingSubmission {
             queue: self,
@@ -1906,7 +2034,12 @@ impl Queue {
             };
         }
 
-        match pending_writes.pre_submit(&self.device.command_allocator, &self.device, self) {
+        match pending_writes.pre_submit(
+            &self.device.command_allocator,
+            &self.device,
+            self,
+            &snatch_guard,
+        ) {
             Ok(Some(pending_execution)) => {
                 executions.insert(0, pending_execution);
             }
@@ -2031,8 +2164,7 @@ impl Queue {
 
         self.device.check_is_valid()?;
 
-        self.device
-            .require_features(wgpu_types::Features::EXPERIMENTAL_RAY_QUERY)?;
+        self.device.require_acceleration_structures()?;
 
         blas.check_is_valid()?;
         self.same_device_as(blas.as_ref())?;
@@ -2135,7 +2267,7 @@ fn validate_command_buffer(
             for buffer in cmd_buf_data.trackers.buffers.used_resources() {
                 buffer.check_destroyed(snatch_guard)?;
 
-                match *buffer.map_state.lock() {
+                match *buffer.map_state.read() {
                     BufferMapState::Idle => (),
                     _ => return Err(QueueSubmitError::BufferStillMapped(buffer.error_ident())),
                 }

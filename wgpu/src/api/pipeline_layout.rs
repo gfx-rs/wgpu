@@ -23,6 +23,28 @@ impl PipelineLayout {
     }
 }
 
+#[cfg(wgpu_core)]
+impl PipelineLayout {
+    /// Create a new pipeline layout of wgpu from a wgpu-core pipeline layout.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_pipeline_layout` - wgpu-core pipeline layout.
+    pub fn from_core(
+        core_pipeline_layout: alloc::sync::Arc<wgc::binding_model::PipelineLayout>,
+    ) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CorePipelineLayout::from_core(core_pipeline_layout)
+                .into(),
+        }
+    }
+
+    /// Returns the underlying wgpu-core pipeline layout if this `PipelineLayout` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::binding_model::PipelineLayout>> {
+        self.inner.as_core_opt().map(|pl| pl.as_core())
+    }
+}
+
 /// Describes a [`PipelineLayout`].
 ///
 /// For use with [`Device::create_pipeline_layout`].

@@ -30,6 +30,8 @@ pub enum ExpressionError {
     InvalidArrayType(Handle<crate::Expression>),
     #[error("Get intersection of {0:?} can't be done")]
     InvalidRayQueryType(Handle<crate::Expression>),
+    #[error("Hit object {0:?} is not a pointer to a hit object in the function address space")]
+    InvalidHitObjectType(Handle<crate::Expression>),
     #[error("Splatting {0:?} can't be done")]
     InvalidSplatType(Handle<crate::Expression>),
     #[error("Swizzling {0:?} can't be done")]
@@ -138,6 +140,8 @@ pub enum ExpressionError {
     InvalidSampleClampCoordinateToEdge(alloc::string::String),
     #[error("Unable to cast")]
     InvalidCastArgument,
+    #[error("Unable to bitcast the argument to {0:?}")]
+    InvalidBitcast(Handle<crate::Type>),
     #[error("Invalid argument count for {0:?}")]
     WrongArgumentCount(crate::MathFunction),
     #[error("Argument [{1}] to {0:?} as expression {2:?} has an invalid type.")]
@@ -525,7 +529,12 @@ impl super::Validator {
                 if !mod_info[ty].contains(TypeFlags::CONSTRUCTIBLE) {
                     return Err(ExpressionError::InvalidZeroValue(ty));
                 }
-                if matches!(module.types[ty].inner, crate::TypeInner::RayQuery { .. }) {
+                // Opaque handle types cannot be constructed, even though their
+                // `CONSTRUCTIBLE` flag lets them be declared as locals.
+                if matches!(
+                    module.types[ty].inner,
+                    crate::TypeInner::RayQuery { .. } | crate::TypeInner::HitObject
+                ) {
                     return Err(ExpressionError::InvalidZeroValue(ty));
                 }
                 ShaderStages::all()
@@ -551,7 +560,8 @@ impl super::Validator {
                     Ti::Pointer { base, .. }
                         if self.types[base.index()]
                             .flags
-                            .contains(TypeFlags::SIZED | TypeFlags::DATA) => {}
+                            .contains(TypeFlags::SIZED | TypeFlags::DATA)
+                            && !matches!(module.types[base].inner, Ti::HitObject) => {}
                     Ti::ValuePointer { .. } => {}
                     ref other => {
                         log::debug!("Loading {other:?}");
@@ -1299,24 +1309,35 @@ impl super::Validator {
 
                 ShaderStages::all()
             }
-            E::As {
-                expr,
-                kind,
-                convert,
-            } => {
-                let mut base_scalar = match resolver[expr] {
-                    crate::TypeInner::Scalar(scalar) | crate::TypeInner::Vector { scalar, .. } => {
-                        scalar
-                    }
-                    crate::TypeInner::Matrix { scalar, .. } => scalar,
+            E::As { expr, target } => {
+                match resolver[expr] {
+                    Ti::Scalar(_) | Ti::Vector { .. } => {}
+                    Ti::Matrix { .. } if target.kind == Sk::Float => {}
                     _ => return Err(ExpressionError::InvalidCastArgument),
-                };
-                base_scalar.kind = kind;
-                if let Some(width) = convert {
-                    base_scalar.width = width;
                 }
-                if self.check_width(base_scalar).is_err() {
+                if self.check_width(target).is_err() {
                     return Err(ExpressionError::InvalidCastArgument);
+                }
+                ShaderStages::all()
+            }
+            E::Bitcast { expr, ty } => {
+                let is_bit_pattern = |scalar: Sc| {
+                    matches!(scalar.kind, Sk::Sint | Sk::Uint | Sk::Float)
+                        && self.check_width(scalar).is_ok()
+                };
+                let byte_size = |inner: &Ti| match *inner {
+                    Ti::Scalar(scalar) if is_bit_pattern(scalar) => Some(scalar.width as u32),
+                    Ti::Vector { size, scalar } if is_bit_pattern(scalar) => {
+                        Some(size as u32 * scalar.width as u32)
+                    }
+                    _ => None,
+                };
+                match (
+                    byte_size(&resolver[expr]),
+                    byte_size(&module.types[ty].inner),
+                ) {
+                    (Some(source), Some(target)) if source == target => {}
+                    _ => return Err(ExpressionError::InvalidBitcast(ty)),
                 }
                 ShaderStages::all()
             }
@@ -1376,6 +1397,29 @@ impl super::Validator {
                 ref other => {
                     log::debug!("Intersection result of {other:?}");
                     return Err(ExpressionError::InvalidRayQueryType(query));
+                }
+            },
+            E::HitObjectQuery {
+                hit_object,
+                query: _,
+            } => match resolver[hit_object] {
+                Ti::Pointer {
+                    base,
+                    space: crate::AddressSpace::Function,
+                } => match resolver.types[base].inner {
+                    Ti::HitObject => {
+                        ShaderStages::RAY_GENERATION
+                            | ShaderStages::CLOSEST_HIT
+                            | ShaderStages::MISS
+                    }
+                    ref other => {
+                        log::debug!("Hit object query of a pointer to {other:?}");
+                        return Err(ExpressionError::InvalidHitObjectType(hit_object));
+                    }
+                },
+                ref other => {
+                    log::debug!("Hit object query of {other:?}");
+                    return Err(ExpressionError::InvalidHitObjectType(hit_object));
                 }
             },
             E::RayQueryVertexPositions {

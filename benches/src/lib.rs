@@ -115,6 +115,11 @@ Other:
 ";
 
 pub fn main(benchmarks: Vec<Benchmark>) {
+    // The benchmarks run as tests in CI, where they occasionally time out with
+    // no output at all to say where the time went. See
+    // <https://github.com/gfx-rs/wgpu/issues/9248>.
+    let _ = env_logger::builder().format_timestamp_millis().try_init();
+
     let mut args = Arguments::from_env();
 
     let help = args.contains(["-h", "--help"]);

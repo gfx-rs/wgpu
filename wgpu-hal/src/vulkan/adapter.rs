@@ -363,6 +363,7 @@ impl PhysicalDeviceFeatures {
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::PRIMITIVE_INDEX))
                 .depth_clamp(requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL))
+                .depth_bias_clamp(downlevel_flags.contains(wgt::DownlevelFlags::DEPTH_BIAS_CLAMP))
                 .dual_src_blend(requested_features.contains(wgt::Features::DUAL_SOURCE_BLENDING)),
             descriptor_indexing: if requested_features.intersects(INDEXING_FEATURES) {
                 Some(
@@ -671,35 +672,38 @@ impl PhysicalDeviceFeatures {
     ) -> (wgt::Features, wgt::DownlevelFlags) {
         use wgt::{DownlevelFlags as Df, Features as F};
         let mut features = F::empty()
-            | F::MAPPABLE_PRIMARY_BUFFERS
-            | F::IMMEDIATES
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::ADDRESS_MODE_CLAMP_TO_ZERO
-            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE
+            | F::IMMEDIATES
+            | F::MAPPABLE_PRIMARY_BUFFERS
+            | F::MEMORY_DECORATION_COHERENT
+            | F::MEMORY_DECORATION_VOLATILE
+            | F::PASSTHROUGH_SHADERS
             | F::PIPELINE_CACHE
             | F::SHADER_EARLY_DEPTH_TEST
+            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::TEXTURE_ATOMIC
-            | F::PASSTHROUGH_SHADERS
-            | F::MEMORY_DECORATION_COHERENT
-            | F::MEMORY_DECORATION_VOLATILE;
+            | F::UNRESTRICTED_BYTES_PER_ROW;
 
-        let mut dl_flags = Df::COMPUTE_SHADERS
+        let mut dl_flags = Df::empty()
+            | Df::ARBITRARY_BINDING_VIEW_DIMENSIONS
             | Df::BASE_VERTEX
-            | Df::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
-            | Df::COMPARISON_SAMPLERS
-            | Df::VERTEX_STORAGE
-            | Df::FRAGMENT_STORAGE
-            | Df::DEPTH_TEXTURE_AND_BUFFER_COPIES
             | Df::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED
-            | Df::UNRESTRICTED_INDEX_BUFFER
+            | Df::COMPARISON_SAMPLERS
+            | Df::COMPUTE_SHADERS
+            | Df::DEPTH_TEXTURE_AND_BUFFER_COPIES
+            | Df::FRAGMENT_STORAGE
             | Df::INDIRECT_EXECUTION
-            | Df::VIEW_FORMATS
-            | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
-            | Df::NONBLOCKING_QUERY_RESOLVE
-            | Df::SHADER_F16_IN_F32
+            | Df::LINEAR_INTERPOLATION
             | Df::MSL2_1
-            | Df::LINEAR_INTERPOLATION;
+            | Df::NONBLOCKING_QUERY_RESOLVE
+            | Df::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
+            | Df::SHADER_F16_IN_F32
+            | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
+            | Df::UNRESTRICTED_INDEX_BUFFER
+            | Df::VERTEX_STORAGE
+            | Df::VIEW_FORMATS;
 
         // `VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL`
         // and `VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL`
@@ -1058,25 +1062,6 @@ impl PhysicalDeviceFeatures {
         }
 
         features.set(
-            F::VULKAN_GOOGLE_DISPLAY_TIMING,
-            caps.supports_extension(google::display_timing::NAME),
-        );
-
-        features.set(
-            F::VULKAN_EXTERNAL_MEMORY_WIN32,
-            caps.supports_extension(khr::external_memory_win32::NAME),
-        );
-        features.set(
-            F::VULKAN_EXTERNAL_MEMORY_FD,
-            caps.supports_extension(khr::external_memory_fd::NAME),
-        );
-        features.set(
-            F::VULKAN_EXTERNAL_MEMORY_DMA_BUF,
-            caps.supports_extension(khr::external_memory_fd::NAME)
-                && caps.supports_extension(ext::external_memory_dma_buf::NAME)
-                && caps.supports_extension(ext::image_drm_format_modifier::NAME),
-        );
-        features.set(
             F::EXPERIMENTAL_MESH_SHADER,
             caps.supports_extension(ext::mesh_shader::NAME),
         );
@@ -1397,6 +1382,11 @@ impl PhysicalDeviceProperties {
             extensions.push(khr::swapchain_mutable_format::NAME);
         }
 
+        // Optional `VK_KHR_incremental_present`
+        if self.supports_extension(khr::incremental_present::NAME) {
+            extensions.push(khr::incremental_present::NAME);
+        }
+
         // Optional `VK_EXT_robustness2`
         if self.supports_extension(ext::robustness2::NAME) {
             extensions.push(ext::robustness2::NAME);
@@ -1420,6 +1410,11 @@ impl PhysicalDeviceProperties {
         // Optional `VK_EXT_image_drm_format_modifier`
         if self.supports_extension(ext::image_drm_format_modifier::NAME) {
             extensions.push(ext::image_drm_format_modifier::NAME);
+        }
+
+        // Optional `VK_GOOGLE_display_timing`
+        if self.supports_extension(google::display_timing::NAME) {
+            extensions.push(google::display_timing::NAME);
         }
 
         // Optional `VK_EXT_memory_budget`
@@ -1489,11 +1484,6 @@ impl PhysicalDeviceProperties {
         // Require `VK_EXT_shader_atomic_float` if the associated feature was requested
         if requested_features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC) {
             extensions.push(ext::shader_atomic_float::NAME);
-        }
-
-        // Require VK_GOOGLE_display_timing if the associated feature was requested
-        if requested_features.contains(wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING) {
-            extensions.push(google::display_timing::NAME);
         }
 
         if requested_features.contains(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
@@ -2386,11 +2376,8 @@ impl super::Instance {
                 phd_capabilities.properties.vendor_id == db::nvidia::VENDOR,
             );
             workarounds.set(
-                super::Workarounds::IGNORED_NEGATIVE_VIEWPORT_HEIGHT,
-                phd_capabilities
-                    .driver
-                    .as_ref()
-                    .is_some_and(|driver| driver.driver_id == vk::DriverId::ARM_PROPRIETARY),
+                super::Workarounds::POLYFILL_MESH_TASK_WORKGROUP_ZERO_INIT,
+                phd_capabilities.is_driver(vk::DriverId::AMD_PROPRIETARY),
             );
         };
 
@@ -2480,12 +2467,16 @@ impl super::Instance {
         let private_caps = super::PrivateCapabilities {
             image_view_usage: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(khr::maintenance2::NAME),
-            timeline_semaphores: match phd_features.timeline_semaphore {
-                Some(features) => features.timeline_semaphore == vk::TRUE,
-                None => phd_features
-                    .timeline_semaphore
-                    .is_some_and(|ext| ext.timeline_semaphore != 0),
-            },
+            // VeriSilicon's proprietary driver, as on NXP's i.MX 8 SoCs, advertises timeline
+            // semaphores but crashes in `vkQueueSubmit` when wgpu uses them. It reports
+            // `VK_DRIVER_ID_MESA_RADV` as its driver ID, so only the vendor ID identifies it.
+            timeline_semaphores: phd_capabilities.properties.vendor_id != db::verisilicon::VENDOR
+                && match phd_features.timeline_semaphore {
+                    Some(features) => features.timeline_semaphore == vk::TRUE,
+                    None => phd_features
+                        .timeline_semaphore
+                        .is_some_and(|ext| ext.timeline_semaphore != 0),
+                },
             texture_d24: supports_format(
                 &self.shared.raw,
                 phd,
@@ -2550,12 +2541,15 @@ impl super::Instance {
                 .map(|maintenance_5| maintenance_5.depth_stencil_swizzle_one_support == vk::TRUE)
                 .unwrap_or(false),
             ray_tracing_pipeline_group_data_size: alignments.ray_tracing_pipeline_group_data_size,
+            shader_binding_table_alignment: alignments.ray_tracing_pipeline_data_offset_alignment,
             store_op_none: phd_capabilities.device_api_version >= vk::API_VERSION_1_3
                 || (phd_capabilities.device_api_version >= vk::API_VERSION_1_2
                     && phd_capabilities.supports_extension(khr::dynamic_rendering::NAME))
                 || phd_capabilities.supports_extension(khr::load_store_op_none::NAME)
                 || phd_capabilities.supports_extension(ash::qcom::render_pass_store_ops::NAME)
                 || phd_capabilities.supports_extension(ext::load_store_op_none::NAME),
+            incremental_present: phd_capabilities
+                .supports_extension(khr::incremental_present::NAME),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -2582,6 +2576,15 @@ impl super::Instance {
             downlevel_flags,
             private_caps,
             workarounds,
+        };
+
+        let available_features = if crate::auxil::supports_core_features_and_limits(
+            &capabilities.limits,
+            &capabilities.downlevel,
+        ) {
+            available_features | wgt::Features::CORE_FEATURES_AND_LIMITS
+        } else {
+            available_features
         };
 
         Some(crate::ExposedAdapter {
@@ -2885,11 +2888,6 @@ impl super::Adapter {
                 self.phd_capabilities.properties.vendor_id != crate::auxil::db::qualcomm::VENDOR,
             );
             flags.set(
-                spv::WriterFlags::ADJUST_COORDINATE_SPACE,
-                self.workarounds
-                    .contains(super::Workarounds::IGNORED_NEGATIVE_VIEWPORT_HEIGHT),
-            );
-            flags.set(
                 spv::WriterFlags::FORCE_POINT_SIZE,
                 //Note: we could technically disable this when we are compiling separate entry points,
                 // and we know exactly that the primitive topology is not `PointList`.
@@ -3069,19 +3067,17 @@ impl super::Adapter {
             next_submit_chain: Mutex::new(None),
         };
 
-        let allocation_sizes = AllocationSizes::from_memory_hints(memory_hints).into();
+        let allocation_sizes = AllocationSizes::from_memory_hints(memory_hints);
 
         let buffer_device_address = enabled_extensions.contains(&khr::buffer_device_address::NAME);
 
-        let mem_allocator =
-            gpu_allocator::vulkan::Allocator::new(&gpu_allocator::vulkan::AllocatorCreateDesc {
-                instance: self.instance.raw.clone(),
-                device: shared.raw.clone(),
-                physical_device: self.raw,
-                debug_settings: Default::default(),
-                buffer_device_address,
-                allocation_sizes,
-            })?;
+        let mem_allocator = super::MemoryAllocators::new(
+            self.instance.raw.clone(),
+            shared.raw.clone(),
+            self.raw,
+            buffer_device_address,
+            allocation_sizes,
+        )?;
 
         let desc_allocator = super::descriptor::DescriptorAllocator::new(
             if let Some(di) = self.phd_capabilities.descriptor_indexing {
@@ -3093,7 +3089,7 @@ impl super::Adapter {
 
         let device = super::Device {
             shared,
-            mem_allocator: Mutex::new(mem_allocator),
+            mem_allocator,
             desc_allocator: Mutex::new(desc_allocator),
             valid_ash_memory_types,
             naga_options,
@@ -3261,6 +3257,18 @@ impl crate::Adapter for super::Adapter {
             Tfc::STORAGE_ATOMIC,
             features.intersects(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC),
         );
+        // Multi-planar images are created with `EXTENDED_USAGE`, so views of
+        // the planes are limited by the plane view formats, not by this format.
+        if format.is_multi_planar_format() && !flags.is_empty() {
+            let plane_caps = |aspect| unsafe {
+                self.texture_format_capabilities(format.aspect_specific_format(aspect).unwrap())
+            };
+            return (flags & (Tfc::COPY_SRC | Tfc::COPY_DST))
+                | (plane_caps(wgt::TextureAspect::Plane0)
+                    & plane_caps(wgt::TextureAspect::Plane1)
+                    & Tfc::VALID_FOR_MULTI_PLANAR);
+        }
+
         // Vulkan is very permissive about MSAA
         flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.is_compressed());
 

@@ -133,13 +133,18 @@ impl IdentityHub {
     }
 }
 
-#[test]
-fn test_epoch_end_of_life() {
-    let man = IdentityManager::<markers::Buffer>::new();
-    let id1 = man.process();
-    assert_eq!(id1.unzip(), (0, 1));
-    man.free(id1);
-    let id2 = man.process();
-    // confirm that the epoch 1 is no longer re-used
-    assert_eq!(id2.unzip(), (0, 2));
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_epoch_end_of_life() {
+        let man = IdentityManager::<markers::Buffer>::new();
+        let id1 = man.process();
+        assert_eq!(id1.unzip(), (0, 1));
+        man.free(id1);
+        let id2 = man.process();
+        // confirm that the epoch 1 is no longer re-used
+        assert_eq!(id2.unzip(), (0, 2));
+    }
 }

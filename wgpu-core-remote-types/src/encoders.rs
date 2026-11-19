@@ -175,7 +175,7 @@ pub struct ComputePassDescriptor<'a> {
     pub timestamp_writes: Option<PassTimestampWrites>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPUCommandEncoder`](https://www.w3.org/TR/webgpu/#gpucommandencoder).
 pub enum CommandEncoderCommand<'a> {
     BeginRenderPass {
@@ -227,7 +227,7 @@ pub enum CommandEncoderCommand<'a> {
     },
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPURenderPassEncoder`](https://www.w3.org/TR/webgpu/#gpurenderpassencoder).
 pub enum RenderPassEncoderCommand {
     SetViewport {
@@ -255,7 +255,7 @@ pub enum RenderPassEncoderCommand {
     End,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPURenderBundleEncoder`](https://www.w3.org/TR/webgpu/#gpurenderbundleencoder).
 pub enum RenderBundleEncoderCommand<'a> {
     BindingCommand(BindingCommand),
@@ -267,7 +267,7 @@ pub enum RenderBundleEncoderCommand<'a> {
     },
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPUComputePassEncoder`](https://www.w3.org/TR/webgpu/#gpucomputepassencoder).
 pub enum ComputePassEncoderCommand {
     BindingCommand(BindingCommand),
@@ -285,7 +285,7 @@ pub enum ComputePassEncoderCommand {
     End,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPUDebugCommandsMixin`](https://www.w3.org/TR/webgpu/#gpudebugcommandsmixin).
 pub enum DebugCommand {
     PushDebugGroup(String),
@@ -293,7 +293,7 @@ pub enum DebugCommand {
     InsertDebugMarker(String),
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPUBindingCommandsMixin`](https://www.w3.org/TR/webgpu/#gpubindingcommandsmixin).
 pub enum BindingCommand {
     SetBindGroup {
@@ -307,7 +307,7 @@ pub enum BindingCommand {
     },
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPURenderCommandsMixin`](https://www.w3.org/TR/webgpu/#gpurendercommandsmixin).
 pub enum RenderCommand {
     SetPipeline(id::RenderPipelineId),

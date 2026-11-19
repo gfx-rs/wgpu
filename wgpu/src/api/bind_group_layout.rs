@@ -28,6 +28,30 @@ impl BindGroupLayout {
     }
 }
 
+#[cfg(wgpu_core)]
+impl BindGroupLayout {
+    /// Create a new bind group layout of wgpu from a wgpu-core bind group layout.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_bind_group_layout` - wgpu-core bind group layout.
+    pub fn from_core(
+        core_bind_group_layout: alloc::sync::Arc<wgc::binding_model::BindGroupLayout>,
+    ) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreBindGroupLayout::from_core(
+                core_bind_group_layout,
+            )
+            .into(),
+        }
+    }
+
+    /// Returns the underlying wgpu-core bind group layout if this `BindGroupLayout` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::binding_model::BindGroupLayout>> {
+        self.inner.as_core_opt().map(|bgl| bgl.as_core())
+    }
+}
+
 /// Describes a [`BindGroupLayout`].
 ///
 /// For use with [`Device::create_bind_group_layout`].

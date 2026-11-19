@@ -37,6 +37,7 @@ static STENCIL_ONLY_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::
                     | TextureUsages::COPY_SRC
                     | TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
             let _view = texture.create_view(&TextureViewDescriptor {
                 aspect: TextureAspect::StencilOnly,
@@ -69,6 +70,7 @@ static DEPTH_ONLY_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::ne
                     | TextureUsages::COPY_SRC
                     | TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
             let _view = texture.create_view(&TextureViewDescriptor {
                 aspect: TextureAspect::DepthOnly,
@@ -104,6 +106,7 @@ static SHARED_USAGE_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::
                     | TextureUsages::TEXTURE_BINDING
                     | TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[TextureFormat::Rgba8UnormSrgb],
+                texture_binding_view_dimension: None,
             });
             let _view = texture.create_view(&TextureViewDescriptor {
                 aspect: TextureAspect::All,
@@ -143,6 +146,7 @@ static COPY_ONLY_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::new
                     format,
                     usage,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 });
                 let _view = texture.create_view(&TextureViewDescriptor::default());
             }
