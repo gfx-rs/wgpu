@@ -330,6 +330,7 @@ impl super::Device {
             format: desc.format,
             copy_size: desc.copy_extent(),
             identity,
+            present_transition: super::PresentTransition::PresentSrc,
         }
     }
 
@@ -478,31 +479,56 @@ impl super::Device {
         })
     }
 
+    /// Create a [`super::Texture`] backed by a D3D11 texture or D3D12 resource shared via an NT
+    /// handle.
+    ///
+    /// `handle_type` selects how `handle` is interpreted: `D3D11_TEXTURE` for an `ID3D11Texture2D`
+    /// shared handle, or `D3D12_RESOURCE` for an `ID3D12Resource` shared handle.
+    ///
     /// # Safety
     ///
-    /// - Vulkan (with VK_KHR_external_memory_win32)
-    /// - The `d3d11_shared_handle` must be valid and respecting `desc`
-    /// - `VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT` flag is used because we need to hold a reference to the handle
+    /// - The texture must be imported on the same physical device that owns the shared resource.
+    /// - `handle` must be a valid shared NT handle whose resource matches `desc` and `handle_type`.
     #[cfg(windows)]
-    pub unsafe fn texture_from_d3d11_shared_handle(
+    pub unsafe fn texture_from_shared_handle(
         &self,
-        d3d11_shared_handle: windows::Win32::Foundation::HANDLE,
+        handle: windows::Win32::Foundation::HANDLE,
+        handle_type: vk::ExternalMemoryHandleTypeFlags,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
-        if !self
+        let ext = self
             .shared
-            .enabled_extensions
-            .contains(&ash::khr::external_memory_win32::NAME)
-        {
-            log::error!("Vulkan driver does not support VK_KHR_external_memory_win32");
-            return Err(crate::DeviceError::Unexpected);
+            .extension_fns
+            .external_memory_win32
+            .as_ref()
+            .ok_or_else(|| {
+                log::error!("Vulkan driver does not support VK_KHR_external_memory_win32");
+                crate::DeviceError::Unexpected
+            })?;
+
+        // A handle from outside Vulkan can only be imported as one of the memory types that
+        // `vkGetMemoryWin32HandlePropertiesKHR` reports. That call does not accept opaque handles.
+        let mut handle_memory_type_bits = u32::MAX;
+        if !handle_type.intersects(
+            vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32
+                | vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32_KMT,
+        ) {
+            let mut properties = vk::MemoryWin32HandlePropertiesKHR::default();
+            unsafe {
+                ext.get_memory_win32_handle_properties(handle_type, handle.0 as _, &mut properties)
+            }
+            .map_err(super::map_host_oom_err)?;
+            handle_memory_type_bits = properties.memory_type_bits;
         }
 
-        let mut external_memory_image_info = vk::ExternalMemoryImageCreateInfo::default()
-            .handle_types(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE);
+        let mut external_memory_image_info =
+            vk::ExternalMemoryImageCreateInfo::default().handle_types(handle_type);
 
         let image =
             self.create_image_without_memory(desc, Some(&mut external_memory_image_info))?;
+        let raw_image = scopeguard::guard(image.raw, |raw| unsafe {
+            self.shared.raw.destroy_image(raw, None)
+        });
 
         // Some external memory types require dedicated allocation
         // https://docs.vulkan.org/guide/latest/extensions/external.html#_importing_memory
@@ -510,20 +536,20 @@ impl super::Device {
             vk::MemoryDedicatedAllocateInfo::default().image(image.raw);
 
         let mut import_memory_info = vk::ImportMemoryWin32HandleInfoKHR::default()
-            .handle_type(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE)
-            .handle(d3d11_shared_handle.0 as _);
+            .handle_type(handle_type)
+            .handle(handle.0 as _);
         // TODO: We should use `push_next` instead, but currently ash does not provide this method for the `ImportMemoryWin32HandleInfoKHR` type.
         #[allow(clippy::unnecessary_mut_passed)]
         {
             import_memory_info.p_next = <*const _>::cast(&mut dedicated_allocate_info);
         }
 
-        let mem_type_index = self
-            .find_memory_type_index(
-                image.requirements.memory_type_bits,
-                vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            )
-            .ok_or(crate::DeviceError::Unexpected)?;
+        let Some(mem_type_index) = self.find_memory_type_index(
+            image.requirements.memory_type_bits & handle_memory_type_bits,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        ) else {
+            return Err(crate::DeviceError::Unexpected);
+        };
 
         let memory_allocate_info = vk::MemoryAllocateInfo::default()
             .allocation_size(image.requirements.size)
@@ -531,13 +557,18 @@ impl super::Device {
             .push_next(&mut import_memory_info);
         let memory = unsafe { self.shared.raw.allocate_memory(&memory_allocate_info, None) }
             .map_err(super::map_host_device_oom_err)?;
+        let memory = scopeguard::guard(memory, |memory| unsafe {
+            self.shared.raw.free_memory(memory, None)
+        });
 
-        unsafe { self.shared.raw.bind_image_memory(image.raw, memory, 0) }
+        unsafe { self.shared.raw.bind_image_memory(*raw_image, *memory, 0) }
             .map_err(super::map_host_device_oom_err)?;
 
+        let memory = scopeguard::ScopeGuard::into_inner(memory);
+        let raw_image = scopeguard::ScopeGuard::into_inner(raw_image);
         Ok(unsafe {
             self.texture_from_raw(
-                image.raw,
+                raw_image,
                 desc,
                 None,
                 super::TextureMemory::Dedicated(memory),
@@ -2721,12 +2752,9 @@ impl crate::Device for super::Device {
         self.counters.fences.add(1);
 
         Ok(if self.shared.private_caps.timeline_semaphores {
-            let mut sem_type_info =
-                vk::SemaphoreTypeCreateInfo::default().semaphore_type(vk::SemaphoreType::TIMELINE);
-            let vk_info = vk::SemaphoreCreateInfo::default().push_next(&mut sem_type_info);
-            let raw = unsafe { self.shared.raw.create_semaphore(&vk_info, None) }
-                .map_err(super::map_host_device_oom_err)?;
-
+            let raw = self
+                .shared
+                .new_timeline_semaphore("wgpu-hal device fence")?;
             super::Fence::TimelineSemaphore(raw)
         } else {
             super::Fence::FencePool(RwLock::new(super::FencePool {
@@ -3216,6 +3244,51 @@ impl super::DeviceShared {
         }
     }
 
+    /// Creates a timeline semaphore with an initial value of 0.
+    pub(super) fn new_timeline_semaphore(
+        &self,
+        name: &str,
+    ) -> Result<vk::Semaphore, crate::DeviceError> {
+        let mut type_info =
+            vk::SemaphoreTypeCreateInfo::default().semaphore_type(vk::SemaphoreType::TIMELINE);
+        let info = vk::SemaphoreCreateInfo::default().push_next(&mut type_info);
+        let semaphore = unsafe { self.raw.create_semaphore(&info, None) }
+            .map_err(super::map_host_device_oom_err)?;
+        unsafe { self.set_object_name(semaphore, name) };
+        Ok(semaphore)
+    }
+
+    /// Imports a shared D3D11/D3D12 fence (an `ID3D11Fence`/`ID3D12Fence` NT handle) into an
+    /// existing timeline `semaphore`, so the same monotonic counter is visible to both APIs.
+    ///
+    /// # Safety
+    ///
+    /// - `handle` must be a valid shared NT handle to an `ID3D11Fence`/`ID3D12Fence`.
+    /// - `semaphore` must be a timeline semaphore with no pending operations.
+    #[cfg(windows)]
+    pub(super) unsafe fn import_timeline_semaphore_d3d12_fence(
+        &self,
+        semaphore: vk::Semaphore,
+        handle: windows::Win32::Foundation::HANDLE,
+    ) -> Result<(), crate::DeviceError> {
+        let ext = self
+            .extension_fns
+            .external_semaphore_win32
+            .as_ref()
+            .ok_or_else(|| {
+                log::error!("Vulkan driver does not support VK_KHR_external_semaphore_win32");
+                crate::DeviceError::Unexpected
+            })?;
+
+        let import_info = vk::ImportSemaphoreWin32HandleInfoKHR::default()
+            .semaphore(semaphore)
+            .handle_type(vk::ExternalSemaphoreHandleTypeFlags::D3D12_FENCE)
+            .handle(handle.0 as _);
+
+        unsafe { ext.import_semaphore_win32_handle(&import_info) }
+            .map_err(super::map_host_device_oom_err)?;
+        Ok(())
+    }
     pub(super) fn wait_for_fence(
         &self,
         fence: &super::Fence,

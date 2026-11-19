@@ -13,9 +13,8 @@ use super::conv;
 use crate::{
     auxil::{
         self,
-        dxgi::{name::ObjectExt as _, result::HResult as _},
+        dxgi::{borrow_interface_temporarily, name::ObjectExt as _, result::HResult as _},
     },
-    dx12::borrow_interface_temporarily,
     AccelerationStructureEntries, CommandEncoder as _,
 };
 
