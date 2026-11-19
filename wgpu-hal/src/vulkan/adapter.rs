@@ -39,12 +39,10 @@ mod ray_tracing_invocation_reorder {
 
     pub const NAME: &CStr = c"VK_EXT_ray_tracing_invocation_reorder";
 
-    /// `VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_EXT`, derived
-    /// from the extension's registered number, 582: `1000000000 + (582 - 1) * 1000 + 0`.
+    /// `VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_EXT`.
     const FEATURES_STRUCTURE_TYPE: vk::StructureType = vk::StructureType::from_raw(1_000_581_000);
 
-    /// `VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_PROPERTIES_EXT`, derived
-    /// the same way with an offset of 1.
+    /// `VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_PROPERTIES_EXT`.
     const PROPERTIES_STRUCTURE_TYPE: vk::StructureType = vk::StructureType::from_raw(1_000_581_001);
 
     /// `VK_RAY_TRACING_INVOCATION_REORDER_MODE_REORDER_EXT`.
@@ -69,16 +67,10 @@ mod ray_tracing_invocation_reorder {
         }
     }
 
-    // SAFETY: `vk.xml` lists `VkPhysicalDeviceFeatures2` and `VkDeviceCreateInfo` as the
-    // `structextends` of this struct, and it is laid out like `vk::BaseOutStructure` with a
-    // `s_type` that always matches the struct, as `ash` requires for `p_next` chaining.
+    // SAFETY: The layout and `structextends` match `vk.xml`. `p_next` is only a chain pointer.
     unsafe impl vk::ExtendsDeviceCreateInfo for FeaturesEXT {}
-    // SAFETY: as above.
     unsafe impl vk::ExtendsPhysicalDeviceFeatures2 for FeaturesEXT {}
-
-    // SAFETY: `p_next` is only ever used as a chain pointer, as for every `ash` feature struct.
     unsafe impl Send for FeaturesEXT {}
-    // SAFETY: as above.
     unsafe impl Sync for FeaturesEXT {}
 
     /// <https://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDeviceRayTracingInvocationReorderPropertiesEXT.html>
@@ -115,13 +107,9 @@ mod ray_tracing_invocation_reorder {
         }
     }
 
-    // SAFETY: `vk.xml` lists `VkPhysicalDeviceProperties2` as the `structextends` of this struct,
-    // and it is laid out like `vk::BaseOutStructure`, as `ash` requires for `p_next` chaining.
+    // SAFETY: The layout and `structextends` match `vk.xml`. `p_next` is only a chain pointer.
     unsafe impl vk::ExtendsPhysicalDeviceProperties2 for PropertiesEXT {}
-
-    // SAFETY: `p_next` is only ever used as a chain pointer, as for every `ash` property struct.
     unsafe impl Send for PropertiesEXT {}
-    // SAFETY: as above.
     unsafe impl Sync for PropertiesEXT {}
 }
 #[expect(rustdoc::private_intra_doc_links)]
