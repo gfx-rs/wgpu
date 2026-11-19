@@ -87,7 +87,8 @@ mod ray_tracing_invocation_reorder {
     pub struct PropertiesEXT {
         pub s_type: vk::StructureType,
         pub p_next: *mut c_void,
-        /// A `VkRayTracingInvocationReorderModeEXT`, saying whether reordering does anything.
+        /// A `VkRayTracingInvocationReorderModeEXT` hint that tells if the implementation is
+        /// likely to reorder invocations.
         pub ray_tracing_invocation_reorder_reordering_hint: i32,
         /// Unused: naga exposes no way to set a hit object's shader binding table record index.
         pub max_shader_binding_table_record_index: u32,

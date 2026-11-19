@@ -698,9 +698,10 @@ features! {
         /// Requires [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`], and
         /// `enable wgpu_ray_tracing_invocation_reorder;` in WGSL shaders.
         ///
-        /// `reorderThread` may be a no-op. Check what
-        /// [`Adapter::ray_tracing_invocation_reorder_mode`] reports
-        /// [`RayTracingInvocationReorderMode::Reorder`] to see if invocations will be reordered.
+        /// `reorderThread` may have no effect. If
+        /// [`Adapter::ray_tracing_invocation_reorder_mode`] returns
+        /// [`RayTracingInvocationReorderMode::Reorder`], the implementation reports that it is
+        /// likely to reorder invocations.
         ///
         /// Supported platforms:
         /// - Vulkan (with [VK_EXT_ray_tracing_invocation_reorder](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_ray_tracing_invocation_reorder.html))

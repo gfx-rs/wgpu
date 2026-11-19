@@ -226,11 +226,12 @@ impl Adapter {
         self.inner.cooperative_matrix_properties()
     }
 
-    /// Returns whether this adapter actually reorders ray tracing invocations.
+    /// Returns whether the implementation reports that it is likely to reorder ray tracing
+    /// invocations.
     ///
     /// `reorderThread` is valid on any adapter supporting
     /// [`Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER`], but on an adapter returning
-    /// [`RayTracingInvocationReorderMode::None`] it's a no-op.
+    /// [`RayTracingInvocationReorderMode::None`] it is not likely to have an effect.
     ///
     /// Returns [`RayTracingInvocationReorderMode::None`] if
     /// [`Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER`] is not supported.

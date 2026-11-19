@@ -2269,7 +2269,7 @@ pub struct Capabilities {
     /// Empty if cooperative matrices are not supported.
     pub cooperative_matrix_properties: Vec<wgt::CooperativeMatrixProperties>,
 
-    /// Whether the adapter actually reorders ray tracing invocations.
+    /// Whether the implementation reports that it is likely to reorder ray tracing invocations.
     ///
     /// [`None`] if [`Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER`] is not supported.
     ///
