@@ -415,7 +415,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 #### Naga
 
 - Reduce HLSL compute shader compilation time for large workgroup arrays by initializing their elements with loops distributed across workgroup invocations. By @DonutShinobu in [#10314](https://github.com/gfx-rs/wgpu/pull/10314).
-- Initialize workgroup arrays with loops distributed across workgroup invocations in SPIR-V too, when workgroup memory zero initialization is polyfilled. On an Adreno 540, creating a pipeline for one WebGPU CTS shader went from 328 seconds to 0.06 seconds. By @matthargett in [#10990](https://github.com/gfx-rs/wgpu/pull/10990).
+- Initialize workgroup arrays with loops distributed across workgroup invocations in SPIR-V, when workgroup memory zero initialization is polyfilled, working around a Qualcomm shader compiler bug. On an Adreno 540 (Oculus Quest 1, Xiammi, and HTC phones), creating a pipeline with typical workgroup use cases went from 328+ seconds to 0.06 seconds. By @matthargett in [#10990](https://github.com/gfx-rs/wgpu/pull/10990).
 
 ### Documentation
 
