@@ -386,8 +386,7 @@ impl super::Adapter {
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::COMPARISON_SAMPLERS
             | wgt::DownlevelFlags::MSL2_1
-            | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
-            | wgt::DownlevelFlags::SHADER_F16_IN_F32;
+            | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES;
         downlevel_flags.set(
             wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES,
             supports_cube_array,
