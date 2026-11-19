@@ -19,6 +19,10 @@ pub struct TestParameters {
     pub required_downlevel_caps: DownlevelCapabilities,
     pub required_limits: Limits,
 
+    /// Minimum Vulkan API version, as `(major, minor)`, that the driver must report for this
+    /// test to run on Vulkan.
+    pub required_vulkan_api_version: Option<(u32, u32)>,
+
     pub required_instance_flags: InstanceFlags,
 
     /// Instance flags that must be cleared for this test, even if they would
@@ -47,6 +51,7 @@ impl Default for TestParameters {
             required_features: Features::empty(),
             required_downlevel_caps: LOWEST_DOWNLEVEL_PROPERTIES,
             required_limits: Limits::downlevel_webgl2_defaults(),
+            required_vulkan_api_version: None,
             required_instance_flags: InstanceFlags::empty(),
             forbidden_instance_flags: InstanceFlags::empty(),
             force_fxc: false,
@@ -81,6 +86,12 @@ impl TestParameters {
     /// Set the limits needed for the test.
     pub fn limits(mut self, limits: Limits) -> Self {
         self.required_limits = limits;
+        self
+    }
+
+    /// Set the minimum Vulkan API version the driver must report for this test to run on Vulkan.
+    pub fn vulkan_api_version(mut self, major: u32, minor: u32) -> Self {
+        self.required_vulkan_api_version = Some((major, minor));
         self
     }
 
@@ -145,7 +156,7 @@ pub struct TestInfo {
 impl TestInfo {
     pub(crate) fn from_configuration(test: &GpuTestConfiguration, adapter: &AdapterReport) -> Self {
         // Figure out if a test is unsupported, and why.
-        let mut unsupported_reasons: ArrayVec<_, 4> = ArrayVec::new();
+        let mut unsupported_reasons: ArrayVec<_, 5> = ArrayVec::new();
         let missing_features = test.params.required_features - adapter.features;
         if !missing_features.is_empty() {
             unsupported_reasons.push("Features");
@@ -163,6 +174,17 @@ impl TestInfo {
 
         if test.params.required_downlevel_caps.shader_model > adapter.downlevel_caps.shader_model {
             unsupported_reasons.push("Shader Model");
+        }
+
+        if let Some(required) = test.params.required_vulkan_api_version {
+            let reported = adapter
+                .vulkan_api_version
+                .map(|[major, minor, _]| (major, minor));
+            if adapter.info.backend == wgpu::Backend::Vulkan
+                && reported.is_none_or(|reported| reported < required)
+            {
+                unsupported_reasons.push("Vulkan API Version");
+            }
         }
 
         // Produce a lower-case version of the adapter info, for comparison against

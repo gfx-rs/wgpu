@@ -83,6 +83,7 @@ pub async fn run_gpu_report() {
         limits,
         downlevel_caps,
         texture_format_features,
+        vulkan_api_version: None,
     };
 
     let report = GpuReport {

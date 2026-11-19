@@ -1051,7 +1051,8 @@ impl super::Instance {
             };
             match result {
                 // Some loaders, such as the Oculus Quest 1's, list VK_EXT_debug_utils but
-                // reject it. Without a retry, debug builds silently lose the Vulkan backend.
+                // reject it. Without a retry, instances created with `InstanceFlags::DEBUG`
+                // silently lose the Vulkan backend.
                 Err(vk::Result::ERROR_EXTENSION_NOT_PRESENT)
                     if extensions.contains(&ext::debug_utils::NAME) =>
                 {

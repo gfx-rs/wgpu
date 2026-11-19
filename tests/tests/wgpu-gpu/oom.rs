@@ -28,6 +28,9 @@ const OOM_DETECTION_IMPL: Backends = Backends::DX12.union(Backends::VULKAN);
 /// Backends for which query set OOM detection is implemented
 const QUERY_SET_OOM_DETECTION_IMPL: Backends = Backends::DX12;
 
+// All tests skip Vulkan drivers older than 1.2. Some of them, such as the Oculus Quest 1's,
+// keep allocating until the kernel runs out of memory and the device panics.
+
 // All tests skip llvmpipe.
 // Even though llvmpipe supports VK_EXT_memory_budget it's happy to continue creating resources until
 // the process crashes with SIGABRT "memory allocation of X bytes failed" or the test times out.
@@ -35,42 +38,16 @@ const QUERY_SET_OOM_DETECTION_IMPL: Backends = Backends::DX12;
 /// Nr of resources tests will try to create before failing.
 const LOOP_BOUND: u32 = 1_000_000;
 
-/// Vulkan predicts OOM only with `VK_EXT_memory_budget`. Without it, these tests allocate until
-/// the process, or on some devices the kernel, runs out of memory.
-fn oom_detection_available(ctx: &wgpu_test::TestingContext) -> bool {
-    match ctx.adapter_info.backend {
-        #[cfg(any(
-            target_os = "windows",
-            target_os = "linux",
-            target_os = "android",
-            target_os = "freebsd",
-            target_os = "macos"
-        ))]
-        wgpu::Backend::Vulkan => {
-            // SAFETY: the hal device is only used to read its enabled extensions.
-            let device = unsafe { ctx.device.as_hal::<wgpu::hal::vulkan::Api>() };
-            device.is_some_and(|device| {
-                device
-                    .enabled_device_extensions()
-                    .contains(&c"VK_EXT_memory_budget")
-            })
-        }
-        _ => true,
-    }
-}
-
 #[apply(gpu_test!)]
 static TEXTURE_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .skip(FailureCase::backend(!OOM_DETECTION_IMPL))
             // see comment at the top of the file
-            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
+            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe"))
+            .vulkan_api_version(1, 2),
     )
     .run_async(|ctx| async move {
-        if !oom_detection_available(&ctx) {
-            return;
-        }
         let mut textures = Vec::new();
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
@@ -108,12 +85,10 @@ static BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .skip(FailureCase::backend(!OOM_DETECTION_IMPL))
             // see comment at the top of the file
-            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
+            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe"))
+            .vulkan_api_version(1, 2),
     )
     .run_async(|ctx| async move {
-        if !oom_detection_available(&ctx) {
-            return;
-        }
         let mut buffers = Vec::new();
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
@@ -142,12 +117,10 @@ static MAPPING_BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new
         TestParameters::default()
             .skip(FailureCase::backend(!OOM_DETECTION_IMPL))
             // see comment at the top of the file
-            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
+            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe"))
+            .vulkan_api_version(1, 2),
     )
     .run_async(|ctx| async move {
-        if !oom_detection_available(&ctx) {
-            return;
-        }
         let mut buffers = Vec::new();
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
@@ -177,12 +150,10 @@ static QUERY_SET_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
             // Vulkan: https://github.com/gfx-rs/wgpu/issues/7817
             .skip(FailureCase::backend(!QUERY_SET_OOM_DETECTION_IMPL))
             // see comment at the top of the file
-            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
+            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe"))
+            .vulkan_api_version(1, 2),
     )
     .run_async(|ctx| async move {
-        if !oom_detection_available(&ctx) {
-            return;
-        }
         let mut query_sets = Vec::new();
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
@@ -211,12 +182,10 @@ static BLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
             .features(Features::EXPERIMENTAL_RAY_QUERY)
             .skip(FailureCase::backend(!OOM_DETECTION_IMPL))
             // see comment at the top of the file
-            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
+            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe"))
+            .vulkan_api_version(1, 2),
     )
     .run_async(|ctx| async move {
-        if !oom_detection_available(&ctx) {
-            return;
-        }
         let mut blases = Vec::new();
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
@@ -256,12 +225,10 @@ static TLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
             .features(Features::EXPERIMENTAL_RAY_QUERY)
             .skip(FailureCase::backend(!OOM_DETECTION_IMPL))
             // see comment at the top of the file
-            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
+            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe"))
+            .vulkan_api_version(1, 2),
     )
     .run_async(|ctx| async move {
-        if !oom_detection_available(&ctx) {
-            return;
-        }
         let mut tlases = Vec::new();
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
