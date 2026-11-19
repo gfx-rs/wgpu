@@ -1,4 +1,3 @@
-use std::mem::size_of;
 use std::num::NonZeroU64;
 
 use wgpu::util::RenderEncoder;
@@ -8,7 +7,204 @@ use wgpu_test::{
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
-    vec.extend([PARTIAL_UPDATE, RENDER_PASS_TEST, NESTED_STRUCT]);
+    vec.extend([
+        PARTIAL_UPDATE,
+        RENDER_PASS_TEST,
+        NESTED_STRUCT,
+        BEYOND_LAYOUT_SIZE,
+        LARGER_LAYOUT_AFTER_DRAW,
+    ]);
+}
+
+const TARGET_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
+
+/// A storage buffer at `@group(0) @binding(0)` that shaders write and tests read back.
+struct Output {
+    bind_group_layout: BindGroupLayout,
+    bind_group: BindGroup,
+    buffer: Buffer,
+}
+
+impl Output {
+    fn new(ctx: &TestingContext, visibility: ShaderStages, size: BufferAddress) -> Self {
+        let bind_group_layout = ctx
+            .device
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: NonZeroU64::new(size),
+                    },
+                    count: None,
+                }],
+            });
+        let buffer = ctx.device.create_buffer(&BufferDescriptor {
+            label: None,
+            size,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        });
+        Self {
+            bind_group_layout,
+            bind_group,
+            buffer,
+        }
+    }
+
+    /// Submits `encoder` and returns the contents of the buffer.
+    async fn read<T: bytemuck::Pod>(
+        &self,
+        ctx: &TestingContext,
+        mut encoder: CommandEncoder,
+    ) -> Vec<T> {
+        let readback = ctx.device.create_buffer(&BufferDescriptor {
+            label: None,
+            size: self.buffer.size(),
+            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        encoder.copy_buffer_to_buffer(&self.buffer, 0, &readback, 0, self.buffer.size());
+        ctx.queue.submit([encoder.finish()]);
+
+        readback.slice(..).map_async(MapMode::Read, |_| ());
+        ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
+
+        let data = readback.slice(..).get_mapped_range().unwrap();
+        bytemuck::cast_slice::<u8, T>(&data).to_vec()
+    }
+}
+
+fn create_pipeline_layout(
+    ctx: &TestingContext,
+    bind_group_layouts: &[Option<&BindGroupLayout>],
+    immediate_size: u32,
+) -> PipelineLayout {
+    ctx.device
+        .create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts,
+            immediate_size,
+        })
+}
+
+/// Creates a pipeline with the only compute entry point of `module`.
+fn create_compute_pipeline(
+    ctx: &TestingContext,
+    module: &ShaderModule,
+    layout: &PipelineLayout,
+) -> ComputePipeline {
+    ctx.device
+        .create_compute_pipeline(&ComputePipelineDescriptor {
+            label: None,
+            layout: Some(layout),
+            module,
+            entry_point: None,
+            compilation_options: Default::default(),
+            cache: None,
+        })
+}
+
+/// Creates a pipeline that draws points with the only vertex entry point of `module`.
+fn create_point_pipeline(
+    ctx: &TestingContext,
+    module: &ShaderModule,
+    layout: &PipelineLayout,
+    fs_entry_point: &str,
+) -> RenderPipeline {
+    ctx.device
+        .create_render_pipeline(&RenderPipelineDescriptor {
+            label: None,
+            layout: Some(layout),
+            vertex: VertexState {
+                module,
+                entry_point: None,
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(FragmentState {
+                module,
+                entry_point: Some(fs_entry_point),
+                targets: &[Some(TARGET_FORMAT.into())],
+                compilation_options: Default::default(),
+            }),
+            primitive: PrimitiveState {
+                topology: PrimitiveTopology::PointList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        })
+}
+
+/// Creates a 1x1 render target.
+fn create_target(ctx: &TestingContext) -> TextureView {
+    ctx.device
+        .create_texture(&TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TARGET_FORMAT,
+            usage: TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+            texture_binding_view_dimension: None,
+        })
+        .create_view(&Default::default())
+}
+
+fn begin_render_pass<'a>(encoder: &'a mut CommandEncoder, view: &TextureView) -> RenderPass<'a> {
+    encoder.begin_render_pass(&RenderPassDescriptor {
+        color_attachments: &[Some(RenderPassColorAttachment {
+            view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: Operations {
+                load: LoadOp::Clear(Color::default()),
+                store: StoreOp::Store,
+            },
+        })],
+        ..Default::default()
+    })
+}
+
+fn create_bundle_encoder(ctx: &TestingContext) -> RenderBundleEncoder<'_> {
+    ctx.device
+        .create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
+            color_formats: &[Some(TARGET_FORMAT)],
+            sample_count: 1,
+            ..Default::default()
+        })
+}
+
+fn create_command_encoder(ctx: &TestingContext) -> CommandEncoder {
+    ctx.device
+        .create_command_encoder(&CommandEncoderDescriptor::default())
+}
+
+fn create_wgsl_module(ctx: &TestingContext, source: &str) -> ShaderModule {
+    ctx.device.create_shader_module(ShaderModuleDescriptor {
+        label: None,
+        source: ShaderSource::Wgsl(source.into()),
+    })
 }
 
 /// We want to test that partial updates to immediates work as expected.
@@ -48,84 +244,16 @@ const SHADER: &str = r#"
 "#;
 
 async fn partial_update_test(ctx: TestingContext) {
-    let sm = ctx
-        .device
-        .create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("shader"),
-            source: wgpu::ShaderSource::Wgsl(SHADER.into()),
-        });
+    let module = create_wgsl_module(&ctx, SHADER);
+    let output = Output::new(&ctx, ShaderStages::COMPUTE, 32);
+    let layout = create_pipeline_layout(&ctx, &[Some(&output.bind_group_layout)], 32);
+    let pipeline = create_compute_pipeline(&ctx, &module, &layout);
 
-    let bgl = ctx
-        .device
-        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("bind_group_layout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: NonZeroU64::new(16),
-                },
-                count: None,
-            }],
-        });
-
-    let gpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("gpu_buffer"),
-        size: 32,
-        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-        mapped_at_creation: false,
-    });
-
-    let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("cpu_buffer"),
-        size: 32,
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    });
-
-    let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("bind_group"),
-        layout: &bgl,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: gpu_buffer.as_entire_binding(),
-        }],
-    });
-
-    let pipeline_layout = ctx
-        .device
-        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("pipeline_layout"),
-            bind_group_layouts: &[Some(&bgl)],
-            immediate_size: 32,
-        });
-
-    let pipeline = ctx
-        .device
-        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("pipeline"),
-            layout: Some(&pipeline_layout),
-            module: &sm,
-            entry_point: Some("main"),
-            compilation_options: Default::default(),
-            cache: None,
-        });
-
-    let mut encoder = ctx
-        .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("encoder"),
-        });
-
+    let mut encoder = create_command_encoder(&ctx);
     {
-        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("compute_pass"),
-            timestamp_writes: None,
-        });
+        let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
         cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, &bind_group, &[]);
+        cpass.set_bind_group(0, &output.bind_group, &[]);
 
         // -- Dispatch 0 --
 
@@ -144,21 +272,13 @@ async fn partial_update_test(ctx: TestingContext) {
         cpass.dispatch_workgroups(1, 1, 1);
     }
 
-    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, 32);
-    ctx.queue.submit([encoder.finish()]);
-    cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
-    ctx.async_poll(wgpu::PollType::wait_indefinitely())
-        .await
-        .unwrap();
-
-    let data = cpu_buffer.slice(..).get_mapped_range().unwrap();
-
-    let floats: &[f32] = bytemuck::cast_slice(&data);
+    let floats = output.read::<f32>(&ctx, encoder).await;
 
     // first 4 floats the initial value
     // second 4 floats the first update
     assert_eq!(floats, [1.0, 2.0, 3.0, 4.0, 1.0, 5.0, 3.0, 4.0]);
 }
+
 #[apply(gpu_test!)]
 static RENDER_PASS_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
@@ -212,116 +332,12 @@ const SHADER2: &str = "
 ";
 
 async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
-    let output_buffer = ctx.device.create_buffer(&BufferDescriptor {
-        label: Some("output buffer"),
-        size: 8 * size_of::<u32>() as BufferAddress,
-        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
-        mapped_at_creation: false,
-    });
-
-    let cpu_buffer = ctx.device.create_buffer(&BufferDescriptor {
-        label: Some("cpu buffer"),
-        size: output_buffer.size(),
-        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    });
-
     // We need an output texture, even though we're not ever going to look at it.
-    let output_texture = ctx.device.create_texture(&TextureDescriptor {
-        size: Extent3d {
-            width: 2,
-            height: 2,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: TextureDimension::D2,
-        format: TextureFormat::Rgba8UnormSrgb,
-        usage: TextureUsages::RENDER_ATTACHMENT,
-        label: Some("Output Texture"),
-        view_formats: &[],
-        texture_binding_view_dimension: None,
-    });
-    let output_texture_view = output_texture.create_view(&Default::default());
-
-    let shader = ctx.device.create_shader_module(ShaderModuleDescriptor {
-        label: Some("Shader"),
-        source: ShaderSource::Wgsl(SHADER2.into()),
-    });
-
-    let bind_group_layout = ctx
-        .device
-        .create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-
-    let render_pipeline_layout = ctx
-        .device
-        .create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 8 * size_of::<u32>() as u32,
-        });
-
-    let pipeline = ctx
-        .device
-        .create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: VertexState {
-                module: &shader,
-                entry_point: None,
-                buffers: &[],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(FragmentState {
-                module: &shader,
-                entry_point: None,
-                targets: &[Some(output_texture.format().into())],
-                compilation_options: Default::default(),
-            }),
-            primitive: PrimitiveState {
-                topology: PrimitiveTopology::PointList,
-                ..Default::default()
-            },
-            depth_stencil: None,
-            multisample: MultisampleState::default(),
-            multiview_mask: None,
-            cache: None,
-        });
-
-    let render_pass_desc = RenderPassDescriptor {
-        label: Some("Render Pass"),
-        color_attachments: &[Some(RenderPassColorAttachment {
-            view: &output_texture_view,
-            depth_slice: None,
-            resolve_target: None,
-            ops: Operations {
-                load: LoadOp::Clear(Color::default()),
-                store: StoreOp::Store,
-            },
-        })],
-        ..Default::default()
-    };
-
-    let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
-        label: Some("bind group"),
-        layout: &pipeline.get_bind_group_layout(0),
-        entries: &[BindGroupEntry {
-            binding: 0,
-            resource: output_buffer.as_entire_binding(),
-        }],
-    });
+    let view = create_target(ctx);
+    let module = create_wgsl_module(ctx, SHADER2);
+    let output = Output::new(ctx, ShaderStages::VERTEX_FRAGMENT, 32);
+    let layout = create_pipeline_layout(ctx, &[Some(&output.bind_group_layout)], 32);
+    let pipeline = create_point_pipeline(ctx, &module, &layout, "fragment");
 
     let data: Vec<i32> = (0..8).map(|i| (i * i) - 1).collect();
 
@@ -338,40 +354,26 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
         encoder.draw(0..4, 0..1);
     }
 
-    let mut command_encoder = ctx
-        .device
-        .create_command_encoder(&CommandEncoderDescriptor::default());
+    let mut encoder = create_command_encoder(ctx);
     {
-        let mut render_pass = command_encoder.begin_render_pass(&render_pass_desc);
+        let mut render_pass = begin_render_pass(&mut encoder, &view);
         if use_render_bundle {
             // Execute the commands in a render_bundle_encoder.
-            let mut render_bundle_encoder =
-                ctx.device
-                    .create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
-                        color_formats: &[Some(output_texture.format())],
-                        sample_count: 1,
-                        ..RenderBundleEncoderDescriptor::default()
-                    });
-            do_encoding(&mut render_bundle_encoder, &pipeline, &bind_group, &data);
+            let mut render_bundle_encoder = create_bundle_encoder(ctx);
+            do_encoding(
+                &mut render_bundle_encoder,
+                &pipeline,
+                &output.bind_group,
+                &data,
+            );
             let render_bundle = render_bundle_encoder.finish(&RenderBundleDescriptor::default());
             render_pass.execute_bundles([&render_bundle]);
         } else {
             // Execute the commands directly.
-            do_encoding(&mut render_pass, &pipeline, &bind_group, &data);
+            do_encoding(&mut render_pass, &pipeline, &output.bind_group, &data);
         }
     }
-    // Move the result to the cpu buffer, so that we can read them.
-    command_encoder.copy_buffer_to_buffer(&output_buffer, 0, &cpu_buffer, 0, output_buffer.size());
-    let command_buffer = command_encoder.finish();
-    ctx.queue.submit([command_buffer]);
-    cpu_buffer.slice(..).map_async(MapMode::Read, |_| ());
-    ctx.async_poll(wgpu::PollType::wait_indefinitely())
-        .await
-        .unwrap();
-    let mapped_data = cpu_buffer.slice(..).get_mapped_range().unwrap();
-    let result = bytemuck::cast_slice::<u8, i32>(&mapped_data).to_vec();
-    drop(mapped_data);
-    cpu_buffer.unmap();
+    let result = output.read::<i32>(ctx, encoder).await;
     assert_eq!(&result, &data);
 }
 
@@ -411,84 +413,168 @@ const NESTED_STRUCT_SHADER: &str = r#"
 "#;
 
 async fn nested_struct_test(ctx: TestingContext) {
-    let module = ctx.device.create_shader_module(ShaderModuleDescriptor {
-        label: None,
-        source: ShaderSource::Wgsl(NESTED_STRUCT_SHADER.into()),
-    });
+    let module = create_wgsl_module(&ctx, NESTED_STRUCT_SHADER);
+    let output = Output::new(&ctx, ShaderStages::COMPUTE, 16);
+    let layout = create_pipeline_layout(&ctx, &[Some(&output.bind_group_layout)], 16);
+    let pipeline = create_compute_pipeline(&ctx, &module, &layout);
 
-    let bgl = ctx
-        .device
-        .create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: NonZeroU64::new(16),
-                },
-                count: None,
-            }],
-        });
-
-    let layout = ctx
-        .device
-        .create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[Some(&bgl)],
-            immediate_size: 16,
-        });
-
-    let pipeline = ctx
-        .device
-        .create_compute_pipeline(&ComputePipelineDescriptor {
-            label: None,
-            layout: Some(&layout),
-            module: &module,
-            entry_point: Some("main"),
-            compilation_options: Default::default(),
-            cache: None,
-        });
-
-    let output = ctx.device.create_buffer(&BufferDescriptor {
-        label: None,
-        size: 16,
-        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
-        mapped_at_creation: false,
-    });
-    let readback = ctx.device.create_buffer(&BufferDescriptor {
-        label: None,
-        size: 16,
-        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    });
-    let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
-        label: None,
-        layout: &bgl,
-        entries: &[BindGroupEntry {
-            binding: 0,
-            resource: output.as_entire_binding(),
-        }],
-    });
-
-    let mut encoder = ctx
-        .device
-        .create_command_encoder(&CommandEncoderDescriptor::default());
+    let mut encoder = create_command_encoder(&ctx);
     {
         let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
         cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, &bind_group, &[]);
+        cpass.set_bind_group(0, &output.bind_group, &[]);
         // `Data { x: 0, inner: Inner { a: 1, b: 2 }, y: 3 }`
         cpass.set_immediates(0, bytemuck::bytes_of(&[0_u32, 1, 2, 3]));
         cpass.dispatch_workgroups(1, 1, 1);
     }
-    encoder.copy_buffer_to_buffer(&output, 0, &readback, 0, 16);
-    ctx.queue.submit([encoder.finish()]);
+    assert_eq!(output.read::<u32>(&ctx, encoder).await, [0, 1, 2, 3]);
+}
 
-    readback.slice(..).map_async(MapMode::Read, |_| ());
+/// Shader for tests that write more immediates than a pipeline layout holds.
+///
+/// `fs_write` copies the immediates to `output`. The other entry points use nothing.
+const LAYOUT_SIZE_SHADER: &str = r#"
+    var<immediate> data: vec2u;
+
+    @group(0) @binding(0)
+    var<storage, read_write> output: vec2u;
+
+    @compute @workgroup_size(1)
+    fn cs_main() {}
+
+    @vertex
+    fn vs_main() -> @builtin(position) vec4f {
+        return vec4f(0.0, 0.0, 0.0, 1.0);
+    }
+
+    @fragment
+    fn fs_empty() -> @location(0) vec4f {
+        return vec4f();
+    }
+
+    @fragment
+    fn fs_write() -> @location(0) vec4f {
+        output = data;
+        return vec4f();
+    }
+"#;
+
+/// `set_immediates` is limited by `max_immediate_size`, not by the pipeline layout.
+///
+/// Write immediates that are empty or larger than the pipeline layout immediate size,
+/// including layouts with no immediates, then dispatch and draw.
+#[apply(gpu_test!)]
+static BEYOND_LAYOUT_SIZE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::IMMEDIATES)
+            .limits(Limits {
+                max_immediate_size: 16,
+                ..Default::default()
+            }),
+    )
+    .run_async(beyond_layout_size_test);
+
+async fn beyond_layout_size_test(ctx: TestingContext) {
+    let module = create_wgsl_module(&ctx, LAYOUT_SIZE_SHADER);
+    let view = create_target(&ctx);
+    let data = [0_u8; 16];
+
+    for immediate_size in [0, 4] {
+        let layout = create_pipeline_layout(&ctx, &[], immediate_size);
+        let compute_pipeline = create_compute_pipeline(&ctx, &module, &layout);
+        let render_pipeline = create_point_pipeline(&ctx, &module, &layout, "fs_empty");
+
+        for data in [&data[..0], &data[..]] {
+            let mut bundle_encoder = create_bundle_encoder(&ctx);
+            bundle_encoder.set_pipeline(&render_pipeline);
+            bundle_encoder.set_immediates(0, data);
+            bundle_encoder.draw(0..1, 0..1);
+            let bundle = bundle_encoder.finish(&RenderBundleDescriptor::default());
+
+            let mut encoder = create_command_encoder(&ctx);
+            {
+                let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
+                cpass.set_pipeline(&compute_pipeline);
+                cpass.set_immediates(0, data);
+                cpass.dispatch_workgroups(1, 1, 1);
+            }
+            {
+                let mut rpass = begin_render_pass(&mut encoder, &view);
+                rpass.set_pipeline(&render_pipeline);
+                rpass.set_immediates(0, data);
+                rpass.draw(0..1, 0..1);
+                rpass.execute_bundles([&bundle]);
+            }
+            ctx.queue.submit([encoder.finish()]);
+        }
+    }
+
     ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
+}
 
-    let data = readback.slice(..).get_mapped_range().unwrap();
-    assert_eq!(bytemuck::cast_slice::<u8, u32>(&data), [0, 1, 2, 3]);
+/// Immediates set while a pipeline with a smaller immediate size is bound must reach a
+/// later pipeline with a larger immediate size.
+#[apply(gpu_test!)]
+static LARGER_LAYOUT_AFTER_DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::IMMEDIATES)
+            .limits(Limits {
+                max_immediate_size: 8,
+                ..Default::default()
+            }),
+    )
+    .run_async(|ctx| async move {
+        for use_render_bundle in [false, true] {
+            larger_layout_after_draw_test(&ctx, use_render_bundle).await;
+        }
+    });
+
+async fn larger_layout_after_draw_test(ctx: &TestingContext, use_render_bundle: bool) {
+    let module = create_wgsl_module(ctx, LAYOUT_SIZE_SHADER);
+    let view = create_target(ctx);
+    let output = Output::new(ctx, ShaderStages::FRAGMENT, 8);
+    let small_layout = create_pipeline_layout(ctx, &[], 4);
+    let large_layout = create_pipeline_layout(ctx, &[Some(&output.bind_group_layout)], 8);
+    let small_pipeline = create_point_pipeline(ctx, &module, &small_layout, "fs_empty");
+    let large_pipeline = create_point_pipeline(ctx, &module, &large_layout, "fs_write");
+
+    fn do_encoding<'a>(
+        encoder: &mut dyn RenderEncoder<'a>,
+        small_pipeline: &'a RenderPipeline,
+        large_pipeline: &'a RenderPipeline,
+        bind_group: &'a BindGroup,
+    ) {
+        encoder.set_pipeline(small_pipeline);
+        encoder.set_immediates(0, bytemuck::bytes_of(&[1_u32, 2]));
+        encoder.draw(0..1, 0..1);
+        encoder.set_pipeline(large_pipeline);
+        encoder.set_bind_group(0, Some(bind_group), &[]);
+        encoder.draw(0..1, 0..1);
+    }
+
+    let mut encoder = create_command_encoder(ctx);
+    {
+        let mut rpass = begin_render_pass(&mut encoder, &view);
+        if use_render_bundle {
+            let mut bundle_encoder = create_bundle_encoder(ctx);
+            do_encoding(
+                &mut bundle_encoder,
+                &small_pipeline,
+                &large_pipeline,
+                &output.bind_group,
+            );
+            let bundle = bundle_encoder.finish(&RenderBundleDescriptor::default());
+            rpass.execute_bundles([&bundle]);
+        } else {
+            do_encoding(
+                &mut rpass,
+                &small_pipeline,
+                &large_pipeline,
+                &output.bind_group,
+            );
+        }
+    }
+    assert_eq!(output.read::<u32>(ctx, encoder).await, [1, 2]);
 }
