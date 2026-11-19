@@ -1364,6 +1364,10 @@ pub trait Queue: WasmNotSendSync {
     ///
     /// This consumes the surface texture, returning it to the swapchain.
     ///
+    /// `damage_rects` are the regions that changed since the last present, as a
+    /// hint for backends that support incremental presentation. An empty slice
+    /// means the whole surface changed.
+    ///
     /// # Safety
     ///
     /// - `texture` must have been acquired from `surface` via
@@ -1382,6 +1386,8 @@ pub trait Queue: WasmNotSendSync {
     /// - Must be externally synchronized with all other queue operations
     ///   ([`submit`][s], [`present`][Queue::present],
     ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue.
+    /// - Every rect in `damage_rects` must be non-empty and lie within the
+    ///   surface's configured extent.
     ///
     /// [d]: Api::Device
     /// [s]: Queue::submit
@@ -1389,6 +1395,7 @@ pub trait Queue: WasmNotSendSync {
         &self,
         surface: &<Self::A as Api>::Surface,
         texture: <Self::A as Api>::SurfaceTexture,
+        damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), SurfaceError>;
     /// Block until all previously submitted work on this queue has completed,
     /// including any pending presentations.
@@ -2087,6 +2094,22 @@ bitflags!(
     }
 );
 
+#[cfg(any(metal, vulkan))]
+impl TextureFormatCapabilities {
+    /// Capabilities that may be offered by multi-planar texture formats. It is generally
+    /// not possible to operate on a multi-planar texture as a whole. Presence of these
+    /// capabilities on a multi-planar format signifies that plane views support the
+    /// indicated usage.
+    ///
+    /// This constant omits `COPY_SRC` and `COPY_DST` because they are handled separately
+    /// in the code that uses it.
+    pub(crate) const VALID_FOR_MULTI_PLANAR: Self = Self::empty()
+        .union(Self::SAMPLED)
+        .union(Self::SAMPLED_LINEAR)
+        .union(Self::COLOR_ATTACHMENT)
+        .union(Self::COLOR_ATTACHMENT_BLEND);
+}
+
 bitflags!(
     /// Texture format capability flags.
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -2358,6 +2381,11 @@ pub struct TextureDescriptor<'a> {
     pub format: wgt::TextureFormat,
     pub usage: wgt::TextureUses,
     pub memory_flags: MemoryFlags,
+    /// The view dimension texture bindings will use.
+    /// Must be `Some` on devices without
+    /// [`ARBITRARY_BINDING_VIEW_DIMENSIONS`](wgt::DownlevelFlags::ARBITRARY_BINDING_VIEW_DIMENSIONS)
+    /// (GLES), ignored otherwise.
+    pub texture_binding_view_dimension: Option<wgt::TextureViewDimension>,
     /// Allows views of this texture to have a different format
     /// than the texture does.
     pub view_formats: Vec<wgt::TextureFormat>,

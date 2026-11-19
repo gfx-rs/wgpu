@@ -118,6 +118,7 @@ impl crate::framework::Example for Example {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::STORAGE_BINDING,
             view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
+            texture_binding_view_dimension: None,
         });
 
         let rt_view = rt_target.create_view(&wgpu::TextureViewDescriptor {
@@ -284,15 +285,12 @@ impl crate::framework::Example for Example {
             ],
         });
 
-        tlas[0] = Some(wgpu::TlasInstance::new(
+        tlas[0] = Some(wgpu::TlasInstance::from_blas_transformed(
             &blas,
             affine_to_rows(&Affine3A::from_rotation_translation(
                 Quat::IDENTITY,
                 Vec3::new(0.0, 0.0, 0.0),
             )),
-            0,
-            0xff,
-            0,
         ));
 
         let mut encoder =

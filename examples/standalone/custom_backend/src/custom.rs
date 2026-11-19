@@ -128,7 +128,15 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
+    fn is_surface_supported(&self, _surface: &DispatchSurface) -> bool {
+        unimplemented!()
+    }
+
     fn adapter_info(&self) -> wgpu::AdapterInfo {
+        unimplemented!()
+    }
+
+    fn queue(&self) -> DispatchQueue {
         unimplemented!()
     }
 

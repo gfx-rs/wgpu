@@ -530,6 +530,9 @@ struct PrivateCapabilities {
     /// - `VK_ATTACHMENT_STORE_OP_NONE_QCOM` provided by `VK_QCOM_render_pass_store_ops`.
     /// - `VK_ATTACHMENT_STORE_OP_NONE_EXT` provided by `VK_EXT_load_store_op_none`.
     store_op_none: bool,
+
+    /// True if `VK_KHR_incremental_present` is enabled on the device.
+    incremental_present: bool,
 }
 
 bitflags::bitflags!(
@@ -563,6 +566,10 @@ bitflags::bitflags!(
         /// As such, we need to make sure all calls to vkCmdFillBuffer are aligned to 16 bytes
         /// if they cover a range of 4096 bytes or more.
         const FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16 = 1 << 2;
+        /// AMD's proprietary driver fails with VK_ERROR_INITIALIZATION_FAILED on mesh
+        /// and task shaders that zero-initialize workgroup memory with `OpVariable`
+        /// initializers, so polyfill it in those stages.
+        const POLYFILL_MESH_TASK_WORKGROUP_ZERO_INIT = 1 << 3;
     }
 );
 
@@ -1650,10 +1657,16 @@ impl crate::Queue for Queue {
         &self,
         surface: &Surface,
         texture: SurfaceTexture,
+        damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), crate::SurfaceError> {
         let mut swapchain = surface.swapchain.write();
 
-        unsafe { swapchain.as_mut().unwrap().present(self, texture) }
+        unsafe {
+            swapchain
+                .as_mut()
+                .unwrap()
+                .present(self, texture, damage_rects)
+        }
     }
 
     unsafe fn get_timestamp_period(&self) -> f32 {
