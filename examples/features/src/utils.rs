@@ -144,7 +144,7 @@ fn create_staging_canvas(document: &web_sys::Document) -> web_sys::HtmlCanvasEle
     new_canvas.set_attribute("hidden", "true").unwrap();
     new_canvas.set_attribute("background-color", "red").unwrap();
     content_div.append_child(&new_canvas).unwrap();
-    log::info!("Created new staging canvas: {:?}", &new_canvas);
+    log::info!("Created new staging canvas: {:?}", new_canvas);
     new_canvas
 }
 
@@ -158,7 +158,7 @@ fn create_output_image_element(document: &web_sys::Document) -> web_sys::HtmlIma
         .unwrap();
     new_image.set_id("output-image-target");
     content_div.replace_children_with_node_1(&new_image);
-    log::info!("Created new output target image: {:?}", &new_image);
+    log::info!("Created new output target image: {:?}", new_image);
     new_image
 }
 
