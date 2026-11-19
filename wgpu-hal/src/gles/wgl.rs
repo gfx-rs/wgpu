@@ -455,7 +455,9 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
                             }
                             0 => break,
                             _ if message.message == INSTANCE_THREAD_SHUTDOWN => break,
-                            _ => {}
+                            _ => {
+                                unsafe { WindowsAndMessaging::DispatchMessageA(&message) };
+                            }
                         }
                     }
                 }
