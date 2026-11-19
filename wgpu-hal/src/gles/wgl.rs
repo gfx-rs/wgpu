@@ -442,6 +442,7 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
             match setup {
                 Ok((_window, dc)) => {
                     setup_tx.send(Ok(SendDc(dc.device, dc.window))).unwrap();
+                    // Pump messages so that input-language broadcasts are not blocked.
                     loop {
                         let mut message = unsafe { mem::zeroed::<WindowsAndMessaging::MSG>() };
                         match unsafe {
