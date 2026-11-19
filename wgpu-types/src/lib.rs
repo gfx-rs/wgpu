@@ -212,7 +212,8 @@ pub type ShaderLocation = u32;
 /// [dynamic bind group offsets](../wgpu/struct.RenderPass.html#method.set_bind_group).
 pub type DynamicOffset = u32;
 
-/// Buffer-texture copies must have [`bytes_per_row`] aligned to this number.
+/// Buffer-texture copies must have [`bytes_per_row`] aligned to this number, unless
+/// [`Features::UNRESTRICTED_BYTES_PER_ROW`] is enabled.
 ///
 /// This doesn't apply to [`Queue::write_texture`][Qwt], only to [`copy_buffer_to_texture()`]
 /// and [`copy_texture_to_buffer()`].
@@ -353,6 +354,8 @@ pub enum PollError {
     Timeout,
     /// The requested Wait was given a wrong submission index.
     WrongSubmissionIndex(u64, u64),
+    /// The backend doesn't support synchronously waiting.
+    CantWait,
 }
 
 // This impl could be derived by `thiserror`, but by not doing so, we can reduce the number of
@@ -369,6 +372,9 @@ impl fmt::Display for PollError {
                 that has not been returned by a successful submission \
                 (last successful submission: {successful}"
             ),
+            PollError::CantWait => {
+                f.write_str("The backend doesn't support synchronously waiting.")
+            }
         }
     }
 }

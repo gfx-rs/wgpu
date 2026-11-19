@@ -354,8 +354,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     let handle = function.expressions.append(
                         crate::Expression::As {
                             expr: arg_expr,
-                            kind: crate::ScalarKind::Sint,
-                            convert: Some(4),
+                            target: crate::Scalar::I32,
                         },
                         span,
                     );
