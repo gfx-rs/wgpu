@@ -16,8 +16,8 @@ use crate::{
     ir,
     proc::{ConstantEvaluator, ConstantEvaluatorError, Emitter},
     valid::{Capabilities, ModuleInfo, ValidationError, ValidationFlags, Validator},
-    Arena, Block, Constant, Expression, Function, Handle, Literal, Module, Override, Range, Scalar,
-    Span, Statement, TypeInner, WithSpan,
+    Arena, Block, Constant, Expression, FastHashMap, Function, Handle, Literal, Module, Override,
+    Range, Scalar, Span, Statement, TypeInner, WithSpan,
 };
 
 // Possibly unused if not compiled with no_std
@@ -127,7 +127,7 @@ pub fn process_overrides<'a>(
 
     // A map from override handles to the handles of the constants
     // we've replaced them with.
-    let mut override_map = HandleVec::with_capacity(module.overrides.len());
+    let mut override_map = FastHashMap::default();
 
     // A map from `module`'s original global expression handles to
     // handles in the new, simplified global expression arena.
@@ -185,21 +185,32 @@ pub fn process_overrides<'a>(
     for (old_h, expr, span) in module.global_expressions.drain() {
         let mut expr = match expr {
             Expression::Override(h) => {
-                let c_h = if let Some(new_h) = override_map.get(h) {
+                let c_h = if let Some(new_h) = override_map.get(&h) {
                     *new_h
                 } else {
                     let mut new_h = None;
                     for entry in override_iter.by_ref() {
                         let stop = entry.0 == h;
-                        new_h = Some(process_override(
-                            entry,
-                            pipeline_constants,
-                            &mut module,
-                            &mut override_map,
-                            &adjusted_global_expressions,
-                            &mut adjusted_constant_initializers,
-                            &mut global_expression_kind_tracker,
-                        )?);
+                        match *entry.1 {
+                            Override { name: Some(_), .. } | Override { id: Some(_), .. } => {
+                                new_h = Some(process_override(
+                                    entry,
+                                    pipeline_constants,
+                                    &mut module,
+                                    &mut override_map,
+                                    &adjusted_global_expressions,
+                                    &mut adjusted_constant_initializers,
+                                    &mut global_expression_kind_tracker,
+                                )?);
+                            }
+                            Override {
+                                init: Some(ref mut init),
+                                ..
+                            } => {
+                                *init = adjusted_global_expressions[*init];
+                            }
+                            _ => {}
+                        }
                         if stop {
                             break;
                         }
@@ -362,7 +373,7 @@ fn process_override(
     (old_h, r#override, span): (Handle<Override>, &mut Override, &Span),
     pipeline_constants: &PipelineConstants,
     module: &mut Module,
-    override_map: &mut HandleVec<Override, Handle<Constant>>,
+    override_map: &mut FastHashMap<Handle<Override>, Handle<Constant>>,
     adjusted_global_expressions: &HandleVec<Expression, Handle<Expression>>,
     adjusted_constant_initializers: &mut HashSet<Handle<Constant>>,
     global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
@@ -419,7 +430,7 @@ fn process_override(
 /// `Handle<Constant>` for the override's final value.
 fn process_function(
     module: &mut Module,
-    override_map: &HandleVec<Override, Handle<Constant>>,
+    override_map: &FastHashMap<Handle<Override>, Handle<Constant>>,
     layouter: &mut crate::proc::Layouter,
     function: &mut Function,
 ) -> Result<(), ConstantEvaluatorError> {
@@ -453,7 +464,7 @@ fn process_function(
 
     for (old_h, mut expr, span) in expressions.drain() {
         if let Expression::Override(h) = expr {
-            expr = Expression::Constant(override_map[h]);
+            expr = Expression::Constant(override_map[&h]);
         }
         adjust_expr(&adjusted_local_expressions, &mut expr);
         let h = evaluator.try_eval_and_append(expr, span)?;
