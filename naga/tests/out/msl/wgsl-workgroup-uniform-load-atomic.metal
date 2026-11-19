@@ -41,31 +41,31 @@ kernel void test_atomic_workgroup_uniform_load(
     int _e22 = metal::atomic_fetch_add_explicit(&wg_struct.atomic_arr.inner[0], 1, metal::memory_order_relaxed);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    uint unnamed = metal::atomic_load_explicit(&wg_scalar, metal::memory_order_relaxed);
+    uint _e24 = metal::atomic_load_explicit(&wg_scalar, metal::memory_order_relaxed);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    int unnamed_1 = metal::atomic_load_explicit(&wg_signed, metal::memory_order_relaxed);
+    int _e26 = metal::atomic_load_explicit(&wg_signed, metal::memory_order_relaxed);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    uint unnamed_2 = metal::atomic_load_explicit(&wg_struct.atomic_scalar, metal::memory_order_relaxed);
+    uint _e29 = metal::atomic_load_explicit(&wg_struct.atomic_scalar, metal::memory_order_relaxed);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    int unnamed_3 = metal::atomic_load_explicit(&wg_struct.atomic_arr.inner[0], metal::memory_order_relaxed);
+    int _e33 = metal::atomic_load_explicit(&wg_struct.atomic_arr.inner[0], metal::memory_order_relaxed);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    if (unnamed == 0u) {
-        local = unnamed_1 > 0;
+    if (_e24 == 0u) {
+        local = _e26 > 0;
     } else {
         local = false;
     }
     bool _e41 = local;
     if (_e41) {
-        local_1 = unnamed_2 > 0u;
+        local_1 = _e29 > 0u;
     } else {
         local_1 = false;
     }
     bool _e47 = local_1;
     if (_e47) {
-        local_2 = unnamed_3 > 0;
+        local_2 = _e33 > 0;
     } else {
         local_2 = false;
     }

@@ -211,40 +211,55 @@ void main()
     a += textureLod(sampler2D(image_2d, sampler_reg), vec2(0.5), 2.2999999523162841796875);
     a += textureLodOffset(sampler2D(image_2d, sampler_reg), vec2(0.5), 2.2999999523162841796875, ivec2(3, 1));
     a += textureOffset(sampler2D(image_2d, sampler_reg), vec2(0.5), ivec2(3, 1), 2.0);
-    vec2 _353 = vec2(0.5) / vec2(uvec2(textureSize(image_2d, int(0u))));
-    a += textureLod(sampler2D(image_2d, sampler_reg), spvNClamp(vec2(0.5), _353, vec2(1.0) - _353), 0.0);
-    float _363 = float(0u);
-    a += texture(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _363));
+    a += textureGrad(sampler2D(image_2d, sampler_reg), vec2(0.5), vec2(0.5), vec2(0.5));
+    vec2 _359 = vec2(0.5) / vec2(uvec2(textureSize(image_2d, int(0u))));
+    a += textureLod(sampler2D(image_2d, sampler_reg), spvNClamp(vec2(0.5), _359, vec2(1.0) - _359), 0.0);
     float _369 = float(0u);
-    a += textureOffset(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _369), ivec2(3, 1));
+    a += texture(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _369));
     float _375 = float(0u);
-    a += textureLod(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _375), 2.2999999523162841796875);
+    a += textureOffset(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _375), ivec2(3, 1));
     float _381 = float(0u);
-    a += textureLodOffset(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _381), 2.2999999523162841796875, ivec2(3, 1));
+    a += textureLod(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _381), 2.2999999523162841796875);
     float _387 = float(0u);
-    a += textureOffset(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _387), ivec2(3, 1), 2.0);
-    float _393 = float(0);
-    a += texture(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _393));
+    a += textureLodOffset(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _387), 2.2999999523162841796875, ivec2(3, 1));
+    float _393 = float(0u);
+    a += textureOffset(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _393), ivec2(3, 1), 2.0);
     float _399 = float(0);
-    a += textureOffset(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _399), ivec2(3, 1));
+    a += texture(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _399));
     float _405 = float(0);
-    a += textureLod(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _405), 2.2999999523162841796875);
+    a += textureOffset(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _405), ivec2(3, 1));
     float _411 = float(0);
-    a += textureLodOffset(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _411), 2.2999999523162841796875, ivec2(3, 1));
+    a += textureLod(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _411), 2.2999999523162841796875);
     float _417 = float(0);
-    a += textureOffset(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _417), ivec2(3, 1), 2.0);
-    float _424 = float(0u);
-    a += texture(samplerCubeArray(image_cube_array, sampler_reg), vec4(vec3(0.5), _424));
-    float _430 = float(0u);
-    a += textureLod(samplerCubeArray(image_cube_array, sampler_reg), vec4(vec3(0.5), _430), 2.2999999523162841796875);
-    float _436 = float(0u);
-    a += texture(samplerCubeArray(image_cube_array, sampler_reg), vec4(vec3(0.5), _436), 2.0);
-    float _442 = float(0);
-    a += texture(samplerCubeArray(image_cube_array, sampler_reg), vec4(vec3(0.5), _442));
-    float _448 = float(0);
-    a += textureLod(samplerCubeArray(image_cube_array, sampler_reg), vec4(vec3(0.5), _448), 2.2999999523162841796875);
-    float _454 = float(0);
-    a += texture(samplerCubeArray(image_cube_array, sampler_reg), vec4(vec3(0.5), _454), 2.0);
+    a += textureLodOffset(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _417), 2.2999999523162841796875, ivec2(3, 1));
+    float _423 = float(0);
+    a += textureOffset(sampler2DArray(image_2d_array, sampler_reg), vec3(vec2(0.5), _423), ivec2(3, 1), 2.0);
+    a += textureGrad(samplerCube(image_cube, sampler_reg), mix(vec3(0.5), vec3(0.0), isnan(vec3(0.5))), vec3(0.5), vec3(0.5));
+    float _439 = float(0u);
+    vec4 _440 = vec4(vec3(0.5), _439);
+    a += texture(samplerCubeArray(image_cube_array, sampler_reg), mix(_440, vec4(0.0), isnan(_440)));
+    float _449 = float(0u);
+    vec4 _450 = vec4(vec3(0.5), _449);
+    a += textureLod(samplerCubeArray(image_cube_array, sampler_reg), mix(_450, vec4(0.0), isnan(_450)), 2.2999999523162841796875);
+    float _457 = float(0u);
+    vec4 _458 = vec4(vec3(0.5), _457);
+    a += texture(samplerCubeArray(image_cube_array, sampler_reg), mix(_458, vec4(0.0), isnan(_458)), 2.0);
+    float _465 = float(0u);
+    vec4 _466 = vec4(vec3(0.5), _465);
+    a += textureGrad(samplerCubeArray(image_cube_array, sampler_reg), mix(_466, vec4(0.0), isnan(_466)), vec3(0.5), vec3(0.5));
+    float _473 = float(0);
+    vec4 _474 = vec4(vec3(0.5), _473);
+    a += texture(samplerCubeArray(image_cube_array, sampler_reg), mix(_474, vec4(0.0), isnan(_474)));
+    float _481 = float(0);
+    vec4 _482 = vec4(vec3(0.5), _481);
+    a += textureLod(samplerCubeArray(image_cube_array, sampler_reg), mix(_482, vec4(0.0), isnan(_482)), 2.2999999523162841796875);
+    float _489 = float(0);
+    vec4 _490 = vec4(vec3(0.5), _489);
+    a += texture(samplerCubeArray(image_cube_array, sampler_reg), mix(_490, vec4(0.0), isnan(_490)), 2.0);
+    float _497 = float(0);
+    vec4 _498 = vec4(vec3(0.5), _497);
+    a += textureGrad(samplerCubeArray(image_cube_array, sampler_reg), mix(_498, vec4(0.0), isnan(_498)), vec3(0.5), vec3(0.5));
+    a += textureGrad(sampler3D(image_3d, sampler_reg), vec3(0.5), vec3(0.5), vec3(0.5));
     _304 = a;
 }
 
@@ -277,24 +292,24 @@ layout(set = 1, binding = 2) uniform texture2D image_2d_depth;
 layout(set = 1, binding = 3) uniform texture2DArray image_2d_array_depth;
 layout(set = 1, binding = 4) uniform textureCube image_cube_depth;
 
-layout(location = 0) out float _461;
+layout(location = 0) out float _511;
 
 void main()
 {
     float a = 0.0;
     a += texture(sampler2DShadow(image_2d_depth, sampler_cmp), vec3(vec2(0.5), 0.5));
-    float _479 = float(0u);
-    a += texture(sampler2DArrayShadow(image_2d_array_depth, sampler_cmp), vec4(vec3(vec2(0.5), _479), 0.5));
-    float _485 = float(0);
-    a += texture(sampler2DArrayShadow(image_2d_array_depth, sampler_cmp), vec4(vec3(vec2(0.5), _485), 0.5));
-    a += texture(samplerCubeShadow(image_cube_depth, sampler_cmp), vec4(vec3(0.5), 0.5));
+    float _529 = float(0u);
+    a += texture(sampler2DArrayShadow(image_2d_array_depth, sampler_cmp), vec4(vec3(vec2(0.5), _529), 0.5));
+    float _535 = float(0);
+    a += texture(sampler2DArrayShadow(image_2d_array_depth, sampler_cmp), vec4(vec3(vec2(0.5), _535), 0.5));
+    a += texture(samplerCubeShadow(image_cube_depth, sampler_cmp), vec4(mix(vec3(0.5), vec3(0.0), isnan(vec3(0.5))), 0.5));
     a += textureLod(sampler2DShadow(image_2d_depth, sampler_cmp), vec3(vec2(0.5), 0.5), 0.0);
-    float _500 = float(0u);
-    a += textureGrad(sampler2DArrayShadow(image_2d_array_depth, sampler_cmp), vec4(vec3(vec2(0.5), _500), 0.5), vec2(0.0), vec2(0.0));
-    float _506 = float(0);
-    a += textureGrad(sampler2DArrayShadow(image_2d_array_depth, sampler_cmp), vec4(vec3(vec2(0.5), _506), 0.5), vec2(0.0), vec2(0.0));
-    a += textureGrad(samplerCubeShadow(image_cube_depth, sampler_cmp), vec4(vec3(0.5), 0.5), vec3(0.0), vec3(0.0));
-    _461 = a;
+    float _552 = float(0u);
+    a += textureGrad(sampler2DArrayShadow(image_2d_array_depth, sampler_cmp), vec4(vec3(vec2(0.5), _552), 0.5), vec2(0.0), vec2(0.0));
+    float _558 = float(0);
+    a += textureGrad(sampler2DArrayShadow(image_2d_array_depth, sampler_cmp), vec4(vec3(vec2(0.5), _558), 0.5), vec2(0.0), vec2(0.0));
+    a += textureGrad(samplerCubeShadow(image_cube_depth, sampler_cmp), vec4(mix(vec3(0.5), vec3(0.0), isnan(vec3(0.5))), 0.5), vec3(0.0), vec3(0.0));
+    _511 = a;
 }
 
 
@@ -326,11 +341,11 @@ layout(set = 1, binding = 2) uniform texture2D image_2d_depth;
 layout(set = 1, binding = 3) uniform texture2DArray image_2d_array_depth;
 layout(set = 1, binding = 4) uniform textureCube image_cube_depth;
 
-layout(location = 0) out vec4 _517;
+layout(location = 0) out vec4 _571;
 
 void main()
 {
-    _517 = (((textureGather(sampler2D(image_2d, sampler_reg), vec2(0.5), int(1u)) + textureGatherOffset(sampler2D(image_2d, sampler_reg), vec2(0.5), ivec2(3, 1), int(3u))) + textureGather(sampler2DShadow(image_2d_depth, sampler_cmp), vec2(0.5), 0.5)) + textureGatherOffset(sampler2DShadow(image_2d_depth, sampler_cmp), vec2(0.5), 0.5, ivec2(3, 1))) + (vec4(textureGather(usampler2D(image_2d_u32, sampler_reg), vec2(0.5))) + vec4(textureGather(isampler2D(image_2d_i32, sampler_reg), vec2(0.5))));
+    _571 = (((textureGather(sampler2D(image_2d, sampler_reg), vec2(0.5), int(1u)) + textureGatherOffset(sampler2D(image_2d, sampler_reg), vec2(0.5), ivec2(3, 1), int(3u))) + textureGather(sampler2DShadow(image_2d_depth, sampler_cmp), vec2(0.5), 0.5)) + textureGatherOffset(sampler2DShadow(image_2d_depth, sampler_cmp), vec2(0.5), 0.5, ivec2(3, 1))) + (vec4(textureGather(usampler2D(image_2d_u32, sampler_reg), vec2(0.5))) + vec4(textureGather(isampler2D(image_2d_i32, sampler_reg), vec2(0.5))));
 }
 
 
@@ -362,11 +377,11 @@ layout(set = 1, binding = 2) uniform texture2D image_2d_depth;
 layout(set = 1, binding = 3) uniform texture2DArray image_2d_array_depth;
 layout(set = 1, binding = 4) uniform textureCube image_cube_depth;
 
-layout(location = 0) out vec4 _551;
+layout(location = 0) out vec4 _605;
 
 void main()
 {
-    float _563 = float(1);
-    _551 = (vec4(texture(sampler2DShadow(image_2d_depth, sampler_reg), vec2(0.5)).x) + textureGather(sampler2DShadow(image_2d_depth, sampler_reg), vec2(0.5))) + vec4(textureLod(sampler2DShadow(image_2d_depth, sampler_reg), vec2(0.5), _563).x);
+    float _617 = float(1);
+    _605 = (vec4(texture(sampler2DShadow(image_2d_depth, sampler_reg), vec2(0.5)).x) + textureGather(sampler2DShadow(image_2d_depth, sampler_reg), vec2(0.5))) + vec4(textureLod(sampler2DShadow(image_2d_depth, sampler_reg), vec2(0.5), _617).x);
 }
 

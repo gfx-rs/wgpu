@@ -79,6 +79,7 @@ static RESOLVE_WITH_TRANSIENT: GpuTestConfiguration = GpuTestConfiguration::new(
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         let target_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -90,6 +91,7 @@ static RESOLVE_WITH_TRANSIENT: GpuTestConfiguration = GpuTestConfiguration::new(
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {

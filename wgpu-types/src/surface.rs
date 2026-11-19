@@ -759,6 +759,191 @@ impl DisplayHdrInfo {
     }
 }
 
+/// Configures a [`Surface`] for presentation.
+///
+#[doc = link_to_wgpu_item!(struct Surface)]
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct SurfaceConfiguration<V> {
+    /// The usage of the swap chain. The only usage guaranteed to be supported is [`TextureUsages::RENDER_ATTACHMENT`].
+    pub usage: TextureUsages,
+    /// The texture format of the swap chain. The only formats that are guaranteed are
+    /// [`TextureFormat::Bgra8Unorm`] and [`TextureFormat::Bgra8UnormSrgb`]. Unlike
+    /// WebGPU canvases, `wgpu` supports sRGB surface formats.
+    pub format: TextureFormat,
+    /// The color space in which the presentation engine interprets the values
+    /// written to the swap chain.
+    ///
+    /// The supported color spaces for each format are listed in
+    /// [`SurfaceCapabilities::format_capabilities`].
+    /// [`SurfaceColorSpace::Auto`] (the default) is supported for every
+    /// format in [`SurfaceCapabilities::formats`]; any other value must be
+    /// present in the format's
+    /// [`color_spaces`](SurfaceFormatCapabilities::color_spaces) set.
+    pub color_space: SurfaceColorSpace,
+    /// Width of the swap chain. Must be the same size as the surface, and nonzero.
+    ///
+    /// If this is not the same size as the underlying surface (e.g. if it is
+    /// set once, and the window is later resized), the behaviour is defined
+    /// but platform-specific, and may change in the future (currently macOS
+    /// scales the surface, other platforms may do something else).
+    pub width: u32,
+    /// Height of the swap chain. Must be the same size as the surface, and nonzero.
+    ///
+    /// If this is not the same size as the underlying surface (e.g. if it is
+    /// set once, and the window is later resized), the behaviour is defined
+    /// but platform-specific, and may change in the future (currently macOS
+    /// scales the surface, other platforms may do something else).
+    pub height: u32,
+    /// Presentation mode of the swap chain. Fifo is the only mode guaranteed to be supported.
+    /// `FifoRelaxed`, `Immediate`, and `Mailbox` will crash if unsupported, while `AutoVsync` and
+    /// `AutoNoVsync` will gracefully do a designed sets of fallbacks if their primary modes are
+    /// unsupported.
+    pub present_mode: PresentMode,
+    /// Desired maximum number of monitor refreshes between a [`Surface::get_current_texture`] call and the
+    /// texture being presented to the screen. This is sometimes called "Frames in Flight".
+    ///
+    /// Defaults to `2` when created via [`Surface::get_default_config`] as this is a reasonable default.
+    ///
+    /// This is ultimately a hint to the backend implementation and will always be clamped
+    /// to the supported range.
+    ///
+    /// Typical values are `1` to `3`, but higher values are valid, though likely to be clamped.
+    /// * Choose `1` to minimize latency above all else. This only gives a single monitor refresh for all of
+    ///   the CPU and GPU work to complete. ⚠️ As a result of these short swapchains, the CPU and GPU
+    ///   cannot run in parallel, prioritizing latency over throughput. For applications like GUIs doing
+    ///   a small amount of GPU work each frame that need low latency, this is a reasonable choice.
+    /// * Choose `2` for a balance between latency and throughput. The CPU and GPU both can each use
+    ///   a full monitor refresh to do their computations. This is a reasonable default for most applications.
+    /// * Choose `3` or higher to maximize throughput, sacrificing latency when the CPU and GPU
+    ///   are using less than a full monitor refresh each. For applications that use CPU-side pipelining
+    ///   of frames this may be a reasonable choice. ⚠️ On 60hz displays the latency can be very noticeable.
+    ///
+    /// This maps to the backend in the following ways:
+    /// - Vulkan: Number of frames in the swapchain is `desired_maximum_frame_latency + 1`,
+    ///   clamped to the supported range.
+    /// - DX12: Calls [`IDXGISwapChain2::SetMaximumFrameLatency(desired_maximum_frame_latency)`][SMFL].
+    /// - Metal: Sets the `maximumDrawableCount` of the underlying `CAMetalLayer` to
+    ///   `desired_maximum_frame_latency + 1`, clamped to the supported range.
+    /// - OpenGL: Ignored
+    ///
+    /// It also has various subtle interactions with various present modes and APIs.
+    /// - DX12 + Mailbox: Limits framerate to `desired_maximum_frame_latency * Monitor Hz` fps.
+    /// - Vulkan/Metal + Mailbox: If this is set to `2`, limits framerate to `2 * Monitor Hz` fps. `3` or higher is unlimited.
+    ///
+    #[doc = link_to_wgpu_docs!(["`Surface::get_current_texture`"]: "struct.Surface.html#method.get_current_texture")]
+    #[doc = link_to_wgpu_docs!(["`Surface::get_default_config`"]: "struct.Surface.html#method.get_default_config")]
+    /// [SMFL]: https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_3/nf-dxgi1_3-idxgiswapchain2-setmaximumframelatency
+    pub desired_maximum_frame_latency: u32,
+    /// Specifies how the alpha channel of the textures should be handled during compositing.
+    pub alpha_mode: CompositeAlphaMode,
+    /// Specifies what view formats will be allowed when calling `Texture::create_view` on
+    /// the texture returned by `Surface::get_current_texture`.
+    ///
+    /// Views with the same format as the texture are always allowed. Views with a different
+    /// format than the texture require [`crate::DownlevelFlags::SURFACE_VIEW_FORMATS`].
+    /// Note that `wgpu` treats adapters as [WebGPU-compliant][`crate::DownlevelFlags::compliant`]
+    /// even if they lack [`crate::DownlevelFlags::SURFACE_VIEW_FORMATS`].
+    ///
+    /// Currently, a view format may only differ from the surface in srgb-ness (ex: `Rgba8Unorm`
+    /// texture + `Rgba8UnormSrgb` view).
+    ///
+    /// Unlike WebGPU canvases, `wgpu` supports sRGB surface formats.
+    pub view_formats: V,
+}
+
+impl<V: Clone> SurfaceConfiguration<V> {
+    /// Map `view_formats` of the texture descriptor into another.
+    pub fn map_view_formats<'a, M>(
+        &'a self,
+        fun: impl FnOnce(&'a V) -> M,
+    ) -> SurfaceConfiguration<M> {
+        SurfaceConfiguration {
+            usage: self.usage,
+            format: self.format,
+            color_space: self.color_space,
+            width: self.width,
+            height: self.height,
+            present_mode: self.present_mode,
+            desired_maximum_frame_latency: self.desired_maximum_frame_latency,
+            alpha_mode: self.alpha_mode,
+            view_formats: fun(&self.view_formats),
+        }
+    }
+}
+
+/// Status of the received surface image.
+#[repr(C)]
+#[derive(Debug)]
+pub enum SurfaceStatus {
+    /// No issues.
+    Good,
+    /// The swap chain is operational, but it does no longer perfectly
+    /// match the surface. A re-configuration is needed.
+    Suboptimal,
+    /// Unable to get the next frame, timed out.
+    ///
+    /// Try reconfiguring your surface.
+    Timeout,
+    /// The window is occluded (e.g. minimized or behind another window).
+    ///
+    /// Try again once the window is no longer occluded.
+    Occluded,
+    /// The surface under the swap chain has changed.
+    ///
+    /// Try reconfiguring your surface.
+    Outdated,
+    /// The surface under the swap chain is lost.
+    Lost,
+    /// `Surface::get_current_texture` has hit a validation error which was caught
+    /// by a error scope.
+    Validation,
+}
+
+/// Nanosecond timestamp used by the presentation engine.
+///
+/// The specific clock depends on the window system integration (WSI) API used.
+///
+/// <table>
+/// <tr>
+///     <td>WSI</td>
+///     <td>Clock</td>
+/// </tr>
+/// <tr>
+///     <td>IDXGISwapchain</td>
+///     <td><a href="https://docs.microsoft.com/en-us/windows/win32/api/profileapi/nf-profileapi-queryperformancecounter">QueryPerformanceCounter</a></td>
+/// </tr>
+/// <tr>
+///     <td>IPresentationManager</td>
+///     <td><a href="https://docs.microsoft.com/en-us/windows/win32/api/realtimeapiset/nf-realtimeapiset-queryinterrupttimeprecise">QueryInterruptTimePrecise</a></td>
+/// </tr>
+/// <tr>
+///     <td>CAMetalLayer</td>
+///     <td><a href="https://developer.apple.com/documentation/kernel/1462446-mach_absolute_time">mach_absolute_time</a></td>
+/// </tr>
+/// <tr>
+///     <td>VK_GOOGLE_display_timing</td>
+///     <td><a href="https://linux.die.net/man/3/clock_gettime">clock_gettime(CLOCK_MONOTONIC)</a></td>
+/// </tr>
+/// </table>
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PresentationTimestamp(
+    /// Timestamp in nanoseconds.
+    pub u128,
+);
+
+impl PresentationTimestamp {
+    /// A timestamp that is invalid due to the platform not having a timestamp system.
+    pub const INVALID_TIMESTAMP: Self = Self(u128::MAX);
+
+    /// Returns true if this timestamp is the invalid timestamp.
+    #[must_use]
+    pub fn is_invalid(self) -> bool {
+        self == Self::INVALID_TIMESTAMP
+    }
+}
+
 #[cfg(test)]
 mod display_hdr_info_tests {
     use super::*;
@@ -889,182 +1074,5 @@ mod display_hdr_info_tests {
             ..Default::default()
         };
         assert_eq!(info.tone_map_headroom(), Some(10.0));
-    }
-}
-
-/// Configures a [`Surface`] for presentation.
-///
-#[doc = link_to_wgpu_item!(struct Surface)]
-#[repr(C)]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct SurfaceConfiguration<V> {
-    /// The usage of the swap chain. The only usage guaranteed to be supported is [`TextureUsages::RENDER_ATTACHMENT`].
-    pub usage: TextureUsages,
-    /// The texture format of the swap chain. The only formats that are guaranteed are
-    /// [`TextureFormat::Bgra8Unorm`] and [`TextureFormat::Bgra8UnormSrgb`].
-    pub format: TextureFormat,
-    /// The color space in which the presentation engine interprets the values
-    /// written to the swap chain.
-    ///
-    /// The supported color spaces for each format are listed in
-    /// [`SurfaceCapabilities::format_capabilities`].
-    /// [`SurfaceColorSpace::Auto`] (the default) is supported for every
-    /// format in [`SurfaceCapabilities::formats`]; any other value must be
-    /// present in the format's
-    /// [`color_spaces`](SurfaceFormatCapabilities::color_spaces) set.
-    pub color_space: SurfaceColorSpace,
-    /// Width of the swap chain. Must be the same size as the surface, and nonzero.
-    ///
-    /// If this is not the same size as the underlying surface (e.g. if it is
-    /// set once, and the window is later resized), the behaviour is defined
-    /// but platform-specific, and may change in the future (currently macOS
-    /// scales the surface, other platforms may do something else).
-    pub width: u32,
-    /// Height of the swap chain. Must be the same size as the surface, and nonzero.
-    ///
-    /// If this is not the same size as the underlying surface (e.g. if it is
-    /// set once, and the window is later resized), the behaviour is defined
-    /// but platform-specific, and may change in the future (currently macOS
-    /// scales the surface, other platforms may do something else).
-    pub height: u32,
-    /// Presentation mode of the swap chain. Fifo is the only mode guaranteed to be supported.
-    /// `FifoRelaxed`, `Immediate`, and `Mailbox` will crash if unsupported, while `AutoVsync` and
-    /// `AutoNoVsync` will gracefully do a designed sets of fallbacks if their primary modes are
-    /// unsupported.
-    pub present_mode: PresentMode,
-    /// Desired maximum number of monitor refreshes between a [`Surface::get_current_texture`] call and the
-    /// texture being presented to the screen. This is sometimes called "Frames in Flight".
-    ///
-    /// Defaults to `2` when created via [`Surface::get_default_config`] as this is a reasonable default.
-    ///
-    /// This is ultimately a hint to the backend implementation and will always be clamped
-    /// to the supported range.
-    ///
-    /// Typical values are `1` to `3`, but higher values are valid, though likely to be clamped.
-    /// * Choose `1` to minimize latency above all else. This only gives a single monitor refresh for all of
-    ///   the CPU and GPU work to complete. ⚠️ As a result of these short swapchains, the CPU and GPU
-    ///   cannot run in parallel, prioritizing latency over throughput. For applications like GUIs doing
-    ///   a small amount of GPU work each frame that need low latency, this is a reasonable choice.
-    /// * Choose `2` for a balance between latency and throughput. The CPU and GPU both can each use
-    ///   a full monitor refresh to do their computations. This is a reasonable default for most applications.
-    /// * Choose `3` or higher to maximize throughput, sacrificing latency when the CPU and GPU
-    ///   are using less than a full monitor refresh each. For applications that use CPU-side pipelining
-    ///   of frames this may be a reasonable choice. ⚠️ On 60hz displays the latency can be very noticeable.
-    ///
-    /// This maps to the backend in the following ways:
-    /// - Vulkan: Number of frames in the swapchain is `desired_maximum_frame_latency + 1`,
-    ///   clamped to the supported range.
-    /// - DX12: Calls [`IDXGISwapChain2::SetMaximumFrameLatency(desired_maximum_frame_latency)`][SMFL].
-    /// - Metal: Sets the `maximumDrawableCount` of the underlying `CAMetalLayer` to
-    ///   `desired_maximum_frame_latency + 1`, clamped to the supported range.
-    /// - OpenGL: Ignored
-    ///
-    /// It also has various subtle interactions with various present modes and APIs.
-    /// - DX12 + Mailbox: Limits framerate to `desired_maximum_frame_latency * Monitor Hz` fps.
-    /// - Vulkan/Metal + Mailbox: If this is set to `2`, limits framerate to `2 * Monitor Hz` fps. `3` or higher is unlimited.
-    ///
-    #[doc = link_to_wgpu_docs!(["`Surface::get_current_texture`"]: "struct.Surface.html#method.get_current_texture")]
-    #[doc = link_to_wgpu_docs!(["`Surface::get_default_config`"]: "struct.Surface.html#method.get_default_config")]
-    /// [SMFL]: https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_3/nf-dxgi1_3-idxgiswapchain2-setmaximumframelatency
-    pub desired_maximum_frame_latency: u32,
-    /// Specifies how the alpha channel of the textures should be handled during compositing.
-    pub alpha_mode: CompositeAlphaMode,
-    /// Specifies what view formats will be allowed when calling `Texture::create_view` on the texture returned by `Surface::get_current_texture`.
-    ///
-    /// View formats of the same format as the texture are always allowed.
-    ///
-    /// Note: currently, only the srgb-ness is allowed to change. (ex: `Rgba8Unorm` texture + `Rgba8UnormSrgb` view)
-    pub view_formats: V,
-}
-
-impl<V: Clone> SurfaceConfiguration<V> {
-    /// Map `view_formats` of the texture descriptor into another.
-    pub fn map_view_formats<'a, M>(
-        &'a self,
-        fun: impl FnOnce(&'a V) -> M,
-    ) -> SurfaceConfiguration<M> {
-        SurfaceConfiguration {
-            usage: self.usage,
-            format: self.format,
-            color_space: self.color_space,
-            width: self.width,
-            height: self.height,
-            present_mode: self.present_mode,
-            desired_maximum_frame_latency: self.desired_maximum_frame_latency,
-            alpha_mode: self.alpha_mode,
-            view_formats: fun(&self.view_formats),
-        }
-    }
-}
-
-/// Status of the received surface image.
-#[repr(C)]
-#[derive(Debug)]
-pub enum SurfaceStatus {
-    /// No issues.
-    Good,
-    /// The swap chain is operational, but it does no longer perfectly
-    /// match the surface. A re-configuration is needed.
-    Suboptimal,
-    /// Unable to get the next frame, timed out.
-    ///
-    /// Try reconfiguring your surface.
-    Timeout,
-    /// The window is occluded (e.g. minimized or behind another window).
-    ///
-    /// Try again once the window is no longer occluded.
-    Occluded,
-    /// The surface under the swap chain has changed.
-    ///
-    /// Try reconfiguring your surface.
-    Outdated,
-    /// The surface under the swap chain is lost.
-    Lost,
-    /// `Surface::get_current_texture` has hit a validation error which was caught
-    /// by a error scope.
-    Validation,
-}
-
-/// Nanosecond timestamp used by the presentation engine.
-///
-/// The specific clock depends on the window system integration (WSI) API used.
-///
-/// <table>
-/// <tr>
-///     <td>WSI</td>
-///     <td>Clock</td>
-/// </tr>
-/// <tr>
-///     <td>IDXGISwapchain</td>
-///     <td><a href="https://docs.microsoft.com/en-us/windows/win32/api/profileapi/nf-profileapi-queryperformancecounter">QueryPerformanceCounter</a></td>
-/// </tr>
-/// <tr>
-///     <td>IPresentationManager</td>
-///     <td><a href="https://docs.microsoft.com/en-us/windows/win32/api/realtimeapiset/nf-realtimeapiset-queryinterrupttimeprecise">QueryInterruptTimePrecise</a></td>
-/// </tr>
-/// <tr>
-///     <td>CAMetalLayer</td>
-///     <td><a href="https://developer.apple.com/documentation/kernel/1462446-mach_absolute_time">mach_absolute_time</a></td>
-/// </tr>
-/// <tr>
-///     <td>VK_GOOGLE_display_timing</td>
-///     <td><a href="https://linux.die.net/man/3/clock_gettime">clock_gettime(CLOCK_MONOTONIC)</a></td>
-/// </tr>
-/// </table>
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct PresentationTimestamp(
-    /// Timestamp in nanoseconds.
-    pub u128,
-);
-
-impl PresentationTimestamp {
-    /// A timestamp that is invalid due to the platform not having a timestamp system.
-    pub const INVALID_TIMESTAMP: Self = Self(u128::MAX);
-
-    /// Returns true if this timestamp is the invalid timestamp.
-    #[must_use]
-    pub fn is_invalid(self) -> bool {
-        self == Self::INVALID_TIMESTAMP
     }
 }

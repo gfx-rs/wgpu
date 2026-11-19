@@ -24,9 +24,8 @@ targets = [
     "wasm32-unknown-unknown",
 ]
 
-[features]
-## Enables serialization via `serde` on common wgpu types.
-serde = ["dep:serde", "wgpu-types/serde", "wgpu-core/serde"]
+[lints]
+workspace = true
 
 [dependencies]
 raw-window-handle.workspace = true

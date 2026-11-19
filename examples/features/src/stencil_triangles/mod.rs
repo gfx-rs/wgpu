@@ -147,6 +147,7 @@ impl crate::framework::Example for Example {
             format: wgpu::TextureFormat::Stencil8,
             view_formats: &[],
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            texture_binding_view_dimension: None,
         });
 
         // Done
@@ -182,6 +183,7 @@ impl crate::framework::Example for Example {
             format: wgpu::TextureFormat::Stencil8,
             view_formats: &[],
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            texture_binding_view_dimension: None,
         });
     }
 

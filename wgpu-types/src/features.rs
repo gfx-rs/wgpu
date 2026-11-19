@@ -27,64 +27,70 @@ pub use webgpu_impl::*;
 mod webgpu_impl {
     //! Constant values for [`super::FeaturesWebGPU`], separated so they can be picked up by
     //! `cbindgen` in `mozilla-central` (where Firefox is developed).
+    //!
+    //! Bitmask feature encoding is not defined by the WebGPU specification, and the values
+    //! are subject to change.
     #![allow(missing_docs)]
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_DEPTH_CLIP_CONTROL: u64 = 1 << 0;
+    pub const WEBGPU_FEATURE_CORE_FEATURES_AND_LIMITS: u64 = 1 << 0;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_DEPTH32FLOAT_STENCIL8: u64 = 1 << 1;
+    pub const WEBGPU_FEATURE_DEPTH_CLIP_CONTROL: u64 = 1 << 1;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC: u64 = 1 << 2;
+    pub const WEBGPU_FEATURE_DEPTH32FLOAT_STENCIL8: u64 = 1 << 2;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC_SLICED_3D: u64 = 1 << 3;
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC: u64 = 1 << 3;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ETC2: u64 = 1 << 4;
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC_SLICED_3D: u64 = 1 << 4;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC: u64 = 1 << 5;
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ETC2: u64 = 1 << 5;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC_SLICED_3D: u64 = 1 << 6;
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC: u64 = 1 << 6;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TIMESTAMP_QUERY: u64 = 1 << 7;
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC_SLICED_3D: u64 = 1 << 7;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE: u64 = 1 << 8;
+    pub const WEBGPU_FEATURE_TIMESTAMP_QUERY: u64 = 1 << 8;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_SHADER_F16: u64 = 1 << 9;
+    pub const WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE: u64 = 1 << 9;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_RG11B10UFLOAT_RENDERABLE: u64 = 1 << 10;
+    pub const WEBGPU_FEATURE_SHADER_F16: u64 = 1 << 10;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_BGRA8UNORM_STORAGE: u64 = 1 << 11;
+    pub const WEBGPU_FEATURE_RG11B10UFLOAT_RENDERABLE: u64 = 1 << 11;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_FLOAT32_FILTERABLE: u64 = 1 << 12;
+    pub const WEBGPU_FEATURE_BGRA8UNORM_STORAGE: u64 = 1 << 12;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_FLOAT32_BLENDABLE: u64 = 1 << 13;
+    pub const WEBGPU_FEATURE_FLOAT32_FILTERABLE: u64 = 1 << 13;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_DUAL_SOURCE_BLENDING: u64 = 1 << 14;
+    pub const WEBGPU_FEATURE_FLOAT32_BLENDABLE: u64 = 1 << 14;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_CLIP_DISTANCES: u64 = 1 << 15;
+    pub const WEBGPU_FEATURE_DUAL_SOURCE_BLENDING: u64 = 1 << 15;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_IMMEDIATES: u64 = 1 << 16;
+    pub const WEBGPU_FEATURE_CLIP_DISTANCES: u64 = 1 << 16;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_PRIMITIVE_INDEX: u64 = 1 << 17;
+    pub const WEBGPU_FEATURE_IMMEDIATES: u64 = 1 << 17;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPONENT_SWIZZLE: u64 = 1 << 18;
+    pub const WEBGPU_FEATURE_PRIMITIVE_INDEX: u64 = 1 << 18;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_TEXTURE_COMPONENT_SWIZZLE: u64 = 1 << 19;
 }
 
 /// Prefer `From<(FeaturesWGPU, FeaturesWebGPU)>` instead, which protects against swapping
@@ -582,6 +588,9 @@ features! {
         #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indexed_indirect_count`"]: "struct.RenderPass.html#method.multi_draw_indexed_indirect_count")]
         #[name("wgpu-multi-draw-indirect-count", "multi-draw-indirect-count")]
         const MULTI_DRAW_INDIRECT_COUNT = 1 << 15;
+
+        // Bit 16 is available.
+
         /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
         /// of [`SamplerBorderColor::Zero`].
         ///
@@ -673,6 +682,13 @@ features! {
         /// This is a native only feature.
         #[name("wgpu-clear-texture", "clear-texture")]
         const CLEAR_TEXTURE = 1 << 23;
+
+        /// Allows for constructing ray tracing pipelines.
+        #[name("wgpu-ray-tracing-pipelines")]
+        const EXPERIMENTAL_RAY_TRACING_PIPELINES = 1 << 24;
+
+        // Bit 25 is available.
+
         /// Enables multiview render passes and `builtin(view_index)` in vertex/mesh shaders.
         ///
         /// Supported platforms:
@@ -708,6 +724,7 @@ features! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
+        /// - Metal (simulated)
         ///
         /// This is a native only feature.
         ///
@@ -719,6 +736,7 @@ features! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
+        /// - Metal
         ///
         /// This is a native only feature.
         ///
@@ -781,7 +799,7 @@ features! {
         #[name("wgpu-shader-i16", "shader-i16")]
         const SHADER_I16 = 1 << 34;
 
-        // Bit 35 is used by VULKAN_EXTERNAL_MEMORY_FD.
+        // Bit 35 is available.
 
         /// Allows shaders to use the `early_depth_test` attribute.
         ///
@@ -794,6 +812,10 @@ features! {
         ///
         ///      - `layout(early_fragment_tests) in;` (GLSL)
         ///
+        ///      - `[[early_fragment_tests]]` (MSL 1.2+)
+        ///
+        ///      - `[earlydepthstencil]` (HLSL)
+        ///
         ///   2. Provide a conservative depth specifier that allows an additional early
         ///      depth test under certain conditions:
         ///
@@ -801,10 +823,17 @@ features! {
         ///
         ///      - `layout(depth_<greater/less/unchanged>) out float gl_FragDepth;` (GLSL)
         ///
+        ///      - `[[depth(greater/less)]]` (MSL, any version)
+        ///
+        ///      - `SV_Depth<GreaterEqual/LessEqual>` (HLSL), for pipelines that are not
+        ///        multisampled. Multisampled pipelines use an unrestricted `SV_Depth` instead.
+        ///
         /// See [`EarlyDepthTest`] for more details.
         ///
         /// Supported platforms:
         /// - Vulkan
+        /// - Metal (with MSL 1.2+)
+        /// - DX12
         /// - GLES 3.1+
         ///
         /// This is a native only feature.
@@ -889,68 +918,17 @@ features! {
         /// This is a native only feature.
         #[name("wgpu-shader-int64-atomic-all-ops")]
         const SHADER_INT64_ATOMIC_ALL_OPS = 1 << 43;
-        /// Allows using the [VK_GOOGLE_display_timing] Vulkan extension.
-        ///
-        /// This is used for frame pacing to reduce latency, and is generally only available on Android.
-        ///
-        /// This feature does not have a `wgpu`-level API, and so users of wgpu wishing
-        /// to use this functionality must access it using various `as_hal` functions,
-        /// primarily [`Surface::as_hal()`], to then use.
-        ///
-        /// Supported platforms:
-        /// - Vulkan (with [VK_GOOGLE_display_timing])
-        ///
-        /// This is a native only feature.
-        ///
-        /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
-        #[doc = link_to_wgpu_docs!(["`Surface::as_hal()`"]: "struct.Surface.html#method.as_hal")]
-        #[name("wgpu-vulkan-google-display-timing")]
-        const VULKAN_GOOGLE_DISPLAY_TIMING = 1 << 44;
 
-        /// Allows using the [VK_KHR_external_memory_win32] Vulkan extension.
-        ///
-        /// Supported platforms:
-        /// - Vulkan (with [VK_KHR_external_memory_win32])
-        ///
-        /// This is a native only feature.
-        ///
-        /// [VK_KHR_external_memory_win32]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_external_memory_win32.html
-        #[name("wgpu-vulkan-external-memory-win32")]
-        const VULKAN_EXTERNAL_MEMORY_WIN32 = 1 << 45;
+        // Bit 44 is available.
 
-        /// Allows using the [VK_KHR_external_memory_fd] Vulkan extension.
-        ///
-        /// Supported platforms:
-        /// - Vulkan (with [VK_KHR_external_memory_fd])
-        ///
-        /// This is a native only feature.
-        ///
-        /// [VK_KHR_external_memory_fd]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_external_memory_fd.html
-        #[name("wgpu-vulkan-external-memory-fd")]
-        const VULKAN_EXTERNAL_MEMORY_FD = 1 << 35;
-
-        /// Allows using the [VK_EXT_external_memory_dma_buf] Vulkan extension
-        /// for importing DMA-buf textures on Linux.
-        ///
-        /// Requires [VK_EXT_image_drm_format_modifier] for specifying the
-        /// DRM format modifier and plane layout during import.
-        ///
-        /// Supported platforms:
-        /// - Vulkan (with [VK_EXT_external_memory_dma_buf] and [VK_EXT_image_drm_format_modifier])
-        ///
-        /// This is a native only feature.
-        ///
-        /// [VK_EXT_external_memory_dma_buf]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_external_memory_dma_buf.html
-        /// [VK_EXT_image_drm_format_modifier]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_image_drm_format_modifier.html
-        #[name("wgpu-vulkan-external-memory-dma-buf")]
-        const VULKAN_EXTERNAL_MEMORY_DMA_BUF = 1 << 63;
+        // Bit 45 is available.
 
         /// Enables R64Uint image atomic min and max.
         ///
         /// Supported platforms:
         /// - Vulkan (with VK_EXT_shader_image_atomic_int64)
         /// - DX12 (with SM 6.6+)
-        /// - Metal (with MSL 3.1+)
+        /// - Metal (with MSL 3.1+; Apple8 on macOS or Apple9+)
         ///
         /// This is a native only feature.
         #[name("wgpu-texture-int64-atomic")]
@@ -1183,11 +1161,24 @@ features! {
         #[name("wgpu-memory-decoration-volatile")]
         const MEMORY_DECORATION_VOLATILE = 1 << 62;
 
-        /// Allows for constructing ray tracing pipelines.
-        #[name("wgpu-ray-tracing-pipelines")]
-        const EXPERIMENTAL_RAY_TRACING_PIPELINES = 1 << 24;
+        /// Allows [`TexelCopyBufferLayout::bytes_per_row`] in `copy_buffer_to_texture` and
+        /// `copy_texture_to_buffer` to be any multiple of the texel block copy size, instead of a
+        /// multiple of [`COPY_BYTES_PER_ROW_ALIGNMENT`] (256).
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - Metal
+        /// - GLES
+        /// - DX12 (with `UnrestrictedBufferTextureCopyPitchSupported`)
+        ///
+        /// This is a native only feature.
+        ///
+        /// [`TexelCopyBufferLayout::bytes_per_row`]: crate::TexelCopyBufferLayout::bytes_per_row
+        /// [`COPY_BYTES_PER_ROW_ALIGNMENT`]: crate::COPY_BYTES_PER_ROW_ALIGNMENT
+        #[name("wgpu-unrestricted-bytes-per-row")]
+        const UNRESTRICTED_BYTES_PER_ROW = 1 << 63;
 
-        // Adding a new feature? All bits in the first u64 are used. Use the second u64 (bits 64+).
+        // Search for "is available" to check for free bits earlier in the list.
     }
 
     /// Features that are not guaranteed to be supported.
@@ -1206,6 +1197,14 @@ features! {
     #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct FeaturesWebGPU features_webgpu {
         // API:
+
+        /// Core features and limits that are guaranteed to be supported by all WebGPU specification-compliant adapters.
+        /// This feature is always enabled on adapters for which [`crate::DownlevelCapabilities::is_webgpu_compliant`] returns `true`.
+        ///
+        /// This is a web and native feature.
+        #[name("core-features-and-limits")]
+        #[web(allow)]
+        const CORE_FEATURES_AND_LIMITS = WEBGPU_FEATURE_CORE_FEATURES_AND_LIMITS;
 
         /// By default, polygon depth is clipped to 0-1 range before/during rasterization.
         /// Anything outside of that range is rejected, and respective fragments are not touched.

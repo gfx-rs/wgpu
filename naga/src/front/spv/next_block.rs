@@ -896,16 +896,20 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let left_cast = ctx.expressions.append(
                         crate::Expression::As {
                             expr: left,
-                            kind: crate::ScalarKind::Float,
-                            convert: Some(size),
+                            target: crate::Scalar {
+                                kind: crate::ScalarKind::Float,
+                                width: size,
+                            },
                         },
                         span,
                     );
                     let right_cast = ctx.expressions.append(
                         crate::Expression::As {
                             expr: right,
-                            kind: crate::ScalarKind::Float,
-                            convert: Some(size),
+                            target: crate::Scalar {
+                                kind: crate::ScalarKind::Float,
+                                width: size,
+                            },
                         },
                         span,
                     );
@@ -930,8 +934,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let cast = ctx.expressions.append(
                         crate::Expression::As {
                             expr: floor,
-                            kind,
-                            convert: Some(size),
+                            target: crate::Scalar { kind, width: size },
                         },
                         span,
                     );
@@ -1130,8 +1133,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         ctx.expressions.append(
                             crate::Expression::As {
                                 expr: offset_handle,
-                                kind: crate::ScalarKind::Uint,
-                                convert: None,
+                                target: crate::Scalar::U32,
                             },
                             span,
                         )
@@ -1143,8 +1145,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         ctx.expressions.append(
                             crate::Expression::As {
                                 expr: count_handle,
-                                kind: crate::ScalarKind::Uint,
-                                convert: None,
+                                target: crate::Scalar::U32,
                             },
                             span,
                         )
@@ -1198,8 +1199,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         ctx.expressions.append(
                             crate::Expression::As {
                                 expr: offset_handle,
-                                kind: crate::ScalarKind::Uint,
-                                convert: None,
+                                target: crate::Scalar::U32,
                             },
                             span,
                         )
@@ -1211,8 +1211,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         ctx.expressions.append(
                             crate::Expression::As {
                                 expr: count_handle,
-                                kind: crate::ScalarKind::Uint,
-                                convert: None,
+                                target: crate::Scalar::U32,
                             },
                             span,
                         )
@@ -1619,16 +1618,16 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         _ => return Err(Error::InvalidAsType(ty_lookup.handle)),
                     };
 
-                    let expr = crate::Expression::As {
-                        expr: get_expr_handle!(value_id, value_lexp),
-                        kind: scalar.kind,
-                        convert: if scalar.kind == crate::ScalarKind::Bool {
-                            Some(crate::BOOL_WIDTH)
-                        } else if inst.op == Op::Bitcast {
-                            None
-                        } else {
-                            Some(scalar.width)
-                        },
+                    let expr = if inst.op == Op::Bitcast {
+                        crate::Expression::Bitcast {
+                            expr: get_expr_handle!(value_id, value_lexp),
+                            ty: ty_lookup.handle,
+                        }
+                    } else {
+                        crate::Expression::As {
+                            expr: get_expr_handle!(value_id, value_lexp),
+                            target: scalar,
+                        }
                     };
                     self.lookup_expression.insert(
                         result_id,
@@ -2152,9 +2151,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                             // IR expects a signed integer, so do a bitcast
                             ctx.expressions.append(
                                 crate::Expression::As {
-                                    kind: crate::ScalarKind::Sint,
                                     expr: selector_handle,
-                                    convert: None,
+                                    target: crate::Scalar::I32,
                                 },
                                 span,
                             )
@@ -2830,6 +2828,55 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                             mode: crate::GatherMode::QuadSwap(direction),
                             result: result_handle,
                             argument: argument_handle,
+                        },
+                        span,
+                    );
+                    emitter.start(ctx.expressions);
+                }
+                Op::GroupNonUniformBallotFindLSB | Op::GroupNonUniformBallotFindMSB => {
+                    inst.expect(5)?;
+                    block.extend(emitter.finish(ctx.expressions));
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let exec_scope_id = self.next()?;
+                    let argument_id = self.next()?;
+
+                    let argument_lookup = self.lookup_expression.lookup(argument_id)?;
+                    let argument_handle = get_expr_handle!(argument_id, argument_lookup);
+
+                    let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
+                    let _exec_scope = resolve_constant(ctx.gctx(), &exec_scope_const.inner)
+                        .filter(|exec_scope| *exec_scope == spirv::Scope::Subgroup as u32)
+                        .ok_or(Error::InvalidBarrierScope(exec_scope_id))?;
+
+                    let order = if inst.op == Op::GroupNonUniformBallotFindLSB {
+                        crate::BallotFindBitOrder::Lsb
+                    } else {
+                        crate::BallotFindBitOrder::Msb
+                    };
+
+                    let result_type = self.lookup_type.lookup(result_type_id)?;
+
+                    let result_handle = ctx.expressions.append(
+                        crate::Expression::SubgroupOperationResult {
+                            ty: result_type.handle,
+                        },
+                        span,
+                    );
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: result_handle,
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+
+                    block.push(
+                        crate::Statement::SubgroupBallotFindBit {
+                            order,
+                            argument: argument_handle,
+                            result: result_handle,
                         },
                         span,
                     );

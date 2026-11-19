@@ -1,0 +1,28 @@
+(
+    vertex:[
+    ],
+    fragment:[
+    ],
+    compute:[
+        (
+            entry_point:"scalar_then_struct",
+            target_profile:"cs_5_1",
+        ),
+        (
+            entry_point:"vec3_then_struct",
+            target_profile:"cs_5_1",
+        ),
+        (
+            entry_point:"matrices_and_vectors",
+            target_profile:"cs_5_1",
+        ),
+        (
+            entry_point:"whole_vector",
+            target_profile:"cs_5_1",
+        ),
+    ],
+    task:[
+    ],
+    mesh:[
+    ],
+)

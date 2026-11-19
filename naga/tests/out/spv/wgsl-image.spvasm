@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 569
+; Bound: 623
 OpCapability Shader
 OpCapability Image1D
 OpCapability Sampled1D
@@ -14,15 +14,15 @@ OpEntryPoint GLCompute %199 "depth_load" %197
 OpEntryPoint Vertex %222 "queries" %220
 OpEntryPoint Vertex %274 "levels_queries" %273
 OpEntryPoint Fragment %305 "texture_sample" %304
-OpEntryPoint Fragment %463 "texture_sample_comparison" %461
-OpEntryPoint Fragment %518 "gather" %517
-OpEntryPoint Fragment %552 "depth_no_comparison" %551
+OpEntryPoint Fragment %513 "texture_sample_comparison" %511
+OpEntryPoint Fragment %572 "gather" %571
+OpEntryPoint Fragment %606 "depth_no_comparison" %605
 OpExecutionMode %98 LocalSize 16 1 1
 OpExecutionMode %199 LocalSize 16 1 1
 OpExecutionMode %305 OriginUpperLeft
-OpExecutionMode %463 OriginUpperLeft
-OpExecutionMode %518 OriginUpperLeft
-OpExecutionMode %552 OriginUpperLeft
+OpExecutionMode %513 OriginUpperLeft
+OpExecutionMode %572 OriginUpperLeft
+OpExecutionMode %606 OriginUpperLeft
 %3 = OpString "image.wgsl"
 OpSource Unknown 0 %3 "@group(0) @binding(0)
 var image_mipmapped_src: texture_2d<u32>;
@@ -153,6 +153,7 @@ fn texture_sample() -> @location(0) vec4<f32> {
     a += textureSampleLevel(image_2d, sampler_reg, tc, level);
     a += textureSampleLevel(image_2d, sampler_reg, tc, level, offset);
     a += textureSampleBias(image_2d, sampler_reg, tc, 2.0, offset);
+    a += textureSampleGrad(image_2d, sampler_reg, tc, tc, tc);
     a += textureSampleBaseClampToEdge(image_2d, sampler_reg, tc);
     a += textureSample(image_2d_array, sampler_reg, tc, 0u);
     a += textureSample(image_2d_array, sampler_reg, tc, 0u, offset);
@@ -164,12 +165,16 @@ fn texture_sample() -> @location(0) vec4<f32> {
     a += textureSampleLevel(image_2d_array, sampler_reg, tc, 0, level);
     a += textureSampleLevel(image_2d_array, sampler_reg, tc, 0, level, offset);
     a += textureSampleBias(image_2d_array, sampler_reg, tc, 0, 2.0, offset);
+    a += textureSampleGrad(image_cube, sampler_reg, tc3, tc3, tc3);
     a += textureSample(image_cube_array, sampler_reg, tc3, 0u);
     a += textureSampleLevel(image_cube_array, sampler_reg, tc3, 0u, level);
     a += textureSampleBias(image_cube_array, sampler_reg, tc3, 0u, 2.0);
+    a += textureSampleGrad(image_cube_array, sampler_reg, tc3, 0u, tc3, tc3);
     a += textureSample(image_cube_array, sampler_reg, tc3, 0);
     a += textureSampleLevel(image_cube_array, sampler_reg, tc3, 0, level);
     a += textureSampleBias(image_cube_array, sampler_reg, tc3, 0, 2.0);
+    a += textureSampleGrad(image_cube_array, sampler_reg, tc3, 0, tc3, tc3);
+    a += textureSampleGrad(image_3d, sampler_reg, tc3, tc3, tc3);
     return a;
 }
 
@@ -257,11 +262,11 @@ OpName %199 "depth_load"
 OpName %222 "queries"
 OpName %274 "levels_queries"
 OpName %305 "texture_sample"
-OpName %320 "a"
-OpName %463 "texture_sample_comparison"
-OpName %468 "a"
-OpName %518 "gather"
-OpName %552 "depth_no_comparison"
+OpName %322 "a"
+OpName %513 "texture_sample_comparison"
+OpName %518 "a"
+OpName %572 "gather"
+OpName %606 "depth_no_comparison"
 OpDecorate %29 DescriptorSet 0
 OpDecorate %29 Binding 0
 OpDecorate %31 DescriptorSet 0
@@ -314,9 +319,9 @@ OpDecorate %197 BuiltIn LocalInvocationId
 OpDecorate %220 BuiltIn Position
 OpDecorate %273 BuiltIn Position
 OpDecorate %304 Location 0
-OpDecorate %461 Location 0
-OpDecorate %517 Location 0
-OpDecorate %551 Location 0
+OpDecorate %511 Location 0
+OpDecorate %571 Location 0
+OpDecorate %605 Location 0
 %2 = OpTypeVoid
 %5 = OpTypeInt 32 0
 %4 = OpTypeImage %5 2D 0 0 0 1 Unknown
@@ -412,37 +417,43 @@ OpDecorate %551 Location 0
 %231 = OpConstant  %5  0
 %273 = OpVariable  %221  Output
 %304 = OpVariable  %221  Output
-%311 = OpConstant  %8  0.5
-%312 = OpTypeVector %8 2
-%313 = OpConstantComposite  %312  %311 %311
-%314 = OpTypeVector %8 3
-%315 = OpConstantComposite  %314  %311 %311 %311
-%316 = OpConstant  %15  3
-%317 = OpConstantComposite  %14  %316 %88
-%318 = OpConstant  %8  2.3
-%319 = OpConstant  %8  2
-%321 = OpTypePointer Function %24
-%322 = OpConstantNull  %24
-%325 = OpTypeSampledImage %16
-%330 = OpTypeSampledImage %17
-%354 = OpConstant  %8  1
-%355 = OpConstantComposite  %312  %354 %354
-%362 = OpTypeSampledImage %19
-%423 = OpTypeSampledImage %21
-%462 = OpTypePointer Output %8
-%461 = OpVariable  %462  Output
-%469 = OpTypePointer Function %8
-%470 = OpConstantNull  %8
-%473 = OpTypeSampledImage %26
-%478 = OpTypeSampledImage %27
-%491 = OpTypeSampledImage %28
-%517 = OpVariable  %221  Output
-%528 = OpConstant  %5  1
-%531 = OpConstant  %5  3
-%536 = OpTypeSampledImage %4
-%539 = OpTypeVector %15 4
-%540 = OpTypeSampledImage %18
-%551 = OpVariable  %221  Output
+%313 = OpConstant  %8  0.5
+%314 = OpTypeVector %8 2
+%315 = OpConstantComposite  %314  %313 %313
+%316 = OpTypeVector %8 3
+%317 = OpConstantComposite  %316  %313 %313 %313
+%318 = OpConstant  %15  3
+%319 = OpConstantComposite  %14  %318 %88
+%320 = OpConstant  %8  2.3
+%321 = OpConstant  %8  2
+%323 = OpTypePointer Function %24
+%324 = OpConstantNull  %24
+%327 = OpTypeSampledImage %16
+%332 = OpTypeSampledImage %17
+%360 = OpConstant  %8  1
+%361 = OpConstantComposite  %314  %360 %360
+%368 = OpTypeSampledImage %19
+%429 = OpTypeSampledImage %20
+%430 = OpTypeVector %76 3
+%432 = OpConstantNull  %316
+%438 = OpTypeSampledImage %21
+%441 = OpTypeVector %76 4
+%443 = OpConstantNull  %24
+%505 = OpTypeSampledImage %22
+%512 = OpTypePointer Output %8
+%511 = OpVariable  %512  Output
+%519 = OpTypePointer Function %8
+%520 = OpConstantNull  %8
+%523 = OpTypeSampledImage %26
+%528 = OpTypeSampledImage %27
+%541 = OpTypeSampledImage %28
+%571 = OpVariable  %221  Output
+%582 = OpConstant  %5  1
+%585 = OpConstant  %5  3
+%590 = OpTypeSampledImage %4
+%593 = OpTypeVector %15 4
+%594 = OpTypeSampledImage %18
+%605 = OpVariable  %221  Output
 %70 = OpFunction  %14  None %71
 %72 = OpFunctionParameter  %14
 %73 = OpFunctionParameter  %14
@@ -729,396 +740,464 @@ OpReturn
 OpFunctionEnd
 %305 = OpFunction  %2  None %99
 %303 = OpLabel
-%320 = OpVariable  %321  Function %322
+%322 = OpVariable  %323  Function %324
 %306 = OpLoad  %16  %44
 %307 = OpLoad  %17  %46
 %308 = OpLoad  %19  %51
-%309 = OpLoad  %21  %55
-%310 = OpLoad  %25  %61
-OpBranch %323
-%323 = OpLabel
+%309 = OpLoad  %20  %53
+%310 = OpLoad  %21  %55
+%311 = OpLoad  %22  %57
+%312 = OpLoad  %25  %61
+OpBranch %325
+%325 = OpLabel
 OpLine %3 119 16
 OpLine %3 120 17
 OpLine %3 121 20
 OpLine %3 1 1
-%324 = OpLoad  %24  %320
+%326 = OpLoad  %24  %322
 OpLine %3 124 5
-%326 = OpSampledImage  %325  %306 %310
-%327 = OpImageSampleImplicitLod  %24  %326 %311
-%328 = OpFAdd  %24  %324 %327
+%328 = OpSampledImage  %327  %306 %312
+%329 = OpImageSampleImplicitLod  %24  %328 %313
+%330 = OpFAdd  %24  %326 %329
 OpLine %3 124 5
-OpStore %320 %328
+OpStore %322 %330
 OpLine %3 1 1
-%329 = OpLoad  %24  %320
+%331 = OpLoad  %24  %322
 OpLine %3 125 5
-%331 = OpSampledImage  %330  %307 %310
-%332 = OpImageSampleImplicitLod  %24  %331 %313
-%333 = OpFAdd  %24  %329 %332
+%333 = OpSampledImage  %332  %307 %312
+%334 = OpImageSampleImplicitLod  %24  %333 %315
+%335 = OpFAdd  %24  %331 %334
 OpLine %3 125 5
-OpStore %320 %333
+OpStore %322 %335
 OpLine %3 1 1
-%334 = OpLoad  %24  %320
+%336 = OpLoad  %24  %322
 OpLine %3 126 5
-%335 = OpSampledImage  %330  %307 %310
-%336 = OpImageSampleImplicitLod  %24  %335 %313 ConstOffset %317
-%337 = OpFAdd  %24  %334 %336
+%337 = OpSampledImage  %332  %307 %312
+%338 = OpImageSampleImplicitLod  %24  %337 %315 ConstOffset %319
+%339 = OpFAdd  %24  %336 %338
 OpLine %3 126 5
-OpStore %320 %337
+OpStore %322 %339
 OpLine %3 1 1
-%338 = OpLoad  %24  %320
+%340 = OpLoad  %24  %322
 OpLine %3 127 5
-%339 = OpSampledImage  %330  %307 %310
-%340 = OpImageSampleExplicitLod  %24  %339 %313 Lod %318
-%341 = OpFAdd  %24  %338 %340
+%341 = OpSampledImage  %332  %307 %312
+%342 = OpImageSampleExplicitLod  %24  %341 %315 Lod %320
+%343 = OpFAdd  %24  %340 %342
 OpLine %3 127 5
-OpStore %320 %341
+OpStore %322 %343
 OpLine %3 1 1
-%342 = OpLoad  %24  %320
+%344 = OpLoad  %24  %322
 OpLine %3 128 5
-%343 = OpSampledImage  %330  %307 %310
-%344 = OpImageSampleExplicitLod  %24  %343 %313 Lod|ConstOffset %318 %317
-%345 = OpFAdd  %24  %342 %344
+%345 = OpSampledImage  %332  %307 %312
+%346 = OpImageSampleExplicitLod  %24  %345 %315 Lod|ConstOffset %320 %319
+%347 = OpFAdd  %24  %344 %346
 OpLine %3 128 5
-OpStore %320 %345
+OpStore %322 %347
 OpLine %3 1 1
-%346 = OpLoad  %24  %320
+%348 = OpLoad  %24  %322
 OpLine %3 129 5
-%347 = OpSampledImage  %330  %307 %310
-%348 = OpImageSampleImplicitLod  %24  %347 %313 Bias|ConstOffset %319 %317
-%349 = OpFAdd  %24  %346 %348
+%349 = OpSampledImage  %332  %307 %312
+%350 = OpImageSampleImplicitLod  %24  %349 %315 Bias|ConstOffset %321 %319
+%351 = OpFAdd  %24  %348 %350
 OpLine %3 129 5
-OpStore %320 %349
+OpStore %322 %351
 OpLine %3 1 1
-%350 = OpLoad  %24  %320
+%352 = OpLoad  %24  %322
 OpLine %3 130 5
-%351 = OpImageQuerySizeLod  %111  %307 %231
-%352 = OpConvertUToF  %312  %351
-%353 = OpFDiv  %312  %313 %352
-%356 = OpFSub  %312  %355 %353
-%357 = OpExtInst  %312  %1 NClamp %313 %353 %356
-%358 = OpSampledImage  %330  %307 %310
-%359 = OpImageSampleExplicitLod  %24  %358 %357 Lod %214
-%360 = OpFAdd  %24  %350 %359
+%353 = OpSampledImage  %332  %307 %312
+%354 = OpImageSampleExplicitLod  %24  %353 %315 Grad %315 %315
+%355 = OpFAdd  %24  %352 %354
 OpLine %3 130 5
-OpStore %320 %360
+OpStore %322 %355
 OpLine %3 1 1
-%361 = OpLoad  %24  %320
+%356 = OpLoad  %24  %322
 OpLine %3 131 5
-%363 = OpConvertUToF  %8  %231
-%364 = OpCompositeConstruct  %314  %313 %363
-%365 = OpSampledImage  %362  %308 %310
-%366 = OpImageSampleImplicitLod  %24  %365 %364
-%367 = OpFAdd  %24  %361 %366
+%357 = OpImageQuerySizeLod  %111  %307 %231
+%358 = OpConvertUToF  %314  %357
+%359 = OpFDiv  %314  %315 %358
+%362 = OpFSub  %314  %361 %359
+%363 = OpExtInst  %314  %1 NClamp %315 %359 %362
+%364 = OpSampledImage  %332  %307 %312
+%365 = OpImageSampleExplicitLod  %24  %364 %363 Lod %214
+%366 = OpFAdd  %24  %356 %365
 OpLine %3 131 5
-OpStore %320 %367
+OpStore %322 %366
 OpLine %3 1 1
-%368 = OpLoad  %24  %320
+%367 = OpLoad  %24  %322
 OpLine %3 132 5
 %369 = OpConvertUToF  %8  %231
-%370 = OpCompositeConstruct  %314  %313 %369
-%371 = OpSampledImage  %362  %308 %310
-%372 = OpImageSampleImplicitLod  %24  %371 %370 ConstOffset %317
-%373 = OpFAdd  %24  %368 %372
+%370 = OpCompositeConstruct  %316  %315 %369
+%371 = OpSampledImage  %368  %308 %312
+%372 = OpImageSampleImplicitLod  %24  %371 %370
+%373 = OpFAdd  %24  %367 %372
 OpLine %3 132 5
-OpStore %320 %373
+OpStore %322 %373
 OpLine %3 1 1
-%374 = OpLoad  %24  %320
+%374 = OpLoad  %24  %322
 OpLine %3 133 5
 %375 = OpConvertUToF  %8  %231
-%376 = OpCompositeConstruct  %314  %313 %375
-%377 = OpSampledImage  %362  %308 %310
-%378 = OpImageSampleExplicitLod  %24  %377 %376 Lod %318
+%376 = OpCompositeConstruct  %316  %315 %375
+%377 = OpSampledImage  %368  %308 %312
+%378 = OpImageSampleImplicitLod  %24  %377 %376 ConstOffset %319
 %379 = OpFAdd  %24  %374 %378
 OpLine %3 133 5
-OpStore %320 %379
+OpStore %322 %379
 OpLine %3 1 1
-%380 = OpLoad  %24  %320
+%380 = OpLoad  %24  %322
 OpLine %3 134 5
 %381 = OpConvertUToF  %8  %231
-%382 = OpCompositeConstruct  %314  %313 %381
-%383 = OpSampledImage  %362  %308 %310
-%384 = OpImageSampleExplicitLod  %24  %383 %382 Lod|ConstOffset %318 %317
+%382 = OpCompositeConstruct  %316  %315 %381
+%383 = OpSampledImage  %368  %308 %312
+%384 = OpImageSampleExplicitLod  %24  %383 %382 Lod %320
 %385 = OpFAdd  %24  %380 %384
 OpLine %3 134 5
-OpStore %320 %385
+OpStore %322 %385
 OpLine %3 1 1
-%386 = OpLoad  %24  %320
+%386 = OpLoad  %24  %322
 OpLine %3 135 5
 %387 = OpConvertUToF  %8  %231
-%388 = OpCompositeConstruct  %314  %313 %387
-%389 = OpSampledImage  %362  %308 %310
-%390 = OpImageSampleImplicitLod  %24  %389 %388 Bias|ConstOffset %319 %317
+%388 = OpCompositeConstruct  %316  %315 %387
+%389 = OpSampledImage  %368  %308 %312
+%390 = OpImageSampleExplicitLod  %24  %389 %388 Lod|ConstOffset %320 %319
 %391 = OpFAdd  %24  %386 %390
 OpLine %3 135 5
-OpStore %320 %391
+OpStore %322 %391
 OpLine %3 1 1
-%392 = OpLoad  %24  %320
+%392 = OpLoad  %24  %322
 OpLine %3 136 5
-%393 = OpConvertSToF  %8  %77
-%394 = OpCompositeConstruct  %314  %313 %393
-%395 = OpSampledImage  %362  %308 %310
-%396 = OpImageSampleImplicitLod  %24  %395 %394
+%393 = OpConvertUToF  %8  %231
+%394 = OpCompositeConstruct  %316  %315 %393
+%395 = OpSampledImage  %368  %308 %312
+%396 = OpImageSampleImplicitLod  %24  %395 %394 Bias|ConstOffset %321 %319
 %397 = OpFAdd  %24  %392 %396
 OpLine %3 136 5
-OpStore %320 %397
+OpStore %322 %397
 OpLine %3 1 1
-%398 = OpLoad  %24  %320
+%398 = OpLoad  %24  %322
 OpLine %3 137 5
 %399 = OpConvertSToF  %8  %77
-%400 = OpCompositeConstruct  %314  %313 %399
-%401 = OpSampledImage  %362  %308 %310
-%402 = OpImageSampleImplicitLod  %24  %401 %400 ConstOffset %317
+%400 = OpCompositeConstruct  %316  %315 %399
+%401 = OpSampledImage  %368  %308 %312
+%402 = OpImageSampleImplicitLod  %24  %401 %400
 %403 = OpFAdd  %24  %398 %402
 OpLine %3 137 5
-OpStore %320 %403
+OpStore %322 %403
 OpLine %3 1 1
-%404 = OpLoad  %24  %320
+%404 = OpLoad  %24  %322
 OpLine %3 138 5
 %405 = OpConvertSToF  %8  %77
-%406 = OpCompositeConstruct  %314  %313 %405
-%407 = OpSampledImage  %362  %308 %310
-%408 = OpImageSampleExplicitLod  %24  %407 %406 Lod %318
+%406 = OpCompositeConstruct  %316  %315 %405
+%407 = OpSampledImage  %368  %308 %312
+%408 = OpImageSampleImplicitLod  %24  %407 %406 ConstOffset %319
 %409 = OpFAdd  %24  %404 %408
 OpLine %3 138 5
-OpStore %320 %409
+OpStore %322 %409
 OpLine %3 1 1
-%410 = OpLoad  %24  %320
+%410 = OpLoad  %24  %322
 OpLine %3 139 5
 %411 = OpConvertSToF  %8  %77
-%412 = OpCompositeConstruct  %314  %313 %411
-%413 = OpSampledImage  %362  %308 %310
-%414 = OpImageSampleExplicitLod  %24  %413 %412 Lod|ConstOffset %318 %317
+%412 = OpCompositeConstruct  %316  %315 %411
+%413 = OpSampledImage  %368  %308 %312
+%414 = OpImageSampleExplicitLod  %24  %413 %412 Lod %320
 %415 = OpFAdd  %24  %410 %414
 OpLine %3 139 5
-OpStore %320 %415
+OpStore %322 %415
 OpLine %3 1 1
-%416 = OpLoad  %24  %320
+%416 = OpLoad  %24  %322
 OpLine %3 140 5
 %417 = OpConvertSToF  %8  %77
-%418 = OpCompositeConstruct  %314  %313 %417
-%419 = OpSampledImage  %362  %308 %310
-%420 = OpImageSampleImplicitLod  %24  %419 %418 Bias|ConstOffset %319 %317
+%418 = OpCompositeConstruct  %316  %315 %417
+%419 = OpSampledImage  %368  %308 %312
+%420 = OpImageSampleExplicitLod  %24  %419 %418 Lod|ConstOffset %320 %319
 %421 = OpFAdd  %24  %416 %420
 OpLine %3 140 5
-OpStore %320 %421
+OpStore %322 %421
 OpLine %3 1 1
-%422 = OpLoad  %24  %320
+%422 = OpLoad  %24  %322
 OpLine %3 141 5
-%424 = OpConvertUToF  %8  %231
-%425 = OpCompositeConstruct  %24  %315 %424
-%426 = OpSampledImage  %423  %309 %310
-%427 = OpImageSampleImplicitLod  %24  %426 %425
-%428 = OpFAdd  %24  %422 %427
+%423 = OpConvertSToF  %8  %77
+%424 = OpCompositeConstruct  %316  %315 %423
+%425 = OpSampledImage  %368  %308 %312
+%426 = OpImageSampleImplicitLod  %24  %425 %424 Bias|ConstOffset %321 %319
+%427 = OpFAdd  %24  %422 %426
 OpLine %3 141 5
-OpStore %320 %428
+OpStore %322 %427
 OpLine %3 1 1
-%429 = OpLoad  %24  %320
+%428 = OpLoad  %24  %322
 OpLine %3 142 5
-%430 = OpConvertUToF  %8  %231
-%431 = OpCompositeConstruct  %24  %315 %430
-%432 = OpSampledImage  %423  %309 %310
-%433 = OpImageSampleExplicitLod  %24  %432 %431 Lod %318
-%434 = OpFAdd  %24  %429 %433
+%431 = OpIsNan  %430  %317
+%433 = OpSelect  %316  %431 %432 %317
+%434 = OpSampledImage  %429  %309 %312
+%435 = OpImageSampleExplicitLod  %24  %434 %433 Grad %317 %317
+%436 = OpFAdd  %24  %428 %435
 OpLine %3 142 5
-OpStore %320 %434
+OpStore %322 %436
 OpLine %3 1 1
-%435 = OpLoad  %24  %320
+%437 = OpLoad  %24  %322
 OpLine %3 143 5
-%436 = OpConvertUToF  %8  %231
-%437 = OpCompositeConstruct  %24  %315 %436
-%438 = OpSampledImage  %423  %309 %310
-%439 = OpImageSampleImplicitLod  %24  %438 %437 Bias %319
-%440 = OpFAdd  %24  %435 %439
+%439 = OpConvertUToF  %8  %231
+%440 = OpCompositeConstruct  %24  %317 %439
+%442 = OpIsNan  %441  %440
+%444 = OpSelect  %24  %442 %443 %440
+%445 = OpSampledImage  %438  %310 %312
+%446 = OpImageSampleImplicitLod  %24  %445 %444
+%447 = OpFAdd  %24  %437 %446
 OpLine %3 143 5
-OpStore %320 %440
+OpStore %322 %447
 OpLine %3 1 1
-%441 = OpLoad  %24  %320
+%448 = OpLoad  %24  %322
 OpLine %3 144 5
-%442 = OpConvertSToF  %8  %77
-%443 = OpCompositeConstruct  %24  %315 %442
-%444 = OpSampledImage  %423  %309 %310
-%445 = OpImageSampleImplicitLod  %24  %444 %443
-%446 = OpFAdd  %24  %441 %445
+%449 = OpConvertUToF  %8  %231
+%450 = OpCompositeConstruct  %24  %317 %449
+%451 = OpIsNan  %441  %450
+%452 = OpSelect  %24  %451 %443 %450
+%453 = OpSampledImage  %438  %310 %312
+%454 = OpImageSampleExplicitLod  %24  %453 %452 Lod %320
+%455 = OpFAdd  %24  %448 %454
 OpLine %3 144 5
-OpStore %320 %446
+OpStore %322 %455
 OpLine %3 1 1
-%447 = OpLoad  %24  %320
+%456 = OpLoad  %24  %322
 OpLine %3 145 5
-%448 = OpConvertSToF  %8  %77
-%449 = OpCompositeConstruct  %24  %315 %448
-%450 = OpSampledImage  %423  %309 %310
-%451 = OpImageSampleExplicitLod  %24  %450 %449 Lod %318
-%452 = OpFAdd  %24  %447 %451
+%457 = OpConvertUToF  %8  %231
+%458 = OpCompositeConstruct  %24  %317 %457
+%459 = OpIsNan  %441  %458
+%460 = OpSelect  %24  %459 %443 %458
+%461 = OpSampledImage  %438  %310 %312
+%462 = OpImageSampleImplicitLod  %24  %461 %460 Bias %321
+%463 = OpFAdd  %24  %456 %462
 OpLine %3 145 5
-OpStore %320 %452
+OpStore %322 %463
 OpLine %3 1 1
-%453 = OpLoad  %24  %320
+%464 = OpLoad  %24  %322
 OpLine %3 146 5
-%454 = OpConvertSToF  %8  %77
-%455 = OpCompositeConstruct  %24  %315 %454
-%456 = OpSampledImage  %423  %309 %310
-%457 = OpImageSampleImplicitLod  %24  %456 %455 Bias %319
-%458 = OpFAdd  %24  %453 %457
+%465 = OpConvertUToF  %8  %231
+%466 = OpCompositeConstruct  %24  %317 %465
+%467 = OpIsNan  %441  %466
+%468 = OpSelect  %24  %467 %443 %466
+%469 = OpSampledImage  %438  %310 %312
+%470 = OpImageSampleExplicitLod  %24  %469 %468 Grad %317 %317
+%471 = OpFAdd  %24  %464 %470
 OpLine %3 146 5
-OpStore %320 %458
+OpStore %322 %471
 OpLine %3 1 1
-%459 = OpLoad  %24  %320
-OpStore %304 %459
+%472 = OpLoad  %24  %322
+OpLine %3 147 5
+%473 = OpConvertSToF  %8  %77
+%474 = OpCompositeConstruct  %24  %317 %473
+%475 = OpIsNan  %441  %474
+%476 = OpSelect  %24  %475 %443 %474
+%477 = OpSampledImage  %438  %310 %312
+%478 = OpImageSampleImplicitLod  %24  %477 %476
+%479 = OpFAdd  %24  %472 %478
+OpLine %3 147 5
+OpStore %322 %479
+OpLine %3 1 1
+%480 = OpLoad  %24  %322
+OpLine %3 148 5
+%481 = OpConvertSToF  %8  %77
+%482 = OpCompositeConstruct  %24  %317 %481
+%483 = OpIsNan  %441  %482
+%484 = OpSelect  %24  %483 %443 %482
+%485 = OpSampledImage  %438  %310 %312
+%486 = OpImageSampleExplicitLod  %24  %485 %484 Lod %320
+%487 = OpFAdd  %24  %480 %486
+OpLine %3 148 5
+OpStore %322 %487
+OpLine %3 1 1
+%488 = OpLoad  %24  %322
+OpLine %3 149 5
+%489 = OpConvertSToF  %8  %77
+%490 = OpCompositeConstruct  %24  %317 %489
+%491 = OpIsNan  %441  %490
+%492 = OpSelect  %24  %491 %443 %490
+%493 = OpSampledImage  %438  %310 %312
+%494 = OpImageSampleImplicitLod  %24  %493 %492 Bias %321
+%495 = OpFAdd  %24  %488 %494
+OpLine %3 149 5
+OpStore %322 %495
+OpLine %3 1 1
+%496 = OpLoad  %24  %322
+OpLine %3 150 5
+%497 = OpConvertSToF  %8  %77
+%498 = OpCompositeConstruct  %24  %317 %497
+%499 = OpIsNan  %441  %498
+%500 = OpSelect  %24  %499 %443 %498
+%501 = OpSampledImage  %438  %310 %312
+%502 = OpImageSampleExplicitLod  %24  %501 %500 Grad %317 %317
+%503 = OpFAdd  %24  %496 %502
+OpLine %3 150 5
+OpStore %322 %503
+OpLine %3 1 1
+%504 = OpLoad  %24  %322
+OpLine %3 151 5
+%506 = OpSampledImage  %505  %311 %312
+%507 = OpImageSampleExplicitLod  %24  %506 %317 Grad %317 %317
+%508 = OpFAdd  %24  %504 %507
+OpLine %3 151 5
+OpStore %322 %508
+OpLine %3 1 1
+%509 = OpLoad  %24  %322
+OpStore %304 %509
 OpReturn
 OpFunctionEnd
-%463 = OpFunction  %2  None %99
-%460 = OpLabel
-%468 = OpVariable  %469  Function %470
-%464 = OpLoad  %25  %63
-%465 = OpLoad  %26  %64
-%466 = OpLoad  %27  %66
-%467 = OpLoad  %28  %68
-OpBranch %471
-%471 = OpLabel
-OpLine %3 161 14
-OpLine %3 162 15
+%513 = OpFunction  %2  None %99
+%510 = OpLabel
+%518 = OpVariable  %519  Function %520
+%514 = OpLoad  %25  %63
+%515 = OpLoad  %26  %64
+%516 = OpLoad  %27  %66
+%517 = OpLoad  %28  %68
+OpBranch %521
+%521 = OpLabel
+OpLine %3 166 14
+OpLine %3 167 15
 OpLine %3 1 1
-%472 = OpLoad  %8  %468
-OpLine %3 165 5
-%474 = OpSampledImage  %473  %465 %464
-%475 = OpImageSampleDrefImplicitLod  %8  %474 %313 %311
-%476 = OpFAdd  %8  %472 %475
-OpLine %3 165 5
-OpStore %468 %476
-OpLine %3 1 1
-%477 = OpLoad  %8  %468
-OpLine %3 166 5
-%479 = OpConvertUToF  %8  %231
-%480 = OpCompositeConstruct  %314  %313 %479
-%481 = OpSampledImage  %478  %466 %464
-%482 = OpImageSampleDrefImplicitLod  %8  %481 %480 %311
-%483 = OpFAdd  %8  %477 %482
-OpLine %3 166 5
-OpStore %468 %483
-OpLine %3 1 1
-%484 = OpLoad  %8  %468
-OpLine %3 167 5
-%485 = OpConvertSToF  %8  %77
-%486 = OpCompositeConstruct  %314  %313 %485
-%487 = OpSampledImage  %478  %466 %464
-%488 = OpImageSampleDrefImplicitLod  %8  %487 %486 %311
-%489 = OpFAdd  %8  %484 %488
-OpLine %3 167 5
-OpStore %468 %489
-OpLine %3 1 1
-%490 = OpLoad  %8  %468
-OpLine %3 168 5
-%492 = OpSampledImage  %491  %467 %464
-%493 = OpImageSampleDrefImplicitLod  %8  %492 %315 %311
-%494 = OpFAdd  %8  %490 %493
-OpLine %3 168 5
-OpStore %468 %494
-OpLine %3 1 1
-%495 = OpLoad  %8  %468
-OpLine %3 169 5
-%496 = OpSampledImage  %473  %465 %464
-%497 = OpImageSampleDrefExplicitLod  %8  %496 %313 %311 Lod %214
-%498 = OpFAdd  %8  %495 %497
-OpLine %3 169 5
-OpStore %468 %498
-OpLine %3 1 1
-%499 = OpLoad  %8  %468
+%522 = OpLoad  %8  %518
 OpLine %3 170 5
-%500 = OpConvertUToF  %8  %231
-%501 = OpCompositeConstruct  %314  %313 %500
-%502 = OpSampledImage  %478  %466 %464
-%503 = OpImageSampleDrefExplicitLod  %8  %502 %501 %311 Lod %214
-%504 = OpFAdd  %8  %499 %503
+%524 = OpSampledImage  %523  %515 %514
+%525 = OpImageSampleDrefImplicitLod  %8  %524 %315 %313
+%526 = OpFAdd  %8  %522 %525
 OpLine %3 170 5
-OpStore %468 %504
+OpStore %518 %526
 OpLine %3 1 1
-%505 = OpLoad  %8  %468
+%527 = OpLoad  %8  %518
 OpLine %3 171 5
-%506 = OpConvertSToF  %8  %77
-%507 = OpCompositeConstruct  %314  %313 %506
-%508 = OpSampledImage  %478  %466 %464
-%509 = OpImageSampleDrefExplicitLod  %8  %508 %507 %311 Lod %214
-%510 = OpFAdd  %8  %505 %509
+%529 = OpConvertUToF  %8  %231
+%530 = OpCompositeConstruct  %316  %315 %529
+%531 = OpSampledImage  %528  %516 %514
+%532 = OpImageSampleDrefImplicitLod  %8  %531 %530 %313
+%533 = OpFAdd  %8  %527 %532
 OpLine %3 171 5
-OpStore %468 %510
+OpStore %518 %533
 OpLine %3 1 1
-%511 = OpLoad  %8  %468
+%534 = OpLoad  %8  %518
 OpLine %3 172 5
-%512 = OpSampledImage  %491  %467 %464
-%513 = OpImageSampleDrefExplicitLod  %8  %512 %315 %311 Lod %214
-%514 = OpFAdd  %8  %511 %513
+%535 = OpConvertSToF  %8  %77
+%536 = OpCompositeConstruct  %316  %315 %535
+%537 = OpSampledImage  %528  %516 %514
+%538 = OpImageSampleDrefImplicitLod  %8  %537 %536 %313
+%539 = OpFAdd  %8  %534 %538
 OpLine %3 172 5
-OpStore %468 %514
+OpStore %518 %539
 OpLine %3 1 1
-%515 = OpLoad  %8  %468
-OpStore %461 %515
+%540 = OpLoad  %8  %518
+OpLine %3 173 5
+%542 = OpIsNan  %430  %317
+%543 = OpSelect  %316  %542 %432 %317
+%544 = OpSampledImage  %541  %517 %514
+%545 = OpImageSampleDrefImplicitLod  %8  %544 %543 %313
+%546 = OpFAdd  %8  %540 %545
+OpLine %3 173 5
+OpStore %518 %546
+OpLine %3 1 1
+%547 = OpLoad  %8  %518
+OpLine %3 174 5
+%548 = OpSampledImage  %523  %515 %514
+%549 = OpImageSampleDrefExplicitLod  %8  %548 %315 %313 Lod %214
+%550 = OpFAdd  %8  %547 %549
+OpLine %3 174 5
+OpStore %518 %550
+OpLine %3 1 1
+%551 = OpLoad  %8  %518
+OpLine %3 175 5
+%552 = OpConvertUToF  %8  %231
+%553 = OpCompositeConstruct  %316  %315 %552
+%554 = OpSampledImage  %528  %516 %514
+%555 = OpImageSampleDrefExplicitLod  %8  %554 %553 %313 Lod %214
+%556 = OpFAdd  %8  %551 %555
+OpLine %3 175 5
+OpStore %518 %556
+OpLine %3 1 1
+%557 = OpLoad  %8  %518
+OpLine %3 176 5
+%558 = OpConvertSToF  %8  %77
+%559 = OpCompositeConstruct  %316  %315 %558
+%560 = OpSampledImage  %528  %516 %514
+%561 = OpImageSampleDrefExplicitLod  %8  %560 %559 %313 Lod %214
+%562 = OpFAdd  %8  %557 %561
+OpLine %3 176 5
+OpStore %518 %562
+OpLine %3 1 1
+%563 = OpLoad  %8  %518
+OpLine %3 177 5
+%564 = OpIsNan  %430  %317
+%565 = OpSelect  %316  %564 %432 %317
+%566 = OpSampledImage  %541  %517 %514
+%567 = OpImageSampleDrefExplicitLod  %8  %566 %565 %313 Lod %214
+%568 = OpFAdd  %8  %563 %567
+OpLine %3 177 5
+OpStore %518 %568
+OpLine %3 1 1
+%569 = OpLoad  %8  %518
+OpStore %511 %569
 OpReturn
 OpFunctionEnd
-%518 = OpFunction  %2  None %99
-%516 = OpLabel
-%519 = OpLoad  %17  %46
-%520 = OpLoad  %4  %48
-%521 = OpLoad  %18  %49
-%522 = OpLoad  %25  %61
-%523 = OpLoad  %25  %63
-%524 = OpLoad  %26  %64
-OpBranch %525
-%525 = OpLabel
-OpLine %3 178 14
-OpLine %3 180 15
-%526 = OpSampledImage  %330  %519 %522
-%527 = OpImageGather  %24  %526 %313 %528
-OpLine %3 181 22
-%529 = OpSampledImage  %330  %519 %522
-%530 = OpImageGather  %24  %529 %313 %531 ConstOffset %317
-OpLine %3 182 21
-%532 = OpSampledImage  %473  %524 %523
-%533 = OpImageDrefGather  %24  %532 %313 %311
-OpLine %3 183 28
-%534 = OpSampledImage  %473  %524 %523
-%535 = OpImageDrefGather  %24  %534 %313 %311 ConstOffset %317
-OpLine %3 185 13
-%537 = OpSampledImage  %536  %520 %522
-%538 = OpImageGather  %119  %537 %313 %231
-OpLine %3 186 13
-%541 = OpSampledImage  %540  %521 %522
-%542 = OpImageGather  %539  %541 %313 %231
-OpLine %3 187 13
-%543 = OpConvertUToF  %24  %538
-%544 = OpConvertSToF  %24  %542
-%545 = OpFAdd  %24  %543 %544
-OpLine %3 189 12
-%546 = OpFAdd  %24  %527 %530
-%547 = OpFAdd  %24  %546 %533
-%548 = OpFAdd  %24  %547 %535
-%549 = OpFAdd  %24  %548 %545
-OpStore %517 %549
+%572 = OpFunction  %2  None %99
+%570 = OpLabel
+%573 = OpLoad  %17  %46
+%574 = OpLoad  %4  %48
+%575 = OpLoad  %18  %49
+%576 = OpLoad  %25  %61
+%577 = OpLoad  %25  %63
+%578 = OpLoad  %26  %64
+OpBranch %579
+%579 = OpLabel
+OpLine %3 183 14
+OpLine %3 185 15
+%580 = OpSampledImage  %332  %573 %576
+%581 = OpImageGather  %24  %580 %315 %582
+OpLine %3 186 22
+%583 = OpSampledImage  %332  %573 %576
+%584 = OpImageGather  %24  %583 %315 %585 ConstOffset %319
+OpLine %3 187 21
+%586 = OpSampledImage  %523  %578 %577
+%587 = OpImageDrefGather  %24  %586 %315 %313
+OpLine %3 188 28
+%588 = OpSampledImage  %523  %578 %577
+%589 = OpImageDrefGather  %24  %588 %315 %313 ConstOffset %319
+OpLine %3 190 13
+%591 = OpSampledImage  %590  %574 %576
+%592 = OpImageGather  %119  %591 %315 %231
+OpLine %3 191 13
+%595 = OpSampledImage  %594  %575 %576
+%596 = OpImageGather  %593  %595 %315 %231
+OpLine %3 192 13
+%597 = OpConvertUToF  %24  %592
+%598 = OpConvertSToF  %24  %596
+%599 = OpFAdd  %24  %597 %598
+OpLine %3 194 12
+%600 = OpFAdd  %24  %581 %584
+%601 = OpFAdd  %24  %600 %587
+%602 = OpFAdd  %24  %601 %589
+%603 = OpFAdd  %24  %602 %599
+OpStore %571 %603
 OpReturn
 OpFunctionEnd
-%552 = OpFunction  %2  None %99
-%550 = OpLabel
-%553 = OpLoad  %25  %61
-%554 = OpLoad  %26  %64
-OpBranch %555
-%555 = OpLabel
-OpLine %3 194 14
-OpLine %3 196 15
-%556 = OpSampledImage  %473  %554 %553
-%557 = OpImageSampleImplicitLod  %24  %556 %313
-%558 = OpCompositeExtract  %8  %557 0
-OpLine %3 197 22
-%559 = OpSampledImage  %473  %554 %553
-%560 = OpImageGather  %24  %559 %313 %231
-OpLine %3 198 21
-%561 = OpSampledImage  %473  %554 %553
-%563 = OpConvertSToF  %8  %88
-%562 = OpImageSampleExplicitLod  %24  %561 %313 Lod %563
-%564 = OpCompositeExtract  %8  %562 0
-OpLine %3 196 15
-%565 = OpCompositeConstruct  %24  %558 %558 %558 %558
-%566 = OpFAdd  %24  %565 %560
-%567 = OpCompositeConstruct  %24  %564 %564 %564 %564
-%568 = OpFAdd  %24  %566 %567
-OpStore %551 %568
+%606 = OpFunction  %2  None %99
+%604 = OpLabel
+%607 = OpLoad  %25  %61
+%608 = OpLoad  %26  %64
+OpBranch %609
+%609 = OpLabel
+OpLine %3 199 14
+OpLine %3 201 15
+%610 = OpSampledImage  %523  %608 %607
+%611 = OpImageSampleImplicitLod  %24  %610 %315
+%612 = OpCompositeExtract  %8  %611 0
+OpLine %3 202 22
+%613 = OpSampledImage  %523  %608 %607
+%614 = OpImageGather  %24  %613 %315 %231
+OpLine %3 203 21
+%615 = OpSampledImage  %523  %608 %607
+%617 = OpConvertSToF  %8  %88
+%616 = OpImageSampleExplicitLod  %24  %615 %315 Lod %617
+%618 = OpCompositeExtract  %8  %616 0
+OpLine %3 201 15
+%619 = OpCompositeConstruct  %24  %612 %612 %612 %612
+%620 = OpFAdd  %24  %619 %614
+%621 = OpCompositeConstruct  %24  %618 %618 %618 %618
+%622 = OpFAdd  %24  %620 %621
+OpStore %605 %622
 OpReturn
 OpFunctionEnd
