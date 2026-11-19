@@ -124,7 +124,7 @@ fn choose_config(
         ),
     ];
 
-    let mut attributes = Vec::with_capacity(9);
+    let mut attributes = Vec::with_capacity(15);
     for tier_max in (0..tiers.len()).rev() {
         let name = tiers[tier_max].0;
         log::debug!("\tTrying {name}");
@@ -152,7 +152,25 @@ fn choose_config(
         }
         attributes.push(khronos_egl::NONE);
 
-        match egl.choose_first_config(display, &attributes) {
+        // Some drivers (e.g. SwiftShader on the Android 11 emulator) list an RGB565 config
+        // first when no alpha is requested, which quantizes every presented color.
+        let mut deep_attributes = attributes.clone();
+        deep_attributes.pop();
+        deep_attributes.extend_from_slice(&[
+            khronos_egl::RED_SIZE,
+            8,
+            khronos_egl::GREEN_SIZE,
+            8,
+            khronos_egl::BLUE_SIZE,
+            8,
+            khronos_egl::NONE,
+        ]);
+        let config = match egl.choose_first_config(display, &deep_attributes) {
+            Ok(Some(config)) => Ok(Some(config)),
+            _ => egl.choose_first_config(display, &attributes),
+        };
+
+        match config {
             Ok(Some(config)) => {
                 if tier_max == 1 {
                     //Note: this has been confirmed to malfunction on Intel+NV laptops,
