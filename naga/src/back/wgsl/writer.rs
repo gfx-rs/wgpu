@@ -288,6 +288,7 @@ impl<W: Write> Writer<W> {
         #[derive(Default)]
         struct RequiredEnabled {
             f16: bool,
+            f64: bool,
             int16: bool,
             dual_source_blending: bool,
             clip_distances: bool,
@@ -359,6 +360,7 @@ impl<W: Write> Writer<W> {
                 | TypeInner::Vector { scalar, .. }
                 | TypeInner::Matrix { scalar, .. } => {
                     needed.f16 |= scalar == crate::Scalar::F16;
+                    needed.f64 |= scalar == crate::Scalar::F64;
                     needed.int16 |= scalar == crate::Scalar::I16 || scalar == crate::Scalar::U16;
                 }
                 TypeInner::Struct { ref members, .. } => {
@@ -437,6 +439,10 @@ impl<W: Write> Writer<W> {
         let mut any_written = false;
         if needed.f16 {
             writeln!(self.out, "enable f16;")?;
+            any_written = true;
+        }
+        if needed.f64 {
+            writeln!(self.out, "enable wgpu_f64;")?;
             any_written = true;
         }
         if needed.int16 {

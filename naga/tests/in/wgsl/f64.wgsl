@@ -1,3 +1,5 @@
+enable wgpu_f64;
+
 var<private> v: f64 = 1lf;
 const k: f64 = 2.0lf;
 
