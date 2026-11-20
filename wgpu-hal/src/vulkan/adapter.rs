@@ -2382,7 +2382,8 @@ impl super::Instance {
             // vendor ID and is not affected.
             workarounds.set(
                 super::Workarounds::DISABLE_TIMELINE_SEMAPHORES,
-                phd_capabilities.is_driver(vk::DriverId::ARM_PROPRIETARY),
+                phd_capabilities.is_driver(vk::DriverId::ARM_PROPRIETARY)
+                    && arm_driver_leaks_timeline_semaphores(&info.driver_info),
             );
         };
 
@@ -3551,6 +3552,27 @@ fn is_intel_igpu_outdated_for_robustness2(capabilities: &PhysicalDevicePropertie
     is_outdated
 }
 
+/// Returns `true` if Arm's proprietary driver can leak memory on timeline semaphore signals.
+///
+/// Arm fixed this in `r46`. Rockchip's `g`-numbered drivers have the fix from `g24` at the latest.
+/// If `driver_info` does not start with `v1.r<N>p` or `v1.g<N>p`, this returns `true`.
+fn arm_driver_leaks_timeline_semaphores(driver_info: &str) -> bool {
+    let Some(release) = driver_info.strip_prefix("v1.") else {
+        return true;
+    };
+    let (fixed_in, rest) = if let Some(rest) = release.strip_prefix('r') {
+        (46, rest)
+    } else if let Some(rest) = release.strip_prefix('g') {
+        (24, rest)
+    } else {
+        return true;
+    };
+    match rest.split_once('p') {
+        Some((number, _)) => number.parse::<u32>().map_or(true, |n| n < fixed_in),
+        None => true,
+    }
+}
+
 /// Convert Vulkan component type to wgt::CooperativeScalarType.
 fn map_vk_component_type(ty: vk::ComponentTypeKHR) -> Option<wgt::CooperativeScalarType> {
     match ty {
@@ -3673,4 +3695,22 @@ fn query_cooperative_matrix_properties(
         result.len()
     );
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::arm_driver_leaks_timeline_semaphores as leaks;
+
+    #[test]
+    fn arm_timeline_semaphore_driver_versions() {
+        assert!(leaks("v1.g18p0-01eac0.9e534f339477793d151cc7ab4c27f2c0"));
+        assert!(!leaks("v1.g24p0-00eac0.3c7aec95bbe4cb46ae6709632084ff89"));
+        assert!(leaks(
+            "v1.r44p0-wayland-drm-g310-dmaheap-aarch64-d877e132c-18"
+        ));
+        assert!(!leaks("v1.r46p0-01eac0"));
+        assert!(leaks("?"));
+        assert!(leaks("v1.x50p0"));
+        assert!(leaks("v1.r50"));
+    }
 }

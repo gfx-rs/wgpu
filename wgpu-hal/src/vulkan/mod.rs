@@ -581,6 +581,9 @@ bitflags::bitflags!(
         /// Android 12): 16 bytes per signal, device lost after ~4.2 million submissions,
         /// i.e. ~35 minutes for a 960 FPS `Mailbox` loop or ~10 hours at 60 FPS.
         ///
+        /// Set for Arm drivers older than `r46` and Rockchip drivers older than `g24`, and
+        /// for drivers whose version is not known.
+        ///
         /// [`Fence`]: super::Fence
         /// [`FencePool`]: super::FencePool
         const DISABLE_TIMELINE_SEMAPHORES = 1 << 4;
