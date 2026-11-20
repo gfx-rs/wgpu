@@ -570,6 +570,23 @@ bitflags::bitflags!(
         /// and task shaders that zero-initialize workgroup memory with `OpVariable`
         /// initializers, so polyfill it in those stages.
         const POLYFILL_MESH_TASK_WORKGROUP_ZERO_INIT = 1 << 3;
+        /// Don't use timeline semaphores, even if the device supports them, and fall back
+        /// to binary fences ([`FencePool`]) for [`Fence`]s instead.
+        ///
+        /// Arm's proprietary Mali driver keeps memory for every value a timeline semaphore
+        /// has ever been signaled with, and only releases it when the semaphore is
+        /// destroyed. wgpu signals the device's timeline semaphore once per submission, so
+        /// the memory grows without bound until the kernel driver's limit is reached and the
+        /// device is lost. Observed with driver `v1.g18p0-01eac0` on a Mali-G610 (RK3588,
+        /// Android 12): 16 bytes per signal, device lost after ~4.2 million submissions,
+        /// i.e. ~35 minutes for a 960 FPS `Mailbox` loop or ~10 hours at 60 FPS.
+        ///
+        /// Set for Arm drivers older than `r46` and Rockchip drivers older than `g24`, and
+        /// for drivers whose version is not known.
+        ///
+        /// [`Fence`]: super::Fence
+        /// [`FencePool`]: super::FencePool
+        const DISABLE_TIMELINE_SEMAPHORES = 1 << 4;
     }
 );
 
