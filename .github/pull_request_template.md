@@ -44,7 +44,7 @@ person(s) who reviewed your changes. This will make sure it gets re-added to the
 <!-- Note that checking all the boxes is not necessary to open a PR. -->
 
 - [ ] I self-reviewed and fully understand this PR.
-- [ ] `CHANGELOG.md` entries for the user-facing effects of this change are present. <!-- See instructions at the top of `CHANGELOG.md`. -->
+- [ ] Changelog fragments for the user-facing effects of this change are present. <!-- See `changelog.d/README.md`. -->
 - [ ] The PR is minimal, and doesn't make sense to land as multiple PRs.
 - [ ] Commits are logically scoped and individually reviewable.
 - [ ] The PR description has enough context to understand the motivation and solution implemented.
