@@ -718,6 +718,9 @@ pub trait Surface: WasmNotSendSync {
     /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - The surface `self` must not currently be configured to use any other [`Device`].
+    /// - Must be externally synchronized with all other queue operations on
+    ///   `device`'s queue, including `configure` and `unconfigure` of other
+    ///   surfaces.
     unsafe fn configure(
         &self,
         device: &<Self::A as Api>::Device,
@@ -732,6 +735,9 @@ pub trait Surface: WasmNotSendSync {
     /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - The surface `self` must have been configured on `device`.
+    /// - Must be externally synchronized with all other queue operations on
+    ///   `device`'s queue, including `configure` and `unconfigure` of other
+    ///   surfaces.
     unsafe fn unconfigure(&self, device: &<Self::A as Api>::Device);
 
     /// Return the next texture to be presented by `self`, for the caller to draw on.
@@ -1385,7 +1391,8 @@ pub trait Queue: WasmNotSendSync {
     ///   ordering between rendering and display.
     /// - Must be externally synchronized with all other queue operations
     ///   ([`submit`][s], [`present`][Queue::present],
-    ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue.
+    ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue, and with
+    ///   [`Surface::configure`] and [`Surface::unconfigure`] on its device.
     /// - Every rect in `damage_rects` must be non-empty and lie within the
     ///   surface's configured extent.
     ///
@@ -1404,7 +1411,8 @@ pub trait Queue: WasmNotSendSync {
     ///
     /// - Must be externally synchronized with all other queue operations
     ///   ([`submit`][Queue::submit], [`present`][Queue::present],
-    ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue.
+    ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue, and with
+    ///   [`Surface::configure`] and [`Surface::unconfigure`] on its device.
     unsafe fn wait_for_idle(&self) -> Result<(), DeviceError>;
     unsafe fn get_timestamp_period(&self) -> f32;
 }
