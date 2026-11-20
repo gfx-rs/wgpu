@@ -520,12 +520,19 @@ struct PrivateCapabilities {
     /// require an unnecessary parameter.
     ray_tracing_pipeline_group_data_size: u32,
 
+    /// `shaderGroupBaseAlignment`. Shader binding table regions must start at a device
+    /// address that is a multiple of this, so shader binding table buffers use it as their alignment.
+    shader_binding_table_alignment: u32,
+
     /// Whether `VK_ATTACHMENT_STORE_OP_NONE` is supported. This includes:
     /// - `VK_ATTACHMENT_STORE_OP_NONE` provided by `VK_VERSION_1_3`.
     /// - `VK_ATTACHMENT_STORE_OP_NONE_KHR` provided by `VK_KHR_dynamic_rendering`, or `VK_KHR_load_store_op_none` (promoted to Vulkan 1.4).
     /// - `VK_ATTACHMENT_STORE_OP_NONE_QCOM` provided by `VK_QCOM_render_pass_store_ops`.
     /// - `VK_ATTACHMENT_STORE_OP_NONE_EXT` provided by `VK_EXT_load_store_op_none`.
     store_op_none: bool,
+
+    /// True if `VK_KHR_incremental_present` is enabled on the device.
+    incremental_present: bool,
 }
 
 bitflags::bitflags!(
@@ -559,6 +566,10 @@ bitflags::bitflags!(
         /// As such, we need to make sure all calls to vkCmdFillBuffer are aligned to 16 bytes
         /// if they cover a range of 4096 bytes or more.
         const FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16 = 1 << 2;
+        /// AMD's proprietary driver fails with VK_ERROR_INITIALIZATION_FAILED on mesh
+        /// and task shaders that zero-initialize workgroup memory with `OpVariable`
+        /// initializers, so polyfill it in those stages.
+        const POLYFILL_MESH_TASK_WORKGROUP_ZERO_INIT = 1 << 3;
         /// Don't use timeline semaphores, even if the device supports them, and fall back
         /// to binary fences ([`FencePool`]) for [`Fence`]s instead.
         ///
@@ -572,7 +583,7 @@ bitflags::bitflags!(
         ///
         /// [`Fence`]: super::Fence
         /// [`FencePool`]: super::FencePool
-        const DISABLE_TIMELINE_SEMAPHORES = 1 << 3;
+        const DISABLE_TIMELINE_SEMAPHORES = 1 << 4;
     }
 );
 
@@ -1595,21 +1606,22 @@ impl crate::Queue for Queue {
 
         // We need to signal our wgpu::Fence if we have one, this adds it to the signal list.
         signal_fence.maintain(&self.device.raw)?;
-        // Keeping the Arc around is probably unneeded - the fence should never be signaled as it was reset,
-        // and newer submits should not happen until this submit is done. Therefore, it should be too high
-        // to be reset.
-        let shared_fence;
+        // `vkQueueSubmit` requires its fence to be externally synchronized, and other threads
+        // access the fences in `active` (for example with `vkGetFenceStatus`) while holding the
+        // pool's lock. Holding the lock across the submit keeps them off the new fence.
+        let mut pool_guard = None;
         match *signal_fence {
             Fence::TimelineSemaphore(raw) => {
                 signal_semaphores.push_signal(SemaphoreType::Timeline(raw, signal_value));
             }
             Fence::FencePool(ref pool) => {
+                let locked_pool = pool_guard.insert(pool.write());
                 let FencePool {
                     ref mut active,
                     ref mut free,
                     ..
-                } = *pool.write();
-                shared_fence = match free.pop() {
+                } = **locked_pool;
+                let shared_fence = match free.pop() {
                     Some(raw) => Arc::new(raw),
                     None => unsafe {
                         let fence = self
@@ -1621,7 +1633,7 @@ impl crate::Queue for Queue {
                     },
                 };
                 fence_raw = *shared_fence;
-                active.push((signal_value, shared_fence.clone()));
+                active.push((signal_value, shared_fence));
             }
         }
 
@@ -1660,10 +1672,16 @@ impl crate::Queue for Queue {
         &self,
         surface: &Surface,
         texture: SurfaceTexture,
+        damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), crate::SurfaceError> {
         let mut swapchain = surface.swapchain.write();
 
-        unsafe { swapchain.as_mut().unwrap().present(self, texture) }
+        unsafe {
+            swapchain
+                .as_mut()
+                .unwrap()
+                .present(self, texture, damage_rects)
+        }
     }
 
     unsafe fn get_timestamp_period(&self) -> f32 {

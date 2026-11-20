@@ -14,6 +14,7 @@ use thiserror::Error;
 use wgt::error::{ErrorType, WebGpuError};
 
 pub use crate::pipeline_cache::PipelineCacheValidationError;
+use crate::ray_tracing_pipeline::RayTracingPipelineError;
 use crate::{
     api_log,
     binding_model::{
@@ -482,6 +483,8 @@ pub enum CreatePipelineError {
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     Render(#[from] RenderError),
+    #[error(transparent)]
+    RayTracing(#[from] RayTracingPipelineError),
 }
 
 impl From<ColorAttachmentError> for CreatePipelineError {
@@ -579,6 +582,7 @@ impl WebGpuError for CreatePipelineError {
             Self::Internal { .. } => ErrorType::Internal,
             Self::PipelineConstants { .. } => ErrorType::Validation,
             Self::Render(e) => e.webgpu_error_type(),
+            Self::RayTracing(e) => e.webgpu_error_type(),
         }
     }
 }

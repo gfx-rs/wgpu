@@ -746,7 +746,17 @@ impl super::Device {
                     entry_point: stage.entry_point.to_owned(),
                     shader_stage: naga_stage,
                 };
-                let needs_temp_options = !runtime_checks.bounds_checks
+                let polyfill_zero_init = matches!(
+                    naga_stage,
+                    naga::ShaderStage::Task | naga::ShaderStage::Mesh
+                ) && self
+                    .shared
+                    .workarounds
+                    .contains(super::Workarounds::POLYFILL_MESH_TASK_WORKGROUP_ZERO_INIT)
+                    && self.naga_options.zero_initialize_workgroup_memory
+                        == naga::back::spv::ZeroInitializeWorkgroupMemoryMode::Native;
+                let needs_temp_options = polyfill_zero_init
+                    || !runtime_checks.bounds_checks
                     || !runtime_checks.force_loop_bounding
                     || !runtime_checks.ray_query_initialization_tracking
                     || !binding_map.is_empty()
@@ -787,6 +797,9 @@ impl super::Device {
                     if !stage.zero_initialize_workgroup_memory {
                         temp_options.zero_initialize_workgroup_memory =
                             naga::back::spv::ZeroInitializeWorkgroupMemoryMode::None;
+                    } else if polyfill_zero_init {
+                        temp_options.zero_initialize_workgroup_memory =
+                            naga::back::spv::ZeroInitializeWorkgroupMemoryMode::Polyfill;
                     }
                     if !runtime_checks.task_shader_dispatch_tracking {
                         temp_options.task_dispatch_limits = None;
@@ -1054,6 +1067,15 @@ impl crate::Device for super::Device {
             requirements.alignment = requirements
                 .alignment
                 .max(self.shared.private_caps.scratch_buffer_alignment as u64);
+        }
+
+        if desc
+            .usage
+            .contains(wgt::BufferUses::RAY_TRACING_PIPELINE_SHADER_DATA)
+        {
+            requirements.alignment = requirements
+                .alignment
+                .max(self.shared.private_caps.shader_binding_table_alignment as u64);
         }
 
         let allocation = self

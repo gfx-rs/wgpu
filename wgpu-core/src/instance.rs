@@ -412,7 +412,7 @@ impl Instance {
             self.flags,
             &raw.info,
             &raw.capabilities.limits,
-            &raw.capabilities.downlevel,
+            raw.features,
         )
     }
 
@@ -865,11 +865,17 @@ impl Surface {
             .map(|surface| surface.as_ref())
     }
 
-    fn unconfigure_inner<'a>(
+    /// Takes the current configuration, destroys its acquired texture and waits
+    /// for all work on its device to finish.
+    ///
+    /// Returns the device the surface was configured for. The raw surface is
+    /// still configured, so the caller must unconfigure it next.
+    fn take_presentation<'a>(
         &self,
         presentation: &mut MutexGuard<'a, Option<Presentation>>,
-    ) -> UserClosures {
+    ) -> (Option<Arc<Device>>, UserClosures) {
         let mut result = UserClosures::default();
+        let mut device = None;
         if let Some(mut present) = presentation.take() {
             if let Some(texture) = present.acquired_texture.take() {
                 texture.destroy();
@@ -903,14 +909,33 @@ impl Surface {
                 }
             }
             result.extend(user_callbacks);
-
-            for (&backend, surface) in &self.surface_per_backend {
-                if backend == present.device.backend() {
-                    unsafe { surface.unconfigure(present.device.raw()) };
-                }
-            }
+            device = Some(present.device);
         }
-        result
+        (device, result)
+    }
+
+    /// Unconfigures the raw surface from `device`.
+    ///
+    /// # Safety
+    ///
+    /// `device` must have been returned by [`Self::take_presentation`], and the
+    /// surface must not have been configured since.
+    unsafe fn unconfigure_raw(&self, device: &Device) {
+        if let Some(surface) = self.raw(device.backend()) {
+            let _command_indices = device.command_indices.write();
+            unsafe { surface.unconfigure(device.raw()) };
+        }
+    }
+
+    fn unconfigure_inner<'a>(
+        &self,
+        presentation: &mut MutexGuard<'a, Option<Presentation>>,
+    ) -> UserClosures {
+        let (device, user_callbacks) = self.take_presentation(presentation);
+        if let Some(device) = device {
+            unsafe { self.unconfigure_raw(&device) };
+        }
+        user_callbacks
     }
 
     pub fn unconfigure(self: &Arc<Self>) {
@@ -1004,10 +1029,28 @@ impl Surface {
             // so that no change can happen in the middle of it.
             let mut presentation = self.presentation.lock();
 
-            user_callbacks = self.unconfigure_inner(&mut presentation);
+            let previous_device;
+            (previous_device, user_callbacks) = self.take_presentation(&mut presentation);
 
             let surface_raw = self.raw(device.backend()).unwrap();
-            match unsafe { surface_raw.configure(device.raw(), &hal_config) } {
+            // `command_indices` serializes these calls with other queue
+            // operations. For the same device, hold it across both calls.
+            let result = {
+                let same_device = match previous_device {
+                    Some(previous_device) if Arc::ptr_eq(&previous_device, device) => true,
+                    Some(previous_device) => {
+                        unsafe { self.unconfigure_raw(&previous_device) };
+                        false
+                    }
+                    None => false,
+                };
+                let _command_indices = device.command_indices.write();
+                if same_device {
+                    unsafe { surface_raw.unconfigure(device.raw()) };
+                }
+                unsafe { surface_raw.configure(device.raw(), &hal_config) }
+            };
+            match result {
                 Ok(()) => {
                     *presentation = Some(Presentation {
                         device: Arc::clone(device),
@@ -1108,7 +1151,16 @@ impl Adapter {
     ) -> wgt::TextureFormatFeatures {
         use hal::TextureFormatCapabilities as Tfc;
 
-        let caps = unsafe { self.raw.adapter.texture_format_capabilities(format) };
+        let mut caps = unsafe { self.raw.adapter.texture_format_capabilities(format) };
+
+        // Storage bindings of multi-planar textures are not supported.
+        if format.is_multi_planar_format() {
+            caps -= Tfc::STORAGE_READ_ONLY
+                | Tfc::STORAGE_WRITE_ONLY
+                | Tfc::STORAGE_READ_WRITE
+                | Tfc::STORAGE_ATOMIC;
+        }
+
         let mut allowed_usages = wgt::TextureUsages::empty();
 
         allowed_usages.set(wgt::TextureUsages::COPY_SRC, caps.contains(Tfc::COPY_SRC));
@@ -1396,7 +1448,7 @@ fn adapter_allowed(
     flags: InstanceFlags,
     info: &impl fmt::Debug,
     limits: &wgt::Limits,
-    downlevel: &wgt::DownlevelCapabilities,
+    features: wgt::Features,
 ) -> bool {
     // Check "All alignment-class limits must be powers of 2."
     //
@@ -1427,25 +1479,11 @@ fn adapter_allowed(
         return true;
     }
 
-    // Check "All supported limits must be either the default value or better."
-    let mut min_limits = wgt::Limits::defaults();
-    min_limits.zero_native_only();
-    let failed_limits = check_limits(&min_limits, limits);
-    if !failed_limits.is_empty() {
+    if !features.contains(wgt::Features::CORE_FEATURES_AND_LIMITS) {
         log::debug!(
-            "Adapter {:?} is not WebGPU compliant due to limits: {:?}",
-            info,
-            failed_limits
-        );
-        return false;
-    }
-
-    if !downlevel.is_webgpu_compliant() {
-        let missing_flags = wgt::DownlevelFlags::compliant() - downlevel.flags;
-        log::debug!(
-            "Adapter {:?} is not WebGPU compliant due to missing downlevel flags: {:?}",
-            info,
-            missing_flags
+            "Adapter {:?} is not WebGPU compliant because it does not support \
+            CORE_FEATURES_AND_LIMITS",
+            info
         );
         return false;
     }
@@ -1515,13 +1553,6 @@ fn normalize_max_resource_per_shader_stage_limits(limits: &mut wgt::Limits) {
 mod tests {
     use super::*;
 
-    fn compliant_downlevel() -> wgt::DownlevelCapabilities {
-        wgt::DownlevelCapabilities {
-            flags: wgt::DownlevelFlags::compliant(),
-            ..Default::default()
-        }
-    }
-
     #[test]
     fn non_power_of_two_uniform_alignment_always_rejected() {
         let limits = wgt::Limits {
@@ -1532,13 +1563,13 @@ mod tests {
             InstanceFlags::empty(),
             &"",
             &limits,
-            &compliant_downlevel()
+            wgt::Features::CORE_FEATURES_AND_LIMITS
         ));
         assert!(!adapter_allowed(
             InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
             &"",
             &limits,
-            &compliant_downlevel()
+            wgt::Features::CORE_FEATURES_AND_LIMITS
         ));
     }
 
@@ -1552,13 +1583,13 @@ mod tests {
             InstanceFlags::empty(),
             &"",
             &limits,
-            &compliant_downlevel()
+            wgt::Features::CORE_FEATURES_AND_LIMITS
         ));
         assert!(!adapter_allowed(
             InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
             &"",
             &limits,
-            &compliant_downlevel()
+            wgt::Features::CORE_FEATURES_AND_LIMITS
         ));
     }
 
@@ -1572,7 +1603,7 @@ mod tests {
             InstanceFlags::empty(),
             &"",
             &limits,
-            &wgt::DownlevelCapabilities::default()
+            wgt::Features::empty()
         ));
     }
 
@@ -1586,35 +1617,17 @@ mod tests {
             InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
             &"",
             &limits,
-            &compliant_downlevel()
+            wgt::Features::empty()
         ));
     }
 
     #[test]
-    fn missing_downlevel_flags_rejected_with_strict_compliance() {
-        let downlevel = wgt::DownlevelCapabilities {
-            flags: wgt::DownlevelFlags::empty(),
-            ..Default::default()
-        };
+    fn missing_core_features_and_limits_rejected_with_strict_compliance() {
         assert!(!adapter_allowed(
             InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
             &"",
             &wgt::Limits::defaults(),
-            &downlevel
-        ));
-    }
-
-    #[test]
-    fn missing_surface_view_formats_allowed_with_strict_compliance() {
-        let downlevel = wgt::DownlevelCapabilities {
-            flags: wgt::DownlevelFlags::all() - wgt::DownlevelFlags::SURFACE_VIEW_FORMATS,
-            ..Default::default()
-        };
-        assert!(adapter_allowed(
-            InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
-            &"",
-            &wgt::Limits::defaults(),
-            &downlevel
+            wgt::Features::empty()
         ));
     }
 
@@ -1624,7 +1637,7 @@ mod tests {
             InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
             &"",
             &wgt::Limits::defaults(),
-            &compliant_downlevel()
+            wgt::Features::CORE_FEATURES_AND_LIMITS
         ));
     }
 

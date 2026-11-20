@@ -170,6 +170,7 @@ async fn pulling_common(
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let color_view = color_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
