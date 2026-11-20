@@ -507,6 +507,12 @@ struct SwapChain {
     format: wgt::TextureFormat,
     size: wgt::Extent3d,
     restart_pending: bool,
+    /// Made with `DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL`: back buffers keep their contents.
+    preserve_contents: bool,
+    /// Presents made with this swap chain.
+    presents: u64,
+    /// For each back buffer, the value of `presents` after its latest present, or `0`.
+    last_presented: Vec<u64>,
 }
 
 enum SurfaceTarget {
@@ -1412,7 +1418,7 @@ impl crate::Surface for Surface {
         let pending_present_count = config.maximum_frame_latency as usize;
         let swap_chain = match self.swap_chain.write().take() {
             //Note: this path doesn't properly re-initialize all of the things
-            Some(sc) => {
+            Some(sc) if sc.preserve_contents == config.preserve_contents => {
                 let raw = unsafe { sc.release_resources() };
                 let result = unsafe {
                     raw.ResizeBuffers(
@@ -1429,7 +1435,9 @@ impl crate::Surface for Surface {
                 }
                 raw
             }
-            None => {
+            // ResizeBuffers cannot change the swap effect: a new swap chain replaces the old.
+            old => {
+                drop(old.map(|sc| unsafe { sc.release_resources() }));
                 let desc = Dxgi::DXGI_SWAP_CHAIN_DESC1 {
                     AlphaMode: auxil::dxgi::conv::map_acomposite_alpha_mode(
                         config.composite_alpha_mode,
@@ -1445,7 +1453,12 @@ impl crate::Surface for Surface {
                     BufferUsage: Dxgi::DXGI_USAGE_RENDER_TARGET_OUTPUT,
                     BufferCount: swap_chain_buffer,
                     Scaling: Dxgi::DXGI_SCALING_STRETCH,
-                    SwapEffect: Dxgi::DXGI_SWAP_EFFECT_FLIP_DISCARD,
+                    // Only FLIP_SEQUENTIAL keeps back buffers and allows dirty rectangles.
+                    SwapEffect: if config.preserve_contents {
+                        Dxgi::DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL
+                    } else {
+                        Dxgi::DXGI_SWAP_EFFECT_FLIP_DISCARD
+                    },
                     Flags: flags.0 as u32,
                 };
                 let swap_chain1 = match self.target {
@@ -1614,6 +1627,9 @@ impl crate::Surface for Surface {
             format: config.format,
             size: config.extent,
             restart_pending: true,
+            preserve_contents: config.preserve_contents,
+            presents: 0,
+            last_presented: vec![0; swap_chain_buffer as usize],
         });
 
         Ok(())
@@ -1672,9 +1688,16 @@ impl crate::Surface for Surface {
             plane_slice_override: None,
             _drop_guard: None,
         };
+        let age = match sc.last_presented.get(index) {
+            Some(&last) if sc.preserve_contents && last > 0 => {
+                u32::try_from(sc.presents - last + 1).unwrap_or(0)
+            }
+            _ => 0,
+        };
         Ok(crate::AcquiredSurfaceTexture {
             texture,
             suboptimal: false,
+            age,
         })
     }
     unsafe fn discard_texture(&self, _texture: Texture) {
@@ -1740,11 +1763,17 @@ impl crate::Queue for Queue {
         &self,
         surface: &Surface,
         _texture: Texture,
-        _damage_rects: &[wgt::Rect<u32>],
+        damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), crate::SurfaceError> {
         let mut swapchain = surface.swap_chain.write();
         let sc = swapchain.as_mut().unwrap();
         sc.acquired_count -= 1;
+
+        let index = unsafe { sc.raw.GetCurrentBackBufferIndex() } as usize;
+        sc.presents += 1;
+        if let Some(last) = sc.last_presented.get_mut(index) {
+            *last = sc.presents;
+        }
 
         let (interval, flags) = match sc.present_mode {
             // We only allow immediate if ALLOW_TEARING is valid.
@@ -1765,6 +1794,26 @@ impl crate::Queue for Queue {
             unsafe { sc.raw.Present(1, Dxgi::DXGI_PRESENT_RESTART) }
                 .ok()
                 .into_device_result("Present(RESTART)")?;
+        } else if sc.preserve_contents && !damage_rects.is_empty() {
+            let mut dirty = damage_rects
+                .iter()
+                .map(|r| Foundation::RECT {
+                    left: r.x as i32,
+                    top: r.y as i32,
+                    right: (r.x + r.w) as i32,
+                    bottom: (r.y + r.h) as i32,
+                })
+                .collect::<Vec<_>>();
+            let params = Dxgi::DXGI_PRESENT_PARAMETERS {
+                DirtyRectsCount: dirty.len() as u32,
+                pDirtyRects: dirty.as_mut_ptr(),
+                pScrollRect: core::ptr::null_mut(),
+                pScrollOffset: core::ptr::null_mut(),
+            };
+            profiling::scope!("IDXGISwapchain3::Present1");
+            unsafe { sc.raw.Present1(interval, flags, &params) }
+                .ok()
+                .into_device_result("Present1")?;
         } else {
             profiling::scope!("IDXGISwapchain3::Present");
             unsafe { sc.raw.Present(interval, flags) }

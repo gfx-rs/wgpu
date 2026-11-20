@@ -219,6 +219,7 @@ mod surface_configuration_tests {
             },
             usage: wgt::TextureUses::COLOR_TARGET,
             view_formats: Vec::new(),
+            preserve_contents: false,
         }
     }
 

@@ -968,6 +968,7 @@ impl crate::Surface for Surface {
         Ok(crate::AcquiredSurfaceTexture {
             texture,
             suboptimal: false,
+            age: 0,
         })
     }
     unsafe fn discard_texture(&self, _texture: super::Texture) {}

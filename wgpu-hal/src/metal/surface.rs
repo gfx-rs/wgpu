@@ -427,6 +427,7 @@ impl crate::Surface for super::Surface {
         Ok(crate::AcquiredSurfaceTexture {
             texture: suf_texture,
             suboptimal: false,
+            age: 0,
         })
     }
 

@@ -389,7 +389,14 @@ impl Queue {
     /// presentation ignore them.
     ///
     /// The texture must still contain the whole frame, since the compositor may use any part
-    /// of it.
+    /// of it. On a surface configured with
+    /// [`preserve_contents`](crate::SurfaceConfiguration::preserve_contents) whose texture had a
+    /// [`buffer_age`](SurfaceTexture::buffer_age) of `n`, that means drawing only what changed in
+    /// the last `n` presents and naming it here; nothing outside these rects may be written.
+    ///
+    /// - DX12: `IDXGISwapChain1::Present1` dirty rectangles, on surfaces that keep their contents.
+    /// - Vulkan: `VkPresentRegionsKHR`, where `VK_KHR_incremental_present` is available.
+    /// - EGL: `eglSwapBuffersWithDamage`, where available.
     pub fn present_with_damage(
         &self,
         mut surface_texture: SurfaceTexture,
