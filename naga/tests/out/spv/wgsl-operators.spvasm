@@ -34,8 +34,11 @@ OpDecorate %562 BuiltIn WorkgroupId
 %27 = OpTypeFunction %4
 %28 = OpConstant  %5  0
 %29 = OpConstant  %3  0.1
-%30 = OpConstantComposite  %6  %28 %28 %28 %28
-%34 = OpTypeVector %7 4
+%30 = OpConstant  %3  0.000000000000000000000000000000000000000000001
+%31 = OpConstantComposite  %4  %30 %30 %30 %30
+%32 = OpConstantComposite  %6  %28 %28 %28 %28
+%33 = OpConstantComposite  %4  %30 %30 %30 %30
+%37 = OpTypeVector %7 4
 %51 = OpTypeFunction %6 %6 %6
 %55 = OpConstantComposite  %6  %28 %28 %28 %28
 %57 = OpConstant  %5  -2147483648
@@ -67,8 +70,8 @@ OpDecorate %562 BuiltIn WorkgroupId
 %136 = OpConstantComposite  %135  %24 %24
 %137 = OpConstantComposite  %114  %24 %24 %24
 %138 = OpConstantComposite  %114  %23 %23 %23
-%139 = OpConstantComposite  %34  %24 %24 %24 %24
-%140 = OpConstantComposite  %34  %23 %23 %23 %23
+%139 = OpConstantComposite  %37  %24 %24 %24 %24
+%140 = OpConstantComposite  %37  %23 %23 %23 %23
 %142 = OpTypePointer Function %7
 %143 = OpConstantNull  %7
 %145 = OpConstantNull  %7
@@ -116,36 +119,33 @@ OpDecorate %562 BuiltIn WorkgroupId
 %566 = OpConstantComposite  %9  %15 %15 %15
 %26 = OpFunction  %4  None %27
 %25 = OpLabel
-OpBranch %31
-%31 = OpLabel
-%32 = OpSelect  %5  %24 %21 %28
-%35 = OpCompositeConstruct  %34  %24 %24 %24 %24
-%33 = OpSelect  %4  %35 %16 %18
-%36 = OpExtInst  %4  %1 FMix %18 %16 %20
-%38 = OpCompositeConstruct  %4  %29 %29 %29 %29
-%37 = OpExtInst  %4  %1 FMix %18 %16 %38
-%39 = OpBitcast  %3  %21
-%40 = OpBitcast  %4  %22
-%41 = OpCompositeConstruct  %6  %32 %32 %32 %32
-%42 = OpIAdd  %6  %41 %30
-%43 = OpConvertSToF  %4  %42
-%44 = OpFAdd  %4  %43 %33
+OpBranch %34
+%34 = OpLabel
+%35 = OpSelect  %5  %24 %21 %28
+%38 = OpCompositeConstruct  %37  %24 %24 %24 %24
+%36 = OpSelect  %4  %38 %16 %18
+%39 = OpExtInst  %4  %1 FMix %18 %16 %20
+%41 = OpCompositeConstruct  %4  %29 %29 %29 %29
+%40 = OpExtInst  %4  %1 FMix %18 %16 %41
+%42 = OpCompositeConstruct  %6  %35 %35 %35 %35
+%43 = OpIAdd  %6  %42 %32
+%44 = OpConvertSToF  %4  %43
 %45 = OpFAdd  %4  %44 %36
-%46 = OpFAdd  %4  %45 %37
-%47 = OpCompositeConstruct  %4  %39 %39 %39 %39
-%48 = OpFAdd  %4  %46 %47
-%49 = OpFAdd  %4  %48 %40
+%46 = OpFAdd  %4  %45 %39
+%47 = OpFAdd  %4  %46 %40
+%48 = OpFAdd  %4  %47 %33
+%49 = OpFAdd  %4  %48 %31
 OpReturnValue %49
 OpFunctionEnd
 %50 = OpFunction  %6  None %51
 %52 = OpFunctionParameter  %6
 %53 = OpFunctionParameter  %6
 %54 = OpLabel
-%56 = OpIEqual  %34  %53 %55
-%61 = OpIEqual  %34  %52 %59
-%62 = OpIEqual  %34  %53 %60
-%63 = OpLogicalAnd  %34  %61 %62
-%64 = OpLogicalOr  %34  %56 %63
+%56 = OpIEqual  %37  %53 %55
+%61 = OpIEqual  %37  %52 %59
+%62 = OpIEqual  %37  %53 %60
+%63 = OpLogicalAnd  %37  %61 %62
+%64 = OpLogicalOr  %37  %56 %63
 %66 = OpSelect  %6  %64 %65 %53
 %67 = OpSDiv  %6  %52 %66
 %68 = OpIMul  %6  %67 %66
@@ -256,7 +256,7 @@ OpBranch %164
 %168 = OpLogicalOr  %7  %24 %23
 %169 = OpLogicalOr  %114  %137 %138
 %170 = OpLogicalAnd  %7  %24 %23
-%171 = OpLogicalAnd  %34  %139 %140
+%171 = OpLogicalAnd  %37  %139 %140
 %172 = OpLogicalNot  %7  %23
 OpSelectionMerge %173 None
 OpBranchConditional %172 %174 %175
@@ -553,37 +553,37 @@ OpBranch %431
 %434 = OpFOrdEqual  %7  %75 %15
 %435 = OpIEqual  %135  %311 %237
 %436 = OpIEqual  %114  %312 %247
-%437 = OpFOrdEqual  %34  %313 %314
+%437 = OpFOrdEqual  %37  %313 %314
 %438 = OpINotEqual  %7  %81 %21
 %439 = OpINotEqual  %7  %310 %220
 %440 = OpFOrdNotEqual  %7  %75 %15
 %441 = OpINotEqual  %135  %311 %237
 %442 = OpINotEqual  %114  %312 %247
-%443 = OpFOrdNotEqual  %34  %313 %314
+%443 = OpFOrdNotEqual  %37  %313 %314
 %444 = OpSLessThan  %7  %81 %21
 %445 = OpULessThan  %7  %310 %220
 %446 = OpFOrdLessThan  %7  %75 %15
 %447 = OpSLessThan  %135  %311 %237
 %448 = OpULessThan  %114  %312 %247
-%449 = OpFOrdLessThan  %34  %313 %314
+%449 = OpFOrdLessThan  %37  %313 %314
 %450 = OpSLessThanEqual  %7  %81 %21
 %451 = OpULessThanEqual  %7  %310 %220
 %452 = OpFOrdLessThanEqual  %7  %75 %15
 %453 = OpSLessThanEqual  %135  %311 %237
 %454 = OpULessThanEqual  %114  %312 %247
-%455 = OpFOrdLessThanEqual  %34  %313 %314
+%455 = OpFOrdLessThanEqual  %37  %313 %314
 %456 = OpSGreaterThan  %7  %81 %21
 %457 = OpUGreaterThan  %7  %310 %220
 %458 = OpFOrdGreaterThan  %7  %75 %15
 %459 = OpSGreaterThan  %135  %311 %237
 %460 = OpUGreaterThan  %114  %312 %247
-%461 = OpFOrdGreaterThan  %34  %313 %314
+%461 = OpFOrdGreaterThan  %37  %313 %314
 %462 = OpSGreaterThanEqual  %7  %81 %21
 %463 = OpUGreaterThanEqual  %7  %310 %220
 %464 = OpFOrdGreaterThanEqual  %7  %75 %15
 %465 = OpSGreaterThanEqual  %135  %311 %237
 %466 = OpUGreaterThanEqual  %114  %312 %247
-%467 = OpFOrdGreaterThanEqual  %34  %313 %314
+%467 = OpFOrdGreaterThanEqual  %37  %313 %314
 OpReturn
 OpFunctionEnd
 %469 = OpFunction  %2  None %134

@@ -4,6 +4,9 @@
 
 using metal::uint;
 
+constant uint bitcast_vec2_to_scalar = 1006648320u;
+constant metal::half4 bitcast_vec2_to_vec4_ = metal::half4(0.000000059604645h, 0.0h, 0.000000059604645h, 0.0h);
+constant metal::uint2 bitcast_vec4_to_vec2_ = metal::uint2(1006648320u, 1006648320u);
 
 kernel void main_(
 ) {
@@ -15,34 +18,34 @@ kernel void main_(
     metal::int2 i2_ = metal::int2(0);
     metal::uint2 u2_ = metal::uint2(0u);
     metal::float2 f2_ = metal::float2(0.0);
-    metal::half2 _e25 = h2_;
-    i1_ = as_type<int>(_e25);
-    metal::half2 _e27 = h2_;
-    u1_ = as_type<uint>(_e27);
     metal::half2 _e29 = h2_;
-    f1_ = as_type<float>(_e29);
-    metal::half4 _e31 = h4_;
-    i2_ = as_type<metal::int2>(_e31);
-    metal::half4 _e33 = h4_;
-    u2_ = as_type<metal::uint2>(_e33);
+    i1_ = as_type<int>(_e29);
+    metal::half2 _e31 = h2_;
+    u1_ = as_type<uint>(_e31);
+    metal::half2 _e33 = h2_;
+    f1_ = as_type<float>(_e33);
     metal::half4 _e35 = h4_;
-    f2_ = as_type<metal::float2>(_e35);
-    int _e37 = i1_;
-    h2_ = as_type<metal::half2>(_e37);
-    uint _e39 = u1_;
-    h2_ = as_type<metal::half2>(_e39);
-    float _e41 = f1_;
+    i2_ = as_type<metal::int2>(_e35);
+    metal::half4 _e37 = h4_;
+    u2_ = as_type<metal::uint2>(_e37);
+    metal::half4 _e39 = h4_;
+    f2_ = as_type<metal::float2>(_e39);
+    int _e41 = i1_;
     h2_ = as_type<metal::half2>(_e41);
-    metal::int2 _e43 = i2_;
-    h4_ = as_type<metal::half4>(_e43);
-    metal::uint2 _e45 = u2_;
-    h4_ = as_type<metal::half4>(_e45);
-    metal::float2 _e47 = f2_;
+    uint _e43 = u1_;
+    h2_ = as_type<metal::half2>(_e43);
+    float _e45 = f1_;
+    h2_ = as_type<metal::half2>(_e45);
+    metal::int2 _e47 = i2_;
     h4_ = as_type<metal::half4>(_e47);
-    metal::half2 _e49 = h2_;
-    h2_ = as_type<metal::half2>(_e49);
-    uint _e51 = u1_;
-    u1_ = as_type<uint>(_e51);
+    metal::uint2 _e49 = u2_;
+    h4_ = as_type<metal::half4>(_e49);
+    metal::float2 _e51 = f2_;
+    h4_ = as_type<metal::half4>(_e51);
+    metal::half2 _e53 = h2_;
+    h2_ = as_type<metal::half2>(_e53);
+    uint _e55 = u1_;
+    u1_ = as_type<uint>(_e55);
     u1_ = as_type<uint>(4294967295u);
     f1_ = as_type<float>(1);
     i1_ = as_type<int>(1.0);
