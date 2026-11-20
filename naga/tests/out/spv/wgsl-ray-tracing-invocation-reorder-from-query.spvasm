@@ -13,12 +13,6 @@ OpExtension "SPV_EXT_shader_invocation_reorder"
 OpMemoryModel Logical GLSL450
 OpEntryPoint RayGenerationKHR %19 "ray_gen_main" %14 %16 %6
 OpMemberDecorate %8 0 Offset 0
-OpMemberDecorate %11 0 Offset 0
-OpMemberDecorate %11 1 Offset 4
-OpMemberDecorate %11 2 Offset 8
-OpMemberDecorate %11 3 Offset 12
-OpMemberDecorate %11 4 Offset 16
-OpMemberDecorate %11 5 Offset 32
 OpDecorate %16 DescriptorSet 0
 OpDecorate %16 Binding 0
 %2 = OpTypeVoid

@@ -64,8 +64,6 @@ OpName %25 "vert_main"
 OpName %42 "uv"
 OpName %45 "frag_main"
 OpName %61 "fs_extra"
-OpMemberDecorate %7 0 Offset 0
-OpMemberDecorate %7 1 Offset 16
 OpDecorate %11 DescriptorSet 0
 OpDecorate %11 Binding 0
 OpDecorate %13 DescriptorSet 0

@@ -8,7 +8,6 @@ OpExtension "SPV_KHR_storage_buffer_storage_class"
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %114 "main" %138
 OpExecutionMode %114 LocalSize 1 1 1
-OpDecorate %5 ArrayStride 4
 OpMemberDecorate %9 0 Offset 0
 OpMemberDecorate %9 1 Offset 12
 OpDecorate %11 ArrayStride 8

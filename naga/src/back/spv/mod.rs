@@ -969,6 +969,9 @@ pub struct Writer {
     cached_constants: crate::FastHashMap<CachedConstant, Word>,
     global_variables: HandleVec<crate::GlobalVariable, GlobalVariable>,
     std140_compat_uniform_types: crate::FastHashMap<Handle<crate::Type>, Std140CompatTypeInfo>,
+    /// Types that need explicit layout decorations: those reachable from
+    /// variables in address spaces backed by buffer memory.
+    explicit_layout_types: crate::arena::HandleSet<crate::Type>,
     fake_missing_bindings: bool,
     binding_map: BindingMap,
 

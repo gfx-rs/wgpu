@@ -14,10 +14,6 @@ OpExecutionMode %19 LocalSize 1 1 1
 OpExecutionMode %103 LocalSize 1 1 1
 OpDecorate %5 ArrayStride 8
 OpDecorate %8 ArrayStride 8
-OpMemberDecorate %10 0 Offset 0
-OpMemberDecorate %10 1 Offset 8
-OpMemberDecorate %11 0 Offset 0
-OpMemberDecorate %11 1 Offset 8
 OpDecorate %12 DescriptorSet 0
 OpDecorate %12 Binding 0
 OpDecorate %13 Block

@@ -107,6 +107,7 @@ impl Writer {
             cached_constants: crate::FastHashMap::default(),
             global_variables: HandleVec::new(),
             std140_compat_uniform_types: crate::FastHashMap::default(),
+            explicit_layout_types: crate::arena::HandleSet::new(),
             fake_missing_bindings: options.fake_missing_bindings,
             binding_map: options.binding_map.clone(),
             saved_cached: CachedExpressions::default(),
@@ -207,6 +208,7 @@ impl Writer {
             cached_constants: take(&mut self.cached_constants).reclaim(),
             global_variables: take(&mut self.global_variables).reclaim(),
             std140_compat_uniform_types: take(&mut self.std140_compat_uniform_types).reclaim(),
+            explicit_layout_types: crate::arena::HandleSet::new(),
             saved_cached: take(&mut self.saved_cached).reclaim(),
             temp_list: take(&mut self.temp_list).reclaim(),
             ray_query_functions: take(&mut self.ray_query_functions).reclaim(),
@@ -2323,7 +2325,9 @@ impl Writer {
             let id = self.id_gen.next();
             let instruction = match ty.inner {
                 crate::TypeInner::Array { base, size, stride } => {
-                    self.decorate(id, Decoration::ArrayStride, &[stride]);
+                    if self.explicit_layout_types.contains(handle) {
+                        self.decorate(id, Decoration::ArrayStride, &[stride]);
+                    }
 
                     let type_id = self.get_handle_type_id(base);
                     match size.resolve(module.to_ctx())? {
@@ -2366,7 +2370,8 @@ impl Writer {
                             }
                             _ => (),
                         }
-                        self.decorate_struct_member(id, index, member, &module.types)?;
+                        let layout = self.explicit_layout_types.contains(handle);
+                        self.decorate_struct_member(id, index, member, layout, &module.types)?;
                         let member_id = self.get_handle_type_id(member.ty);
                         member_ids.push(member_id);
                     }
@@ -2612,6 +2617,7 @@ impl Writer {
                                                 std140_type_id,
                                                 next_index as usize,
                                                 member,
+                                                true,
                                                 &module.types,
                                             )?;
                                             self.get_handle_type_id(member.ty)
@@ -3663,7 +3669,13 @@ impl Writer {
                         binding: None,
                         offset: 0,
                     };
-                    self.decorate_struct_member(wrapper_type_id, 0, &member, &ir_module.types)?;
+                    self.decorate_struct_member(
+                        wrapper_type_id,
+                        0,
+                        &member,
+                        true,
+                        &ir_module.types,
+                    )?;
 
                     Instruction::type_struct(wrapper_type_id, &[inner_type_id])
                         .to_words(&mut self.logical_layout.declarations);
@@ -3732,22 +3744,17 @@ impl Writer {
     /// Write the necessary decorations for a struct member.
     ///
     /// Emit decorations for the `index`'th member of the struct type
-    /// designated by `struct_id`, described by `member`.
+    /// designated by `struct_id`, described by `member`. The explicit layout
+    /// decorations are emitted only if `layout` is true.
     fn decorate_struct_member(
         &mut self,
         struct_id: Word,
         index: usize,
         member: &crate::StructMember,
+        layout: bool,
         arena: &UniqueArena<crate::Type>,
     ) -> Result<(), Error> {
         use spirv::Decoration;
-
-        self.annotations.push(Instruction::member_decorate(
-            struct_id,
-            index as u32,
-            Decoration::Offset,
-            &[member.offset],
-        ));
 
         if self.flags.contains(WriterFlags::DEBUG) {
             if let Some(ref name) = member.name {
@@ -3755,6 +3762,17 @@ impl Writer {
                     .push(Instruction::member_name(struct_id, index as u32, name));
             }
         }
+
+        if !layout {
+            return Ok(());
+        }
+
+        self.annotations.push(Instruction::member_decorate(
+            struct_id,
+            index as u32,
+            Decoration::Offset,
+            &[member.offset],
+        ));
 
         // Matrices and (potentially nested) arrays of matrices both require decorations,
         // so "see through" any arrays to determine if they're needed.
@@ -3920,6 +3938,8 @@ impl Writer {
                 ));
             }
         }
+
+        self.explicit_layout_types = explicit_layout_types(ir_module);
 
         // write all types
         for (handle, _) in ir_module.types.iter() {
@@ -4141,4 +4161,44 @@ fn test_write_physical_layout() {
     assert_eq!(writer.physical_layout.bound, 0);
     writer.write_physical_layout();
     assert_eq!(writer.physical_layout.bound, 3);
+}
+
+/// Find the types that need explicit layout decorations (`Offset`,
+/// `ArrayStride`, `MatrixStride`).
+///
+/// Since SPIR-V 1.5, Vulkan forbids these decorations on types used by
+/// variables in the `Function`, `Private` and `Workgroup` storage classes
+/// (`VUID-StandaloneSpirv-None-10684`), so only the types reachable from
+/// variables in other address spaces get them.
+fn explicit_layout_types(module: &crate::Module) -> crate::arena::HandleSet<crate::Type> {
+    use crate::{AddressSpace as As, TypeInner as Ti};
+
+    let needs_layout = |space| {
+        !matches!(
+            space,
+            As::Function | As::Private | As::WorkGroup | As::Handle
+        )
+    };
+    let mut set = crate::arena::HandleSet::for_arena(&module.types);
+    let mut stack: Vec<_> = module
+        .global_variables
+        .iter()
+        .filter(|&(_, var)| needs_layout(var.space))
+        .map(|(_, var)| var.ty)
+        .chain(module.types.iter().filter_map(|(_, ty)| match ty.inner {
+            Ti::Pointer { base, space } if needs_layout(space) => Some(base),
+            _ => None,
+        }))
+        .collect();
+    while let Some(handle) = stack.pop() {
+        if !set.insert(handle) {
+            continue;
+        }
+        match module.types[handle].inner {
+            Ti::Array { base, .. } | Ti::BindingArray { base, .. } => stack.push(base),
+            Ti::Struct { ref members, .. } => stack.extend(members.iter().map(|m| m.ty)),
+            _ => {}
+        }
+    }
+    set
 }
