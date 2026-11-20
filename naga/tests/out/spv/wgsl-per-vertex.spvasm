@@ -9,7 +9,6 @@ OpExtension "SPV_KHR_fragment_shader_barycentric"
 OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %14 "fs_main" %9 %12
 OpExecutionMode %14 OriginUpperLeft
-OpDecorate %4 ArrayStride 4
 OpDecorate %9 Location 0
 OpDecorate %9 PerVertexKHR
 OpDecorate %12 Location 0

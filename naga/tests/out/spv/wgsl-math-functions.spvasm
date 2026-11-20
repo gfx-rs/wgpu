@@ -7,16 +7,6 @@ OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %18 "main"
 OpExecutionMode %18 OriginUpperLeft
-OpMemberDecorate %11 0 Offset 0
-OpMemberDecorate %11 1 Offset 4
-OpMemberDecorate %12 0 Offset 0
-OpMemberDecorate %12 1 Offset 8
-OpMemberDecorate %13 0 Offset 0
-OpMemberDecorate %13 1 Offset 16
-OpMemberDecorate %14 0 Offset 0
-OpMemberDecorate %14 1 Offset 4
-OpMemberDecorate %15 0 Offset 0
-OpMemberDecorate %15 1 Offset 16
 %2 = OpTypeVoid
 %3 = OpTypeFloat 32
 %4 = OpTypeInt 32 1

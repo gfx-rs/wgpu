@@ -50,12 +50,6 @@ OpMemberDecorate %19 16 ColMajor
 OpMemberDecorate %19 16 MatrixStride 8
 OpDecorate %20 ArrayStride 2
 OpMemberDecorate %22 0 Offset 0
-OpMemberDecorate %23 0 Offset 0
-OpMemberDecorate %23 1 Offset 2
-OpMemberDecorate %23 2 Offset 8
-OpMemberDecorate %23 3 Offset 14
-OpMemberDecorate %23 4 Offset 16
-OpMemberDecorate %23 5 Offset 20
 OpMemberDecorate %24 0 Offset 0
 OpMemberDecorate %24 1 Offset 4
 OpMemberDecorate %24 2 Offset 8

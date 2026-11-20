@@ -20,27 +20,6 @@ OpMemberDecorate %10 2 Offset 8
 OpMemberDecorate %10 3 Offset 12
 OpMemberDecorate %10 4 Offset 16
 OpMemberDecorate %10 5 Offset 24
-OpMemberDecorate %14 0 Offset 0
-OpMemberDecorate %14 1 Offset 4
-OpMemberDecorate %14 2 Offset 8
-OpMemberDecorate %14 3 Offset 12
-OpMemberDecorate %14 4 Offset 16
-OpMemberDecorate %14 5 Offset 32
-OpMemberDecorate %17 0 Offset 0
-OpMemberDecorate %17 1 Offset 4
-OpMemberDecorate %17 2 Offset 8
-OpMemberDecorate %17 3 Offset 12
-OpMemberDecorate %17 4 Offset 16
-OpMemberDecorate %17 5 Offset 20
-OpMemberDecorate %17 6 Offset 24
-OpMemberDecorate %17 7 Offset 28
-OpMemberDecorate %17 8 Offset 36
-OpMemberDecorate %17 9 Offset 48
-OpMemberDecorate %17 9 ColMajor
-OpMemberDecorate %17 9 MatrixStride 16
-OpMemberDecorate %17 10 Offset 112
-OpMemberDecorate %17 10 ColMajor
-OpMemberDecorate %17 10 MatrixStride 16
 OpDecorate %22 DescriptorSet 0
 OpDecorate %22 Binding 0
 OpDecorate %24 DescriptorSet 0

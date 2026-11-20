@@ -7,8 +7,6 @@ OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %16 "compute1" %10 %13
 OpExecutionMode %16 LocalSize 1 1 1
-OpMemberDecorate %5 0 Offset 0
-OpMemberDecorate %5 1 Offset 12
 OpDecorate %10 BuiltIn LocalInvocationId
 OpDecorate %13 BuiltIn LocalInvocationIndex
 %2 = OpTypeVoid

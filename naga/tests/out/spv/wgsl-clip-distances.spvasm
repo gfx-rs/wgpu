@@ -7,9 +7,6 @@ OpCapability ClipDistance
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
 OpEntryPoint Vertex %14 "main" %10 %12
-OpDecorate %5 ArrayStride 4
-OpMemberDecorate %8 0 Offset 0
-OpMemberDecorate %8 1 Offset 16
 OpDecorate %10 BuiltIn Position
 OpDecorate %12 BuiltIn ClipDistance
 %2 = OpTypeVoid

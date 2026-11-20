@@ -360,9 +360,6 @@ OpName %439 "foo"
 OpName %440 "c2"
 OpName %484 "foo_frag"
 OpName %502 "foo_compute"
-OpMemberDecorate %7 0 Offset 0
-OpMemberDecorate %7 1 Offset 16
-OpMemberDecorate %7 2 Offset 28
 OpMemberDecorate %8 0 Offset 0
 OpDecorate %14 ArrayStride 16
 OpDecorate %16 ArrayStride 4
@@ -386,17 +383,6 @@ OpDecorate %26 ArrayStride 32
 OpMemberDecorate %27 0 Offset 0
 OpMemberDecorate %27 0 ColMajor
 OpMemberDecorate %27 0 MatrixStride 8
-OpDecorate %29 ArrayStride 4
-OpDecorate %30 ArrayStride 40
-OpDecorate %33 ArrayStride 4
-OpDecorate %35 ArrayStride 16
-OpMemberDecorate %37 0 Offset 0
-OpDecorate %39 ArrayStride 4
-OpDecorate %43 ArrayStride 1
-OpMemberDecorate %45 0 Offset 0
-OpMemberDecorate %46 0 Offset 0
-OpMemberDecorate %47 0 Offset 0
-OpMemberDecorate %47 1 Offset 4
 OpMemberDecorate %48 0 Offset 0
 OpMemberDecorate %48 1 Offset 8
 OpMemberDecorate %48 2 Offset 16

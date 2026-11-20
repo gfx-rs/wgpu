@@ -8,7 +8,6 @@ OpExtension "SPV_KHR_shader_draw_parameters"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
 OpEntryPoint Vertex %14 "vertex" %9 %12
-OpMemberDecorate %4 0 Offset 0
 OpDecorate %9 BuiltIn DrawIndex
 OpDecorate %12 BuiltIn Position
 %2 = OpTypeVoid

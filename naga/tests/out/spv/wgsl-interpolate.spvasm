@@ -92,18 +92,6 @@ OpName %131 "perspective_centroid"
 OpName %133 "perspective_sample"
 OpName %135 "perspective_center"
 OpName %137 "frag_main"
-OpMemberDecorate %9 0 Offset 0
-OpMemberDecorate %9 1 Offset 16
-OpMemberDecorate %9 2 Offset 20
-OpMemberDecorate %9 3 Offset 24
-OpMemberDecorate %9 4 Offset 28
-OpMemberDecorate %9 5 Offset 32
-OpMemberDecorate %9 6 Offset 48
-OpMemberDecorate %9 7 Offset 64
-OpMemberDecorate %9 8 Offset 80
-OpMemberDecorate %9 9 Offset 96
-OpMemberDecorate %9 10 Offset 100
-OpMemberDecorate %9 11 Offset 104
 OpDecorate %11 BuiltIn Position
 OpDecorate %13 Location 0
 OpDecorate %13 Flat

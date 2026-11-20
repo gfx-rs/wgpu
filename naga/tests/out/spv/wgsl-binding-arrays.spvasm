@@ -11,7 +11,6 @@ OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %52 "main" %47 %50
 OpExecutionMode %52 OriginUpperLeft
 OpMemberDecorate %4 0 Offset 0
-OpMemberDecorate %21 0 Offset 0
 OpDecorate %24 DescriptorSet 0
 OpDecorate %24 Binding 0
 OpDecorate %28 DescriptorSet 0
