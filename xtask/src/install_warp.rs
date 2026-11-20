@@ -65,7 +65,16 @@ pub fn install_warp(shell: &Shell, target_dir: &str) -> anyhow::Result<()> {
     log::info!("Downloading WARP from {warp_url}");
     shell
         .cmd("curl.exe")
-        .args(["-L", "--retry", "5", &warp_url, "-o", "warp.zip"])
+        .args([
+            "-L",
+            "--fail",
+            "--retry",
+            "5",
+            "--retry-all-errors",
+            &warp_url,
+            "-o",
+            "warp.zip",
+        ])
         .run()
         .context("Failed to download WARP package")?;
 
