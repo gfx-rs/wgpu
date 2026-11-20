@@ -56,13 +56,50 @@ pub(super) struct WrappedImageSample {
     pub(super) clamp_to_edge: bool,
 }
 
-#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
-pub(super) struct WrappedImageQuery {
-    pub(super) dim: crate::ImageDimension,
-    pub(super) arrayed: bool,
-    pub(super) class: crate::ImageClass,
-    pub(super) query: ImageQuery,
+mod wiq {
+    use super::ImageQuery;
+
+    /// A wrapped function that performs an image query.
+    ///
+    /// We rely on HLSL's overloading support, i.e., we expect there to be cases where two
+    /// different `WrappedImageQuery`s have the same function name and differ elsewhere in
+    /// the signature, typically in what `write_image_type` produces. Fields that affect
+    /// neither the name nor the signature of the function must be normalized away in
+    /// `WrappedImageQuery::new` so that `WrappedImageQuery` works correctly as a map key in
+    /// [`crate::back::hlsl::Wrapped`].
+    #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+    pub(in crate::back::hlsl) struct WrappedImageQuery {
+        pub dim: crate::ImageDimension,
+        pub arrayed: bool,
+        pub class: crate::ImageClass,
+        pub query: ImageQuery,
+        _private: (),
+    }
+
+    impl WrappedImageQuery {
+        pub fn new(
+            dim: crate::ImageDimension,
+            arrayed: bool,
+            mut class: crate::ImageClass,
+            query: crate::ImageQuery,
+        ) -> Self {
+            // Normalize away the storage access mode, which does not affect image query
+            // functions. See docs on [`WrappedImageQuery`].
+            if let crate::ImageClass::Storage { ref mut access, .. } = class {
+                *access = crate::StorageAccess::LOAD;
+            }
+
+            Self {
+                dim,
+                arrayed,
+                class,
+                query: query.into(),
+                _private: (),
+            }
+        }
+    }
 }
+pub(in crate::back::hlsl) use wiq::WrappedImageQuery;
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) struct WrappedConstructor {
@@ -594,6 +631,10 @@ impl<W: Write> super::Writer<'_, W> {
         Ok(())
     }
 
+    /// Write the name of an image query wrapped function.
+    ///
+    /// See [`WrappedImageQuery`] for important considerations about uniqueness
+    /// of these functions.
     pub(super) fn write_wrapped_image_query_function_name(
         &mut self,
         query: WrappedImageQuery,
@@ -623,7 +664,12 @@ impl<W: Write> super::Writer<'_, W> {
 
     /// Helper function that write wrapped function for `Expression::ImageQuery`
     ///
-    /// <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-getdimensions>
+    /// See [`WrappedImageQuery`] for important considerations about uniqueness
+    /// of these functions.
+    ///
+    /// References:
+    ///
+    /// - <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-getdimensions>
     pub(super) fn write_wrapped_image_query_function(
         &mut self,
         module: &crate::Module,
@@ -2072,12 +2118,7 @@ impl<W: Write> super::Writer<'_, W> {
                             dim,
                             arrayed,
                             class,
-                        } => WrappedImageQuery {
-                            dim,
-                            arrayed,
-                            class,
-                            query: query.into(),
-                        },
+                        } => WrappedImageQuery::new(dim, arrayed, class, query),
                         _ => unreachable!("we only query images"),
                     };
 
