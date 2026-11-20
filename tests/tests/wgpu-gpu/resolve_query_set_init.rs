@@ -5,7 +5,7 @@
 
 use wgpu::*;
 use wgpu_test::{
-    apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    apply, fail, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
     TestingContext,
 };
 
@@ -17,9 +17,11 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         SAME_ENCODER_RESOLVES_CORRECTLY,
         WRITTEN_IN_PRIOR_SUBMIT_RESOLVES_CORRECTLY,
         WRITTEN_IN_PRIOR_SUBMIT_AND_SAME_ENCODER_RESOLVES_CORRECTLY,
+        WRITTEN_IN_FAILED_SUBMIT_OCCLUSION_RESOLVES_TO_ZERO,
         // Timestamp — requires TIMESTAMP_QUERY.
         UNWRITTEN_TIMESTAMP_RESOLVES_TO_ZERO,
         WRITTEN_TIMESTAMP_RESOLVES_TO_NONZERO,
+        WRITTEN_IN_FAILED_SUBMIT_TIMESTAMP_RESOLVES_TO_ZERO,
         // Inside-pass timestamp — requires TIMESTAMP_QUERY_INSIDE_PASSES.
         INSIDE_PASS_WRITTEN_TIMESTAMP_RESOLVES_TO_NONZERO,
         // Encoder timestamp — requires TIMESTAMP_QUERY_INSIDE_ENCODERS.
@@ -233,6 +235,39 @@ static WRITTEN_IN_PRIOR_SUBMIT_AND_SAME_ENCODER_RESOLVES_CORRECTLY: GpuTestConfi
             assert_eq!(result[2], 0, "slot 2 (unwritten) must be zero");
         });
 
+/// Slots written by a command buffer in a submit that fails validation (because
+/// a later command buffer in the same submit is invalid) must not be considered
+/// initialized.
+#[apply(gpu_test!)]
+static WRITTEN_IN_FAILED_SUBMIT_OCCLUSION_RESOLVES_TO_ZERO: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default())
+        .run_async(|ctx| async move {
+            const COUNT: u32 = 2;
+            let (qs, dst, size) = create_resolve_resources(&ctx, QueryType::Occlusion, COUNT);
+            let (view, pipeline) = create_occlusion_render_resources(&ctx);
+
+            let mut enc = ctx
+                .device
+                .create_command_encoder(&CommandEncoderDescriptor::default());
+            write_occlusion_query(&mut enc, &view, &pipeline, &qs, 0);
+            write_occlusion_query(&mut enc, &view, &pipeline, &qs, 1);
+            submit_with_invalid_command_buffer(&ctx, enc.finish());
+
+            let mut enc = ctx
+                .device
+                .create_command_encoder(&CommandEncoderDescriptor::default());
+            enc.resolve_query_set(&qs, 0..COUNT, &dst, 0);
+            ctx.queue.submit(Some(enc.finish()));
+
+            let result = read_resolve_buffer(&ctx, &dst, size).await;
+            assert!(
+                result.iter().all(|&v| v == 0),
+                "slots written only in a failed submit must resolve to zero, got {:?}",
+                result
+            );
+        });
+
 #[apply(gpu_test!)]
 static UNWRITTEN_TIMESTAMP_RESOLVES_TO_ZERO: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(Features::TIMESTAMP_QUERY))
@@ -304,6 +339,41 @@ static WRITTEN_TIMESTAMP_RESOLVES_TO_NONZERO: GpuTestConfiguration = GpuTestConf
             result
         );
     });
+
+#[apply(gpu_test!)]
+static WRITTEN_IN_FAILED_SUBMIT_TIMESTAMP_RESOLVES_TO_ZERO: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().features(Features::TIMESTAMP_QUERY))
+        .run_async(|ctx| async move {
+            const COUNT: u32 = 2;
+            let (qs, dst, size) = create_resolve_resources(&ctx, QueryType::Timestamp, COUNT);
+
+            let mut enc = ctx
+                .device
+                .create_command_encoder(&CommandEncoderDescriptor::default());
+            enc.begin_compute_pass(&ComputePassDescriptor {
+                label: None,
+                timestamp_writes: Some(ComputePassTimestampWrites {
+                    query_set: &qs,
+                    beginning_of_pass_write_index: Some(0),
+                    end_of_pass_write_index: Some(1),
+                }),
+            });
+            submit_with_invalid_command_buffer(&ctx, enc.finish());
+
+            let mut enc = ctx
+                .device
+                .create_command_encoder(&CommandEncoderDescriptor::default());
+            enc.resolve_query_set(&qs, 0..COUNT, &dst, 0);
+            ctx.queue.submit(Some(enc.finish()));
+
+            let result = read_resolve_buffer(&ctx, &dst, size).await;
+            assert!(
+                result.iter().all(|&v| v == 0),
+                "slots written only in a failed submit must resolve to zero, got {:?}",
+                result
+            );
+        });
 
 #[apply(gpu_test!)]
 static INSIDE_PASS_WRITTEN_TIMESTAMP_RESOLVES_TO_NONZERO: GpuTestConfiguration =
@@ -461,6 +531,29 @@ static WRITTEN_PIPELINE_STATISTICS_RESOLVES_TO_NONZERO: GpuTestConfiguration =
                 result[0]
             );
         });
+
+/// Submits `cmd_buf` followed by a command buffer that fails submit-time
+/// validation because it uses a destroyed buffer.
+fn submit_with_invalid_command_buffer(ctx: &TestingContext, cmd_buf: CommandBuffer) {
+    let buffer = ctx.device.create_buffer(&BufferDescriptor {
+        label: Some("destroyed"),
+        size: 4,
+        usage: BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let mut enc = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default());
+    enc.clear_buffer(&buffer, 0, None);
+    let invalid = enc.finish();
+    buffer.destroy();
+
+    fail(
+        &ctx.device,
+        || ctx.queue.submit([cmd_buf, invalid]),
+        Some("has been destroyed"),
+    );
+}
 
 fn create_occlusion_render_resources(ctx: &TestingContext) -> (TextureView, RenderPipeline) {
     let view = ctx
