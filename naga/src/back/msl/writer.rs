@@ -8061,6 +8061,15 @@ template <typename A>
                                         ));
                                     }
                                 },
+                                crate::TypeInner::AccelerationStructure { .. } => {
+                                    // Instance acceleration structures can be
+                                    // encoded in argument buffers since MSL 2.4.
+                                    if options.lang_version < (2, 4) {
+                                        return Err(Error::UnsupportedArrayOf(
+                                            "acceleration structures".to_string(),
+                                        ));
+                                    }
+                                }
                                 _ => {
                                     return Err(Error::UnsupportedArrayOfType(base));
                                 }

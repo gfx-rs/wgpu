@@ -1037,6 +1037,7 @@ features! {
         /// Supported platforms
         /// - Vulkan
         /// - DX12
+        /// - Metal
         ///
         /// [BlasTriangleGeometrySizeDescriptor::vertex_format]: super::BlasTriangleGeometrySizeDescriptor
         #[name("wgpu-extended-acceleration-structure-vertex-formats")]
@@ -1153,10 +1154,12 @@ features! {
         /// ex.
         /// - `var tlas: binding_array<acceleration_structure, 10>` (WGSL)
         ///
-        /// This capability allows them to exist and to be indexed by dynamically uniform values.
+        /// This capability allows them to exist and to be indexed by dynamically uniform or
+        /// non-uniform values.
         ///
         /// Supported platforms:
         /// - DX12
+        /// - Metal
         /// - Vulkan
         ///
         /// This is a native only feature.
