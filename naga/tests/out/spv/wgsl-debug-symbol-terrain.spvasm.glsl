@@ -100,9 +100,9 @@ uint naga_div(uint lhs, uint rhs)
 
 vec2 index_to_p(uint vert_index, uvec2 chunk_size, ivec2 chunk_corner)
 {
-    float _328 = float(vert_index);
-    float _331 = float(chunk_size.x + 1u);
-    return vec2(_328 - _331 * trunc(_328 / _331), float(naga_div(vert_index, chunk_size.x + 1u))) + vec2(chunk_corner);
+    float _332 = float(vert_index);
+    float _335 = float(chunk_size.x + 1u);
+    return vec2(_332 - _335 * trunc(_332 / _335), float(naga_div(vert_index, chunk_size.x + 1u))) + vec2(chunk_corner);
 }
 
 vec3 permute3(vec3 x)
@@ -127,11 +127,11 @@ float snoise2(vec2 v)
     m = max(vec3(0.5) - vec3(dot(_109, _109), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), vec3(0.0));
     m *= m;
     m *= m;
-    vec3 _169 = (fract(permute3((permute3(vec3(i.y) + vec3(0.0, i1.y, 1.0)) + vec3(i.x)) + vec3(0.0, i1.x, 1.0)) * vec4(0.211324870586395263671875, 0.3660254180431365966796875, -0.57735025882720947265625, 0.024390242993831634521484375).www) * 2.0) - vec3(1.0);
-    vec3 _171 = abs(_169) - vec3(0.5);
-    vec3 _174 = _169 - floor(_169 + vec3(0.5));
-    m *= (vec3(1.792842864990234375) - (((_174 * _174) + (_171 * _171)) * 0.8537347316741943359375));
-    return 130.0 * dot(m, vec3((_174.x * _109.x) + (_171.x * _109.y), (_174.yz * x12.xz) + (_171.yz * x12.yw)));
+    vec3 _171 = (fract(permute3((permute3(vec3(i.y) + vec3(0.0, i1.y, 1.0)) + vec3(i.x)) + vec3(0.0, i1.x, 1.0)) * vec4(0.211324870586395263671875, 0.3660254180431365966796875, -0.57735025882720947265625, 0.024390242993831634521484375).www) * 2.0) - vec3(1.0);
+    vec3 _173 = abs(_171) - vec3(0.5);
+    vec3 _176 = _171 - floor(_171 + vec3(0.5));
+    m *= (vec3(1.792842864990234375) - (((_176 * _176) + (_173 * _173)) * 0.8537347316741943359375));
+    return 130.0 * dot(m, vec3((_176.x * _109.x) + (_173.x * _109.y), (_176.yz * x12.xz) + (_173.yz * x12.yw)));
 }
 
 float fbm(vec2 p)
@@ -142,7 +142,7 @@ float fbm(vec2 p)
     float a = 0.5;
     uvec2 loop_bound = uvec2(4294967295u);
     x = p * 0.00999999977648258209228515625;
-    mat2 _227 = mat2(vec2(0.877582550048828125, 0.47942554950714111328125), vec2(-0.47942554950714111328125, 0.877582550048828125));
+    mat2 _231 = mat2(vec2(0.877582550048828125, 0.47942554950714111328125), vec2(-0.47942554950714111328125, 0.877582550048828125));
     for (;;)
     {
         if (all(equal(uvec2(0u), loop_bound)))
@@ -155,7 +155,7 @@ float fbm(vec2 p)
             break;
         }
         v += (a * snoise2(x));
-        x = ((_227 * x) * 2.0) + vec2(100.0);
+        x = ((_231 * x) * 2.0) + vec2(100.0);
         a *= 0.5;
         i++;
         continue;
@@ -170,27 +170,27 @@ vec3 terrain_point(vec2 p, vec2 min_max_height)
 
 Vertex terrain_vertex(vec2 p, vec2 min_max_height)
 {
-    vec3 _293 = terrain_point(p, min_max_height);
-    return Vertex(_293, (normalize(cross(terrain_point(p + vec2(0.0, 0.100000001490116119384765625), min_max_height) - _293, terrain_point(p + vec2(0.100000001490116119384765625, 0.0), min_max_height) - _293)) + normalize(cross(terrain_point(p + vec2(0.0, -0.100000001490116119384765625), min_max_height) - _293, terrain_point(p + vec2(-0.100000001490116119384765625, 0.0), min_max_height) - _293))) * 0.5);
+    vec3 _297 = terrain_point(p, min_max_height);
+    return Vertex(_297, (normalize(cross(terrain_point(p + vec2(0.0, 0.100000001490116119384765625), min_max_height) - _297, terrain_point(p + vec2(0.100000001490116119384765625, 0.0), min_max_height) - _297)) + normalize(cross(terrain_point(p + vec2(0.0, -0.100000001490116119384765625), min_max_height) - _297, terrain_point(p + vec2(-0.100000001490116119384765625, 0.0), min_max_height) - _297))) * 0.5);
 }
 
 void main()
 {
     vertices.data[gl_GlobalInvocationID.x] = terrain_vertex(index_to_p(gl_GlobalInvocationID.x, chunk_data_1._m0.chunk_size, chunk_data_1._m0.chunk_corner), chunk_data_1._m0.min_max_height);
-    uint _392 = gl_GlobalInvocationID.x * 6u;
-    if (_392 >= ((chunk_data_1._m0.chunk_size.x * chunk_data_1._m0.chunk_size.y) * 6u))
+    uint _396 = gl_GlobalInvocationID.x * 6u;
+    if (_396 >= ((chunk_data_1._m0.chunk_size.x * chunk_data_1._m0.chunk_size.y) * 6u))
     {
         return;
     }
-    uint _407 = gl_GlobalInvocationID.x + naga_div(gl_GlobalInvocationID.x, chunk_data_1._m0.chunk_size.x);
-    uint _412 = (_407 + chunk_data_1._m0.chunk_size.x) + 1u;
-    uint _413 = _412 + 1u;
-    indices.data[_392] = _407;
-    indices.data[_392 + 1u] = _412;
-    indices.data[_392 + 2u] = _413;
-    indices.data[_392 + 3u] = _407;
-    indices.data[_392 + 4u] = _413;
-    indices.data[_392 + 5u] = _407 + 1u;
+    uint _411 = gl_GlobalInvocationID.x + naga_div(gl_GlobalInvocationID.x, chunk_data_1._m0.chunk_size.x);
+    uint _416 = (_411 + chunk_data_1._m0.chunk_size.x) + 1u;
+    uint _417 = _416 + 1u;
+    indices.data[_396] = _411;
+    indices.data[_396 + 1u] = _416;
+    indices.data[_396 + 2u] = _417;
+    indices.data[_396 + 3u] = _411;
+    indices.data[_396 + 4u] = _417;
+    indices.data[_396 + 5u] = _411 + 1u;
 }
 
 
@@ -303,11 +303,11 @@ uint naga_mod(uint lhs, uint rhs)
 
 void main()
 {
-    vec2 _458 = vec2(float(naga_mod(naga_div(uint(gl_VertexIndex) + 2u, 3u), 2u)), float(naga_mod(naga_div(uint(gl_VertexIndex) + 1u, 3u), 2u)));
-    GenVertexOutput _479 = GenVertexOutput(uint(clamp((_458.x * float(gen_data_1._m0.texture_size)) + (_458.y * float(gen_data_1._m0.texture_size)), 0.0, 4294967040.0)) + gen_data_1._m0.start_index, vec4(vec2(-1.0) + (_458 * 2.0), 0.0, 1.0), _458);
-    index = _479.index;
-    gl_Position = _479.position;
-    uv = _479.uv;
+    vec2 _462 = vec2(float(naga_mod(naga_div(uint(gl_VertexIndex) + 2u, 3u), 2u)), float(naga_mod(naga_div(uint(gl_VertexIndex) + 1u, 3u), 2u)));
+    GenVertexOutput _485 = GenVertexOutput(uint(clamp((_462.x * float(gen_data_1._m0.texture_size)) + (_462.y * float(gen_data_1._m0.texture_size)), 0.0, 4294967040.0)) + gen_data_1._m0.start_index, vec4(vec2(-1.0) + (_462 * 2.0), 0.0, 1.0), _462);
+    index = _485.index;
+    gl_Position = _485.position;
+    uv = _485.uv;
 }
 
 
@@ -422,9 +422,9 @@ uint naga_div(uint lhs, uint rhs)
 
 vec2 index_to_p(uint vert_index, uvec2 chunk_size, ivec2 chunk_corner)
 {
-    float _328 = float(vert_index);
-    float _331 = float(chunk_size.x + 1u);
-    return vec2(_328 - _331 * trunc(_328 / _331), float(naga_div(vert_index, chunk_size.x + 1u))) + vec2(chunk_corner);
+    float _332 = float(vert_index);
+    float _335 = float(chunk_size.x + 1u);
+    return vec2(_332 - _335 * trunc(_332 / _335), float(naga_div(vert_index, chunk_size.x + 1u))) + vec2(chunk_corner);
 }
 
 vec3 permute3(vec3 x)
@@ -449,11 +449,11 @@ float snoise2(vec2 v)
     m = max(vec3(0.5) - vec3(dot(_109, _109), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), vec3(0.0));
     m *= m;
     m *= m;
-    vec3 _169 = (fract(permute3((permute3(vec3(i.y) + vec3(0.0, i1.y, 1.0)) + vec3(i.x)) + vec3(0.0, i1.x, 1.0)) * vec4(0.211324870586395263671875, 0.3660254180431365966796875, -0.57735025882720947265625, 0.024390242993831634521484375).www) * 2.0) - vec3(1.0);
-    vec3 _171 = abs(_169) - vec3(0.5);
-    vec3 _174 = _169 - floor(_169 + vec3(0.5));
-    m *= (vec3(1.792842864990234375) - (((_174 * _174) + (_171 * _171)) * 0.8537347316741943359375));
-    return 130.0 * dot(m, vec3((_174.x * _109.x) + (_171.x * _109.y), (_174.yz * x12.xz) + (_171.yz * x12.yw)));
+    vec3 _171 = (fract(permute3((permute3(vec3(i.y) + vec3(0.0, i1.y, 1.0)) + vec3(i.x)) + vec3(0.0, i1.x, 1.0)) * vec4(0.211324870586395263671875, 0.3660254180431365966796875, -0.57735025882720947265625, 0.024390242993831634521484375).www) * 2.0) - vec3(1.0);
+    vec3 _173 = abs(_171) - vec3(0.5);
+    vec3 _176 = _171 - floor(_171 + vec3(0.5));
+    m *= (vec3(1.792842864990234375) - (((_176 * _176) + (_173 * _173)) * 0.8537347316741943359375));
+    return 130.0 * dot(m, vec3((_176.x * _109.x) + (_173.x * _109.y), (_176.yz * x12.xz) + (_173.yz * x12.yw)));
 }
 
 float fbm(vec2 p)
@@ -464,7 +464,7 @@ float fbm(vec2 p)
     float a = 0.5;
     uvec2 loop_bound = uvec2(4294967295u);
     x = p * 0.00999999977648258209228515625;
-    mat2 _227 = mat2(vec2(0.877582550048828125, 0.47942554950714111328125), vec2(-0.47942554950714111328125, 0.877582550048828125));
+    mat2 _231 = mat2(vec2(0.877582550048828125, 0.47942554950714111328125), vec2(-0.47942554950714111328125, 0.877582550048828125));
     for (;;)
     {
         if (all(equal(uvec2(0u), loop_bound)))
@@ -477,7 +477,7 @@ float fbm(vec2 p)
             break;
         }
         v += (a * snoise2(x));
-        x = ((_227 * x) * 2.0) + vec2(100.0);
+        x = ((_231 * x) * 2.0) + vec2(100.0);
         a *= 0.5;
         i++;
         continue;
@@ -492,49 +492,49 @@ vec3 terrain_point(vec2 p, vec2 min_max_height)
 
 Vertex terrain_vertex(vec2 p, vec2 min_max_height)
 {
-    vec3 _293 = terrain_point(p, min_max_height);
-    return Vertex(_293, (normalize(cross(terrain_point(p + vec2(0.0, 0.100000001490116119384765625), min_max_height) - _293, terrain_point(p + vec2(0.100000001490116119384765625, 0.0), min_max_height) - _293)) + normalize(cross(terrain_point(p + vec2(0.0, -0.100000001490116119384765625), min_max_height) - _293, terrain_point(p + vec2(-0.100000001490116119384765625, 0.0), min_max_height) - _293))) * 0.5);
+    vec3 _297 = terrain_point(p, min_max_height);
+    return Vertex(_297, (normalize(cross(terrain_point(p + vec2(0.0, 0.100000001490116119384765625), min_max_height) - _297, terrain_point(p + vec2(0.100000001490116119384765625, 0.0), min_max_height) - _297)) + normalize(cross(terrain_point(p + vec2(0.0, -0.100000001490116119384765625), min_max_height) - _297, terrain_point(p + vec2(-0.100000001490116119384765625, 0.0), min_max_height) - _297))) * 0.5);
 }
 
 void main()
 {
     float vert_component_1 = 0.0;
     uint index_2 = 0u;
-    GenVertexOutput _484 = GenVertexOutput(index, gl_FragCoord, uv);
-    uint _521 = uint(clamp((_484.uv.x * float(gen_data_1._m0.texture_size)) + (_484.uv.y * float(gen_data_1._m0.texture_size * gen_data_1._m0.texture_size)), 0.0, 4294967040.0)) + gen_data_1._m0.start_index;
-    uint _526 = uint(clamp(floor(float(_521) / 6.0), 0.0, 4294967040.0));
-    uint _527 = naga_mod(_521, 6u);
-    Vertex _535 = terrain_vertex(index_to_p(_526, gen_data_1._m0.chunk_size, gen_data_1._m0.chunk_corner), gen_data_1._m0.min_max_height);
-    switch (_527)
+    GenVertexOutput _490 = GenVertexOutput(index, gl_FragCoord, uv);
+    uint _527 = uint(clamp((_490.uv.x * float(gen_data_1._m0.texture_size)) + (_490.uv.y * float(gen_data_1._m0.texture_size * gen_data_1._m0.texture_size)), 0.0, 4294967040.0)) + gen_data_1._m0.start_index;
+    uint _532 = uint(clamp(floor(float(_527) / 6.0), 0.0, 4294967040.0));
+    uint _533 = naga_mod(_527, 6u);
+    Vertex _541 = terrain_vertex(index_to_p(_532, gen_data_1._m0.chunk_size, gen_data_1._m0.chunk_corner), gen_data_1._m0.min_max_height);
+    switch (_533)
     {
         case 0u:
         {
-            vert_component_1 = _535.position.x;
+            vert_component_1 = _541.position.x;
             break;
         }
         case 1u:
         {
-            vert_component_1 = _535.position.y;
+            vert_component_1 = _541.position.y;
             break;
         }
         case 2u:
         {
-            vert_component_1 = _535.position.z;
+            vert_component_1 = _541.position.z;
             break;
         }
         case 3u:
         {
-            vert_component_1 = _535.normal.x;
+            vert_component_1 = _541.normal.x;
             break;
         }
         case 4u:
         {
-            vert_component_1 = _535.normal.y;
+            vert_component_1 = _541.normal.y;
             break;
         }
         case 5u:
         {
-            vert_component_1 = _535.normal.z;
+            vert_component_1 = _541.normal.z;
             break;
         }
         default:
@@ -542,30 +542,30 @@ void main()
             break;
         }
     }
-    uint _559 = _526 + naga_div(_526, gen_data_1._m0.chunk_size.x);
-    uint _564 = (_559 + gen_data_1._m0.chunk_size.x) + 1u;
-    switch (_527)
+    uint _565 = _532 + naga_div(_532, gen_data_1._m0.chunk_size.x);
+    uint _570 = (_565 + gen_data_1._m0.chunk_size.x) + 1u;
+    switch (_533)
     {
         case 0u:
         case 3u:
         {
-            index_2 = _559;
+            index_2 = _565;
             break;
         }
         case 2u:
         case 4u:
         {
-            index_2 = _564 + 1u;
+            index_2 = _570 + 1u;
             break;
         }
         case 1u:
         {
-            index_2 = _564;
+            index_2 = _570;
             break;
         }
         case 5u:
         {
-            index_2 = _559 + 1u;
+            index_2 = _565 + 1u;
             break;
         }
         default:
@@ -573,10 +573,10 @@ void main()
             break;
         }
     }
-    index_2 = _484.index;
-    GenFragmentOutput _576 = GenFragmentOutput(floatBitsToUint(vert_component_1), index_2);
-    vert_component = _576.vert_component;
-    index_1 = _576.index;
+    index_2 = _490.index;
+    GenFragmentOutput _582 = GenFragmentOutput(floatBitsToUint(vert_component_1), index_2);
+    vert_component = _582.vert_component;
+    index_1 = _582.index;
 }
 
 
@@ -681,11 +681,11 @@ layout(location = 1) out vec3 world_pos;
 
 void main()
 {
-    Vertex _580 = Vertex(position, normal);
-    VertexOutput _602 = VertexOutput(camera_1._m0.view_proj * vec4(_580.position, 1.0), _580.normal, _580.position);
-    gl_Position = _602.clip_position;
-    normal_1 = _602.normal;
-    world_pos = _602.world_pos;
+    Vertex _586 = Vertex(position, normal);
+    VertexOutput _611 = VertexOutput(camera_1._m0.view_proj * vec4(_586.position, 1.0), _586.normal, _586.position);
+    gl_Position = _611.clip_position;
+    normal_1 = _611.normal;
+    world_pos = _611.world_pos;
 }
 
 
@@ -785,7 +785,7 @@ layout(set = 2, binding = 3) uniform sampler s_normal;
 
 layout(location = 0) in vec3 normal;
 layout(location = 1) in vec3 world_pos;
-layout(location = 0) out vec4 _614;
+layout(location = 0) out vec4 _623;
 
 vec3 permute3(vec3 x)
 {
@@ -809,11 +809,11 @@ float snoise2(vec2 v)
     m = max(vec3(0.5) - vec3(dot(_109, _109), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), vec3(0.0));
     m *= m;
     m *= m;
-    vec3 _169 = (fract(permute3((permute3(vec3(i.y) + vec3(0.0, i1.y, 1.0)) + vec3(i.x)) + vec3(0.0, i1.x, 1.0)) * vec4(0.211324870586395263671875, 0.3660254180431365966796875, -0.57735025882720947265625, 0.024390242993831634521484375).www) * 2.0) - vec3(1.0);
-    vec3 _171 = abs(_169) - vec3(0.5);
-    vec3 _174 = _169 - floor(_169 + vec3(0.5));
-    m *= (vec3(1.792842864990234375) - (((_174 * _174) + (_171 * _171)) * 0.8537347316741943359375));
-    return 130.0 * dot(m, vec3((_174.x * _109.x) + (_171.x * _109.y), (_174.yz * x12.xz) + (_171.yz * x12.yw)));
+    vec3 _171 = (fract(permute3((permute3(vec3(i.y) + vec3(0.0, i1.y, 1.0)) + vec3(i.x)) + vec3(0.0, i1.x, 1.0)) * vec4(0.211324870586395263671875, 0.3660254180431365966796875, -0.57735025882720947265625, 0.024390242993831634521484375).www) * 2.0) - vec3(1.0);
+    vec3 _173 = abs(_171) - vec3(0.5);
+    vec3 _176 = _171 - floor(_171 + vec3(0.5));
+    m *= (vec3(1.792842864990234375) - (((_176 * _176) + (_173 * _173)) * 0.8537347316741943359375));
+    return 130.0 * dot(m, vec3((_176.x * _109.x) + (_173.x * _109.y), (_176.yz * x12.xz) + (_173.yz * x12.yw)));
 }
 
 vec3 color23(vec2 p)
@@ -824,10 +824,10 @@ vec3 color23(vec2 p)
 void main()
 {
     vec3 color = vec3(0.0);
-    VertexOutput _607 = VertexOutput(gl_FragCoord, normal, world_pos);
-    color = smoothstep(vec3(0.0), vec3(0.100000001490116119384765625), fract(_607.world_pos));
+    VertexOutput _616 = VertexOutput(gl_FragCoord, normal, world_pos);
+    color = smoothstep(vec3(0.0), vec3(0.100000001490116119384765625), fract(_616.world_pos));
     color = mix(vec3(0.5, 0.100000001490116119384765625, 0.699999988079071044921875), vec3(0.20000000298023223876953125), vec3((color.x * color.y) * color.z));
-    vec3 _654 = normalize(light_1._m0.position - _607.world_pos);
-    _614 = vec4((((light_1._m0.color * 0.100000001490116119384765625) + (light_1._m0.color * max(dot(_607.normal, _654), 0.0))) + (light_1._m0.color * pow(max(dot(_607.normal, normalize(normalize(camera_1._m0.view_pos.xyz - _607.world_pos) + _654)), 0.0), 32.0))) * color, 1.0);
+    vec3 _663 = normalize(light_1._m0.position - _616.world_pos);
+    _623 = vec4((((light_1._m0.color * 0.100000001490116119384765625) + (light_1._m0.color * max(dot(_616.normal, _663), 0.0))) + (light_1._m0.color * pow(max(dot(_616.normal, normalize(normalize(camera_1._m0.view_pos.xyz - _616.world_pos) + _663)), 0.0), 32.0))) * color, 1.0);
 }
 

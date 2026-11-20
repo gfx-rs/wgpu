@@ -221,7 +221,7 @@ layout(set = 0, binding = 3) uniform samplerShadow sampler_shadow;
 
 layout(location = 0) in vec3 world_normal;
 layout(location = 1) in vec4 world_position;
-layout(location = 0) out vec4 _227;
+layout(location = 0) out vec4 _230;
 
 float fetch_shadow(uint light_id, vec4 homogeneous_coords)
 {
@@ -238,8 +238,8 @@ void main()
     vec3 color = vec3(0.0500000007450580596923828125);
     uint i = 0u;
     uvec2 loop_bound = uvec2(4294967295u);
-    VertexOutput _220 = VertexOutput(gl_FragCoord, world_normal, world_position);
-    vec3 _239 = normalize(_220.world_normal);
+    VertexOutput _223 = VertexOutput(gl_FragCoord, world_normal, world_position);
+    vec3 _242 = normalize(_223.world_normal);
     for (;;)
     {
         if (all(equal(uvec2(0u), loop_bound)))
@@ -251,10 +251,10 @@ void main()
         {
             break;
         }
-        color += (u_lights_1._m0[i].color.xyz * (fetch_shadow(i, u_lights_1._m0[i].proj * _220.world_position) * max(0.0, dot(_239, normalize(u_lights_1._m0[i].pos.xyz - _220.world_position.xyz)))));
+        color += (u_lights_1._m0[i].color.xyz * (fetch_shadow(i, u_lights_1._m0[i].proj * _223.world_position) * max(0.0, dot(_242, normalize(u_lights_1._m0[i].pos.xyz - _223.world_position.xyz)))));
         i++;
         continue;
     }
-    _227 = vec4(color, 1.0) * u_entity_1._m0.color;
+    _230 = vec4(color, 1.0) * u_entity_1._m0.color;
 }
 

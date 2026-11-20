@@ -356,6 +356,11 @@ pub(crate) enum Error<'a> {
     InvalidBreakIf(Span),
     InvalidGatherComponent(Span),
     InvalidConstructorComponentType(Span, i32),
+    WrongConstructorComponentCount {
+        span: Span,
+        expected: u32,
+        found: u32,
+    },
     InvalidIdentifierUnderscore(Span),
     ReservedIdentifierPrefix(Span),
     UnknownAddressSpace(Span),
@@ -995,6 +1000,7 @@ impl<'a> Error<'a> {
                 | Error::UnknownIdent(span, _)
                 | Error::BadTextureSampleType { span, .. }
                 | Error::InvalidConstructorComponentType(span, _)
+                | Error::WrongConstructorComponentCount { span, .. }
                 | Error::NotReference(_, span)
                 | Error::WrongArgumentCount { span, .. }
                 | Error::ConstantEvaluatorError(_, span)
@@ -1023,6 +1029,10 @@ impl<'a> Error<'a> {
                     Error::InvalidConstructorComponentType(_, component) => (
                         format!("invalid type for constructor component at index [{component}]"),
                         "invalid component type"
+                    ),
+                    Error::WrongConstructorComponentCount { expected, found, .. } => (
+                        format!("Constructor expects {expected} components, found {found}"),
+                        "wrong number of components"
                     ),
                     Error::NotReference(what, _) => (
                         format!("{what} must be a reference"),

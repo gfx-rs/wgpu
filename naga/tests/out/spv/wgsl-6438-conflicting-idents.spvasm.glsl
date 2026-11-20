@@ -32,10 +32,10 @@ struct _6
     vec2 _m1;
 };
 
-layout(location = 0) out vec4 _32;
+layout(location = 0) out vec4 _34;
 
 void main()
 {
-    _32 = vec4(1.0, 0.0, 0.0, 1.0);
+    _34 = vec4(1.0, 0.0, 0.0, 1.0);
 }
 

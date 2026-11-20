@@ -143,9 +143,9 @@ vec3 _229(vec3 _227, _10 _228)
 
 void main()
 {
-    _10 _254 = _25(vec3(0.0), vec3(0.0, 1.0, 0.0), _15);
-    _17._m0._m0 = uint(_254._m0 == 0u);
-    _17._m0._m1 = _229(vec3(0.0, 1.0, 0.0) * _254._m1, _254);
+    _10 _259 = _25(vec3(0.0), vec3(0.0, 1.0, 0.0), _15);
+    _17._m0._m0 = uint(_259._m0 == 0u);
+    _17._m0._m1 = _229(vec3(0.0, 1.0, 0.0) * _259._m1, _259);
 }
 
 
@@ -209,110 +209,110 @@ void _42(rayQueryEXT _43, accelerationStructureEXT _44, _12 _45, inout uint _46,
     }
 }
 
-_10 _275(rayQueryEXT _276, uint _277)
+_10 _280(rayQueryEXT _281, uint _282)
 {
-    _10 _279 = _10(0u, 0.0, 0u, 0u, 0u, 0u, 0u, vec2(0.0), false, mat4x3(vec3(0.0), vec3(0.0), vec3(0.0), vec3(0.0)), mat4x3(vec3(0.0), vec3(0.0), vec3(0.0), vec3(0.0)));
-    if ((!((_277 & 4u) != 0u)) && ((_277 & 2u) != 0u))
+    _10 _284 = _10(0u, 0.0, 0u, 0u, 0u, 0u, 0u, vec2(0.0), false, mat4x3(vec3(0.0), vec3(0.0), vec3(0.0), vec3(0.0)), mat4x3(vec3(0.0), vec3(0.0), vec3(0.0), vec3(0.0)));
+    if ((!((_282 & 4u) != 0u)) && ((_282 & 2u) != 0u))
     {
-        uint _289 = rayQueryGetIntersectionTypeEXT(_276, bool(0u));
-        uint _291 = (_289 == 0u) ? 1u : 3u;
-        _279._m0 = _291;
-        if (_291 != 0u)
+        uint _294 = rayQueryGetIntersectionTypeEXT(_281, bool(0u));
+        uint _296 = (_294 == 0u) ? 1u : 3u;
+        _284._m0 = _296;
+        if (_296 != 0u)
         {
-            uint _296 = rayQueryGetIntersectionInstanceCustomIndexEXT(_276, bool(0u));
-            uint _297 = rayQueryGetIntersectionInstanceIdEXT(_276, bool(0u));
-            uint _298 = rayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetEXT(_276, bool(0u));
-            uint _299 = rayQueryGetIntersectionGeometryIndexEXT(_276, bool(0u));
-            uint _300 = rayQueryGetIntersectionPrimitiveIndexEXT(_276, bool(0u));
-            mat4x3 _301 = rayQueryGetIntersectionObjectToWorldEXT(_276, bool(0u));
-            mat4x3 _302 = rayQueryGetIntersectionWorldToObjectEXT(_276, bool(0u));
-            _279._m2 = _296;
-            _279._m3 = _297;
-            _279._m4 = _298;
-            _279._m5 = _299;
-            _279._m6 = _300;
-            _279._m9 = _301;
-            _279._m10 = _302;
-            if (_291 == 1u)
+            uint _301 = rayQueryGetIntersectionInstanceCustomIndexEXT(_281, bool(0u));
+            uint _302 = rayQueryGetIntersectionInstanceIdEXT(_281, bool(0u));
+            uint _303 = rayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetEXT(_281, bool(0u));
+            uint _304 = rayQueryGetIntersectionGeometryIndexEXT(_281, bool(0u));
+            uint _305 = rayQueryGetIntersectionPrimitiveIndexEXT(_281, bool(0u));
+            mat4x3 _306 = rayQueryGetIntersectionObjectToWorldEXT(_281, bool(0u));
+            mat4x3 _307 = rayQueryGetIntersectionWorldToObjectEXT(_281, bool(0u));
+            _284._m2 = _301;
+            _284._m3 = _302;
+            _284._m4 = _303;
+            _284._m5 = _304;
+            _284._m6 = _305;
+            _284._m9 = _306;
+            _284._m10 = _307;
+            if (_296 == 1u)
             {
-                float _313 = rayQueryGetIntersectionTEXT(_276, bool(0u));
-                _279._m1 = _313;
-                vec2 _315 = rayQueryGetIntersectionBarycentricsEXT(_276, bool(0u));
-                bool _316 = rayQueryGetIntersectionFrontFaceEXT(_276, bool(0u));
-                _279._m7 = _315;
-                _279._m8 = _316;
+                float _318 = rayQueryGetIntersectionTEXT(_281, bool(0u));
+                _284._m1 = _318;
+                vec2 _320 = rayQueryGetIntersectionBarycentricsEXT(_281, bool(0u));
+                bool _321 = rayQueryGetIntersectionFrontFaceEXT(_281, bool(0u));
+                _284._m7 = _320;
+                _284._m8 = _321;
             }
         }
     }
-    return _279;
+    return _284;
 }
 
-void _327(rayQueryEXT _328, uint _329, float _330, float _331)
+void _332(rayQueryEXT _333, uint _334, float _335, float _336)
 {
-    if ((!((_329 & 4u) != 0u)) && ((_329 & 2u) != 0u))
+    if ((!((_334 & 4u) != 0u)) && ((_334 & 2u) != 0u))
     {
-        uint _344 = rayQueryGetIntersectionTypeEXT(_328, bool(0u));
-        float _346 = rayQueryGetRayTMinEXT(_328);
-        uint _347 = rayQueryGetIntersectionTypeEXT(_328, bool(1u));
-        float _334;
-        if (_347 == 0u)
+        uint _349 = rayQueryGetIntersectionTypeEXT(_333, bool(0u));
+        float _351 = rayQueryGetRayTMinEXT(_333);
+        uint _352 = rayQueryGetIntersectionTypeEXT(_333, bool(1u));
+        float _339;
+        if (_352 == 0u)
         {
-            _334 = _331;
+            _339 = _336;
         }
         else
         {
-            float _353 = rayQueryGetIntersectionTEXT(_328, bool(1u));
-            _334 = _353;
+            float _358 = rayQueryGetIntersectionTEXT(_333, bool(1u));
+            _339 = _358;
         }
-        if (((_330 >= _346) && (_330 <= _334)) && (_344 == 1u))
+        if (((_335 >= _351) && (_335 <= _339)) && (_349 == 1u))
         {
-            rayQueryGenerateIntersectionEXT(_328, _330);
+            rayQueryGenerateIntersectionEXT(_333, _335);
         }
     }
 }
 
-void _368(rayQueryEXT _369, uint _370)
+void _373(rayQueryEXT _374, uint _375)
 {
-    if ((!((_370 & 4u) != 0u)) && ((_370 & 2u) != 0u))
+    if ((!((_375 & 4u) != 0u)) && ((_375 & 2u) != 0u))
     {
-        uint _381 = rayQueryGetIntersectionTypeEXT(_369, bool(0u));
-        if (_381 == 0u)
+        uint _386 = rayQueryGetIntersectionTypeEXT(_374, bool(0u));
+        if (_386 == 0u)
         {
-            rayQueryConfirmIntersectionEXT(_369);
+            rayQueryConfirmIntersectionEXT(_374);
         }
     }
 }
 
-void _387(rayQueryEXT _388, uint _389)
+void _392(rayQueryEXT _393, uint _394)
 {
-    if ((!((_389 & 4u) != 0u)) && ((_389 & 2u) != 0u))
+    if ((!((_394 & 4u) != 0u)) && ((_394 & 2u) != 0u))
     {
-        rayQueryTerminateEXT(_388);
+        rayQueryTerminateEXT(_393);
     }
 }
 
 void main()
 {
-    uint _271 = 0u;
-    float _272 = 0.0;
-    rayQueryEXT _270;
-    _42(_270, _15, _12(4u, 255u, 0.100000001490116119384765625, 100.0, vec3(0.0), vec3(0.0, 1.0, 0.0)), _271, _272);
-    _10 _320 = _275(_270, _271);
-    if (_320._m0 == 3u)
+    uint _276 = 0u;
+    float _277 = 0.0;
+    rayQueryEXT _275;
+    _42(_275, _15, _12(4u, 255u, 0.100000001490116119384765625, 100.0, vec3(0.0), vec3(0.0, 1.0, 0.0)), _276, _277);
+    _10 _325 = _280(_275, _276);
+    if (_325._m0 == 3u)
     {
-        _327(_270, _271, 10.0, _272);
+        _332(_275, _276, 10.0, _277);
         return;
     }
     else
     {
-        if (_320._m0 == 1u)
+        if (_325._m0 == 1u)
         {
-            _368(_270, _271);
+            _373(_275, _276);
             return;
         }
         else
         {
-            _387(_270, _271);
+            _392(_275, _276);
             return;
         }
     }

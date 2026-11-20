@@ -258,6 +258,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Added `naga::valid::Capabilities::LINEAR_INTERPOLATION`, which is now required in order to use `@interpolate(linear)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - The GLSL backend's `MissingFeatures` error now names the GLSL version that lacks the features, e.g. `GLSL 300 es doesn't support the required feature(s): NOPERSPECTIVE_QUALIFIER`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - Bit reinterpretation is now represented in the Naga IR by the new `naga::ir::Expression::Bitcast`, which names its result type. `naga::ir::Expression::As` now only converts, and its `kind` and `convert` fields are replaced by `target: Scalar`. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
+- Naga IR no longer supports flattening of vector-typed `naga::ir::Expression::Compose` expressions. Where necessary, it is now performed by front-ends. `naga::proc::flatten_compose` is removed and has no replacement. Unless you are working directly with Naga IR, this is not a breaking change and no action is required. By @andyleiserson in [#XXXXX](https://github.com/gfx-rs/wgpu/pull/XXXXX).
 
 #### Hal
 
@@ -321,6 +322,8 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix ambiguous `metal::select` calls in the Metal backend's division/remainder zero guards for 64-bit integers: the guards now emit `L`/`uL` suffixed literals (e.g. `metal::select(rhs, 1uL, rhs == 0uL)`) so MSL generated for `i64`/`u64` `/` and `%` compiles. By @Statesman-forge in [#10278](https://github.com/gfx-rs/wgpu/pull/10278).
 - In the MSL backend, `subgroupBallot` now keeps lanes 32-63, which were lost on GPUs with 64-wide SIMD groups (AMD GPUs on macOS). By @ErkoRisthein in [#10797](https://github.com/gfx-rs/wgpu/pull/10797).
 - Report a WGSL error instead of panicking when the condition of a `const_assert` is a composite value, such as `const_assert(vec2i());`. By @MilosLord in [#10897](https://github.com/gfx-rs/wgpu/pull/10897).
+- Fix constant evaluation of swizzles and indexing on vector constructors with vector arguments, such as `vec4(vec2<i32>(), 3, 4)[1]`, and invalid SPIR-V output for constant vector constructors with zero-valued vector arguments. By @andyleiserson in [#XXXXX](https://github.com/gfx-rs/wgpu/pull/XXXXX).
+- The GLSL frontend no longer flattens vector initializer lists (`vec4 v = { vec2(1, 2), 3, 4 };`), which are not legal GLSL. Constructor expressions (`vec4(vec2(), 3, 4)`) are still flattened. By @andyleiserson in [#XXXXX](https://github.com/gfx-rs/wgpu/pull/XXXXX).
 
 #### Validation
 

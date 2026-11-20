@@ -4255,7 +4255,7 @@
                         non_uniform_result: Some(7),
                         requirements: (""),
                     ),
-                    ref_count: 1,
+                    ref_count: 3,
                     assignable_global: None,
                     ty: Value(Vector(
                         size: Tri,
@@ -4268,6 +4268,42 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(7),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(7),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(7),
                         requirements: (""),
                     ),
                     ref_count: 1,

@@ -29,7 +29,8 @@ VertexOutput ConstructVertexOutput(float2 arg0, float4 arg1) {
 
 VertexOutput_vert_main vert_main(float2 pos : LOC0, float2 uv : LOC1)
 {
-    const VertexOutput vertexoutput = ConstructVertexOutput(uv, float4((c_scale * pos), 0.0, 1.0));
+    float2 _e3 = (c_scale * pos);
+    const VertexOutput vertexoutput = ConstructVertexOutput(uv, float4(_e3.x, _e3.y, 0.0, 1.0));
     const VertexOutput_vert_main vertexoutput_1 = { vertexoutput.uv, vertexoutput.position };
     return vertexoutput_1;
 }

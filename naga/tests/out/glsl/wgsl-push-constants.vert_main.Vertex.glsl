@@ -24,8 +24,9 @@ void main() {
     vec2 pos = _p2vs_location0;
     uint ii = (uint(gl_InstanceID) + naga_vs_first_instance);
     uint vi = uint(gl_VertexID);
+    vec2 _e6 = ((float(ii) * float(vi)) * pos);
     float _e9 = _immediates_binding_vs.position_clip;
-    gl_Position = vec4(((float(ii) * float(vi)) * pos), 0.0, _e9);
+    gl_Position = vec4(_e6.x, _e6.y, 0.0, _e9);
     return;
 }
 

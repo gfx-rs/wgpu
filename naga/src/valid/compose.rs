@@ -20,16 +20,17 @@ pub fn validate_compose(
     use crate::TypeInner as Ti;
 
     match gctx.types[self_ty_handle].inner {
-        // vectors are composed from scalars or other vectors
+        // vectors are composed from one scalar per component
         Ti::Vector { size, scalar } => {
-            let mut total = 0;
+            if size as usize != component_resolutions.len() {
+                return Err(ComposeError::ComponentCount {
+                    expected: size as u32,
+                    given: component_resolutions.len() as u32,
+                });
+            }
             for (index, comp_res) in component_resolutions.enumerate() {
-                total += match *comp_res.inner_with(gctx.types) {
-                    Ti::Scalar(comp_scalar) if comp_scalar == scalar => 1,
-                    Ti::Vector {
-                        size: comp_size,
-                        scalar: comp_scalar,
-                    } if comp_scalar == scalar => comp_size as u32,
+                match *comp_res.inner_with(gctx.types) {
+                    Ti::Scalar(comp_scalar) if comp_scalar == scalar => {}
                     ref other => {
                         log::error!(
                             "Vector component[{index}] type {other:?}, building {scalar:?}"
@@ -38,13 +39,7 @@ pub fn validate_compose(
                             index: index as u32,
                         });
                     }
-                };
-            }
-            if size as u32 != total {
-                return Err(ComposeError::ComponentCount {
-                    expected: size as u32,
-                    given: total,
-                });
+                }
             }
         }
         // matrix are composed from column vectors

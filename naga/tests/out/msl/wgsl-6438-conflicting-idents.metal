@@ -22,9 +22,9 @@ vertex vsOutput_1 vs(
 ) {
     const auto xy = varyings.xy;
     OurVertexShaderOutput vsOutput = {};
-    vsOutput.position = metal::float4(xy, 0.0, 1.0);
-    OurVertexShaderOutput _e6 = vsOutput;
-    const auto _tmp = _e6;
+    vsOutput.position = metal::float4(xy.x, xy.y, 0.0, 1.0);
+    OurVertexShaderOutput _e8 = vsOutput;
+    const auto _tmp = _e8;
     return vsOutput_1 { _tmp.position, _tmp.texcoord };
 }
 

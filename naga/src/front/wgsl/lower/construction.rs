@@ -350,6 +350,7 @@ impl<'source> Lowerer<'source, '_> {
                         Error::InvalidConstructorComponentType(spans[index], index as i32)
                     })?;
                 ctx.convert_slice_to_common_leaf_scalar(&mut components, consensus_scalar)?;
+                let components = flatten_vector_components(components, &spans, size, span, ctx)?;
                 let inner = consensus_scalar.to_inner_vector(size);
                 let ty = ctx.ensure_type_exists(inner);
                 expr = crate::Expression::Compose { ty, components };
@@ -357,10 +358,14 @@ impl<'source> Lowerer<'source, '_> {
 
             // Vector constructor (by elements), full type given
             (
-                Components::Many { mut components, .. },
-                Constructor::Type((ty, &crate::TypeInner::Vector { scalar, .. })),
+                Components::Many {
+                    mut components,
+                    spans,
+                },
+                Constructor::Type((ty, &crate::TypeInner::Vector { size, scalar })),
             ) => {
                 ctx.try_automatic_conversions_for_vector(&mut components, scalar, ty_span)?;
+                let components = flatten_vector_components(components, &spans, size, span, ctx)?;
                 expr = crate::Expression::Compose { ty, components };
             }
 
@@ -618,4 +623,52 @@ impl<'source> Lowerer<'source, '_> {
         let expr = ctx.append_expression(expr, span)?;
         Ok(expr)
     }
+}
+
+/// Replace each vector in `components` with its scalar components, and check
+/// that the result has `size` components.
+///
+/// Naga IR requires each component of a vector `Compose` to be a scalar.
+fn flatten_vector_components<'source>(
+    components: Vec<Handle<crate::Expression>>,
+    spans: &[Span],
+    size: crate::VectorSize,
+    span: Span,
+    ctx: &mut ExpressionContext<'source, '_, '_>,
+) -> Result<'source, Vec<Handle<crate::Expression>>> {
+    let mut flattened = Vec::with_capacity(size as usize);
+    for (index, (component, &component_span)) in components.into_iter().zip(spans).enumerate() {
+        let component_size = match *super::resolve_inner!(ctx, component) {
+            crate::TypeInner::Scalar(_) => None,
+            crate::TypeInner::Vector { size, .. } => Some(size),
+            _ => {
+                return Err(Box::new(Error::InvalidConstructorComponentType(
+                    component_span,
+                    index as i32,
+                )))
+            }
+        };
+        match component_size {
+            None => flattened.push(component),
+            Some(component_size) => {
+                for index in 0..component_size as u32 {
+                    flattened.push(ctx.append_expression(
+                        crate::Expression::AccessIndex {
+                            base: component,
+                            index,
+                        },
+                        component_span,
+                    )?);
+                }
+            }
+        }
+    }
+    if flattened.len() != size as usize {
+        return Err(Box::new(Error::WrongConstructorComponentCount {
+            span,
+            expected: size as u32,
+            found: flattened.len() as u32,
+        }));
+    }
+    Ok(flattened)
 }

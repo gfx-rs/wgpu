@@ -15,7 +15,7 @@ fragment fs_mainOutput fs_main(
   fs_mainInput varyings [[stage_in]]
 ) {
     const auto bary = varyings.bary;
-    return fs_mainOutput { metal::float4(bary, 1.0) };
+    return fs_mainOutput { metal::float4(bary.x, bary.y, bary.z, 1.0) };
 }
 
 
@@ -29,5 +29,5 @@ fragment fs_main_no_perspectiveOutput fs_main_no_perspective(
   fs_main_no_perspectiveInput varyings_1 [[stage_in]]
 ) {
     const auto bary_1 = varyings_1.bary_1;
-    return fs_main_no_perspectiveOutput { metal::float4(bary_1, 1.0) };
+    return fs_main_no_perspectiveOutput { metal::float4(bary_1.x, bary_1.y, bary_1.z, 1.0) };
 }

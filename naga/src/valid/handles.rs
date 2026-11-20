@@ -487,6 +487,10 @@ impl super::Validator {
                 handle.check_dep(expr)?;
                 Some(ty)
             }
+            crate::Expression::AccessIndex { base, index: _ } => {
+                handle.check_dep(base)?;
+                None
+            }
             _ => None,
         };
         Ok(max_type)

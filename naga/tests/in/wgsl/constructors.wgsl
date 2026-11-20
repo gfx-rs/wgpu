@@ -23,6 +23,20 @@ const cp1 = vec2(0u);
 const cp2 = mat2x2(vec2(0.), vec2(0.));
 const cp3 = array(0, 1, 2, 3);
 
+// complex composites: a vector ZeroValue or Splat as a constructor argument
+const ccz0 = vec4<f32>(vec2<f32>(), 1.0, 1.0);    // ZeroValue(vec2) component
+const ccz1 = vec4<f32>(vec2<f32>(1.0), 0.0, 1.0); // Splat(vec2) component
+const ccz2 = vec4<f32>(vec2<f32>(1.0, 0.0), 0.0, 1.0); // vec2 component
+
+// matrix composites: columns are vectors, so a ZeroValue/Splat column must be
+// kept as a single (vector) constituent, not expanded into scalars
+const ccm0 = mat2x2<f32>(vec2<f32>(), vec2<f32>(1.0, 2.0)); // ZeroValue(vec2) column
+const ccm1 = mat2x2<f32>(vec2<f32>(1.0), vec2<f32>());      // Splat + ZeroValue columns
+
+// a nested ZeroValue vector must be expanded into scalars at every level of
+// nesting, not just at the top level of a vector composite
+const ccn0 = vec4<f32>(vec3<f32>(vec2<f32>(), 3.0), 4.0);
+
 @compute @workgroup_size(1)
 fn main() {
     var foo: Foo;
@@ -55,6 +69,18 @@ fn main() {
     let cit0 = vec2(0u);
     let cit1 = mat2x2(vec2(0.), vec2(0.));
     let cit2 = array(0, 1, 2, 3);
+
+    // complex composites: a vector ZeroValue or Splat as a constructor argument
+    let ccz3 = vec4<f32>(vec2<f32>(), 1.0, 1.0);
+    let ccz4 = vec4<f32>(vec2<f32>(1.0), 0.0, 1.0);
+    let ccz5 = vec4<f32>(vec2<f32>(1.0, 0.0), 0.0, 1.0);
+
+    // matrix composites: ZeroValue/Splat columns kept as vector constituents
+    let ccm2 = mat2x2<f32>(vec2<f32>(), vec2<f32>(1.0, 2.0));
+    let ccm3 = mat2x2<f32>(vec2<f32>(1.0), vec2<f32>());
+
+    // a nested ZeroValue vector, expanded at every level of nesting
+    let ccn1 = vec4<f32>(vec3<f32>(vec2<f32>(), 3.0), 4.0);
 
     // identity constructors
     let ic0 = bool(bool());

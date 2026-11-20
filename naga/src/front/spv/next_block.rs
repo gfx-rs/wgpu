@@ -700,15 +700,34 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     let result_type_id = self.next()?;
                     let id = self.next()?;
+                    let ty = self.lookup_type.lookup(result_type_id)?.handle;
+                    let is_vector =
+                        matches!(ctx.module.types[ty].inner, crate::TypeInner::Vector { .. });
                     let mut components = Vec::with_capacity(inst.wc as usize - 2);
                     for _ in 3..inst.wc {
                         let comp_id = self.next()?;
                         log::trace!("\t\t\tlooking up expr {comp_id:?}");
                         let lexp = self.lookup_expression.lookup(comp_id)?;
+                        let comp_type_id = lexp.type_id;
                         let handle = get_expr_handle!(comp_id, lexp);
-                        components.push(handle);
+                        // Naga IR requires each component of a vector `Compose`
+                        // to be a scalar, but SPIR-V allows vector constituents.
+                        let comp_ty = self.lookup_type.lookup(comp_type_id)?.handle;
+                        match ctx.module.types[comp_ty].inner {
+                            crate::TypeInner::Vector { size, .. } if is_vector => {
+                                for index in 0..size as u32 {
+                                    components.push(ctx.expressions.append(
+                                        crate::Expression::AccessIndex {
+                                            base: handle,
+                                            index,
+                                        },
+                                        span,
+                                    ));
+                                }
+                            }
+                            _ => components.push(handle),
+                        }
                     }
-                    let ty = self.lookup_type.lookup(result_type_id)?.handle;
                     let first = components[0];
                     let expr = match ctx.module.types[ty].inner {
                         // this is an optimization to detect the splat
