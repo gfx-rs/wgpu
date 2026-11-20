@@ -484,6 +484,104 @@ fn builtin_sign_unsigned_arg() {
     ));
 }
 
+/// `GLSL.std.450` trigonometric, exponential and logarithmic instructions
+/// accept only 16- and 32-bit floats, so `f64` arguments must be rejected.
+#[test]
+fn builtin_transcendental_f64_arg() {
+    use naga::{MathFunction, Type, TypeInner};
+
+    fn variant(
+        fun_kind: MathFunction,
+        scalar: Scalar,
+    ) -> Result<ModuleInfo, Box<valid::ValidationError>> {
+        let span = naga::Span::default();
+        let mut module = Module::default();
+        let ty = module.types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Scalar(scalar),
+            },
+            span,
+        );
+
+        let mut fun = Function {
+            result: Some(naga::ir::FunctionResult { ty, binding: None }),
+            ..Function::default()
+        };
+        let ex_zero = fun.expressions.append(Expression::ZeroValue(ty), span);
+        let arg1 = (fun_kind.argument_count() == 2).then_some(ex_zero);
+        let ex_math = fun.expressions.append(
+            Expression::Math {
+                fun: fun_kind,
+                arg: ex_zero,
+                arg1,
+                arg2: None,
+                arg3: None,
+            },
+            span,
+        );
+
+        fun.body.push(
+            naga::Statement::Emit(naga::Range::new_from_bounds(ex_math, ex_math)),
+            span,
+        );
+        fun.body.push(
+            naga::Statement::Return {
+                value: Some(ex_math),
+            },
+            span,
+        );
+
+        module.functions.append(fun, span);
+
+        valid::Validator::new(ValidationFlags::default(), Capabilities::all())
+            .validate(&module)
+            .map_err(|err| Box::new(err.into_inner()))
+    }
+
+    variant(MathFunction::Sqrt, Scalar::F64).expect("f64 sqrt should validate");
+    for fun_kind in [
+        MathFunction::Sin,
+        MathFunction::Cos,
+        MathFunction::Tan,
+        MathFunction::Asin,
+        MathFunction::Acos,
+        MathFunction::Atan,
+        MathFunction::Sinh,
+        MathFunction::Cosh,
+        MathFunction::Tanh,
+        MathFunction::Asinh,
+        MathFunction::Acosh,
+        MathFunction::Atanh,
+        MathFunction::Atan2,
+        MathFunction::Radians,
+        MathFunction::Degrees,
+        MathFunction::Exp,
+        MathFunction::Exp2,
+        MathFunction::Log,
+        MathFunction::Log2,
+        MathFunction::Pow,
+    ] {
+        variant(fun_kind, Scalar::F32)
+            .unwrap_or_else(|e| panic!("f32 {fun_kind:?} should validate: {e:?}"));
+        assert!(
+            matches!(
+                variant(fun_kind, Scalar::F64).map_err(|e| *e),
+                Err(valid::ValidationError::Function {
+                    source: valid::FunctionError::Expression {
+                        source: valid::ExpressionError::Type(
+                            naga::proc::ResolveError::BuiltinArgumentsInvalid(_)
+                        ),
+                        ..
+                    },
+                    ..
+                })
+            ),
+            "f64 {fun_kind:?} should be rejected"
+        );
+    }
+}
+
 #[test]
 fn bitcast_operand_and_result_types() {
     use naga::{Type, TypeInner, VectorSize};
