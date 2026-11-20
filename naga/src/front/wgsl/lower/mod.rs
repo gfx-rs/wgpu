@@ -1504,10 +1504,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     {
                         Ok(true) => Ok(()),
                         Ok(false) => Err(Error::ConstAssertFailed(span)),
-                        Err(proc::ConstValueError::NonConst | proc::ConstValueError::Negative) => {
-                            unreachable!()
-                        }
-                        Err(proc::ConstValueError::InvalidType) => Err(Error::NotBool(span)),
+                        Err(proc::ConstValueError::Negative) => unreachable!(),
+                        Err(
+                            proc::ConstValueError::NonConst | proc::ConstValueError::InvalidType,
+                        ) => Err(Error::NotBool(span)),
                     }?;
                 }
             }
@@ -2370,10 +2370,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 {
                     Ok(true) => Ok(()),
                     Ok(false) => Err(Error::ConstAssertFailed(span)),
-                    Err(proc::ConstValueError::NonConst | proc::ConstValueError::Negative) => {
-                        unreachable!()
+                    Err(proc::ConstValueError::Negative) => unreachable!(),
+                    Err(proc::ConstValueError::NonConst | proc::ConstValueError::InvalidType) => {
+                        Err(Error::NotBool(span))
                     }
-                    Err(proc::ConstValueError::InvalidType) => Err(Error::NotBool(span)),
                 }?;
 
                 block.extend(emitter.finish(&ctx.function.expressions));
