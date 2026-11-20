@@ -83,6 +83,14 @@ RayIntersection query_loop(
             );
         }
         params.accept_any_intersection((desc.flags & 4) != 0);
+        params.set_triangle_cull_mode(
+            (desc.flags & 16) != 0 ? metal::raytracing::triangle_cull_mode::back : (
+                (desc.flags & 32) != 0 ? metal::raytracing::triangle_cull_mode::front : metal::raytracing::triangle_cull_mode::none
+            ));
+        params.set_geometry_cull_mode(
+            (desc.flags & 256) != 0 ? metal::raytracing::geometry_cull_mode::triangle : (
+                (desc.flags & 512) != 0 ? metal::raytracing::geometry_cull_mode::bounding_box : metal::raytracing::geometry_cull_mode::none
+            ));
         metal::raytracing::ray ray = metal::raytracing::ray(desc.origin, desc.dir, desc.tmin, desc.tmax);
         bool invalid_nan_infs = ((as_type<uint>(desc.origin.x) & 2139095040) == 2139095040) || ((as_type<uint>(desc.origin.y) & 2139095040) == 2139095040) || ((as_type<uint>(desc.origin.z) & 2139095040) == 2139095040) || ((as_type<uint>(desc.dir.x) & 2139095040) == 2139095040) || ((as_type<uint>(desc.dir.y) & 2139095040) == 2139095040) || ((as_type<uint>(desc.dir.z) & 2139095040) == 2139095040) || ((as_type<uint>(desc.tmin) & 2139095040) == 2139095040) || (((as_type<uint>(desc.tmax) & 2139095040) == 2139095040) && ((as_type<uint>(desc.tmax) & 0x7fffff) != 0));
         bool invalid_t = (desc.tmin > desc.tmax) || (desc.tmin < 0.0);
@@ -185,6 +193,14 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
             );
         }
         params.accept_any_intersection((desc.flags & 4) != 0);
+        params.set_triangle_cull_mode(
+            (desc.flags & 16) != 0 ? metal::raytracing::triangle_cull_mode::back : (
+                (desc.flags & 32) != 0 ? metal::raytracing::triangle_cull_mode::front : metal::raytracing::triangle_cull_mode::none
+            ));
+        params.set_geometry_cull_mode(
+            (desc.flags & 256) != 0 ? metal::raytracing::geometry_cull_mode::triangle : (
+                (desc.flags & 512) != 0 ? metal::raytracing::geometry_cull_mode::bounding_box : metal::raytracing::geometry_cull_mode::none
+            ));
         metal::raytracing::ray ray = metal::raytracing::ray(desc.origin, desc.dir, desc.tmin, desc.tmax);
         bool invalid_nan_infs = ((as_type<uint>(desc.origin.x) & 2139095040) == 2139095040) || ((as_type<uint>(desc.origin.y) & 2139095040) == 2139095040) || ((as_type<uint>(desc.origin.z) & 2139095040) == 2139095040) || ((as_type<uint>(desc.dir.x) & 2139095040) == 2139095040) || ((as_type<uint>(desc.dir.y) & 2139095040) == 2139095040) || ((as_type<uint>(desc.dir.z) & 2139095040) == 2139095040) || ((as_type<uint>(desc.tmin) & 2139095040) == 2139095040) || (((as_type<uint>(desc.tmax) & 2139095040) == 2139095040) && ((as_type<uint>(desc.tmax) & 0x7fffff) != 0));
         bool invalid_t = (desc.tmin > desc.tmax) || (desc.tmin < 0.0);
