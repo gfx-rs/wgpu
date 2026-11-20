@@ -1731,6 +1731,7 @@ impl super::CapabilitiesQuery {
             },
             downlevel,
             cooperative_matrix_properties: self.cooperative_matrix_properties(),
+            ray_tracing_invocation_reorder_mode: wgt::RayTracingInvocationReorderMode::None,
         }
     }
 
