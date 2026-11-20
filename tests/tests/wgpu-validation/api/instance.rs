@@ -112,3 +112,35 @@ mod request_adapter_error {
         );
     }
 }
+
+mod strict_webgpu_compliance {
+    #[test]
+    fn keeps_only_webgpu_and_experimental_features() {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::NOOP,
+            flags: wgpu::InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
+            backend_options: wgpu::BackendOptions {
+                noop: wgpu::NoopBackendOptions::enabled(),
+                ..Default::default()
+            },
+            ..wgpu::InstanceDescriptor::new_without_display_handle()
+        });
+        let adapter =
+            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
+                .unwrap();
+        let features = adapter.features();
+
+        assert!(features.contains(wgpu::Features::MULTI_DRAW_INDIRECT_COUNT));
+        assert!(!features.contains(wgpu::Features::MAPPABLE_PRIMARY_BUFFERS));
+
+        let (device, _queue) =
+            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                required_features: wgpu::Features::MULTI_DRAW_INDIRECT_COUNT,
+                ..Default::default()
+            }))
+            .unwrap();
+        assert!(device
+            .features()
+            .contains(wgpu::Features::MULTI_DRAW_INDIRECT_COUNT));
+    }
+}
