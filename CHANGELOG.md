@@ -350,6 +350,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 #### DX12
 
+- Fix 64-bit integer literal truncation and comparisons against zero in DX12 shaders compiled with DXC. By @pbkx in [#10585](https://github.com/gfx-rs/wgpu/pull/10585).
 - Make sure padding bytes are 0 in the destination buffer after a `copy_texture_to_buffer` when `UnrestrictedBufferTextureCopyPitchSupported` is not available. By @teoxoy in [#10005](https://github.com/gfx-rs/wgpu/pull/10005).
 - Sanitize shader labels before passing them to DXC as the source name. Fixes compilation when label contains a `:`. By @lucasmerlin in [#10134](https://github.com/gfx-rs/wgpu/pull/10134).
 - Fix a use-after-free when several threads create pipelines from the same shader with FXC. The shader cache now holds copies of the bytecode, not FXC's blobs, whose reference count is not thread-safe. By @xorza in [#10805](https://github.com/gfx-rs/wgpu/pull/10805).
