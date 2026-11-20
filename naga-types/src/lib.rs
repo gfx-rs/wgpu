@@ -300,6 +300,9 @@ impl VertexFormat {
     /// Returns the size read by an acceleration structure build of the vertex format. This is
     /// slightly different from [`Self::size`] because the alpha component of 4-component formats
     /// are not read in an acceleration structure build, allowing for a smaller stride.
+    ///
+    /// Metal requires more: its vertex stride must be at least [`Self::size`], so the packed
+    /// 6 byte stride for [`Self::Float16x4`] and [`Self::Snorm16x4`] is rejected there.
     #[must_use]
     pub const fn min_acceleration_structure_vertex_stride(&self) -> u64 {
         match self {

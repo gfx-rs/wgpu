@@ -210,6 +210,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix `max_task_workgroup_count` being misreported on pre-Apple7 devices. By @inner-daemons in [#10065](https://github.com/gfx-rs/wgpu/pull/10065).
 - The value of the `max_binding_array_sampler_elements_per_shader_stage` on Apple7, Apple8, and Mac2 hardware is reduced from 1024 to 996, to match the latest Metal documentation. By @andyleiserson in [#10649](https://github.com/gfx-rs/wgpu/pull/10649).
 - Added support for NV12 and P010 texture formats. Due to no native support, they're implemented using separate textures for each plane. By @jerzywilczek in [#9624](https://github.com/gfx-rs/wgpu/pull/9624)
+- Support `Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS` on Metal. Metal requires BLAS vertex strides to be at least the full vertex format size, so the packed 6 byte stride allowed for `Float16x4` and `Snorm16x4` elsewhere is rejected there. By @acoliver in [#10289](https://github.com/gfx-rs/wgpu/pull/10289).
 
 #### GLES
 

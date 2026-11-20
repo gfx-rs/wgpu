@@ -1529,7 +1529,13 @@ impl super::CapabilitiesQuery {
             features.insert(F::MULTIVIEW);
         }
 
-        features.set(F::EXPERIMENTAL_RAY_QUERY, self.supports_raytracing);
+        features.set(
+            F::EXPERIMENTAL_RAY_QUERY
+                // Metal's geometry descriptors accept any MTLAttributeFormat, so the
+                // extended BLAS vertex formats come along with ray query support.
+                | F::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
+            self.supports_raytracing,
+        );
 
         features.set(F::MULTISAMPLE_ARRAY, self.supports_multisample_array);
         features.set(F::DEBUG_PRINTF, self.supports_debug_printf);

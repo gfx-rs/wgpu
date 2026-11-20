@@ -1013,6 +1013,7 @@ features! {
         /// Supported platforms
         /// - Vulkan
         /// - DX12
+        /// - Metal
         ///
         /// [BlasTriangleGeometrySizeDescriptor::vertex_format]: super::BlasTriangleGeometrySizeDescriptor
         #[name("wgpu-extended-acceleration-structure-vertex-formats")]
