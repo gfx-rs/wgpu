@@ -319,6 +319,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Generate correct SPIR-V for nested structs containing two-row matrices. By @jimblandy in [#10846](https://github.com/gfx-rs/wgpu/pull/10846)
 - Fix ambiguous `metal::select` calls in the Metal backend's division/remainder zero guards for 64-bit integers: the guards now emit `L`/`uL` suffixed literals (e.g. `metal::select(rhs, 1uL, rhs == 0uL)`) so MSL generated for `i64`/`u64` `/` and `%` compiles. By @Statesman-forge in [#10278](https://github.com/gfx-rs/wgpu/pull/10278).
 - In the MSL backend, `subgroupBallot` now keeps lanes 32-63, which were lost on GPUs with 64-wide SIMD groups (AMD GPUs on macOS). By @ErkoRisthein in [#10797](https://github.com/gfx-rs/wgpu/pull/10797).
+- Forward the ray query face and geometry culling flags (`CULL_BACK_FACING`, `CULL_FRONT_FACING`, `SKIP_TRIANGLES`, `SKIP_AABBS`) to the Metal intersector in the MSL backend. They were previously ignored. By @acoliver in [#10287](https://github.com/gfx-rs/wgpu/pull/10287).
 
 #### Validation
 
@@ -386,6 +387,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix a crash when creating a declared alternate sRGB view of a render-attachment-only surface with Metal API Validation enabled. By @jinleili in [#10280](https://github.com/gfx-rs/wgpu/pull/10280).
 - To avoid rendering failures in new windows (see [#9430](https://github.com/gfx-rs/wgpu/issues/9430)), do not return `SurfaceStatus::Occluded` from `Surface::get_current_texture` when it is called for a window that hasn't been visible yet. By @tronical in [#10302](https://github.com/gfx-rs/wgpu/pull/10302).
 - Skip the render ICB probe on Macs with Tier 1 argument buffers, such as Haswell and Broadwell Intel GPUs. Compiling its kernel crashed the Metal shader compiler, which stalled device creation for about 10 seconds. By @ErkoRisthein in [#10927](https://github.com/gfx-rs/wgpu/pull/10927).
+- Fix Metal ray tracing BLAS triangle geometry transforms being read as column-major instead of wgpu's row-major 3x4 matrices, and `NO_DUPLICATE_ANY_HIT_INVOCATION` having no effect. Ray tracing now requires tvOS 18.1 or visionOS 2.1 on those platforms; macOS 15 and iOS 18 are unchanged. By @acoliver in [#10287](https://github.com/gfx-rs/wgpu/pull/10287).
 
 #### GLES
 

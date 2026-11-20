@@ -310,6 +310,21 @@ impl<W: Write> Writer<W> {
                         "{inner_level}params.accept_any_intersection((desc.flags & {flag}) != 0);"
                     )?;
                 }
+                {
+                    let f_back = back::RayFlag::CULL_BACK_FACING.bits();
+                    let f_front = back::RayFlag::CULL_FRONT_FACING.bits();
+                    writeln!(self.out, "{inner_level}params.set_triangle_cull_mode(
+{inner_level}{INDENT}(desc.flags & {f_back}) != 0 ? {RT_NAMESPACE}::triangle_cull_mode::back : (
+{inner_level}{INDENT}{INDENT}(desc.flags & {f_front}) != 0 ? {RT_NAMESPACE}::triangle_cull_mode::front : {RT_NAMESPACE}::triangle_cull_mode::none
+{inner_level}{INDENT}));")?;
+
+                    let f_triangles = back::RayFlag::SKIP_TRIANGLES.bits();
+                    let f_aabbs = back::RayFlag::SKIP_AABBS.bits();
+                    writeln!(self.out, "{inner_level}params.set_geometry_cull_mode(
+{inner_level}{INDENT}(desc.flags & {f_triangles}) != 0 ? {RT_NAMESPACE}::geometry_cull_mode::triangle : (
+{inner_level}{INDENT}{INDENT}(desc.flags & {f_aabbs}) != 0 ? {RT_NAMESPACE}::geometry_cull_mode::bounding_box : {RT_NAMESPACE}::geometry_cull_mode::none
+{inner_level}{INDENT}));")?;
+                }
 
                 writeln!(
                     self.out,

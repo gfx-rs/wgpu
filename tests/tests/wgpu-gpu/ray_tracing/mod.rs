@@ -19,6 +19,7 @@ mod limits;
 mod pipelines;
 mod scene;
 mod shader;
+mod transform;
 
 pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
     as_aabb::all_tests(tests);
@@ -28,6 +29,7 @@ pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
     limits::all_tests(tests);
     scene::all_tests(tests);
     shader::all_tests(tests);
+    transform::all_tests(tests);
     pipelines::all_tests(tests);
 }
 
