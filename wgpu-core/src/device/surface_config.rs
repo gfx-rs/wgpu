@@ -268,6 +268,25 @@ mod surface_configuration_tests {
         assert_eq!(config.color_space, wgt::SurfaceColorSpace::Srgb);
     }
 
+    /// `Auto` never resolves to pass-through: the application must then
+    /// describe the surface itself, so it must be requested explicitly.
+    #[test]
+    fn auto_never_resolves_to_pass_through() {
+        let caps = caps(vec![format_caps(
+            wgt::TextureFormat::Rgba16Float,
+            wgt::SurfaceColorSpaces::PASS_THROUGH,
+        )]);
+        let mut config = config(
+            wgt::TextureFormat::Rgba16Float,
+            wgt::SurfaceColorSpace::Auto,
+        );
+        let err = validate_surface_configuration(&mut config, &caps, 4096).unwrap_err();
+        assert!(matches!(
+            err,
+            ConfigureSurfaceError::UnsupportedColorSpace { .. }
+        ));
+    }
+
     /// `Auto` resolves fp16 to sRGB when extended linear is unavailable
     /// (e.g. the GLES backend).
     #[test]
