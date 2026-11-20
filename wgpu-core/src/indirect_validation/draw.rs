@@ -667,10 +667,17 @@ fn create_bind_group_layout(
     Ok(bind_group_layout)
 }
 
+/// Returns the alignment of the dynamic offsets into the source buffer.
+///
+/// The shader reads the source buffer as an array of `u32`, so the alignment is at least 4.
+fn src_dynamic_offset_alignment(limits: &Limits) -> u64 {
+    u64::from(limits.min_storage_buffer_offset_alignment).max(4)
+}
+
 /// Returns the largest binding size that when combined with dynamic offsets can address the whole buffer.
 fn calculate_src_buffer_binding_size(buffer_size: u64, limits: &Limits) -> u64 {
     let max_storage_buffer_binding_size = limits.max_storage_buffer_binding_size;
-    let min_storage_buffer_offset_alignment = limits.min_storage_buffer_offset_alignment as u64;
+    let min_storage_buffer_offset_alignment = src_dynamic_offset_alignment(limits);
 
     if buffer_size <= max_storage_buffer_binding_size {
         buffer_size
@@ -700,10 +707,9 @@ fn calculate_src_offsets(
 ) -> (u64, u64) {
     const MAX_DATA_SIZE: u64 = 20; // indexed indirect draw params are 20B
     let binding_size = calculate_src_buffer_binding_size(buffer_size, limits);
-    let min_storage_buffer_offset_alignment = limits.min_storage_buffer_offset_alignment as u64;
+    let min_storage_buffer_offset_alignment = src_dynamic_offset_alignment(limits);
 
     assert!([16, MAX_DATA_SIZE].contains(&data_size));
-    assert!([32, 64, 128, 256].contains(&min_storage_buffer_offset_alignment));
     assert!(buffer_size >= data_size);
     assert!(offset <= buffer_size - data_size);
     assert!(binding_size <= buffer_size);
@@ -1014,10 +1020,13 @@ impl DrawBatcher {
             .get_dst_subrange(stride, &mut self.current_dst_entry)?;
 
         let buffer_size = src_buffer.size;
-        let limits = device.adapter.limits();
         let data_size = get_src_stride_of_indirect_args(family);
-        let (src_dynamic_offset, src_offset) =
-            calculate_src_offsets(buffer_size, &limits, offset, data_size);
+        let (src_dynamic_offset, src_offset) = calculate_src_offsets(
+            buffer_size,
+            &device.adapter.raw.capabilities.limits,
+            offset,
+            data_size,
+        );
 
         let src_buffer_tracker_index = src_buffer.tracker_index();
 
@@ -1110,6 +1119,8 @@ mod tests {
             (512, 256, 128, 20, 236, 128, 108), // before middle
             (512, 256, 128, 20, 244, 128, 116), // straddling middle
             (512, 256, 128, 20, 252, 128, 124), // after middle
+            // alignment < 4 is raised to 4
+            (514, 256, 1,   16, 496, 260, 236),
         ];
 
         for &(
@@ -1138,6 +1149,7 @@ mod tests {
             );
             assert!(out_dynamic_offset + binding_size <= buffer_size);
             assert!(out_offset + data_size <= binding_size);
+            assert_eq!(out_offset % 4, 0);
             // check output matches
             assert_eq!(
                 (out_dynamic_offset, out_offset),
