@@ -33,7 +33,6 @@ mod compute_pass;
 mod compute_pipeline;
 mod device;
 mod error;
-mod external_memory;
 mod pipeline_layout;
 mod query_set;
 mod queue;

@@ -243,7 +243,6 @@ impl GPUAdapter {
       limits: SameObject::new(),
       features: SameObject::new(),
       weak: std::sync::OnceLock::new(),
-      external_memory: Default::default(),
     };
     let device = deno_core::cppgc::make_cppgc_object(scope, device);
     let weak_device = v8::Weak::new(scope, device);

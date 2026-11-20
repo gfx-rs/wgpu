@@ -877,7 +877,6 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::SHADER_FLOAT16
         | Caps::SHADER_INT16
         | Caps::TEXTURE_EXTERNAL
-        | Caps::SHADER_FLOAT16_IN_FLOAT32
         | Caps::SHADER_BARYCENTRICS
         | Caps::MESH_SHADER
         | Caps::MESH_SHADER_POINT_TOPOLOGY

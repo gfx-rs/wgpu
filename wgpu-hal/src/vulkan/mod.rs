@@ -1592,21 +1592,22 @@ impl crate::Queue for Queue {
 
         // We need to signal our wgpu::Fence if we have one, this adds it to the signal list.
         signal_fence.maintain(&self.device.raw)?;
-        // Keeping the Arc around is probably unneeded - the fence should never be signaled as it was reset,
-        // and newer submits should not happen until this submit is done. Therefore, it should be too high
-        // to be reset.
-        let shared_fence;
+        // `vkQueueSubmit` requires its fence to be externally synchronized, and other threads
+        // access the fences in `active` (for example with `vkGetFenceStatus`) while holding the
+        // pool's lock. Holding the lock across the submit keeps them off the new fence.
+        let mut pool_guard = None;
         match *signal_fence {
             Fence::TimelineSemaphore(raw) => {
                 signal_semaphores.push_signal(SemaphoreType::Timeline(raw, signal_value));
             }
             Fence::FencePool(ref pool) => {
+                let locked_pool = pool_guard.insert(pool.write());
                 let FencePool {
                     ref mut active,
                     ref mut free,
                     ..
-                } = *pool.write();
-                shared_fence = match free.pop() {
+                } = **locked_pool;
+                let shared_fence = match free.pop() {
                     Some(raw) => Arc::new(raw),
                     None => unsafe {
                         let fence = self
@@ -1618,7 +1619,7 @@ impl crate::Queue for Queue {
                     },
                 };
                 fence_raw = *shared_fence;
-                active.push((signal_value, shared_fence.clone()));
+                active.push((signal_value, shared_fence));
             }
         }
 

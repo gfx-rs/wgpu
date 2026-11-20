@@ -52,9 +52,9 @@ pub struct GPUTexture {
   pub format: GPUTextureFormat,
   pub usage: GPUTextureUsageFlags,
 
-  /// `None` for surface textures, which the surface owns.
-  pub(crate) external_memory:
-    Option<crate::external_memory::ExternalAllocation>,
+  // Weak reference to the JS object so we can attach a finalizer.
+  // See `GPUDevice::create_texture`.
+  pub weak: OnceLock<v8::Weak<v8::Object>>,
 }
 
 impl GPUTexture {
@@ -131,11 +131,8 @@ impl GPUTexture {
   }
   #[fast]
   #[undefined]
-  fn destroy(&self, scope: &mut v8::HandleScope) {
+  fn destroy(&self) {
     self.wgpu_texture.destroy();
-    if let Some(external_memory) = &self.external_memory {
-      external_memory.release(scope);
-    }
   }
 
   #[reentrant]

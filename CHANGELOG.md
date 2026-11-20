@@ -247,6 +247,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - `clear_texture` now rejects a request to clear only some aspects of a texture. Previously such a request would clear all aspects of the texture. By @andyleiserson in [#10684](https://github.com/gfx-rs/wgpu/pull/10684).
 - `Queue::submit` now returns `Option<SubmissionIndex>`, and returns `None` if the submission failed. A `None` result means the submission never reached the driver, so fences/events/semaphores attached to HAL queues will never be signalled. By @teoxoy in [#10218](https://github.com/gfx-rs/wgpu/pull/10218).
 - `Device::poll` now always returns `PollError::CantWait` if called with `PollType::Wait` on the WebGPU backend. By @teoxoy in [#10218](https://github.com/gfx-rs/wgpu/pull/10218).
+- `DownlevelFlags::SHADER_F16_IN_F32` has been removed. It previously blocked broken `quantizeToF16`, `pack2x16float`, and `unpack2x16float` on older llvmpipe / lavapipe. Using wgpu with an up-to-date Mesa version is always recommended. By @szymros in [#10957](https://github.com/gfx-rs/wgpu/pull/10957)
 
 #### naga
 
@@ -291,6 +292,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Make `TextureBlitter` respect the `sample_type` when performing downsampling. Previously, `FilterMode::Nearest` was always used when copying a larger texture to a smaller one. By @DouglasDwyer in [#10657](https://github.com/gfx-rs/wgpu/pull/10657)
 - Fixed some cases where `Adapter::get_texture_format_features` and `TextureFormat::guaranteed_format_features` did not match the validation applied by `create_texture`. By @andyleiserson in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
 - `STORAGE_BINDING` usage is no longer allowed for multi-planar textures. It was previously accepted, but was untested, and likely broken. By @andyleiserson in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
+- Make `wgpu-core` build with `--no-default-features` by fixing the logic in `wgpu_core::lock`. By @jimblandy in [#10972](https://github.com/gfx-rs/wgpu/pull/10972).
 
 #### naga
 
@@ -365,6 +367,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Enable the `depthBiasClamp` device feature when it is supported. Pipelines with a non-zero `DepthBiasState::clamp` previously failed Vulkan validation. By @VoxelBoy in [#10566](https://github.com/gfx-rs/wgpu/pull/10566).
 - Fix a crash in `vkQueueSubmit` on Imagination's proprietary driver and on the Android 16 emulator by passing a timeline value for every semaphore whenever a submission uses timeline semaphore values. By @laurenz-canva in [#10677](https://github.com/gfx-rs/wgpu/pull/10677).
 - Polyfill workgroup zero init in mesh and task shaders on AMD's proprietary driver, which fails with `VK_ERROR_INITIALIZATION_FAILED` when they use `OpVariable` initializers. By @apollo-2006 in [#10692](https://github.com/gfx-rs/wgpu/pull/10692).
+- Fix a fence data race between submitting and polling on devices without timeline semaphores. By @JasperDeSutter in [#10960](https://github.com/gfx-rs/wgpu/pull/10960).
 - If the Vulkan loader lists `VK_EXT_debug_utils` but instance creation rejects it, retry without it. Previously `InstanceFlags::DEBUG`, which debug builds enable by default, made the Vulkan backend unavailable on devices such as the Oculus Quest 1. By @matthargett in [#10979](https://github.com/gfx-rs/wgpu/pull/10979).
 
 #### Metal
@@ -402,7 +405,6 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 #### deno_webgpu
 
 - Timestamp queries are reported in nanoseconds, as WebGPU requires, on GPUs whose timestamp period is not 1 ns. By @matthargett in [#10979](https://github.com/gfx-rs/wgpu/pull/10979).
-- Buffer and texture allocations are reported to V8 as external memory, so unreferenced GPU resources are garbage collected before GPU memory runs out. By @matthargett in [#10979](https://github.com/gfx-rs/wgpu/pull/10979).
 
 ### Performance
 

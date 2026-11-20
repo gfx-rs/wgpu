@@ -153,7 +153,7 @@ impl GPUCanvasContext {
           dimension: crate::texture::GPUTextureDimension::D2,
           format: config.format,
           usage: config.usage,
-          external_memory: None,
+          weak: Default::default(),
         };
         let obj = make_cppgc_object(scope, texture);
         let obj = v8::Global::new(scope, obj);
