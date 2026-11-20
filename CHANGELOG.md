@@ -391,6 +391,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix a crash when creating a declared alternate sRGB view of a render-attachment-only surface with Metal API Validation enabled. By @jinleili in [#10280](https://github.com/gfx-rs/wgpu/pull/10280).
 - To avoid rendering failures in new windows (see [#9430](https://github.com/gfx-rs/wgpu/issues/9430)), do not return `SurfaceStatus::Occluded` from `Surface::get_current_texture` when it is called for a window that hasn't been visible yet. By @tronical in [#10302](https://github.com/gfx-rs/wgpu/pull/10302).
 - Skip the render ICB probe on Macs with Tier 1 argument buffers, such as Haswell and Broadwell Intel GPUs. Compiling its kernel crashed the Metal shader compiler, which stalled device creation for about 10 seconds. By @ErkoRisthein in [#10927](https://github.com/gfx-rs/wgpu/pull/10927).
+- Order acceleration structure builds and compacted size reads within a single `build_acceleration_structures` call, and across consecutive acceleration structure commands recorded with no render or compute pass, or deferred query resolve, between them. A TLAS build could previously read a BLAS that was still building, producing missing intersections or GPU hangs, and a compacted size query could run before the build it measures. By @jtbirdsell and @acoliver in [#10292](https://github.com/gfx-rs/wgpu/pull/10292).
 
 #### GLES
 
