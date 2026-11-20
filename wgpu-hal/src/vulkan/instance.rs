@@ -416,7 +416,10 @@ impl super::Instance {
         has_nv_optimus: bool,
         drop_callback: Option<crate::DropCallback>,
     ) -> Result<Self, crate::InstanceError> {
-        log::debug!("Instance version: 0x{instance_api_version:x}");
+        log::debug!(
+            "Instance Vulkan version: {}",
+            super::VkVersion(instance_api_version)
+        );
 
         let debug_utils = if let Some(debug_utils_create_info) = debug_utils_create_info {
             if extensions.contains(&ext::debug_utils::NAME) {
