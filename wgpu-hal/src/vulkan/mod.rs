@@ -12,10 +12,8 @@ We cope with this requirement by the combination of the following ways:
 
 Render passes are cached on the device and kept forever.
 
-Framebuffers are also cached on the device, but they are removed when
-any of the image views (they have) gets removed.
-If Vulkan supports image-less framebuffers,
-then the actual views are excluded from the framebuffer key.
+Framebuffers are cached on each command encoder, up to
+`MAX_CACHED_FRAMEBUFFERS` of them.
 
 ## Fences
 
@@ -1164,6 +1162,9 @@ struct ResourceIdentity<T> {
     id: u64,
     _phantom: PhantomData<T>,
 }
+
+/// How many framebuffers a command encoder keeps across its resets.
+const MAX_CACHED_FRAMEBUFFERS: usize = 16;
 
 #[derive(Clone, Eq, Hash, PartialEq)]
 struct FramebufferKey {

@@ -188,9 +188,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.free
             .extend(cmd_bufs.into_iter().map(|cmd_buf| cmd_buf.raw));
         self.free.append(&mut self.discarded);
-        // Delete framebuffers from the framebuffer cache
-        for (_, framebuffer) in self.framebuffers.drain() {
-            unsafe { self.device.raw.destroy_framebuffer(framebuffer, None) };
+        // The framebuffers stay for the render passes that are recorded again, since some
+        // drivers take long to create one: PowerVR's proprietary driver sets up a render
+        // target in the kernel for each. Nothing removes the framebuffer of a view that
+        // was destroyed, so the cache is emptied once it holds more than a few.
+        if self.framebuffers.len() > super::MAX_CACHED_FRAMEBUFFERS {
+            for (_, framebuffer) in self.framebuffers.drain() {
+                unsafe { self.device.raw.destroy_framebuffer(framebuffer, None) };
+            }
         }
         let _ = unsafe {
             self.device
