@@ -10,10 +10,7 @@ use core::{
     ptr,
     time::Duration,
 };
-use std::{
-    sync::mpsc::{sync_channel, SyncSender},
-    thread,
-};
+use std::{sync::mpsc::sync_channel, thread};
 
 use glow::HasContext;
 use glutin_wgl_sys::wgl_extra::{
@@ -345,15 +342,31 @@ fn get_global_window_class() -> Result<CString, crate::InstanceError> {
 
 struct InstanceDevice {
     dc: Gdi::HDC,
+    window: Foundation::HWND,
+}
 
-    /// This is used to keep the thread owning `dc` alive until this struct is dropped.
-    _tx: SyncSender<()>,
+/// Posted to the hidden window to stop its thread.
+const INSTANCE_THREAD_SHUTDOWN: u32 = WindowsAndMessaging::WM_APP;
+
+impl Drop for InstanceDevice {
+    fn drop(&mut self) {
+        if let Err(e) = unsafe {
+            WindowsAndMessaging::PostMessageA(
+                Some(self.window),
+                INSTANCE_THREAD_SHUTDOWN,
+                Foundation::WPARAM::default(),
+                Foundation::LPARAM::default(),
+            )
+        } {
+            log::error!("failed to request instance thread shutdown: {e}");
+        }
+    }
 }
 
 fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
     #[derive(Clone, Copy)]
     // TODO: We can get these SendSync definitions in the upstream metadata if this is the case
-    struct SendDc(Gdi::HDC);
+    struct SendDc(Gdi::HDC, Foundation::HWND);
     unsafe impl Sync for SendDc {}
     unsafe impl Send for SendDc {}
 
@@ -370,7 +383,6 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
 
     let window_class = get_global_window_class()?;
 
-    let (drop_tx, drop_rx) = sync_channel(0);
     let (setup_tx, setup_rx) = sync_channel(0);
 
     // We spawn a thread which owns the hidden window for this instance.
@@ -429,9 +441,30 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
 
             match setup {
                 Ok((_window, dc)) => {
-                    setup_tx.send(Ok(SendDc(dc.device))).unwrap();
-                    // Wait for the shutdown event to free the window and device context handle.
-                    drop_rx.recv().ok();
+                    setup_tx.send(Ok(SendDc(dc.device, dc.window))).unwrap();
+                    // Pump messages so that input-language broadcasts are not blocked.
+                    loop {
+                        let mut message = unsafe { mem::zeroed::<WindowsAndMessaging::MSG>() };
+                        match unsafe {
+                            WindowsAndMessaging::GetMessageA(&mut message, None, 0, 0).0
+                        } {
+                            -1 => {
+                                log::error!(
+                                    "failed to retrieve instance thread message: {}",
+                                    Error::from_thread()
+                                );
+                            }
+                            0 => log::warn!("ignoring WM_QUIT on instance thread"),
+                            _ if message.hwnd == dc.window
+                                && message.message == INSTANCE_THREAD_SHUTDOWN =>
+                            {
+                                break
+                            }
+                            _ => {
+                                unsafe { WindowsAndMessaging::DispatchMessageA(&message) };
+                            }
+                        }
+                    }
                 }
                 Err(err) => {
                     setup_tx.send(Err(err)).unwrap();
@@ -442,9 +475,9 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
             crate::InstanceError::with_source(String::from("unable to create instance thread"), e)
         })?;
 
-    let dc = setup_rx.recv().unwrap()?.0;
+    let SendDc(dc, window) = setup_rx.recv().unwrap()?;
 
-    Ok(InstanceDevice { dc, _tx: drop_tx })
+    Ok(InstanceDevice { dc, window })
 }
 
 impl crate::Instance for Instance {
