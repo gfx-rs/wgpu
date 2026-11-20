@@ -219,10 +219,19 @@ bool _24()
 
 void _161()
 {
+    for (uint _178 = gl_LocalInvocationIndex; _178 < 3u; _178++)
+    {
+        _21._m0[_178] = _7(vec4(0.0), vec4(0.0));
+    }
+    for (uint _188 = gl_LocalInvocationIndex; _188 < 1u; _188++)
+    {
+        _21._m1[_188] = _10(uvec3(0u), false, vec4(0.0));
+    }
     if (gl_LocalInvocationIndex == 0u)
     {
         _19 = 0.0;
-        _21 = _16(_7[](_7(vec4(0.0), vec4(0.0)), _7(vec4(0.0), vec4(0.0)), _7(vec4(0.0), vec4(0.0))), _10[](_10(uvec3(0u), false, vec4(0.0))), 0u, 0u);
+        _21._m2 = 0u;
+        _21._m3 = 0u;
     }
     barrier();
     _21._m2 = 3u;
@@ -243,19 +252,19 @@ void main()
 {
     _161();
     barrier();
-    uint _216 = min(_21._m2, 3u);
-    uint _219 = min(_21._m3, 1u);
-    SetMeshOutputsEXT(_216, _219);
-    for (uint _209 = gl_LocalInvocationIndex; _209 < _216; _209++)
+    uint _236 = min(_21._m2, 3u);
+    uint _239 = min(_21._m3, 1u);
+    SetMeshOutputsEXT(_236, _239);
+    for (uint _229 = gl_LocalInvocationIndex; _229 < _236; _229++)
     {
-        gl_MeshVerticesEXT[_209].gl_Position = _21._m0[_209]._m0;
-        _154[_209] = _21._m0[_209]._m1;
+        gl_MeshVerticesEXT[_229].gl_Position = _21._m0[_229]._m0;
+        _154[_229] = _21._m0[_229]._m1;
     }
-    for (uint _210 = gl_LocalInvocationIndex; _210 < _219; _210++)
+    for (uint _230 = gl_LocalInvocationIndex; _230 < _239; _230++)
     {
-        gl_PrimitiveTriangleIndicesEXT[_210] = _21._m1[_210]._m0;
-        gl_MeshPrimitivesEXT[_210].gl_CullPrimitiveEXT = _21._m1[_210]._m1;
-        _160[_210] = _21._m1[_210]._m2;
+        gl_PrimitiveTriangleIndicesEXT[_230] = _21._m1[_230]._m0;
+        gl_MeshPrimitivesEXT[_230].gl_CullPrimitiveEXT = _21._m1[_230]._m1;
+        _160[_230] = _21._m1[_230]._m2;
     }
 }
 
@@ -306,17 +315,26 @@ struct _68
     uint _m1;
 };
 
-layout(location = 0) out vec4 _273[3];
-layout(location = 1) perprimitiveEXT out vec4 _279[1];
+layout(location = 0) out vec4 _293[3];
+layout(location = 1) perprimitiveEXT out vec4 _299[1];
 shared float _19;
 shared _16 _21;
 
-void _280()
+void _300()
 {
+    for (uint _307 = gl_LocalInvocationIndex; _307 < 3u; _307++)
+    {
+        _21._m0[_307] = _7(vec4(0.0), vec4(0.0));
+    }
+    for (uint _315 = gl_LocalInvocationIndex; _315 < 1u; _315++)
+    {
+        _21._m1[_315] = _10(uvec3(0u), false, vec4(0.0));
+    }
     if (gl_LocalInvocationIndex == 0u)
     {
         _19 = 0.0;
-        _21 = _16(_7[](_7(vec4(0.0), vec4(0.0)), _7(vec4(0.0), vec4(0.0)), _7(vec4(0.0), vec4(0.0))), _10[](_10(uvec3(0u), false, vec4(0.0))), 0u, 0u);
+        _21._m2 = 0u;
+        _21._m3 = 0u;
     }
     barrier();
     _21._m2 = 3u;
@@ -335,21 +353,21 @@ void _280()
 
 void main()
 {
-    _280();
+    _300();
     barrier();
-    uint _306 = min(_21._m2, 3u);
-    uint _309 = min(_21._m3, 1u);
-    SetMeshOutputsEXT(_306, _309);
-    for (uint _300 = gl_LocalInvocationIndex; _300 < _306; _300++)
+    uint _344 = min(_21._m2, 3u);
+    uint _347 = min(_21._m3, 1u);
+    SetMeshOutputsEXT(_344, _347);
+    for (uint _338 = gl_LocalInvocationIndex; _338 < _344; _338++)
     {
-        gl_MeshVerticesEXT[_300].gl_Position = _21._m0[_300]._m0;
-        _273[_300] = _21._m0[_300]._m1;
+        gl_MeshVerticesEXT[_338].gl_Position = _21._m0[_338]._m0;
+        _293[_338] = _21._m0[_338]._m1;
     }
-    for (uint _301 = gl_LocalInvocationIndex; _301 < _309; _301++)
+    for (uint _339 = gl_LocalInvocationIndex; _339 < _347; _339++)
     {
-        gl_PrimitiveTriangleIndicesEXT[_301] = _21._m1[_301]._m0;
-        gl_MeshPrimitivesEXT[_301].gl_CullPrimitiveEXT = _21._m1[_301]._m1;
-        _279[_301] = _21._m1[_301]._m2;
+        gl_PrimitiveTriangleIndicesEXT[_339] = _21._m1[_339]._m0;
+        gl_MeshPrimitivesEXT[_339].gl_CullPrimitiveEXT = _21._m1[_339]._m1;
+        _299[_339] = _21._m1[_339]._m2;
     }
 }
 
@@ -400,17 +418,26 @@ struct _68
     uint _m1;
 };
 
-layout(location = 0) out vec4 _362[3];
-layout(location = 1) perprimitiveEXT out vec4 _368[1];
+layout(location = 0) out vec4 _400[3];
+layout(location = 1) perprimitiveEXT out vec4 _406[1];
 shared float _19;
 shared _16 _21;
 
-void _369()
+void _407()
 {
+    for (uint _413 = gl_LocalInvocationIndex; _413 < 3u; _413 += 2u)
+    {
+        _21._m0[_413] = _7(vec4(0.0), vec4(0.0));
+    }
+    for (uint _421 = gl_LocalInvocationIndex; _421 < 1u; _421 += 2u)
+    {
+        _21._m1[_421] = _10(uvec3(0u), false, vec4(0.0));
+    }
     if (gl_LocalInvocationIndex == 0u)
     {
         _19 = 0.0;
-        _21 = _16(_7[](_7(vec4(0.0), vec4(0.0)), _7(vec4(0.0), vec4(0.0)), _7(vec4(0.0), vec4(0.0))), _10[](_10(uvec3(0u), false, vec4(0.0))), 0u, 0u);
+        _21._m2 = 0u;
+        _21._m3 = 0u;
     }
     barrier();
     if (gl_LocalInvocationID.x == 0u)
@@ -437,21 +464,21 @@ void _369()
 
 void main()
 {
-    _369();
+    _407();
     barrier();
-    uint _399 = min(_21._m2, 3u);
-    uint _402 = min(_21._m3, 1u);
-    SetMeshOutputsEXT(_399, _402);
-    for (uint _393 = gl_LocalInvocationIndex; _393 < _399; _393 += 2u)
+    uint _455 = min(_21._m2, 3u);
+    uint _458 = min(_21._m3, 1u);
+    SetMeshOutputsEXT(_455, _458);
+    for (uint _449 = gl_LocalInvocationIndex; _449 < _455; _449 += 2u)
     {
-        gl_MeshVerticesEXT[_393].gl_Position = _21._m0[_393]._m0;
-        _362[_393] = _21._m0[_393]._m1;
+        gl_MeshVerticesEXT[_449].gl_Position = _21._m0[_449]._m0;
+        _400[_449] = _21._m0[_449]._m1;
     }
-    for (uint _394 = gl_LocalInvocationIndex; _394 < _402; _394 += 2u)
+    for (uint _450 = gl_LocalInvocationIndex; _450 < _458; _450 += 2u)
     {
-        gl_PrimitiveTriangleIndicesEXT[_394] = _21._m1[_394]._m0;
-        gl_MeshPrimitivesEXT[_394].gl_CullPrimitiveEXT = _21._m1[_394]._m1;
-        _368[_394] = _21._m1[_394]._m2;
+        gl_PrimitiveTriangleIndicesEXT[_450] = _21._m1[_450]._m0;
+        gl_MeshPrimitivesEXT[_450].gl_CullPrimitiveEXT = _21._m1[_450]._m1;
+        _406[_450] = _21._m1[_450]._m2;
     }
 }
 
@@ -500,12 +527,12 @@ struct _68
     uint _m1;
 };
 
-layout(location = 0) in vec4 _445;
-layout(location = 1) perprimitiveEXT in vec4 _448;
-layout(location = 0) out vec4 _450;
+layout(location = 0) in vec4 _501;
+layout(location = 1) perprimitiveEXT in vec4 _504;
+layout(location = 0) out vec4 _506;
 
 void main()
 {
-    _450 = _7(gl_FragCoord, _445)._m1 * _11(_448)._m0;
+    _506 = _7(gl_FragCoord, _501)._m1 * _11(_504)._m0;
 }
 

@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 50
+; Bound: 55
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
@@ -42,11 +42,11 @@ OpDecorate %27 BuiltIn NumWorkgroups
 %25 = OpVariable  %18  Input
 %27 = OpVariable  %18  Input
 %30 = OpTypeFunction %2
-%32 = OpConstantNull  %9
-%33 = OpConstant  %6  0
-%37 = OpConstant  %6  2
-%38 = OpConstant  %6  264
-%40 = OpTypePointer Workgroup %6
+%32 = OpConstantNull  %6
+%33 = OpTypePointer Workgroup %6
+%42 = OpConstant  %6  2
+%43 = OpConstant  %6  264
+%53 = OpConstant  %6  0
 %29 = OpFunction  %2  None %30
 %16 = OpLabel
 %19 = OpLoad  %11  %17
@@ -56,25 +56,32 @@ OpDecorate %27 BuiltIn NumWorkgroups
 %28 = OpLoad  %11  %27
 OpBranch %31
 %31 = OpLabel
-%34 = OpIEqual  %8  %24 %33
-OpSelectionMerge %35 None
-OpBranchConditional %34 %36 %35
-%36 = OpLabel
-OpStore %14 %32
-OpBranch %35
+OpBranch %34
+%34 = OpLabel
+%38 = OpPhi  %6  %24 %31 %39 %36
+%40 = OpULessThan  %8  %38 %10
+OpLoopMerge %37 %36 None
+OpBranchConditional %40 %35 %37
 %35 = OpLabel
-OpControlBarrier %37 %37 %38
-OpBranch %39
-%39 = OpLabel
-%41 = OpCompositeExtract  %6  %19 0
-%42 = OpCompositeExtract  %6  %21 0
-%43 = OpIAdd  %6  %41 %42
-%44 = OpIAdd  %6  %43 %24
-%45 = OpCompositeExtract  %6  %26 0
-%46 = OpIAdd  %6  %44 %45
-%47 = OpCompositeExtract  %6  %28 0
-%48 = OpIAdd  %6  %46 %47
-%49 = OpAccessChain  %40  %14 %33
-OpStore %49 %48
+%41 = OpAccessChain  %33  %14 %38
+OpStore %41 %32
+OpBranch %36
+%36 = OpLabel
+%39 = OpIAdd  %6  %38 %10
+OpBranch %34
+%37 = OpLabel
+OpControlBarrier %42 %42 %43
+OpBranch %44
+%44 = OpLabel
+%45 = OpCompositeExtract  %6  %19 0
+%46 = OpCompositeExtract  %6  %21 0
+%47 = OpIAdd  %6  %45 %46
+%48 = OpIAdd  %6  %47 %24
+%49 = OpCompositeExtract  %6  %26 0
+%50 = OpIAdd  %6  %48 %49
+%51 = OpCompositeExtract  %6  %28 0
+%52 = OpIAdd  %6  %50 %51
+%54 = OpAccessChain  %33  %14 %53
+OpStore %54 %52
 OpReturn
 OpFunctionEnd

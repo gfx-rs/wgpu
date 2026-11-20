@@ -1,14 +1,14 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 127
+; Bound: 132
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %112 "main" %115
+OpEntryPoint GLCompute %112 "main" %114
 OpExecutionMode %112 LocalSize 1 1 1
 OpDecorate %6 ArrayStride 4
-OpDecorate %115 BuiltIn LocalInvocationIndex
+OpDecorate %114 BuiltIn LocalInvocationIndex
 %2 = OpTypeVoid
 %3 = OpTypeFloat 32
 %4 = OpTypeInt 32 1
@@ -55,11 +55,11 @@ OpDecorate %115 BuiltIn LocalInvocationIndex
 %101 = OpConstant  %3  5
 %102 = OpConstant  %3  7
 %108 = OpTypePointer Workgroup %5
-%114 = OpConstantNull  %6
-%116 = OpTypePointer Input %5
-%115 = OpVariable  %116  Input
-%119 = OpTypeBool
-%122 = OpConstant  %5  264
+%115 = OpTypePointer Input %5
+%114 = OpVariable  %115  Input
+%117 = OpTypeBool
+%118 = OpConstantNull  %5
+%127 = OpConstant  %5  264
 %20 = OpFunction  %2  None %21
 %19 = OpLabel
 %63 = OpVariable  %36  Function %64
@@ -149,19 +149,26 @@ OpFunctionEnd
 %111 = OpLabel
 OpBranch %113
 %113 = OpLabel
-%117 = OpLoad  %5  %115
-%118 = OpIEqual  %119  %117 %11
-OpSelectionMerge %120 None
-OpBranchConditional %118 %121 %120
-%121 = OpLabel
-OpStore %17 %114
-OpBranch %120
+%116 = OpLoad  %5  %114
+OpBranch %119
+%119 = OpLabel
+%123 = OpPhi  %5  %116 %113 %124 %121
+%125 = OpULessThan  %117  %123 %7
+OpLoopMerge %122 %121 None
+OpBranchConditional %125 %120 %122
 %120 = OpLabel
-OpControlBarrier %30 %30 %122
-OpBranch %123
-%123 = OpLabel
-%124 = OpFunctionCall  %2  %20
-%125 = OpFunctionCall  %2  %100
-%126 = OpFunctionCall  %2  %105
+%126 = OpAccessChain  %108  %17 %123
+OpStore %126 %118
+OpBranch %121
+%121 = OpLabel
+%124 = OpIAdd  %5  %123 %29
+OpBranch %119
+%122 = OpLabel
+OpControlBarrier %30 %30 %127
+OpBranch %128
+%128 = OpLabel
+%129 = OpFunctionCall  %2  %20
+%130 = OpFunctionCall  %2  %100
+%131 = OpFunctionCall  %2  %105
 OpReturn
 OpFunctionEnd

@@ -32,6 +32,64 @@ pub struct FunctionInterface<'a> {
     pub workgroup_size: [u32; 3],
 }
 
+/// One step from a workgroup variable to a value it contains.
+#[derive(Clone, Copy)]
+enum WorkgroupInitStep {
+    /// A struct member index.
+    Member(u32),
+    /// An array element, with the length of the array.
+    Element(u32),
+}
+
+/// A value that the workgroup variable zero initialization polyfill stores.
+struct WorkgroupInitLeaf {
+    var_id: Word,
+    class: spirv::StorageClass,
+    path: Vec<WorkgroupInitStep>,
+    ty: Handle<crate::Type>,
+}
+
+/// Calls `leaf` for each value of `ty` to zero in one store.
+///
+/// Arrays are split into elements so the polyfill can spread their stores over
+/// the workgroup. Types without arrays are stored whole.
+fn collect_workgroup_init_leaves(
+    module: &crate::Module,
+    ty: Handle<crate::Type>,
+    path: &mut Vec<WorkgroupInitStep>,
+    leaf: &mut impl FnMut(&[WorkgroupInitStep], Handle<crate::Type>),
+) -> Result<(), Error> {
+    fn contains_array(module: &crate::Module, ty: Handle<crate::Type>) -> bool {
+        match module.types[ty].inner {
+            crate::TypeInner::Array { .. } => true,
+            crate::TypeInner::Struct { ref members, .. } => members
+                .iter()
+                .any(|member| contains_array(module, member.ty)),
+            _ => false,
+        }
+    }
+
+    match module.types[ty].inner {
+        crate::TypeInner::Array { base, size, .. } => {
+            let crate::proc::IndexableLength::Known(length) = size.resolve(module.to_ctx())? else {
+                return Err(Error::Validation("runtime-sized workgroup array"));
+            };
+            path.push(WorkgroupInitStep::Element(length));
+            collect_workgroup_init_leaves(module, base, path, leaf)?;
+            path.pop();
+        }
+        crate::TypeInner::Struct { ref members, .. } if contains_array(module, ty) => {
+            for (index, member) in members.iter().enumerate() {
+                path.push(WorkgroupInitStep::Member(index as u32));
+                collect_workgroup_init_leaves(module, member.ty, path, leaf)?;
+                path.pop();
+            }
+        }
+        _ => leaf(path, ty),
+    }
+    Ok(())
+}
+
 impl Function {
     pub(super) fn to_words(&self, sink: &mut impl Extend<Word>) {
         self.signature.as_ref().unwrap().to_words(sink);
@@ -1824,7 +1882,7 @@ impl Writer {
                     local_invocation_index_id,
                     interface,
                     context.function,
-                ),
+                )?,
                 _ => None,
             };
 
@@ -2961,30 +3019,41 @@ impl Writer {
         local_invocation_index: Option<Word>,
         interface: &mut FunctionInterface,
         function: &mut Function,
-    ) -> Option<Word> {
-        let body = ir_module
-            .global_variables
-            .iter()
-            .filter(|&(handle, var)| {
-                let task_exception = (var.space == crate::AddressSpace::TaskPayload)
-                    && interface.stage == crate::ShaderStage::Task;
-                !info[handle].is_empty()
-                    && (var.space == crate::AddressSpace::WorkGroup || task_exception)
-            })
-            .map(|(handle, var)| {
-                // It's safe to use `var_id` here, not `access_id`, because only
-                // variables in the `Uniform` and `StorageBuffer` address spaces
-                // get wrapped, and we're initializing `WorkGroup` variables.
-                let var_id = self.global_variables[handle].var_id;
-                let var_type_id = self.get_handle_type_id(var.ty);
-                let init_word = self.get_constant_null(var_type_id);
-                Instruction::store(var_id, init_word, None)
-            })
-            .collect::<Vec<_>>();
-
-        if body.is_empty() {
-            return None;
+    ) -> Result<Option<Word>, Error> {
+        let mut leaves = Vec::new();
+        for (handle, var) in ir_module.global_variables.iter() {
+            let task_exception = (var.space == crate::AddressSpace::TaskPayload)
+                && interface.stage == crate::ShaderStage::Task;
+            if info[handle].is_empty()
+                || !(var.space == crate::AddressSpace::WorkGroup || task_exception)
+            {
+                continue;
+            }
+            // It's safe to use `var_id` here, not `access_id`, because only
+            // variables in the `Uniform` and `StorageBuffer` address spaces
+            // get wrapped, and we're initializing `WorkGroup` variables.
+            let var_id = self.global_variables[handle].var_id;
+            let mut path = Vec::new();
+            collect_workgroup_init_leaves(ir_module, var.ty, &mut path, &mut |path, ty| {
+                leaves.push(WorkgroupInitLeaf {
+                    var_id,
+                    class: map_storage_class(var.space),
+                    path: path.to_vec(),
+                    ty,
+                });
+            })?;
         }
+
+        if leaves.is_empty() {
+            return Ok(None);
+        }
+
+        let workgroup_invocations = interface
+            .workgroup_size
+            .iter()
+            .try_fold(1u32, |total, &size| total.checked_mul(size))
+            .filter(|&total| total != 0)
+            .ok_or(Error::Validation("invalid workgroup size"))?;
 
         let mut pre_if_block = Block::new(entry_id);
 
@@ -3013,6 +3082,170 @@ impl Writer {
 
             id
         };
+
+        let u32_ty_id = self.get_u32_type_id();
+        let bool_ty_id = self.get_bool_type_id();
+        let mut body = Vec::new();
+
+        // Zero each array element from a loop spread over the workgroup. A
+        // single invocation storing a large null aggregate can make driver
+        // compilers take minutes.
+        for leaf in leaves {
+            let leaf_ty_id = self.get_handle_type_id(leaf.ty);
+            let null_id = self.get_constant_null(leaf_ty_id);
+            let pointer_ty_id = self.get_pointer_type_id(leaf_ty_id, leaf.class);
+            let count = leaf
+                .path
+                .iter()
+                .filter_map(|step| match *step {
+                    WorkgroupInitStep::Element(count) => Some(count),
+                    WorkgroupInitStep::Member(_) => None,
+                })
+                .try_fold(1u32, |total, count| total.checked_mul(count))
+                .ok_or(Error::Validation("workgroup array element count overflow"))?;
+
+            if leaf.path.is_empty() {
+                body.push(Instruction::store(leaf.var_id, null_id, None));
+                continue;
+            }
+            if !leaf
+                .path
+                .iter()
+                .any(|step| matches!(*step, WorkgroupInitStep::Element(_)))
+            {
+                let indices = leaf
+                    .path
+                    .iter()
+                    .map(|step| match *step {
+                        WorkgroupInitStep::Member(index) => self.get_index_constant(index),
+                        WorkgroupInitStep::Element(_) => unreachable!(),
+                    })
+                    .collect::<Vec<_>>();
+                let pointer_id = self.id_gen.next();
+                body.push(Instruction::access_chain(
+                    pointer_ty_id,
+                    pointer_id,
+                    leaf.var_id,
+                    &indices,
+                ));
+                body.push(Instruction::store(pointer_id, null_id, None));
+                continue;
+            }
+
+            let header_id = self.id_gen.next();
+            let loop_body_id = self.id_gen.next();
+            let continuing_id = self.id_gen.next();
+            let loop_merge_id = self.id_gen.next();
+            let flat_index_id = self.id_gen.next();
+            let next_flat_index_id = self.id_gen.next();
+            let condition_id = self.id_gen.next();
+
+            let count_id = self.get_index_constant(count);
+            let invocations_id = self.get_index_constant(workgroup_invocations);
+
+            let pre_id = pre_if_block.label_id;
+            function.consume(pre_if_block, Instruction::branch(header_id));
+
+            let mut header = Block::new(header_id);
+            header.body.push(Instruction::phi(
+                u32_ty_id,
+                flat_index_id,
+                &[
+                    (local_invocation_index, pre_id),
+                    (next_flat_index_id, continuing_id),
+                ],
+            ));
+            header.body.push(Instruction::binary(
+                spirv::Op::ULessThan,
+                bool_ty_id,
+                condition_id,
+                flat_index_id,
+                count_id,
+            ));
+            header.body.push(Instruction::loop_merge(
+                loop_merge_id,
+                continuing_id,
+                spirv::SelectionControl::NONE,
+            ));
+            function.consume(
+                header,
+                Instruction::branch_conditional(condition_id, loop_body_id, loop_merge_id),
+            );
+
+            let mut loop_body = Block::new(loop_body_id);
+            let mut indices = Vec::with_capacity(leaf.path.len());
+            let mut stride = count;
+            let mut first_dimension = true;
+            for step in leaf.path.iter() {
+                match *step {
+                    WorkgroupInitStep::Member(index) => {
+                        indices.push(self.get_index_constant(index));
+                    }
+                    WorkgroupInitStep::Element(size) => {
+                        stride /= size;
+                        let mut value_id = flat_index_id;
+                        if stride != 1 {
+                            let stride_id = self.get_index_constant(stride);
+                            let id = self.id_gen.next();
+                            loop_body.body.push(Instruction::binary(
+                                spirv::Op::UDiv,
+                                u32_ty_id,
+                                id,
+                                value_id,
+                                stride_id,
+                            ));
+                            value_id = id;
+                        }
+                        // The loop condition keeps the outermost index in range.
+                        if !first_dimension {
+                            let size_id = self.get_index_constant(size);
+                            let id = self.id_gen.next();
+                            loop_body.body.push(Instruction::binary(
+                                spirv::Op::UMod,
+                                u32_ty_id,
+                                id,
+                                value_id,
+                                size_id,
+                            ));
+                            value_id = id;
+                        }
+                        first_dimension = false;
+                        indices.push(value_id);
+                    }
+                }
+            }
+            let pointer_id = self.id_gen.next();
+            loop_body.body.push(Instruction::access_chain(
+                pointer_ty_id,
+                pointer_id,
+                leaf.var_id,
+                &indices,
+            ));
+            loop_body
+                .body
+                .push(Instruction::store(pointer_id, null_id, None));
+            function.consume(loop_body, Instruction::branch(continuing_id));
+
+            let mut continuing = Block::new(continuing_id);
+            continuing.body.push(Instruction::binary(
+                spirv::Op::IAdd,
+                u32_ty_id,
+                next_flat_index_id,
+                flat_index_id,
+                invocations_id,
+            ));
+            function.consume(continuing, Instruction::branch(header_id));
+
+            pre_if_block = Block::new(loop_merge_id);
+        }
+
+        if body.is_empty() {
+            let mut post_block = pre_if_block;
+            self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut post_block.body);
+            let next_id = self.id_gen.next();
+            function.consume(post_block, Instruction::branch(next_id));
+            return Ok(Some(next_id));
+        }
 
         let zero_id = self.get_constant_scalar(crate::Literal::U32(0));
 
@@ -3049,7 +3282,7 @@ impl Writer {
 
         let next_id = self.id_gen.next();
         function.consume(post_if_block, Instruction::branch(next_id));
-        Some(next_id)
+        Ok(Some(next_id))
     }
 
     /// Generate an `OpVariable` for one value in an [`EntryPoint`]'s IO interface.
