@@ -8,18 +8,23 @@ use crate::{
 use super::DynResourceExt as _;
 
 pub trait DynQueue: DynResource {
+    /// Dynamic version of [Queue::submit]
     unsafe fn submit(
         &self,
         command_buffers: &[&dyn DynCommandBuffer],
         surface_textures: &[&dyn DynSurfaceTexture],
         signal_fence: (&dyn DynFence, FenceValue),
     ) -> Result<(), DeviceError>;
+    /// Dynamic version of [Queue::present]
     unsafe fn present(
         &self,
         surface: &dyn DynSurface,
         texture: Box<dyn DynSurfaceTexture>,
+        damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), SurfaceError>;
+    /// Dynamic version of [Queue::get_timestamp_period]
     unsafe fn get_timestamp_period(&self) -> f32;
+    /// Dynamic version of [Queue::wait_for_idle]
     unsafe fn wait_for_idle(&self) -> Result<(), DeviceError>;
 }
 
@@ -46,9 +51,10 @@ impl<Q: Queue + DynResource> DynQueue for Q {
         &self,
         surface: &dyn DynSurface,
         texture: Box<dyn DynSurfaceTexture>,
+        damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), SurfaceError> {
         let surface = surface.expect_downcast_ref();
-        unsafe { Q::present(self, surface, texture.unbox()) }
+        unsafe { Q::present(self, surface, texture.unbox(), damage_rects) }
     }
 
     unsafe fn get_timestamp_period(&self) -> f32 {

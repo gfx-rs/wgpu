@@ -24,6 +24,7 @@ fn destroyed_texture() {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let texture_dst = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("dst"),
@@ -34,6 +35,7 @@ fn destroyed_texture() {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let mut encoder =
@@ -108,6 +110,7 @@ fn planar_texture_view_plane() {
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         valid(&device, || {
             let _ = tex.create_view(&wgpu::TextureViewDescriptor {
@@ -138,6 +141,7 @@ fn non_planar_texture_view_plane() {
         mip_level_count: 1,
         sample_count: 1,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     fail(
         &device,
@@ -190,6 +194,7 @@ fn planar_texture_view_plane_out_of_bounds() {
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         fail(
             &device,
@@ -240,6 +245,7 @@ fn planar_texture_bad_view_format() {
                     mip_level_count: 1,
                     sample_count: 1,
                     view_formats: &[view_format],
+                    texture_binding_view_dimension: None,
                 });
             },
             Some(&format!(
@@ -279,6 +285,7 @@ fn planar_texture_bad_size() {
                     mip_level_count: 1,
                     sample_count: 1,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 });
             },
             Some(&format!(
@@ -327,6 +334,7 @@ fn planar_texture_render_attachment() {
                 mip_level_count: 1,
                 sample_count: 1,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
 
             let _ = texture.create_view(&wgpu::TextureViewDescriptor {
@@ -367,10 +375,83 @@ fn planar_texture_render_attachment_unsupported() {
                 mip_level_count: 1,
                 sample_count: 1,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
         },
         Some("Texture usages TextureUsages(RENDER_ATTACHMENT) are not allowed on a texture of type P010"),
     );
+}
+
+/// Ensures that creating a P010 texture without the features required by its
+/// plane view formats fails validation.
+#[test]
+fn planar_texture_missing_plane_features() {
+    let device_desc = wgpu::DeviceDescriptor {
+        required_features: wgpu::Features::TEXTURE_FORMAT_P010,
+        ..Default::default()
+    };
+    let (device, _queue) = wgpu::Device::noop(&device_desc);
+
+    fail(
+        &device,
+        || {
+            let _ = device.create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                dimension: wgpu::TextureDimension::D2,
+                size: wgpu::Extent3d {
+                    width: 256,
+                    height: 256,
+                    depth_or_array_layers: 1,
+                },
+                format: wgpu::TextureFormat::P010,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                mip_level_count: 1,
+                sample_count: 1,
+                view_formats: &[],
+                texture_binding_view_dimension: None,
+            });
+        },
+        Some("Texture format P010 can't be used due to missing features"),
+    );
+}
+
+/// Ensures that creating a planar texture with `STORAGE_BINDING` usage fails
+/// validation.
+#[test]
+fn planar_texture_storage_unsupported() {
+    let device_desc = wgpu::DeviceDescriptor {
+        required_features: wgpu::Features::TEXTURE_FORMAT_NV12
+            | wgpu::Features::TEXTURE_FORMAT_P010
+            | wgpu::Features::TEXTURE_FORMAT_16BIT_NORM,
+        ..Default::default()
+    };
+    let (device, _queue) = wgpu::Device::noop(&device_desc);
+
+    for format in [wgpu::TextureFormat::NV12, wgpu::TextureFormat::P010] {
+        fail(
+            &device,
+            || {
+                let _ = device.create_texture(&wgpu::TextureDescriptor {
+                    label: None,
+                    dimension: wgpu::TextureDimension::D2,
+                    size: wgpu::Extent3d {
+                        width: 256,
+                        height: 256,
+                        depth_or_array_layers: 1,
+                    },
+                    format,
+                    usage: wgpu::TextureUsages::STORAGE_BINDING,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    view_formats: &[],
+                    texture_binding_view_dimension: None,
+                });
+            },
+            Some(&format!(
+                "Texture usages TextureUsages(STORAGE_BINDING) are not allowed on a texture of type {format:?}"
+            )),
+        );
+    }
 }
 
 /// Creates a texture and a buffer, and encodes a copy from the texture to the
@@ -396,6 +477,7 @@ fn encode_copy_texture_to_buffer(
         format,
         usage: wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -495,6 +577,7 @@ fn encode_copy_buffer_to_texture(
         format,
         usage: wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -618,6 +701,7 @@ fn copy_bytes_per_row_alignment() {
             format,
             usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
@@ -685,6 +769,7 @@ fn transient_invalid_usage() {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         };
         fail(
             &device,
@@ -702,6 +787,7 @@ fn transient_invalid_usage() {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     };
     fail(
         &device,
@@ -731,6 +817,7 @@ fn transient_invalid_storeop() {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     fail(
@@ -782,6 +869,7 @@ fn no_overflow_in_texture_selector() {
         format: wgpu::TextureFormat::R8Unorm,
         usage: wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let _view = texture.create_view(&wgpu::TextureViewDescriptor {
         base_array_layer: 3385121660,

@@ -1,6 +1,6 @@
 use block2::StackBlock;
 use objc2::rc::{autoreleasepool, Retained};
-use objc2::runtime::{AnyObject, ProtocolObject, Sel};
+use objc2::runtime::{ProtocolObject, Sel};
 use objc2::{available, sel};
 use objc2_foundation::{NSError, NSOperatingSystemVersion, NSProcessInfo, NSString};
 use objc2_metal::{
@@ -21,12 +21,32 @@ use super::{OsFeatures, TimestampQuerySupport};
 
 /// Check if a device's class has a given method in its method table.
 ///
-/// This mirrors the check that `objc2` performs internally (in debug builds)
-/// before sending a message. We use it to skip method calls that would panic
-/// on proxy objects like Apple's `CaptureMTLDevice`, which forwards messages
-/// at runtime but doesn't declare the methods in its class.
-fn device_class_responds_to(device: &ProtocolObject<dyn MTLDevice>, sel: Sel) -> bool {
-    AnyObject::class(device.as_ref()).responds_to(sel)
+/// This mirrors the check that `objc2` performs internally (when `debug_assertions`
+/// is active) before sending a message. We use it to skip method calls that would
+/// panic on proxy objects like Apple's `CaptureMTLDevice`, which forwards messages
+/// at runtime but doesn't declare the methods in its class. See
+/// <https://github.com/gfx-rs/wgpu/issues/10028>.
+#[cfg(debug_assertions)]
+fn is_valid_objc_call(device: &ProtocolObject<dyn MTLDevice>, sel: Sel) -> bool {
+    objc2::runtime::AnyObject::class(device.as_ref()).responds_to(sel)
+}
+#[cfg(not(debug_assertions))]
+fn is_valid_objc_call(_device: &ProtocolObject<dyn MTLDevice>, _sel: Sel) -> bool {
+    true
+}
+
+/// Whether the render ICB probe may run on this device. Apple's paravirtual
+/// device aborts the process instead of failing the probe, and on Macs with
+/// Tier 1 argument buffers compiling the probe's ICB argument buffer aborts the
+/// shader compiler.
+fn render_icb_probe_allowed(
+    is_virtual: bool,
+    os_type: super::OsType,
+    argument_buffers: Option<MTLArgumentBuffersTier>,
+) -> bool {
+    let tier1_mac =
+        os_type == super::OsType::Macos && argument_buffers == Some(MTLArgumentBuffersTier::Tier1);
+    !is_virtual && !tier1_mac
 }
 
 /// Maximum number of command buffers for `MTLCommandQueue`s that we create.
@@ -101,6 +121,31 @@ impl crate::Adapter for super::Adapter {
         _memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         autoreleasepool(|_| {
+            #[cfg(debug_assertions)]
+            {
+                // Detect and warn if our feature detection may be degraded due to
+                // the Metal capture device. See `is_valid_objc_call` and
+                // <https://github.com/gfx-rs/wgpu/issues/10028>.
+                use core::sync::atomic::{AtomicBool, Ordering};
+                static MTL_DEBUG_DEVICES: &[&str] = &[
+                    "CaptureMTLDevice",
+                    // others...?
+                ];
+                static WARN_ONCE: AtomicBool = AtomicBool::new(false);
+                let class = objc2::runtime::AnyObject::class(self.shared.device.as_ref())
+                    .name()
+                    .to_string_lossy();
+                if let Some(class) = MTL_DEBUG_DEVICES.iter().find(|&&c| class == c) {
+                    if !WARN_ONCE.fetch_or(true, Ordering::SeqCst) {
+                        log::warn!(
+                            "Metal debug device ({class}) detected. Some Metal features may \
+                            be incorrectly detected as not supported. \
+                            See <https://github.com/gfx-rs/wgpu/issues/10028>."
+                        );
+                    }
+                }
+            }
+
             let device = &self.shared.device;
 
             let cq_desc = MTLCommandQueueDescriptor::new();
@@ -384,8 +429,14 @@ impl crate::Adapter for super::Adapter {
                 }
                 flags
             }
-            Tf::NV12 => return Tfc::empty(),
-            Tf::P010 => return Tfc::empty(),
+            Tf::NV12 | Tf::P010 => {
+                let plane_caps = |aspect| unsafe {
+                    self.texture_format_capabilities(format.aspect_specific_format(aspect).unwrap())
+                };
+                return plane_caps(wgt::TextureAspect::Plane0)
+                    & plane_caps(wgt::TextureAspect::Plane1)
+                    & (Tfc::VALID_FOR_MULTI_PLANAR | Tfc::COPY_SRC | Tfc::COPY_DST);
+            }
             Tf::Rgb9e5Ufloat => {
                 if pc.msaa_apple3 {
                     all_caps
@@ -459,8 +510,9 @@ impl crate::Adapter for super::Adapter {
         // Display-P3 and HDR (PQ/HLG) color spaces work regardless of the
         // physical display's gamut and are not gated on it here.
         let format_caps = |format: wgt::TextureFormat| {
-            let mut color_spaces =
-                wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::DISPLAY_P3;
+            let mut color_spaces = wgt::SurfaceColorSpaces::SRGB
+                | wgt::SurfaceColorSpaces::DISPLAY_P3
+                | wgt::SurfaceColorSpaces::PASS_THROUGH;
             if format == wgt::TextureFormat::Rgba16Float {
                 // `Rgba16Float` enables Metal's extended dynamic range, in both
                 // linear (scRGB) and encoded (extended nonlinear sRGB) form,
@@ -818,9 +870,10 @@ impl super::CapabilitiesQuery {
         // only means they keep taking the per-draw indirect loop. The probe
         // chooses a lowering, never a capability.
         //
-        // Apple's paravirtual device is excluded up front because its driver
-        // aborts the process instead of failing the probe.
-        let indirect_command_buffers_rendering = !is_virtual
+        // Devices that crash on the probe instead of failing it are excluded up
+        // front; see `render_icb_probe_allowed`.
+        let probe_allowed = render_icb_probe_allowed(is_virtual, os_type, argument_buffers);
+        let indirect_command_buffers_rendering = probe_allowed
             && available!(
                 macos = 10.15,
                 ios = 13.0,
@@ -828,7 +881,7 @@ impl super::CapabilitiesQuery {
                 watchos = 6.0,
                 visionos = 1.0
             )
-            && device_class_responds_to(
+            && is_valid_objc_call(
                 device,
                 sel!(newIndirectCommandBufferWithDescriptor:maxCommandCount:options:),
             );
@@ -894,7 +947,7 @@ impl super::CapabilitiesQuery {
             texture_cube_array: Self::supports_any(device, TEXTURE_CUBE_ARRAY_SUPPORT),
             supports_float_filtering: os_type == super::OsType::Macos
                 || (available!(macos = 11.0, ios = 14.0, tvos = 16.0, visionos = 1.0)
-                    && device_class_responds_to(device, sel!(supports32BitFloatFiltering))
+                    && is_valid_objc_call(device, sel!(supports32BitFloatFiltering))
                     && device.supports32BitFloatFiltering()),
             format_depth24_stencil8: os_type == super::OsType::Macos
                 && device.isDepth24Stencil8PixelFormatSupported(),
@@ -908,7 +961,7 @@ impl super::CapabilitiesQuery {
             format_b5: os_type != super::OsType::Macos,
             format_bc: os_type == super::OsType::Macos
                 || (available!(macos = 11.0, ios = 16.4, tvos = 16.4, visionos = 1.0)
-                    && device_class_responds_to(device, sel!(supportsBCTextureCompression))
+                    && is_valid_objc_call(device, sel!(supportsBCTextureCompression))
                     && device.supportsBCTextureCompression()),
             format_eac_etc: os_type != super::OsType::Macos
                 // M1 in macOS supports EAC/ETC2
@@ -1201,7 +1254,7 @@ impl super::CapabilitiesQuery {
                 ios = 13.0,
                 tvos = 13.0,
                 visionos = 1.0
-            ) && device_class_responds_to(device, sel!(hasUnifiedMemory))
+            ) && is_valid_objc_call(device, sel!(hasUnifiedMemory))
             {
                 Some(device.hasUnifiedMemory())
             } else {
@@ -1234,10 +1287,7 @@ impl super::CapabilitiesQuery {
                     && (device.supportsFamily(MTLGPUFamily::Apple7)
                         || device.supportsFamily(MTLGPUFamily::Mac2)))
                 || (available!(macos = 10.15, ios = 14.0, tvos = 16.0, visionos = 1.0)
-                    && device_class_responds_to(
-                        device,
-                        sel!(supportsShaderBarycentricCoordinates),
-                    )
+                    && is_valid_objc_call(device, sel!(supportsShaderBarycentricCoordinates))
                     && device.supportsShaderBarycentricCoordinates()),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             // See https://github.com/gfx-rs/wgpu/pull/8725 for more details
@@ -1290,6 +1340,8 @@ impl super::CapabilitiesQuery {
             supports_cooperative_matrix: family_check
                 && (device.supportsFamily(MTLGPUFamily::Apple7)
                     || device.supportsFamily(MTLGPUFamily::Mac2)),
+            // This `available!` condition is for residency sets, which are used by
+            // wgpu's ray tracing support, and not for ray tracing itself.
             // https://developer.apple.com/documentation/metal/mtlresidencyset
             supports_raytracing: if available!(
                 macos = 15.0,
@@ -1297,10 +1349,14 @@ impl super::CapabilitiesQuery {
                 tvos = 18.0,
                 visionos = 2.0,
             ) {
-                device_class_responds_to(device, sel!(supportsRaytracing))
-                    && device.supportsRaytracing()
-                    && device_class_responds_to(device, sel!(supportsRaytracingFromRender))
-                    && device.supportsRaytracingFromRender()
+                // This is the actual ray tracing feature detection. Runtime detection with
+                // `supportsRayTracing{,FromRender}` picks up a few devices before Apple6,
+                // but requires the capture device workaround.
+                (family_check && device.supportsFamily(MTLGPUFamily::Apple6))
+                    || (is_valid_objc_call(device, sel!(supportsRaytracing))
+                        && device.supportsRaytracing()
+                        && is_valid_objc_call(device, sel!(supportsRaytracingFromRender))
+                        && device.supportsRaytracingFromRender())
             } else {
                 false
             },
@@ -1321,7 +1377,7 @@ impl super::CapabilitiesQuery {
         }
     }
 
-    pub fn features(&self) -> wgt::Features {
+    pub fn features(&self, capabilities: &crate::Capabilities) -> wgt::Features {
         use wgt::Features as F;
 
         let mut features = F::empty()
@@ -1340,6 +1396,8 @@ impl super::CapabilitiesQuery {
             | F::SHADER_I16
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::TEXTURE_FORMAT_16BIT_NORM
+            | F::TEXTURE_FORMAT_NV12
+            | F::TEXTURE_FORMAT_P010
             | F::UNRESTRICTED_BYTES_PER_ROW
             | F::VERTEX_WRITABLE_STORAGE;
 
@@ -1475,6 +1533,14 @@ impl super::CapabilitiesQuery {
 
         features.set(F::MULTISAMPLE_ARRAY, self.supports_multisample_array);
         features.set(F::DEBUG_PRINTF, self.supports_debug_printf);
+
+        features.set(
+            F::CORE_FEATURES_AND_LIMITS,
+            crate::auxil::supports_core_features_and_limits(
+                &capabilities.limits,
+                &capabilities.downlevel,
+            ),
+        );
 
         features
     }
@@ -1962,5 +2028,23 @@ impl super::OsType {
         } else {
             Self::Ios
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::OsType;
+    use super::{render_icb_probe_allowed, MTLArgumentBuffersTier};
+
+    #[test]
+    fn render_icb_probe_skipped_on_tier1_macs() {
+        let tier1 = Some(MTLArgumentBuffersTier::Tier1);
+        let tier2 = Some(MTLArgumentBuffersTier::Tier2);
+        assert!(!render_icb_probe_allowed(false, OsType::Macos, tier1));
+        assert!(render_icb_probe_allowed(false, OsType::Macos, tier2));
+        assert!(render_icb_probe_allowed(false, OsType::Ios, tier1));
+        assert!(render_icb_probe_allowed(false, OsType::Ios, tier2));
+        assert!(!render_icb_probe_allowed(true, OsType::Macos, tier2));
+        assert!(!render_icb_probe_allowed(true, OsType::Ios, tier2));
     }
 }

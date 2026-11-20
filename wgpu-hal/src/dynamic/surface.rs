@@ -18,20 +18,24 @@ pub struct DynAcquiredSurfaceTexture {
 }
 
 pub trait DynSurface: DynResource {
+    /// Dynamic version of [Surface::configure]
     unsafe fn configure(
         &self,
         device: &dyn DynDevice,
         config: &SurfaceConfiguration,
     ) -> Result<(), SurfaceError>;
 
+    /// Dynamic version of [Surface::unconfigure]
     unsafe fn unconfigure(&self, device: &dyn DynDevice);
 
+    /// Dynamic version of [Surface::acquire_texture]
     unsafe fn acquire_texture(
         &self,
         timeout: Option<Duration>,
         fence: &dyn DynFence,
     ) -> Result<DynAcquiredSurfaceTexture, SurfaceError>;
 
+    /// Dynamic version of [Surface::discard_texture]
     unsafe fn discard_texture(&self, texture: Box<dyn DynSurfaceTexture>);
 }
 

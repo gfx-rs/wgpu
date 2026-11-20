@@ -981,8 +981,21 @@ impl dispatch::DeviceInterface for CoreDevice {
         self.wgpu_device.limits().clone()
     }
 
+    fn is_surface_supported(&self, surface: &dispatch::DispatchSurface) -> bool {
+        self.wgpu_device
+            .adapter()
+            .is_surface_supported(&surface.as_core().wgpu_surface)
+    }
+
     fn adapter_info(&self) -> crate::AdapterInfo {
         self.wgpu_device.adapter_info()
+    }
+
+    fn queue(&self) -> dispatch::DispatchQueue {
+        CoreQueue {
+            wgpu_queue: self.wgpu_device.get_queue().expect("Queue should be set"),
+        }
+        .into()
     }
 
     // If we have no way to create a shader module, we can't return one, and so most of the function is unreachable.
@@ -1881,8 +1894,16 @@ impl dispatch::QueueInterface for CoreQueue {
     }
 
     fn present(&self, detail: &dispatch::DispatchSurfaceOutputDetail) {
+        self.present_with_damage(detail, &[]);
+    }
+
+    fn present_with_damage(
+        &self,
+        detail: &dispatch::DispatchSurfaceOutputDetail,
+        damage_rects: &[wgt::Rect<u32>],
+    ) {
         let detail = detail.as_core();
-        match detail.wgpu_surface.present() {
+        match detail.wgpu_surface.present_with_damage(damage_rects) {
             Ok(_status) => (),
             Err(err) => {
                 self.wgpu_queue
@@ -2012,6 +2033,10 @@ impl dispatch::TextureInterface for CoreTexture {
 
     unsafe fn mark_externally_initialized(&self) {
         unsafe { self.wgpu_texture.mark_externally_initialized() }
+    }
+
+    fn texture_binding_view_dimension(&self) -> Option<crate::TextureViewDimension> {
+        self.wgpu_texture.texture_binding_view_dimension()
     }
 }
 

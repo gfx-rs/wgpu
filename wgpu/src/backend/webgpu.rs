@@ -995,6 +995,11 @@ fn future_request_device(
             // `Surface::get_capabilities` can report `Rgba16Float` truthfully.
             rgba16float_probe::probe_rgba16float_canvas_support(&device);
 
+            let queue = WebQueue {
+                inner: queue,
+                ident: crate::cmp::Identifier::create(),
+            };
+
             (
                 WebDevice {
                     inner: device,
@@ -1002,13 +1007,10 @@ fn future_request_device(
                     error_scope_count: Rc::new(Cell::new(0)),
                     uncaptured_error_listener: Rc::new(RefCell::new(None)),
                     cached_properties: Rc::new(CachedProperties::default()),
+                    queue: queue.clone(),
                 }
                 .into(),
-                WebQueue {
-                    inner: queue,
-                    ident: crate::cmp::Identifier::create(),
-                }
-                .into(),
+                queue.into(),
             )
         })
         .map_err(|error_value| crate::RequestDeviceError {
@@ -1245,6 +1247,8 @@ pub struct WebDevice {
     uncaptured_error_listener: Rc<RefCell<Option<js_sys::Function>>>,
     /// Cached Rust values for the device's properties.
     cached_properties: Rc<CachedProperties>,
+    /// The default queue associated with this device.
+    queue: WebQueue,
 }
 
 #[derive(Debug, Clone)]
@@ -2045,11 +2049,20 @@ impl dispatch::DeviceInterface for WebDevice {
             .clone()
     }
 
+    fn is_surface_supported(&self, _surface: &dispatch::DispatchSurface) -> bool {
+        // All surfaces are inherently supported.
+        true
+    }
+
     fn adapter_info(&self) -> crate::AdapterInfo {
         self.cached_properties
             .adapter_info
             .get_or_init(|| map_adapter_info(&self.inner.adapter_info()))
             .clone()
+    }
+
+    fn queue(&self) -> dispatch::DispatchQueue {
+        self.queue.clone().into()
     }
 
     fn create_shader_module(
@@ -3264,6 +3277,10 @@ impl dispatch::TextureInterface for WebTexture {
 
     fn usage(&self) -> wgt::TextureUsages {
         self.desc.usage
+    }
+
+    fn texture_binding_view_dimension(&self) -> Option<crate::TextureViewDimension> {
+        None
     }
 }
 impl Drop for WebTexture {
@@ -4598,11 +4615,14 @@ impl dispatch::SurfaceInterface for WebSurface {
             }
             cs @ (wgt::SurfaceColorSpace::ExtendedSrgbLinear
             | wgt::SurfaceColorSpace::Bt2100Pq
-            | wgt::SurfaceColorSpace::Bt2100Hlg) => {
+            | wgt::SurfaceColorSpace::Bt2100Hlg
+            | wgt::SurfaceColorSpace::PassThrough) => {
                 // Not representable on a WebGPU canvas: `ExtendedSrgbLinear`
                 // needs a linear-transfer canvas (WebGPU has none), and
                 // `Bt2100Pq`/`Bt2100Hlg` need PQ/HLG canvas signaling (browsers expose
-                // none). `get_capabilities` never advertises these, but an app
+                // none). `PassThrough` requires control over canvas color interpretation,
+                // which WebGPU does not expose.
+                // `get_capabilities` never advertises these, but an app
                 // may still request one without checking; record the failure and
                 // report the surface as lost (as for a rejected `configure`)
                 // rather than panicking, since there is no `catch_unwind` on

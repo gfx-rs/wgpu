@@ -196,6 +196,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             format: wgpu::TextureFormat::Rg8Uint,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let target_view = texture_for_view.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -208,6 +209,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             format: wgpu::TextureFormat::Rg8Uint,
             usage: wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         let texture_for_write = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -219,6 +221,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             format: wgpu::TextureFormat::Rg8Uint,
             usage: wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         // Create some buffers.
@@ -310,6 +313,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             format: wgpu::TextureFormat::Rg8Uint,
             usage: wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         encoder_for_clear.clear_texture(
@@ -579,6 +583,7 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         let my_texture_view = my_texture.create_view(&wgpu::TextureViewDescriptor {
@@ -680,6 +685,7 @@ static DEVICE_DESTROY_THEN_BUFFER_CLEANUP: GpuTestConfiguration = GpuTestConfigu
             format: wgpu::TextureFormat::Rg8Uint,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         // Destroy the device.

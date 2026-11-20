@@ -2204,6 +2204,72 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Write a polyfill for [`Statement::SubgroupBallotFindBit`], since MSL has no
+    /// built-in for it: a chain of ternaries over the already-evaluated ballot
+    /// `words` (`words[0..4]` is `x, y, z, w`). `priority` counts up from 0 (the
+    /// lowest-priority word, used as the fallback base case) to 3 (the
+    /// highest-priority word, checked first: `x` for LSB, `w` for MSB), each
+    /// overriding the lower-priority result when that word has any bit set.
+    ///
+    /// [`Statement::SubgroupBallotFindBit`]: crate::Statement::SubgroupBallotFindBit
+    fn put_ballot_find_bit(
+        &mut self,
+        words: &[String; 4],
+        order: crate::BallotFindBitOrder,
+        priority: u32,
+    ) -> BackendResult {
+        let (word_index, base) = match (order, priority) {
+            (crate::BallotFindBitOrder::Lsb, 0) => (3, 96),
+            (crate::BallotFindBitOrder::Lsb, 1) => (2, 64),
+            (crate::BallotFindBitOrder::Lsb, 2) => (1, 32),
+            (crate::BallotFindBitOrder::Lsb, 3) => (0, 0),
+            (crate::BallotFindBitOrder::Msb, 0) => (0, 0),
+            (crate::BallotFindBitOrder::Msb, 1) => (1, 32),
+            (crate::BallotFindBitOrder::Msb, 2) => (2, 64),
+            (crate::BallotFindBitOrder::Msb, 3) => (3, 96),
+            (_, _) => unreachable!(),
+        };
+        let word = &words[word_index];
+
+        if priority == 0 {
+            self.put_ballot_find_bit_value(order, word, base)?;
+        } else {
+            write!(self.out, "({word} != 0u ? ")?;
+            self.put_ballot_find_bit_value(order, word, base)?;
+            write!(self.out, " : ")?;
+            self.put_ballot_find_bit(words, order, priority - 1)?;
+            write!(self.out, ")")?;
+        }
+        Ok(())
+    }
+
+    /// Write the least/most significant set bit of an already-evaluated `u32`
+    /// ballot word, offset by that word's base invocation index. Mirrors the
+    /// `Mf::FirstTrailingBit`/`Mf::FirstLeadingBit` formulas above, specialized
+    /// for a known-unsigned 32-bit scalar. Used by [`Self::put_ballot_find_bit`].
+    fn put_ballot_find_bit_value(
+        &mut self,
+        order: crate::BallotFindBitOrder,
+        word: &str,
+        base: u32,
+    ) -> BackendResult {
+        match order {
+            crate::BallotFindBitOrder::Lsb => {
+                write!(self.out, "((({NAMESPACE}::ctz({word}) + 1) % 33) - 1)")?;
+            }
+            crate::BallotFindBitOrder::Msb => {
+                write!(
+                    self.out,
+                    "{NAMESPACE}::select(31 - {NAMESPACE}::clz({word}), uint(-1), {word} == 0)"
+                )?;
+            }
+        }
+        if base != 0 {
+            write!(self.out, " + {base}u")?;
+        }
+        Ok(())
+    }
+
     /// Emit code for the expression `expr_handle`.
     ///
     /// The `is_scoped` argument is true if the surrounding operators have the
@@ -4503,16 +4569,18 @@ impl<W: Write> Writer<W> {
                 crate::Statement::SubgroupBallot { result, predicate } => {
                     write!(self.out, "{level}")?;
                     self.write_result_assignment(result, &context.expression)?;
+                    // `simd_ballot` holds one bit per lane, and SIMD groups can be 64 lanes wide
+                    // (AMD GPUs). Lanes 32..63 go in the second component, as WGSL expects.
                     write!(
                         self.out,
-                        "{NAMESPACE}::uint4((uint64_t){NAMESPACE}::simd_ballot("
+                        "{NAMESPACE}::uint4(as_type<{NAMESPACE}::uint2>((uint64_t){NAMESPACE}::simd_ballot("
                     )?;
                     if let Some(predicate) = predicate {
                         self.put_expression(predicate, &context.expression, true)?;
                     } else {
                         write!(self.out, "true")?;
                     }
-                    writeln!(self.out, "), 0, 0, 0);")?;
+                    writeln!(self.out, ")), 0, 0);")?;
                 }
                 crate::Statement::SubgroupCollectiveOperation {
                     op,
@@ -4632,6 +4700,30 @@ impl<W: Write> Writer<W> {
                         }
                     }
                     writeln!(self.out, ");")?;
+                }
+                crate::Statement::SubgroupBallotFindBit {
+                    order,
+                    argument,
+                    result,
+                } => {
+                    // Evaluate each ballot word once into a local, rather
+                    // than repeatedly writing `argument.x`/`.y`/`.z`/`.w` in
+                    // the ternary chain below.
+                    const COMPONENTS: [char; 4] = ['x', 'y', 'z', 'w'];
+                    let mut words: [String; 4] = core::array::from_fn(|_| String::new());
+                    for (word, &component) in words.iter_mut().zip(&COMPONENTS) {
+                        write!(self.out, "{level}uint ")?;
+                        let name = self.namer.call("");
+                        write!(self.out, "{name} = ")?;
+                        self.put_expression(argument, &context.expression, true)?;
+                        writeln!(self.out, ".{component};")?;
+                        *word = name;
+                    }
+
+                    write!(self.out, "{level}")?;
+                    self.write_result_assignment(result, &context.expression)?;
+                    self.put_ballot_find_bit(&words, order, 3)?;
+                    writeln!(self.out, ";")?;
                 }
                 crate::Statement::CooperativeStore { target, ref data } => {
                     write!(self.out, "{level}simdgroup_store(")?;
@@ -6192,9 +6284,11 @@ template <typename A>
                     "{type_name} {DIV_FUNCTION}({type_name} lhs, {type_name} rhs) {{"
                 )?;
                 let level = back::Level(1);
-                // Sub-32-bit types need typed literal wrappers (e.g. `short(1)`)
-                // to avoid ambiguous metal::select overloads. For >= 32-bit,
-                // bare literals like `1`, `-1`, `0` are unambiguous.
+                // The literal operands of `metal::select` must have the same
+                // scalar type as `rhs`, otherwise the call is ambiguous.
+                // Sub-32-bit types need typed literal wrappers (e.g.
+                // `short(1)`), and 64-bit types need suffixed literals (e.g.
+                // `1L` / `1uL`). Bare `1` / `1u` are only correct for 32-bit.
                 let (lp, rp) = if scalar.width < 4 {
                     (format!("{type_name}("), ")".to_string())
                 } else {
@@ -6202,10 +6296,10 @@ template <typename A>
                 };
                 match scalar.kind {
                     crate::ScalarKind::Sint => {
-                        let min_val = match scalar.width {
-                            2 => crate::Literal::I16(i16::MIN),
-                            4 => crate::Literal::I32(i32::MIN),
-                            8 => crate::Literal::I64(i64::MIN),
+                        let (min_val, suffix) = match scalar.width {
+                            2 => (crate::Literal::I16(i16::MIN), ""),
+                            4 => (crate::Literal::I32(i32::MIN), ""),
+                            8 => (crate::Literal::I64(i64::MIN), "L"),
                             _ => {
                                 return Err(Error::GenericValidation(format!(
                                     "Unexpected width for scalar {scalar:?}"
@@ -6214,13 +6308,20 @@ template <typename A>
                         };
                         write!(
                             self.out,
-                            "{level}return lhs / metal::select(rhs, {lp}1{rp}, (lhs == "
+                            "{level}return lhs / metal::select(rhs, {lp}1{suffix}{rp}, (lhs == "
                         )?;
                         self.put_literal(min_val)?;
-                        writeln!(self.out, " & rhs == {lp}-1{rp}) | (rhs == {lp}0{rp}));")?
+                        writeln!(
+                            self.out,
+                            " & rhs == {lp}-1{suffix}{rp}) | (rhs == {lp}0{suffix}{rp}));"
+                        )?
                     }
                     crate::ScalarKind::Uint => {
-                        let suffix = if scalar.width < 4 { "" } else { "u" };
+                        let suffix = match scalar.width {
+                            8 => "uL",
+                            4 => "u",
+                            _ => "",
+                        };
                         writeln!(
                             self.out,
                             "{level}return lhs / metal::select(rhs, {lp}1{suffix}{rp}, rhs == {lp}0{suffix}{rp});"
@@ -6282,6 +6383,9 @@ template <typename A>
                     "{type_name} {MOD_FUNCTION}({type_name} lhs, {type_name} rhs) {{"
                 )?;
                 let level = back::Level(1);
+                // See the corresponding comment in the `Divide` arm above:
+                // `metal::select` literal operands must match `rhs`'s scalar
+                // type exactly to avoid overload ambiguity.
                 let (lp, rp) = if scalar.width < 4 {
                     (format!("{type_name}("), ")".to_string())
                 } else {
@@ -6289,10 +6393,10 @@ template <typename A>
                 };
                 match scalar.kind {
                     crate::ScalarKind::Sint => {
-                        let min_val = match scalar.width {
-                            2 => crate::Literal::I16(i16::MIN),
-                            4 => crate::Literal::I32(i32::MIN),
-                            8 => crate::Literal::I64(i64::MIN),
+                        let (min_val, suffix) = match scalar.width {
+                            2 => (crate::Literal::I16(i16::MIN), ""),
+                            4 => (crate::Literal::I32(i32::MIN), ""),
+                            8 => (crate::Literal::I64(i64::MIN), "L"),
                             _ => {
                                 return Err(Error::GenericValidation(format!(
                                     "Unexpected width for scalar {scalar:?}"
@@ -6301,14 +6405,21 @@ template <typename A>
                         };
                         write!(
                             self.out,
-                            "{level}{rhs_type_name} divisor = metal::select(rhs, {lp}1{rp}, (lhs == "
+                            "{level}{rhs_type_name} divisor = metal::select(rhs, {lp}1{suffix}{rp}, (lhs == "
                         )?;
                         self.put_literal(min_val)?;
-                        writeln!(self.out, " & rhs == {lp}-1{rp}) | (rhs == {lp}0{rp}));")?;
+                        writeln!(
+                            self.out,
+                            " & rhs == {lp}-1{suffix}{rp}) | (rhs == {lp}0{suffix}{rp}));"
+                        )?;
                         writeln!(self.out, "{level}return lhs - (lhs / divisor) * divisor;")?
                     }
                     crate::ScalarKind::Uint => {
-                        let suffix = if scalar.width < 4 { "" } else { "u" };
+                        let suffix = match scalar.width {
+                            8 => "uL",
+                            4 => "u",
+                            _ => "",
+                        };
                         writeln!(
                             self.out,
                             "{level}return lhs % metal::select(rhs, {lp}1{suffix}{rp}, rhs == {lp}0{suffix}{rp});"

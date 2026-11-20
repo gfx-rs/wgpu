@@ -1277,12 +1277,6 @@ bitflags::bitflags! {
         /// - GL ES / WebGL
         const NONBLOCKING_QUERY_RESOLVE = 1 << 22;
 
-        /// Allows shaders to use `quantizeToF16`, `pack2x16float`, and `unpack2x16float`, which
-        /// operate on `f16`-precision values stored in `f32`s.
-        ///
-        /// Not supported by Vulkan on Mesa when [`Features::SHADER_F16`] is absent.
-        const SHADER_F16_IN_F32 = 1 << 23;
-
         /// Supports features introduced in MSL 2.1.
         const MSL2_1 = 1 << 24;
 
@@ -1298,6 +1292,21 @@ bitflags::bitflags! {
         /// GLSL ES has no `noperspective` qualifier, so the GLES backend only supports this
         /// on desktop OpenGL, not on GLES/WebGL2.
         const LINEAR_INTERPOLATION = 1 << 26;
+
+        /// Texture views used for bindings can have any `dimension` compatible with the texture.
+        ///
+        /// When this is not present:
+        /// - Texture views used for bindings must specify the same `dimension` as the
+        ///   `texture_binding_view_dimension` inferred/specified when creating the texture.
+        /// - If `texture_binding_view_dimension` is not specified, it will be inferred from the
+        ///   texture dimension and array layer count.
+        /// - `texture_binding_view_dimension` can only be `cube-array` if
+        ///   [`CUBE_ARRAY_TEXTURES`](Self::CUBE_ARRAY_TEXTURES) is supported, and the array
+        ///   layer count must then be a multiple of 6.
+        ///
+        /// See <https://gpuweb.github.io/gpuweb/#dom-gpudevice-createtexture>
+        const ARBITRARY_BINDING_VIEW_DIMENSIONS = 1 << 27;
+        // Free flag slot at 1 << 23
     }
 }
 

@@ -947,6 +947,25 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.need_bake_expressions.insert(right);
                 }
             }
+
+            if let Expression::Select {
+                condition,
+                accept,
+                reject,
+            } = *expr
+            {
+                // Componentwise `select` below names each operand once per component.
+                if !self.options.version.supports_integer_mix()
+                    && !matches!(inner.scalar_kind(), Some(crate::ScalarKind::Float))
+                {
+                    let cond_inner = info[condition].ty.inner_with(&self.module.types);
+                    if let TypeInner::Vector { .. } = *cond_inner {
+                        self.need_bake_expressions.insert(condition);
+                        self.need_bake_expressions.insert(accept);
+                        self.need_bake_expressions.insert(reject);
+                    }
+                }
+            }
         }
 
         for statement in func.body.iter() {
@@ -1077,15 +1096,11 @@ impl<'a, W: Write> Writer<'a, W> {
                 match built_in {
                     crate::BuiltIn::Position { invariant: true } => {
                         match (self.options.version, self.entry_point.stage) {
-                            (
-                                Version::Embedded {
-                                    version: 300,
-                                    is_webgl: true,
-                                },
-                                ShaderStage::Fragment,
-                            ) => {
-                                // `invariant gl_FragCoord` is not allowed in WebGL2 and possibly
-                                // OpenGL ES in general (waiting on confirmation).
+                            (Version::Embedded { .. }, ShaderStage::Fragment) => {
+                                // `invariant gl_FragCoord` is illegal in all OpenGL ES versions:
+                                // `invariant` may only qualify writable variables, and
+                                // `gl_FragCoord` is read-only in the fragment stage
+                                // (GLSL ES 3.00 spec §4.6.1, same language through 3.20).
                                 //
                                 // See https://github.com/KhronosGroup/WebGL/issues/3518
                             }
@@ -2281,6 +2296,29 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
                 writeln!(self.out, ");")?;
             }
+            Statement::SubgroupBallotFindBit {
+                order,
+                argument,
+                result,
+            } => {
+                write!(self.out, "{level}")?;
+                let res_name = Baked(result).to_string();
+                let res_ty = ctx.info[result].ty.inner_with(&self.module.types);
+                self.write_value_type(res_ty)?;
+                write!(self.out, " {res_name} = ")?;
+                self.named_expressions.insert(result, res_name);
+
+                match order {
+                    crate::BallotFindBitOrder::Lsb => {
+                        write!(self.out, "subgroupBallotFindLSB(")?;
+                    }
+                    crate::BallotFindBitOrder::Msb => {
+                        write!(self.out, "subgroupBallotFindMSB(")?;
+                    }
+                }
+                self.write_expr(argument, ctx)?;
+                writeln!(self.out, ");")?;
+            }
             Statement::CooperativeStore { .. } => unimplemented!(),
             Statement::RayPipelineFunction(_) | Statement::HitObject { .. } => unimplemented!(),
             Statement::DebugPrintf { .. } => unimplemented!(),
@@ -3020,16 +3058,46 @@ impl<'a, W: Write> Writer<'a, W> {
                     false
                 };
 
-                // TODO: Boolean mix on desktop required GL_EXT_shader_integer_mix
                 if vec_select {
-                    // Glsl defines that for mix when the condition is a boolean the first element
-                    // is picked if condition is false and the second if condition is true
-                    write!(self.out, "mix(")?;
-                    self.write_expr(reject, ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(accept, ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(condition, ctx)?;
+                    let result_ty = ctx.resolve_type(accept, &self.module.types);
+                    let size = match *result_ty {
+                        TypeInner::Vector { size, .. } => size,
+                        _ => unreachable!(),
+                    };
+                    let is_float =
+                        matches!(result_ty.scalar_kind(), Some(crate::ScalarKind::Float));
+
+                    if is_float || self.options.version.supports_integer_mix() {
+                        // Glsl defines that for mix when the condition is a boolean the first
+                        // element is picked if condition is false and the second if condition
+                        // is true
+                        write!(self.out, "mix(")?;
+                        self.write_expr(reject, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(accept, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(condition, ctx)?;
+                        write!(self.out, ")")?;
+                    } else {
+                        // No integer `mix` before GLSL 4.50 / ES 3.10.
+                        self.write_value_type(result_ty)?;
+                        write!(self.out, "(")?;
+
+                        for i in 0..size as usize {
+                            if i != 0 {
+                                write!(self.out, ", ")?;
+                            }
+
+                            self.write_expr(condition, ctx)?;
+                            write!(self.out, ".{} ? ", back::COMPONENTS[i])?;
+                            self.write_expr(accept, ctx)?;
+                            write!(self.out, ".{} : ", back::COMPONENTS[i])?;
+                            self.write_expr(reject, ctx)?;
+                            write!(self.out, ".{}", back::COMPONENTS[i])?;
+                        }
+
+                        write!(self.out, ")")?;
+                    }
                 } else {
                     write!(self.out, "(")?;
                     self.write_expr(condition, ctx)?;
@@ -3037,9 +3105,8 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.write_expr(accept, ctx)?;
                     write!(self.out, " : ")?;
                     self.write_expr(reject, ctx)?;
+                    write!(self.out, ")")?;
                 }
-
-                write!(self.out, ")")?
             }
             // `Derivative` is a function call to a glsl provided function
             Expression::Derivative { axis, ctrl, expr } => {

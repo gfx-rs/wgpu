@@ -21,11 +21,7 @@ use super::{
     TimestampQuerySupport,
 };
 use crate::CommandEncoder as _;
-use alloc::{
-    borrow::{Cow, ToOwned as _},
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
 use core::{ops::Range, ptr::NonNull};
 use smallvec::SmallVec;
 use wgpu_sync::atomic;
@@ -644,31 +640,50 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::TextureCopy>,
     {
-        let dst_texture = if src.format != dst.format {
-            let raw_format = self
-                .shared
-                .private_texture_format_caps
-                .map_format(src.format);
-            Cow::Owned(autoreleasepool(|_| {
-                dst.raw.newTextureViewWithPixelFormat(raw_format).unwrap()
-            }))
-        } else {
-            Cow::Borrowed(&dst.raw)
-        };
+        let mut reinterpreted_dst = None;
         let encoder = self.enter_blit();
         for copy in regions {
             let src_origin = conv::map_origin(&copy.src_base.origin);
             let dst_origin = conv::map_origin(&copy.dst_base.origin);
             // no clamping is done: Metal expects physical sizes here
             let extent = conv::map_copy_extent(&copy.size);
+
+            let src_raw = src.raw_plane(copy.src_base.aspect);
+            let dst_raw = dst.raw_plane(copy.dst_base.aspect);
+            // The [`copyFromTexture` docs][1] say that the source and destination must have
+            // "the same pixel format", and `MTLPixelFormat` includes sRGB-ness, although it's
+            // not clear whether the requirement is actually intended to extend to sRGB-ness,
+            // or whether this view creation is necessary under some other reasoning to achieve
+            // WebGPU behavior.
+            //
+            // The view includes all layers and mips, so once created, we can use it for additional
+            // regions.
+            //
+            // [1]: https://developer.apple.com/documentation/metal/mtlblitcommandencoder/copy%28from:to:%29
+            let dst_raw = if src_raw.pixelFormat() != dst_raw.pixelFormat() {
+                assert_eq!(copy.dst_base.aspect, crate::FormatAspects::COLOR);
+                assert_eq!(
+                    src.format.remove_srgb_suffix(),
+                    dst.format.remove_srgb_suffix()
+                );
+                reinterpreted_dst.get_or_insert_with(|| {
+                    autoreleasepool(|_| {
+                        dst_raw
+                            .newTextureViewWithPixelFormat(src_raw.pixelFormat())
+                            .unwrap()
+                    })
+                })
+            } else {
+                dst_raw
+            };
             unsafe {
                 encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toTexture_destinationSlice_destinationLevel_destinationOrigin(
-                    &src.raw,
+                    src_raw,
                     copy.src_base.array_layer as usize,
                     copy.src_base.mip_level as usize,
                     src_origin,
                     extent,
-                    &dst_texture,
+                    dst_raw,
                     copy.dst_base.array_layer as usize,
                     copy.dst_base.mip_level as usize,
                     dst_origin,
@@ -711,7 +726,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     bytes_per_row as usize,
                     image_byte_stride as usize,
                     conv::map_copy_extent(&extent),
-                    &dst.raw,
+                    dst.raw_plane(copy.texture_base.aspect),
                     copy.texture_base.array_layer as usize,
                     copy.texture_base.mip_level as usize,
                     dst_origin,
@@ -745,7 +760,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 .map_or(0, |v| v as u64 * bytes_per_row);
             unsafe {
                 encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage_options(
-                    &src.raw,
+                    src.raw_plane(copy.texture_base.aspect),
                     copy.texture_base.array_layer as usize,
                     copy.texture_base.mip_level as usize,
                     src_origin,
