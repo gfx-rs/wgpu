@@ -19,6 +19,19 @@ static_assertions::assert_impl_all!(SurfaceTexture: Send, Sync);
 crate::cmp::impl_eq_ord_hash_proxy!(SurfaceTexture => .texture.inner);
 
 impl SurfaceTexture {
+    /// How many presents ago this texture's contents were presented: `1` when it holds the
+    /// frame presented last, `n` when it holds the one presented `n` presents ago, and `0`
+    /// when its contents are undefined and all of it must be drawn.
+    ///
+    /// Only surfaces configured with
+    /// [`preserve_contents`](crate::SurfaceConfiguration::preserve_contents) keep contents, and
+    /// only on some backends (see there); otherwise this is `0`. A frame can then redraw only
+    /// what changed in the last `age` presents, and name it in
+    /// [`Queue::present_with_damage`](crate::Queue::present_with_damage).
+    pub fn buffer_age(&self) -> u32 {
+        self.detail.buffer_age()
+    }
+
     #[cfg(custom)]
     /// Returns custom implementation of SurfaceTexture (if custom backend and is internally T)
     pub fn as_custom<T: crate::custom::SurfaceOutputDetailInterface>(&self) -> Option<&T> {

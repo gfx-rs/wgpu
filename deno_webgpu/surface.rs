@@ -103,6 +103,7 @@ impl GPUCanvasContext {
         .map(Into::into)
         .collect(),
       desired_maximum_frame_latency: 2,
+      preserve_contents: false,
     };
 
     let device = configuration.device;

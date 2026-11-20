@@ -314,6 +314,7 @@ impl Surface for NativeSurface {
             .map(|i| Arc::new(Mutex::new(SwapchainPresentSemaphores::new(i))))
             .collect::<Vec<_>>();
 
+        let image_count = images.len();
         Ok(Box::new(NativeSwapchain {
             raw,
             functor,
@@ -326,6 +327,8 @@ impl Surface for NativeSurface {
             present_semaphores,
             next_present_time: None,
             next_present_chain: None,
+            presents: 0,
+            last_presented: vec![0; image_count],
         }))
     }
 
@@ -340,6 +343,12 @@ impl Surface for NativeSurface {
 }
 
 pub(crate) struct NativeSwapchain {
+    /// Presents made with this swapchain.
+    presents: u64,
+    /// For each image, the value of [`presents`](Self::presents) after its latest present,
+    /// or `0` if it was never presented.
+    last_presented: Vec<u64>,
+
     raw: vk::SwapchainKHR,
     functor: khr::swapchain::Device,
     device: Arc<DeviceShared>,
@@ -591,9 +600,16 @@ impl Swapchain for NativeSwapchain {
                 present_semaphores: present_semaphore_arc,
             }),
         };
+        let age = match self.last_presented.get(index as usize) {
+            Some(&last) if self.config.preserve_contents && last > 0 => {
+                u32::try_from(self.presents - last + 1).unwrap_or(0)
+            }
+            _ => 0,
+        };
         Ok(crate::AcquiredSurfaceTexture {
             texture,
             suboptimal,
+            age,
         })
     }
 
@@ -631,6 +647,11 @@ impl Swapchain for NativeSwapchain {
         present_semaphores.end_semaphore_usage();
 
         drop(acquire_semaphore);
+
+        self.presents += 1;
+        if let Some(last) = self.last_presented.get_mut(texture.index as usize) {
+            *last = self.presents;
+        }
 
         let swapchains = [self.raw];
         let image_indices = [texture.index];

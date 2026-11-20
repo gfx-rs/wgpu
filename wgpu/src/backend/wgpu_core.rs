@@ -685,6 +685,7 @@ impl CoreTlas {
 pub struct CoreSurfaceOutputDetail {
     wgpu_surface: Arc<wgc::instance::Surface>,
     error_sink: ErrorSink,
+    age: u32,
 }
 
 impl fmt::Debug for CoreSurfaceOutputDetail {
@@ -3115,17 +3116,20 @@ impl dispatch::SurfaceInterface for CoreSurface {
             ErrorSink::new()
         };
 
-        let output_detail = CoreSurfaceOutputDetail {
+        let mut output_detail = CoreSurfaceOutputDetail {
             wgpu_surface: self.wgpu_surface.clone(),
             error_sink,
-        }
-        .into();
+            age: 0,
+        };
 
         match self.wgpu_surface.get_current_texture() {
             Ok(wgc::present::SurfaceOutput {
                 status,
                 texture: texture_id,
+                age,
             }) => {
+                output_detail.age = age;
+                let output_detail = output_detail.into();
                 let data = texture_id
                     .map(|wgpu_texture| CoreTexture { wgpu_texture })
                     .map(Into::into);
@@ -3137,7 +3141,7 @@ impl dispatch::SurfaceInterface for CoreSurface {
                 match error_sink.as_ref() {
                     Some(error_sink) => {
                         error_sink.handle_error_nolabel(err, "Surface::get_current_texture_view");
-                        (None, crate::SurfaceStatus::Validation, output_detail)
+                        (None, crate::SurfaceStatus::Validation, output_detail.into())
                     }
                     None => handle_error_fatal(err, "Surface::get_current_texture_view"),
                 }
@@ -3147,6 +3151,10 @@ impl dispatch::SurfaceInterface for CoreSurface {
 }
 
 impl dispatch::SurfaceOutputDetailInterface for CoreSurfaceOutputDetail {
+    fn buffer_age(&self) -> u32 {
+        self.age
+    }
+
     fn texture_discard(&self) {
         match self.wgpu_surface.discard() {
             Ok(_status) => (),

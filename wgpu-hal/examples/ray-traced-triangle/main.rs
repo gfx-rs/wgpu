@@ -316,6 +316,7 @@ impl<A: hal::Api> Example<A> {
             },
             usage: wgpu_types::TextureUses::COLOR_TARGET | wgpu_types::TextureUses::COPY_DST,
             view_formats: vec![surface_format],
+            preserve_contents: false,
         };
         unsafe {
             surface.configure(&device, &surface_config).unwrap();
