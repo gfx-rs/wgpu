@@ -18,7 +18,7 @@ use std::{
 use glow::HasContext;
 use glutin_wgl_sys::wgl_extra::{
     Wgl, CONTEXT_CORE_PROFILE_BIT_ARB, CONTEXT_DEBUG_BIT_ARB, CONTEXT_FLAGS_ARB,
-    CONTEXT_PROFILE_MASK_ARB,
+    CONTEXT_MAJOR_VERSION_ARB, CONTEXT_MINOR_VERSION_ARB, CONTEXT_PROFILE_MASK_ARB,
 };
 use hashbrown::HashSet;
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
@@ -464,12 +464,16 @@ impl crate::Instance for Instance {
         let device = create_instance_device()?;
         let dc = device.dc;
 
-        let context = unsafe { OpenGL::wglCreateContext(dc) }.map_err(|e| {
-            crate::InstanceError::with_source(
-                String::from("unable to create initial OpenGL context"),
-                e,
-            )
-        })?;
+        // Some drivers (e.g. the Parallels WDDM driver) fail the first `wglCreateContext` of a
+        // process and grant the next one, so try twice before giving up on the backend.
+        let context = unsafe { OpenGL::wglCreateContext(dc) }
+            .or_else(|_| unsafe { OpenGL::wglCreateContext(dc) })
+            .map_err(|e| {
+                crate::InstanceError::with_source(
+                    String::from("unable to create initial OpenGL context"),
+                    e,
+                )
+            })?;
         let context = WglContext { context };
         context.make_current(dc).map_err(|e| {
             crate::InstanceError::with_source(
@@ -485,19 +489,53 @@ impl crate::Instance for Instance {
             && extra.CreateContextAttribsARB.is_loaded();
 
         let context = if can_use_profile {
-            let attributes = [
-                CONTEXT_PROFILE_MASK_ARB as c_int,
-                CONTEXT_CORE_PROFILE_BIT_ARB as c_int,
-                CONTEXT_FLAGS_ARB as c_int,
-                if desc.flags.contains(InstanceFlags::DEBUG) {
-                    CONTEXT_DEBUG_BIT_ARB as c_int
-                } else {
-                    0
-                },
-                0, // End of list
+            let flags = if desc.flags.contains(InstanceFlags::DEBUG) {
+                CONTEXT_DEBUG_BIT_ARB as c_int
+            } else {
+                0
+            };
+            // Ask for an explicit version. Without one the requested version is 1.0, the
+            // profile mask is ignored below 3.2, and any context compatible with 1.0 is a valid
+            // answer: some drivers (e.g. the Parallels WDDM driver) then return a 2.1 context,
+            // which is below the 3.3 we need. Take the newest core version the driver grants,
+            // and only fall back to the version-less request if it grants none of them.
+            const VERSIONS: [(c_int, c_int); 8] = [
+                (4, 6),
+                (4, 5),
+                (4, 4),
+                (4, 3),
+                (4, 2),
+                (4, 1),
+                (4, 0),
+                (3, 3),
             ];
-            let context =
-                unsafe { extra.CreateContextAttribsARB(dc.0, ptr::null(), attributes.as_ptr()) };
+            let versioned = VERSIONS.iter().find_map(|&(major, minor)| {
+                let attributes = [
+                    CONTEXT_MAJOR_VERSION_ARB as c_int,
+                    major,
+                    CONTEXT_MINOR_VERSION_ARB as c_int,
+                    minor,
+                    CONTEXT_PROFILE_MASK_ARB as c_int,
+                    CONTEXT_CORE_PROFILE_BIT_ARB as c_int,
+                    CONTEXT_FLAGS_ARB as c_int,
+                    flags,
+                    0, // End of list
+                ];
+                let context = unsafe {
+                    extra.CreateContextAttribsARB(dc.0, ptr::null(), attributes.as_ptr())
+                };
+                (!context.is_null()).then_some(context)
+            });
+            let context = versioned.unwrap_or_else(|| {
+                let attributes = [
+                    CONTEXT_PROFILE_MASK_ARB as c_int,
+                    CONTEXT_CORE_PROFILE_BIT_ARB as c_int,
+                    CONTEXT_FLAGS_ARB as c_int,
+                    flags,
+                    0, // End of list
+                ];
+                unsafe { extra.CreateContextAttribsARB(dc.0, ptr::null(), attributes.as_ptr()) }
+            });
             if context.is_null() {
                 return Err(crate::InstanceError::with_source(
                     String::from("unable to create OpenGL context"),
