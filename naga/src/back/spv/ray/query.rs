@@ -58,8 +58,12 @@ impl Writer {
 
         let argument_type_id = self.get_ray_query_pointer_id();
 
-        let (func_id, mut function, arg_ids) = self.write_function_signature(
-            &[argument_type_id, flag_pointer_type_id],
+        let (mut function, func_id, arg_ids) = self.write_function_signature(
+            "ray_query_get_intersection",
+            &[
+                (argument_type_id, "ray_query"),
+                (flag_pointer_type_id, "flag"),
+            ],
             intersection_type_id,
         );
 
@@ -523,13 +527,14 @@ impl Writer {
         let f32_type_id = self.get_f32_type_id();
         let f32_ptr_ty = self.get_pointer_type_id(f32_type_id, spirv::StorageClass::Function);
 
-        let (func_id, mut function, arg_ids) = self.write_function_signature(
+        let (mut function, func_id, arg_ids) = self.write_function_signature(
+            "ray_query_initialize",
             &[
-                ray_query_type_id,
-                acceleration_structure_type_id,
-                ray_desc_type_id,
-                u32_ptr_ty,
-                f32_ptr_ty,
+                (ray_query_type_id, "ray_query"),
+                (acceleration_structure_type_id, "as"),
+                (ray_desc_type_id, "ray_desc"),
+                (u32_ptr_ty, "init_tracker"),
+                (f32_ptr_ty, "t_max_tracker"),
             ],
             self.void_type,
         );
@@ -650,8 +655,14 @@ impl Writer {
         let bool_type_id = self.get_bool_type_id();
         let bool_ptr_ty = self.get_pointer_type_id(bool_type_id, spirv::StorageClass::Function);
 
-        let (func_id, mut function, arg_ids) =
-            self.write_function_signature(&[ray_query_type_id, u32_ptr_ty], bool_type_id);
+        let (mut function, func_id, arg_ids) = self.write_function_signature(
+            "ray_query_proceed",
+            &[
+                (ray_query_type_id, "ray_query"),
+                (u32_ptr_ty, "init_tracker"),
+            ],
+            bool_type_id,
+        );
 
         let query_id = arg_ids[0];
         let init_tracker_id = arg_ids[1];
@@ -798,8 +809,14 @@ impl Writer {
 
         let bool_type_id = self.get_bool_type_id();
 
-        let (func_id, mut function, arg_ids) = self.write_function_signature(
-            &[ray_query_type_id, u32_ptr_ty, f32_type_id, f32_ptr_type_id],
+        let (mut function, func_id, arg_ids) = self.write_function_signature(
+            "ray_query_generate_intersection",
+            &[
+                (ray_query_type_id, "ray_query"),
+                (u32_ptr_ty, "init_tracker"),
+                (f32_type_id, "depth"),
+                (f32_ptr_type_id, "t_max_tracker"),
+            ],
             self.void_type,
         );
 
@@ -1093,8 +1110,14 @@ impl Writer {
 
         let bool_type_id = self.get_bool_type_id();
 
-        let (func_id, mut function, arg_ids) =
-            self.write_function_signature(&[ray_query_type_id, u32_ptr_ty], self.void_type);
+        let (mut function, func_id, arg_ids) = self.write_function_signature(
+            "ray_query_confirm_intersection",
+            &[
+                (ray_query_type_id, "ray_query"),
+                (u32_ptr_ty, "init_tracker"),
+            ],
+            self.void_type,
+        );
 
         let query_id = arg_ids[0];
         let init_tracker_id = arg_ids[1];
@@ -1255,8 +1278,12 @@ impl Writer {
 
         let bool_type_id = self.get_bool_type_id();
 
-        let (func_id, mut function, arg_ids) = self.write_function_signature(
-            &[ray_query_type_id, u32_ptr_ty],
+        let (mut function, func_id, arg_ids) = self.write_function_signature(
+            "ray_query_get_vertex_position",
+            &[
+                (ray_query_type_id, "ray_query"),
+                (u32_ptr_ty, "init_tracker"),
+            ],
             rq_get_vertex_positions_ty_id,
         );
 
@@ -1417,8 +1444,14 @@ impl Writer {
 
         let bool_type_id = self.get_bool_type_id();
 
-        let (func_id, mut function, arg_ids) =
-            self.write_function_signature(&[ray_query_type_id, u32_ptr_ty], self.void_type);
+        let (mut function, func_id, arg_ids) = self.write_function_signature(
+            "ray_query_terminate",
+            &[
+                (ray_query_type_id, "ray_query"),
+                (u32_ptr_ty, "init_tracker"),
+            ],
+            self.void_type,
+        );
 
         let query_id = arg_ids[0];
         let init_tracker_id = arg_ids[1];
