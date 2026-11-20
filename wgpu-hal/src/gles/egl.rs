@@ -96,12 +96,21 @@ enum SrgbFrameBufferKind {
     Khr,
 }
 
+/// Framebuffer configuration chosen by [`choose_config`].
+struct ChosenConfig {
+    config: khronos_egl::Config,
+    /// The config has `EGL_WINDOW_BIT`.
+    supports_window: bool,
+    /// The config is good for presentation on any display.
+    supports_native_window: bool,
+}
+
 /// Choose GLES framebuffer configuration.
 fn choose_config(
     egl: &EglInstance,
     display: khronos_egl::Display,
     srgb_kind: SrgbFrameBufferKind,
-) -> Result<(khronos_egl::Config, bool), crate::InstanceError> {
+) -> Result<ChosenConfig, crate::InstanceError> {
     //TODO: EGL_SLOW_CONFIG
     let tiers = [
         (
@@ -166,7 +175,11 @@ fn choose_config(
                     } else {
                         2
                     };
-                return Ok((config, tier_max >= tier_threshold));
+                return Ok(ChosenConfig {
+                    config,
+                    supports_window: tier_max >= 1,
+                    supports_native_window: tier_max >= tier_threshold,
+                });
             }
             Ok(None) => {
                 log::debug!("No config found!");
@@ -355,6 +368,7 @@ struct Inner {
     /// Required for `eglMakeCurrent` on platforms that doesn't supports `EGL_KHR_surfaceless_context`.
     egl: EglContext,
     version: (i32, i32),
+    supports_window: bool,
     supports_native_window: bool,
     config: khronos_egl::Config,
     /// Method by which the framebuffer should support srgb
@@ -481,7 +495,11 @@ impl Inner {
             }
         }
 
-        let (config, supports_native_window) = choose_config(&egl, display, srgb_kind)?;
+        let ChosenConfig {
+            config,
+            supports_window,
+            supports_native_window,
+        } = choose_config(&egl, display, srgb_kind)?;
 
         let supports_opengl = if version >= (1, 4) {
             let client_apis = egl
@@ -675,6 +693,7 @@ impl Inner {
                 version,
             },
             version,
+            supports_window,
             supports_native_window,
             config,
             srgb_kind,
@@ -1026,11 +1045,18 @@ impl crate::Instance for Instance {
 
         inner.egl.unmake_current();
 
+        // `EGL_NATIVE_RENDERABLE` is about native drawing APIs, not presentation, and
+        // e.g. NVIDIA's egl-x11 reports it for no config. On a display created for the
+        // window system connection, `EGL_WINDOW_BIT` is enough.
+        let presentable = inner.supports_native_window
+            || (inner.supports_window
+                && matches!(self.wsi.kind, WindowKind::X11 | WindowKind::Wayland));
+
         Ok(Surface {
             egl: inner.egl.clone(),
             wsi: self.wsi.clone(),
             config: inner.config,
-            presentable: inner.supports_native_window,
+            presentable,
             raw_window_handle: window_handle,
             swapchain: RwLock::new(None),
             srgb_kind: inner.srgb_kind,
