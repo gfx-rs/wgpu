@@ -1163,6 +1163,41 @@ fn matrix_constructor_inferred() {
 }
 
 #[test]
+fn log_f64() {
+    check(
+        r#"
+            enable wgpu_f64;
+            fn f(x: f64) -> f64 {
+                return log(x);
+            }
+        "#,
+        r#"error: wrong type passed as argument #1 to `log`
+  ┌─ wgsl:3:18
+  │
+3 │             fn f(x: f64) -> f64 {
+  │                  ^ argument #1 has type `f64`
+4 │                 return log(x);
+  │                        ^^^
+  │
+  = note: `log` accepts the following types for argument #1:
+  = note: allowed type: {AbstractFloat}
+  = note: allowed type: f32
+  = note: allowed type: f16
+  = note: allowed type: vec2<{AbstractFloat}>
+  = note: allowed type: vec2<f32>
+  = note: allowed type: vec2<f16>
+  = note: allowed type: vec3<{AbstractFloat}>
+  = note: allowed type: vec3<f32>
+  = note: allowed type: vec3<f16>
+  = note: allowed type: vec4<{AbstractFloat}>
+  = note: allowed type: vec4<f32>
+  = note: allowed type: vec4<f16>
+
+"#,
+    );
+}
+
+#[test]
 fn recursion_depth_expression() {
     check(
         include_str!("deep-expression.wgsl"),
