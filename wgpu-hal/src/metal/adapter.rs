@@ -1340,14 +1340,16 @@ impl super::CapabilitiesQuery {
             supports_cooperative_matrix: family_check
                 && (device.supportsFamily(MTLGPUFamily::Apple7)
                     || device.supportsFamily(MTLGPUFamily::Mac2)),
-            // This `available!` condition is for residency sets, which are used by
-            // wgpu's ray tracing support, and not for ray tracing itself.
+            // This `available!` condition is for residency sets and for row-major BLAS
+            // transformation matrices, which are used by wgpu's ray tracing support, and
+            // not for ray tracing itself.
             // https://developer.apple.com/documentation/metal/mtlresidencyset
+            // https://developer.apple.com/documentation/metal/mtlaccelerationstructuretrianglegeometrydescriptor/transformationmatrixlayout
             supports_raytracing: if available!(
                 macos = 15.0,
                 ios = 18.0,
-                tvos = 18.0,
-                visionos = 2.0,
+                tvos = 18.1,
+                visionos = 2.1,
             ) {
                 // This is the actual ray tracing feature detection. Runtime detection with
                 // `supportsRayTracing{,FromRender}` picks up a few devices before Apple6,

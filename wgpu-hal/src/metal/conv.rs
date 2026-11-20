@@ -6,7 +6,7 @@ use objc2_metal::{
     MTLAccelerationStructureTriangleGeometryDescriptor, MTLAccelerationStructureUsage,
     MTLAttributeFormat, MTLBlendFactor, MTLBlendOperation, MTLBlitOption, MTLClearColor,
     MTLColorWriteMask, MTLCompareFunction, MTLCullMode, MTLIndexType,
-    MTLInstanceAccelerationStructureDescriptor, MTLOrigin,
+    MTLInstanceAccelerationStructureDescriptor, MTLMatrixLayout, MTLOrigin,
     MTLPrimitiveAccelerationStructureDescriptor, MTLPrimitiveTopologyClass, MTLPrimitiveType,
     MTLRenderStages, MTLResourceUsage, MTLSamplerAddressMode, MTLSamplerBorderColor,
     MTLSamplerMinMagFilter, MTLSize, MTLStencilOperation, MTLStoreAction, MTLTextureSwizzle,
@@ -430,6 +430,8 @@ pub fn map_acceleration_structure_descriptor<'a>(
                         )
                     });
                     if let Some(transform) = triangles.transform.as_ref() {
+                        // wgpu transforms are row-major 3x4, Metal defaults to column-major.
+                        descriptor.setTransformationMatrixLayout(MTLMatrixLayout::RowMajor);
                         unsafe {
                             descriptor.setTransformationMatrixBuffer(Some(&transform.buffer.raw));
                             descriptor
@@ -441,11 +443,10 @@ pub fn map_acceleration_structure_descriptor<'a>(
                             .flags
                             .contains(wgt::AccelerationStructureGeometryFlags::OPAQUE),
                     );
-                    if !triangles.flags.contains(
+                    descriptor
+                        .setAllowDuplicateIntersectionFunctionInvocation(!triangles.flags.contains(
                         wgt::AccelerationStructureGeometryFlags::NO_DUPLICATE_ANY_HIT_INVOCATION,
-                    ) {
-                        descriptor.allowDuplicateIntersectionFunctionInvocation();
-                    }
+                    ));
                     // descriptor.setIntersectionFunctionTableOffset(offset);
                     descriptor.into_super()
                 })
@@ -472,11 +473,10 @@ pub fn map_acceleration_structure_descriptor<'a>(
                             .flags
                             .contains(wgt::AccelerationStructureGeometryFlags::OPAQUE),
                     );
-                    if !aabbs.flags.contains(
+                    descriptor
+                        .setAllowDuplicateIntersectionFunctionInvocation(!aabbs.flags.contains(
                         wgt::AccelerationStructureGeometryFlags::NO_DUPLICATE_ANY_HIT_INVOCATION,
-                    ) {
-                        descriptor.allowDuplicateIntersectionFunctionInvocation();
-                    }
+                    ));
                     // descriptor.setIntersectionFunctionTableOffset(offset);
                     descriptor.into_super()
                 })
@@ -518,5 +518,95 @@ pub fn map_texture_component_swizzle(
         green: map_component_swizzle(swizzle.g),
         blue: map_component_swizzle(swizzle.b),
         alpha: map_component_swizzle(swizzle.a),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use objc2_metal::{MTLCreateSystemDefaultDevice, MTLDevice as _, MTLResourceOptions};
+
+    fn geometry_descriptor(
+        entries: &crate::AccelerationStructureEntries<super::super::Buffer>,
+    ) -> Retained<MTLAccelerationStructureGeometryDescriptor> {
+        let descriptor = map_acceleration_structure_descriptor(
+            entries,
+            crate::AccelerationStructureBuildFlags::empty(),
+        )
+        .downcast::<MTLPrimitiveAccelerationStructureDescriptor>()
+        .unwrap();
+        descriptor.geometryDescriptors().unwrap().objectAtIndex(0)
+    }
+
+    /// Creates a Metal device; skipped when no device or no ray tracing support is available.
+    #[test]
+    fn blas_geometry_transform_layout_and_duplicate_invocations() {
+        let Some(device) = MTLCreateSystemDefaultDevice() else {
+            return;
+        };
+        let exposed =
+            super::super::AdapterShared::expose(device.clone(), wgt::InstanceFlags::empty());
+        if !exposed
+            .features
+            .contains(wgt::Features::EXPERIMENTAL_RAY_QUERY)
+        {
+            return;
+        }
+        let buffer = super::super::Buffer {
+            raw: device
+                .newBufferWithLength_options(256, MTLResourceOptions::StorageModeShared)
+                .unwrap(),
+        };
+
+        for no_duplicate in [false, true] {
+            let mut flags = wgt::AccelerationStructureGeometryFlags::empty();
+            flags.set(
+                wgt::AccelerationStructureGeometryFlags::NO_DUPLICATE_ANY_HIT_INVOCATION,
+                no_duplicate,
+            );
+
+            let triangles = crate::AccelerationStructureEntries::Triangles(alloc::vec![
+                crate::AccelerationStructureTriangles {
+                    vertex_buffer: Some(&buffer),
+                    vertex_format: wgt::VertexFormat::Float32x3,
+                    first_vertex: 0,
+                    vertex_count: 3,
+                    vertex_stride: 12,
+                    indices: None,
+                    transform: Some(crate::AccelerationStructureTriangleTransform {
+                        buffer: &buffer,
+                        offset: 64,
+                    }),
+                    flags,
+                }
+            ]);
+            let geometry = geometry_descriptor(&triangles)
+                .downcast::<MTLAccelerationStructureTriangleGeometryDescriptor>()
+                .unwrap();
+            // wgpu transforms are row-major 3x4; Metal defaults to column-major.
+            assert_eq!(
+                geometry.transformationMatrixLayout(),
+                MTLMatrixLayout::RowMajor
+            );
+            assert_eq!(geometry.transformationMatrixBufferOffset(), 64);
+            assert_eq!(
+                geometry.allowDuplicateIntersectionFunctionInvocation(),
+                !no_duplicate
+            );
+
+            let aabbs = crate::AccelerationStructureEntries::AABBs(alloc::vec![
+                crate::AccelerationStructureAABBs {
+                    buffer: Some(&buffer),
+                    offset: 0,
+                    count: 1,
+                    stride: 24,
+                    flags,
+                }
+            ]);
+            assert_eq!(
+                geometry_descriptor(&aabbs).allowDuplicateIntersectionFunctionInvocation(),
+                !no_duplicate
+            );
+        }
     }
 }
