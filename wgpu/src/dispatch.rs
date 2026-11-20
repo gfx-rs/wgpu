@@ -137,6 +137,8 @@ pub trait AdapterInterface: CommonTraits {
     fn get_presentation_timestamp(&self) -> crate::PresentationTimestamp;
 
     fn cooperative_matrix_properties(&self) -> Vec<crate::wgt::CooperativeMatrixProperties>;
+
+    fn ray_tracing_invocation_reorder_mode(&self) -> crate::wgt::RayTracingInvocationReorderMode;
 }
 
 pub trait DeviceInterface: CommonTraits {

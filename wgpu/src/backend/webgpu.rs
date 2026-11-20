@@ -1904,6 +1904,10 @@ impl dispatch::AdapterInterface for WebAdapter {
     fn cooperative_matrix_properties(&self) -> Vec<wgt::CooperativeMatrixProperties> {
         Vec::new()
     }
+
+    fn ray_tracing_invocation_reorder_mode(&self) -> wgt::RayTracingInvocationReorderMode {
+        wgt::RayTracingInvocationReorderMode::None
+    }
 }
 impl Drop for WebAdapter {
     fn drop(&mut self) {
