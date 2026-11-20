@@ -196,6 +196,7 @@ fn float64() {
     require(
         &[Ca::Float64],
         r#"
+            enable wgpu_f64;
             fn f(x: f64) -> f64 {
                 return x;
             }

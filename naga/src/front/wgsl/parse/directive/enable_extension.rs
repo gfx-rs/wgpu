@@ -18,6 +18,8 @@ pub(crate) struct EnableExtensions {
     dual_source_blending: bool,
     /// Whether `enable f16;` was written earlier in the shader module.
     f16: bool,
+    /// Whether `enable wgpu_f64;` was written earlier in the shader module.
+    wgpu_f64: bool,
     /// Whether `enable wgpu_int16;` was written earlier in the shader module.
     wgpu_int16: bool,
     clip_distances: bool,
@@ -47,6 +49,7 @@ impl EnableExtensions {
             per_vertex: false,
             wgpu_binding_array: false,
             debug_printf: false,
+            wgpu_f64: false,
         }
     }
 
@@ -74,6 +77,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::WgpuPerVertex => &mut self.per_vertex,
             ImplementedEnableExtension::WgpuBindingArray => &mut self.wgpu_binding_array,
             ImplementedEnableExtension::WgpuDebugPrintf => &mut self.debug_printf,
+            ImplementedEnableExtension::WgpuF64 => &mut self.wgpu_f64,
         };
         *field = true;
     }
@@ -92,6 +96,7 @@ impl EnableExtensions {
             }
             ImplementedEnableExtension::DualSourceBlending => self.dual_source_blending,
             ImplementedEnableExtension::F16 => self.f16,
+            ImplementedEnableExtension::WgpuF64 => self.wgpu_f64,
             ImplementedEnableExtension::WgpuInt16 => self.wgpu_int16,
             ImplementedEnableExtension::ClipDistances => self.clip_distances,
             ImplementedEnableExtension::WgpuCooperativeMatrix => self.wgpu_cooperative_matrix,
@@ -155,6 +160,7 @@ impl EnableExtension {
     const DRAW_INDEX: &'static str = "draw_index";
     const PER_VERTEX: &'static str = "wgpu_per_vertex";
     const BINDING_ARRAY: &'static str = "wgpu_binding_array";
+    const F64: &'static str = "wgpu_f64";
     const INT16: &'static str = "wgpu_int16";
     const DEBUG_PRINTF: &'static str = "wgpu_debug_printf";
 
@@ -185,6 +191,7 @@ impl EnableExtension {
             Self::PRIMITIVE_INDEX => Self::Implemented(ImplementedEnableExtension::PrimitiveIndex),
             Self::PER_VERTEX => Self::Implemented(ImplementedEnableExtension::WgpuPerVertex),
             Self::BINDING_ARRAY => Self::Implemented(ImplementedEnableExtension::WgpuBindingArray),
+            Self::F64 => Self::Implemented(ImplementedEnableExtension::WgpuF64),
             Self::INT16 => Self::Implemented(ImplementedEnableExtension::WgpuInt16),
             Self::DEBUG_PRINTF => Self::Implemented(ImplementedEnableExtension::WgpuDebugPrintf),
             _ => return Err(Box::new(Error::UnknownEnableExtension(span, word))),
@@ -212,6 +219,7 @@ impl EnableExtension {
                 }
                 ImplementedEnableExtension::WgpuPerVertex => Self::PER_VERTEX,
                 ImplementedEnableExtension::WgpuBindingArray => Self::BINDING_ARRAY,
+                ImplementedEnableExtension::WgpuF64 => Self::F64,
                 ImplementedEnableExtension::WgpuInt16 => Self::INT16,
                 ImplementedEnableExtension::WgpuDebugPrintf => Self::DEBUG_PRINTF,
             },
@@ -271,6 +279,8 @@ pub enum ImplementedEnableExtension {
     WgpuPerVertex,
     /// Enables the `wgpu_binding_array` extension, native only.
     WgpuBindingArray,
+    /// Enables `f64` 64-bit float support in WGSL, native only.
+    WgpuF64,
     /// Enables `i16`/`u16` 16-bit integer support in WGSL, native only.
     WgpuInt16,
     /// Enables the `wgpu_debug_printf` extension, allows using `debugPrintf`, native only.
@@ -293,6 +303,7 @@ impl ImplementedEnableExtension {
         Self::PrimitiveIndex,
         Self::WgpuPerVertex,
         Self::WgpuBindingArray,
+        Self::WgpuF64,
         Self::WgpuInt16,
         Self::WgpuDebugPrintf,
     ];
@@ -327,6 +338,7 @@ impl ImplementedEnableExtension {
                 .union(C::TEXTURE_AND_SAMPLER_BINDING_ARRAY)
                 .union(C::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING)
                 .union(C::ACCELERATION_STRUCTURE_BINDING_ARRAY),
+            Self::WgpuF64 => C::FLOAT64,
             Self::WgpuInt16 => C::SHADER_INT16,
             Self::WgpuDebugPrintf => C::DEBUG_PRINTF,
         }

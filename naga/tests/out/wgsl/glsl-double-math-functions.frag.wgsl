@@ -1,3 +1,5 @@
+enable wgpu_f64;
+
 fn main_1() {
     var a: vec4<f64> = vec4(1.0lf);
     var b: vec4<f64> = vec4(2.0lf);
