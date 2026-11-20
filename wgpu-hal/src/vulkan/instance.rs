@@ -1088,6 +1088,13 @@ impl Drop for super::InstanceShared {
     }
 }
 
+crate::adapter_options! {
+    /// Options for enumerating Vulkan adapters.
+    #[backend(wgt::Backend::Vulkan)]
+    #[derive(Clone, Debug)]
+    pub struct VulkanAdapterOptions;
+}
+
 impl crate::Instance for super::Instance {
     type A = super::Api;
 
@@ -1156,6 +1163,7 @@ impl crate::Instance for super::Instance {
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&super::Surface>,
+        _options: Option<&VulkanAdapterOptions>,
     ) -> Vec<crate::ExposedAdapter<super::Api>> {
         use crate::auxil::db;
 
