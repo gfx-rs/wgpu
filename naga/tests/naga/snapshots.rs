@@ -22,6 +22,8 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
         }
         if targets.contains(Targets::SPIRV) {
             allowed_capabilities &= naga::back::spv::supported_capabilities();
+            // TODO: temporary until Vulkan/SPIR-V external texture support is complete
+            allowed_capabilities |= naga::valid::Capabilities::TEXTURE_EXTERNAL;
         }
         if targets.contains(Targets::WGSL) {
             allowed_capabilities &= naga::back::wgsl::supported_capabilities();
