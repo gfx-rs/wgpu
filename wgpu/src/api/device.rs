@@ -979,6 +979,11 @@ impl Device {
 impl Device {
     /// Create a new device of wgpu from a wgpu-core device.
     ///
+    /// Error scopes, the [uncaptured error handler](Device::on_uncaptured_error)
+    /// and the single [device lost callback](Device::set_device_lost_callback)
+    /// belong to the wgpu-core device, so they are shared with every other user
+    /// of `core_device`.
+    ///
     /// # Arguments
     ///
     /// - `core_device` - wgpu-core device.
