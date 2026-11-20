@@ -1640,6 +1640,10 @@ impl<W: Write> Writer<W> {
             Expression::Override(handle) => {
                 write!(self.out, "{}", self.names[&NameKey::Override(handle)])?;
             }
+            Expression::AccessIndex { base, index } => {
+                write_expression(self, base)?;
+                write!(self.out, "[{index}]")?;
+            }
             _ => unreachable!(),
         }
 

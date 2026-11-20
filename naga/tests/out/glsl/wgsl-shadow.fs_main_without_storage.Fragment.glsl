@@ -77,8 +77,8 @@ void main() {
         }
     }
     vec3 _e42 = color_1;
-    vec4 _e47 = _group_1_binding_0_fs.color;
-    _fs2p_location0 = (vec4(_e42, 1.0) * _e47);
+    vec4 _e50 = _group_1_binding_0_fs.color;
+    _fs2p_location0 = (vec4(_e42.x, _e42.y, _e42.z, 1.0) * _e50);
     return;
 }
 

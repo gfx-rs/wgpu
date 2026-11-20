@@ -123,8 +123,8 @@ float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
         }
     }
     float3 _e42 = color;
-    float4 _e47 = u_entity.color;
-    return (float4(_e42, 1.0) * _e47);
+    float4 _e50 = u_entity.color;
+    return (float4(_e42.x, _e42.y, _e42.z, 1.0) * _e50);
 }
 
 float4 fs_main_without_storage(FragmentInput_fs_main_without_storage fragmentinput_fs_main_without_storage) : SV_Target0
@@ -162,6 +162,6 @@ float4 fs_main_without_storage(FragmentInput_fs_main_without_storage fragmentinp
         }
     }
     float3 _e42 = color_1;
-    float4 _e47 = u_entity.color;
-    return (float4(_e42, 1.0) * _e47);
+    float4 _e50 = u_entity.color;
+    return (float4(_e42.x, _e42.y, _e42.z, 1.0) * _e50);
 }

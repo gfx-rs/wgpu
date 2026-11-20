@@ -15,10 +15,14 @@ digraph Module {
 		ep0_e2 -> ep0_e3 [ label="left" ]
 		ep0_e4 [ fillcolor="#ffffb3" label="[4] Literal" ]
 		ep0_e5 [ fillcolor="#ffffb3" label="[5] Literal" ]
-		ep0_e6 [ color="#bebada" label="[6] Compose" ]
-		{ ep0_e3 ep0_e4 ep0_e5 } -> ep0_e6
-		ep0_e7 [ color="#bebada" label="[7] Compose" ]
-		{ ep0_e1 ep0_e6 } -> ep0_e7
+		ep0_e6 [ color="#8dd3c7" label="[6] AccessIndex[0]" ]
+		ep0_e3 -> ep0_e6 [ label="base" ]
+		ep0_e7 [ color="#8dd3c7" label="[7] AccessIndex[1]" ]
+		ep0_e3 -> ep0_e7 [ label="base" ]
+		ep0_e8 [ color="#bebada" label="[8] Compose" ]
+		{ ep0_e6 ep0_e7 ep0_e4 ep0_e5 } -> ep0_e8
+		ep0_e9 [ color="#bebada" label="[9] Compose" ]
+		{ ep0_e1 ep0_e8 } -> ep0_e9
 		ep0_s0 [ shape=square label="Root" ]
 		ep0_s1 [ shape=square label="Emit" ]
 		ep0_s2 [ shape=square label="Emit" ]
@@ -26,10 +30,12 @@ digraph Module {
 		ep0_s0 -> ep0_s1 [ arrowhead=tee label="" ]
 		ep0_s1 -> ep0_s2 [ arrowhead=tee label="" ]
 		ep0_s2 -> ep0_s3 [ arrowhead=tee label="" ]
-		ep0_e7 -> ep0_s3 [ label="value" ]
+		ep0_e9 -> ep0_s3 [ label="value" ]
 		ep0_s1 -> ep0_e3 [ style=dotted ]
 		ep0_s2 -> ep0_e6 [ style=dotted ]
 		ep0_s2 -> ep0_e7 [ style=dotted ]
+		ep0_s2 -> ep0_e8 [ style=dotted ]
+		ep0_s2 -> ep0_e9 [ style=dotted ]
 	}
 	subgraph cluster_ep1 {
 		label="Fragment/'frag_main'"

@@ -7,9 +7,9 @@ struct OurVertexShaderOutput {
 fn vs(@location(0) xy: vec2<f32>) -> OurVertexShaderOutput {
     var vsOutput: OurVertexShaderOutput;
 
-    vsOutput.position = vec4<f32>(xy, 0f, 1f);
-    let _e6 = vsOutput;
-    return _e6;
+    vsOutput.position = vec4<f32>(xy.x, xy.y, 0f, 1f);
+    let _e8 = vsOutput;
+    return _e8;
 }
 
 @fragment

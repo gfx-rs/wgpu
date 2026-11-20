@@ -107,9 +107,9 @@ RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructu
 
 float3 get_torus_normal(float3 world_point, RayIntersection intersection)
 {
-    float3 local_point = mul(float4(world_point, 1.0), intersection.world_to_object);
+    float3 local_point = mul(float4(world_point.x, world_point.y, world_point.z, 1.0), intersection.world_to_object);
     float2 point_on_guiding_line = (normalize(local_point.xy) * 2.4);
-    float3 world_point_on_guiding_line = mul(float4(point_on_guiding_line, 0.0, 1.0), intersection.object_to_world);
+    float3 world_point_on_guiding_line = mul(float4(point_on_guiding_line.x, point_on_guiding_line.y, 0.0, 1.0), intersection.object_to_world);
     return normalize((world_point - world_point_on_guiding_line));
 }
 

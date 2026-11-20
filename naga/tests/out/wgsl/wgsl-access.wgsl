@@ -244,7 +244,8 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     c2_[(vi + 1u)] = 42i;
     let value_1 = c2_[vi];
     let _e49 = test_arr_as_arg(array<array<f32, 10>, 5>());
-    return vec4<f32>((_matrix * vec4<f32>(vec4(value_1))), 2f);
+    let _e52 = (_matrix * vec4<f32>(vec4(value_1)));
+    return vec4<f32>(_e52.x, _e52.y, _e52.z, 2f);
 }
 
 @fragment

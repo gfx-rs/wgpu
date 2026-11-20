@@ -1638,6 +1638,9 @@ pub enum Expression {
     /// Zero value of a type.
     ZeroValue(Handle<Type>),
     /// Composite expression.
+    ///
+    /// Flattening (e.g. `vec4(vec2(), 0, 1)`) is not supported. The component
+    /// count must match the cardinality of the value being constructed.
     Compose {
         ty: Handle<Type>,
         components: Vec<Handle<Expression>>,

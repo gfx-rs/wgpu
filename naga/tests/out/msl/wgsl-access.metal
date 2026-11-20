@@ -305,7 +305,8 @@ vertex foo_vertOutput foo_vert(
     c2_.inner[vi + 1u] = 42;
     int value_1 = c2_.inner[vi];
     float _e49 = test_arr_as_arg(type_18 {});
-    return foo_vertOutput { metal::float4(_matrix * static_cast<metal::float4>(metal::int4(value_1)), 2.0) };
+    metal::float3 _e52 = _matrix * static_cast<metal::float4>(metal::int4(value_1));
+    return foo_vertOutput { metal::float4(_e52.x, _e52.y, _e52.z, 2.0) };
 }
 
 

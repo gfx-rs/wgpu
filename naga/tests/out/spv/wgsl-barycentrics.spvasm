@@ -1,20 +1,20 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 24
+; Bound: 30
 OpCapability Shader
 OpCapability FragmentBarycentricKHR
 OpExtension "SPV_KHR_fragment_shader_barycentric"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %12 "fs_main" %7 %10
-OpEntryPoint Fragment %21 "fs_main_no_perspective" %18 %20
+OpEntryPoint Fragment %24 "fs_main_no_perspective" %21 %23
 OpExecutionMode %12 OriginUpperLeft
-OpExecutionMode %21 OriginUpperLeft
+OpExecutionMode %24 OriginUpperLeft
 OpDecorate %7 BuiltIn BaryCoordKHR
 OpDecorate %10 Location 0
-OpDecorate %18 BuiltIn BaryCoordNoPerspKHR
-OpDecorate %20 Location 0
+OpDecorate %21 BuiltIn BaryCoordNoPerspKHR
+OpDecorate %23 Location 0
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %3 = OpTypeVector %4 3
@@ -25,23 +25,29 @@ OpDecorate %20 Location 0
 %10 = OpVariable  %11  Output
 %13 = OpTypeFunction %2
 %14 = OpConstant  %4  1
-%18 = OpVariable  %8  Input
-%20 = OpVariable  %11  Output
+%21 = OpVariable  %8  Input
+%23 = OpVariable  %11  Output
 %12 = OpFunction  %2  None %13
 %6 = OpLabel
 %9 = OpLoad  %3  %7
 OpBranch %15
 %15 = OpLabel
-%16 = OpCompositeConstruct  %5  %9 %14
-OpStore %10 %16
+%16 = OpCompositeExtract  %4  %9 0
+%17 = OpCompositeExtract  %4  %9 1
+%18 = OpCompositeExtract  %4  %9 2
+%19 = OpCompositeConstruct  %5  %16 %17 %18 %14
+OpStore %10 %19
 OpReturn
 OpFunctionEnd
-%21 = OpFunction  %2  None %13
-%17 = OpLabel
-%19 = OpLoad  %3  %18
-OpBranch %22
-%22 = OpLabel
-%23 = OpCompositeConstruct  %5  %19 %14
-OpStore %20 %23
+%24 = OpFunction  %2  None %13
+%20 = OpLabel
+%22 = OpLoad  %3  %21
+OpBranch %25
+%25 = OpLabel
+%26 = OpCompositeExtract  %4  %22 0
+%27 = OpCompositeExtract  %4  %22 1
+%28 = OpCompositeExtract  %4  %22 2
+%29 = OpCompositeConstruct  %5  %26 %27 %28 %14
+OpStore %23 %29
 OpReturn
 OpFunctionEnd

@@ -96,9 +96,9 @@ metal::float3 get_torus_normal(
     metal::float3 world_point,
     RayIntersection intersection
 ) {
-    metal::float3 local_point = intersection.world_to_object * metal::float4(world_point, 1.0);
+    metal::float3 local_point = intersection.world_to_object * metal::float4(world_point.x, world_point.y, world_point.z, 1.0);
     metal::float2 point_on_guiding_line = metal::normalize(local_point.xy) * 2.4;
-    metal::float3 world_point_on_guiding_line = intersection.object_to_world * metal::float4(point_on_guiding_line, 0.0, 1.0);
+    metal::float3 world_point_on_guiding_line = intersection.object_to_world * metal::float4(point_on_guiding_line.x, point_on_guiding_line.y, 0.0, 1.0);
     return metal::normalize(world_point - world_point_on_guiding_line);
 }
 

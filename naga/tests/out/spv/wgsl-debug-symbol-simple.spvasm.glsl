@@ -48,7 +48,7 @@ struct VertexOutput
 };
 
 layout(location = 0) in vec3 color;
-layout(location = 0) out vec4 _48;
+layout(location = 0) out vec4 _51;
 
 void main()
 {
@@ -74,6 +74,6 @@ void main()
         i++;
         continue;
     }
-    _48 = vec4(color_1, 1.0);
+    _51 = vec4(color_1, 1.0);
 }
 

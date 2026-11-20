@@ -401,7 +401,8 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     c2_[min(uint((vi + 1u)), 4u)] = int(42);
     int value_1 = c2_[min(uint(vi), 4u)];
     const float _e49 = test_arr_as_arg(ZeroValuearray5_array10_float__());
-    return float4(mul(float4((value_1).xxxx), _matrix), 2.0);
+    float3 _e52 = mul(float4((value_1).xxxx), _matrix);
+    return float4(_e52.x, _e52.y, _e52.z, 2.0);
 }
 
 int2 ZeroValueint2() {

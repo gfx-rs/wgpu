@@ -16,7 +16,8 @@ smooth out vec2 _vs2fs_location0;
 void main() {
     vec2 pos = _p2vs_location0;
     vec2 uv = _p2vs_location1;
-    VertexOutput _tmp_return = VertexOutput(uv, vec4((c_scale * pos), 0.0, 1.0));
+    vec2 _e3 = (c_scale * pos);
+    VertexOutput _tmp_return = VertexOutput(uv, vec4(_e3.x, _e3.y, 0.0, 1.0));
     _vs2fs_location0 = _tmp_return.uv;
     gl_Position = _tmp_return.position;
     return;

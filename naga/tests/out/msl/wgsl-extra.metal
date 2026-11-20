@@ -31,6 +31,7 @@ fragment main_Output main_(
     if (in.primitive_index == _e4) {
         return main_Output { in.color };
     } else {
-        return main_Output { metal::float4(metal::float3(1.0) - in.color.xyz, in.color.w) };
+        metal::float3 _e11 = metal::float3(1.0) - in.color.xyz;
+        return main_Output { metal::float4(_e11.x, _e11.y, _e11.z, in.color.w) };
     }
 }

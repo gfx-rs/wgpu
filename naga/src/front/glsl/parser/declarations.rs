@@ -115,7 +115,21 @@ impl ParsingContext<'_> {
                 // The type expected to be parsed inside the initializer list
                 let new_ty = element_or_member_type(ty, components.len(), &mut ctx.module.types);
 
-                components.push(self.parse_initializer(frontend, new_ty, ctx)?.0);
+                let (component, component_meta) = self.parse_initializer(frontend, new_ty, ctx)?;
+                if let TypeInner::Vector { .. } = ctx.module.types[ty].inner {
+                    if !matches!(
+                        *ctx.resolve_type(component, component_meta)?,
+                        TypeInner::Scalar(_)
+                    ) {
+                        return Err(Error {
+                            kind: ErrorKind::SemanticError(
+                                "Vector initializer list elements must be scalars".into(),
+                            ),
+                            meta: component_meta,
+                        });
+                    }
+                }
+                components.push(component);
 
                 let token = self.bump(frontend)?;
                 match token.value {

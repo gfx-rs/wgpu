@@ -1571,9 +1571,45 @@
                         non_uniform_result: Some(20),
                         requirements: (""),
                     ),
-                    ref_count: 1,
+                    ref_count: 3,
                     assignable_global: None,
                     ty: Handle(1),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(20),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(20),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(20),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
                 ),
                 (
                     uniformity: (

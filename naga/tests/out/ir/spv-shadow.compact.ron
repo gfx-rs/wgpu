@@ -894,10 +894,24 @@
                 Load(
                     pointer: 20,
                 ),
+                AccessIndex(
+                    base: 95,
+                    index: 0,
+                ),
+                AccessIndex(
+                    base: 95,
+                    index: 1,
+                ),
+                AccessIndex(
+                    base: 95,
+                    index: 2,
+                ),
                 Compose(
                     ty: 3,
                     components: [
-                        95,
+                        96,
+                        97,
+                        98,
                         8,
                     ],
                 ),
@@ -953,11 +967,11 @@
                 ),
                 Emit((
                     start: 95,
-                    end: 97,
+                    end: 100,
                 )),
                 Store(
                     pointer: 2,
-                    value: 96,
+                    value: 99,
                 ),
                 Return(
                     value: None,
