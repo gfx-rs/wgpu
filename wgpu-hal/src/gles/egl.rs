@@ -519,10 +519,6 @@ impl Inner {
         let mut context_attributes = vec![];
         let mut gl_context_attributes = vec![];
         let mut gles_context_attributes = vec![];
-        gl_context_attributes.push(khronos_egl::CONTEXT_MAJOR_VERSION);
-        gl_context_attributes.push(3);
-        gl_context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
-        gl_context_attributes.push(3);
         if supports_opengl && force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
             log::warn!("Ignoring specified GLES minor version as OpenGL is used");
         }
@@ -639,8 +635,43 @@ impl Inner {
                 }
             };
 
+            // NVIDIA grants exactly the requested version, and 3.3 has no compute
+            // shaders. Take the newest core version the driver grants, as on WGL.
+            let create_gl_context = || {
+                let mut last_error = khronos_egl::Error::BadMatch;
+                for (major, minor) in [
+                    (4, 6),
+                    (4, 5),
+                    (4, 4),
+                    (4, 3),
+                    (4, 2),
+                    (4, 1),
+                    (4, 0),
+                    (3, 3),
+                ] {
+                    let mut attributes = vec![
+                        khronos_egl::CONTEXT_MAJOR_VERSION,
+                        major,
+                        khronos_egl::CONTEXT_MINOR_VERSION,
+                        minor,
+                    ];
+                    attributes.extend(&gl_context_attributes);
+                    match create_context(khronos_egl::OPENGL_API, &attributes) {
+                        Ok(context) => {
+                            log::debug!("\tEGL context: OpenGL {major}.{minor}");
+                            return Ok(context);
+                        }
+                        Err(e) => {
+                            log::debug!("\tEGL context: no OpenGL {major}.{minor}: {e}");
+                            last_error = e;
+                        }
+                    }
+                }
+                Err(last_error)
+            };
+
             let result = if supports_opengl {
-                create_context(khronos_egl::OPENGL_API, &gl_context_attributes).or_else(
+                create_gl_context().or_else(
                     |gl_error| {
                         log::debug!("Failed to create desktop OpenGL context: {gl_error}, falling back to OpenGL ES");
                         create_context(khronos_egl::OPENGL_ES_API, &gles_context_attributes)
