@@ -1376,10 +1376,9 @@ struct CommandState {
         Option<Retained<ProtocolObject<dyn MTLAccelerationStructureCommandEncoder>>>,
     /// Fence used to order acceleration structure encoders split by
     /// `CommandEncoder::split_acceleration_structure_builder`. Created lazily
-    /// and kept alive for the lifetime of the encoder. Command buffers
-    /// created with unretained references do not retain this fence, so the
-    /// encoder (which owns it) must be kept alive until its submitted
-    /// command buffers have finished executing.
+    /// and kept alive for the lifetime of the encoder. The HAL contract is
+    /// that command buffers must not outlive the encoder that recorded them,
+    /// so the fence outlives every command buffer that uses it.
     acceleration_structure_fence: Option<Retained<ProtocolObject<dyn MTLFence>>>,
     /// Whether the next acceleration structure encoder must wait on
     /// [`Self::acceleration_structure_fence`] before encoding any commands.
