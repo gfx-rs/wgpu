@@ -158,6 +158,7 @@ impl<A: hal::Api> Example<A> {
             },
             usage: wgpu_types::TextureUses::COLOR_TARGET,
             view_formats: vec![],
+            preserve_contents: false,
         };
         unsafe {
             surface.configure(&device, &surface_config).unwrap();

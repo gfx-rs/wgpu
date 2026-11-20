@@ -15,6 +15,8 @@ pub struct DynAcquiredSurfaceTexture {
     /// the surface properties exactly, but can still be used to present
     /// to the surface successfully.
     pub suboptimal: bool,
+    /// How many presents ago the texture's contents were presented; `0` when unknown.
+    pub age: u32,
 }
 
 pub trait DynSurface: DynResource {
@@ -66,6 +68,7 @@ impl<S: Surface + DynResource> DynSurface for S {
             DynAcquiredSurfaceTexture {
                 texture,
                 suboptimal,
+                age: ast.age,
             }
         })
     }

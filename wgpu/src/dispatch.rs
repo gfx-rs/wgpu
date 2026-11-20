@@ -699,6 +699,11 @@ pub trait SurfaceInterface: CommonTraits {
 pub trait SurfaceOutputDetailInterface: CommonTraits {
     fn texture_discard(&self);
     fn texture_release(&self);
+
+    /// How many presents ago the texture's kept contents were presented; `0` when unknown.
+    fn buffer_age(&self) -> u32 {
+        0
+    }
 }
 
 pub trait QueueWriteBufferInterface: CommonTraits {
