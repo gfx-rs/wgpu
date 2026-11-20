@@ -1,6 +1,7 @@
 use alloc::{format, string::String, sync::Arc, vec::Vec};
 
 use arrayvec::ArrayVec;
+use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
@@ -1647,6 +1648,7 @@ pub(super) fn copy_texture_to_texture(
                 [depth, stencil]
             })
             .collect::<Vec<_>>()
+            .into()
     } else if let Some(plane_count) = dst_format.planes() {
         regions
             .into_iter()
@@ -1674,8 +1676,11 @@ pub(super) fn copy_texture_to_texture(
                 })
             })
             .collect::<Vec<_>>()
+            .into()
+    } else if regions.len() == 1 {
+        regions.collect::<SmallVec<[hal::TextureCopy; 1]>>()
     } else {
-        regions.collect::<Vec<_>>()
+        regions.collect::<Vec<_>>().into()
     };
     unsafe {
         state.raw_encoder.transition_textures(&barriers);
