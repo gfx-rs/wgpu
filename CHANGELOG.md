@@ -211,6 +211,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - The value of the `max_binding_array_sampler_elements_per_shader_stage` on Apple7, Apple8, and Mac2 hardware is reduced from 1024 to 996, to match the latest Metal documentation. By @andyleiserson in [#10649](https://github.com/gfx-rs/wgpu/pull/10649).
 - Added support for NV12 and P010 texture formats. Due to no native support, they're implemented using separate textures for each plane. By @jerzywilczek in [#9624](https://github.com/gfx-rs/wgpu/pull/9624)
 - Support `Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS` on Metal. Metal requires BLAS vertex strides to be at least the full vertex format size, so the packed 6 byte stride allowed for `Float16x4` and `Snorm16x4` elsewhere is rejected there. By @acoliver in [#10289](https://github.com/gfx-rs/wgpu/pull/10289).
+- Support `Features::ACCELERATION_STRUCTURE_BINDING_ARRAY` on Metal with tier 2 argument buffers. Naga's MSL backend now emits `binding_array<acceleration_structure>` for MSL 2.4 and later. By @acoliver in [#10289](https://github.com/gfx-rs/wgpu/pull/10289).
 
 #### GLES
 

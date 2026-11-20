@@ -1377,6 +1377,16 @@ impl super::CapabilitiesQuery {
         }
     }
 
+    /// Binding arrays of acceleration structures are argument buffers holding
+    /// each structure's `gpuResourceID`, which requires tier 2 argument buffers.
+    fn supports_acceleration_structure_binding_array(&self) -> bool {
+        self.supports_raytracing
+            && self
+                .argument_buffers
+                .unwrap_or(MTLArgumentBuffersTier::Tier1)
+                >= MTLArgumentBuffersTier::Tier2
+    }
+
     pub fn features(&self, capabilities: &crate::Capabilities) -> wgt::Features {
         use wgt::Features as F;
 
@@ -1536,6 +1546,10 @@ impl super::CapabilitiesQuery {
                 | F::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
             self.supports_raytracing,
         );
+        features.set(
+            F::ACCELERATION_STRUCTURE_BINDING_ARRAY,
+            self.supports_acceleration_structure_binding_array(),
+        );
 
         features.set(F::MULTISAMPLE_ARRAY, self.supports_multisample_array);
         features.set(F::DEBUG_PRINTF, self.supports_debug_printf);
@@ -1678,7 +1692,19 @@ impl super::CapabilitiesQuery {
             max_binding_array_elements_per_shader_stage: self.max_binding_array_elements,
             max_binding_array_sampler_elements_per_shader_stage: self
                 .max_sampler_binding_array_elements,
-            max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
+            // The array is one argument buffer, so its elements share the
+            // general binding array element limit. The argument buffer rows of
+            // the Metal feature set tables
+            // (https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf)
+            // only list buffers, textures and samplers, with no separate
+            // acceleration structure limit.
+            max_binding_array_acceleration_structure_elements_per_shader_stage: if self
+                .supports_acceleration_structure_binding_array()
+            {
+                self.max_binding_array_elements
+            } else {
+                0
+            },
 
             // from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits
             max_blas_primitive_count: 1 << 28,

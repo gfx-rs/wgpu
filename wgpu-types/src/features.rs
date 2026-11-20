@@ -1135,6 +1135,7 @@ features! {
         ///
         /// Supported platforms:
         /// - DX12
+        /// - Metal
         /// - Vulkan
         ///
         /// This is a native only feature.
