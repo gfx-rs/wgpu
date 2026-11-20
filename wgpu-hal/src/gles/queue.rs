@@ -1462,7 +1462,17 @@ impl super::Queue {
             C::SetDepthBias(bias) => {
                 if bias.is_enabled() {
                     unsafe { gl.enable(glow::POLYGON_OFFSET_FILL) };
-                    unsafe { gl.polygon_offset(bias.slope_scale, bias.constant as f32) };
+                    if bias.clamp != 0.0 {
+                        unsafe {
+                            gl.polygon_offset_clamp(
+                                bias.slope_scale,
+                                bias.constant as f32,
+                                bias.clamp,
+                            )
+                        };
+                    } else {
+                        unsafe { gl.polygon_offset(bias.slope_scale, bias.constant as f32) };
+                    }
                 } else {
                     unsafe { gl.disable(glow::POLYGON_OFFSET_FILL) };
                 }
