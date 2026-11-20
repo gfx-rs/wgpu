@@ -43,6 +43,13 @@ filter = 'test(wgpu_gpu::image_atomics::image_32_atomics)'
 platform = 'cfg(target_vendor = "apple")'
 retries = 1
 
+# `wait_indefinitely_long_running` holds the GPU for seconds. On shared
+# virtual GPUs this stalls the GPU work of concurrent tests.
+[[profile.default.overrides]]
+filter = 'test(~poll::wait_indefinitely_long_running)'
+platform = 'cfg(target_vendor = "apple")'
+threads-required = "num-test-threads"
+
 [[profile.default.overrides]]
 filter = 'test(compile_fail)'
 slow-timeout = { period = "3m", terminate-after = 2 }
