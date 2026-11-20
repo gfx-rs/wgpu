@@ -168,6 +168,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 - Added `Utf16SourceLocation` which is analogue to `SourceLocation` but using UTF-16 code units. Added `Utf16SourceLocation::to_utf8` and `SourceLocation::to_utf16` to convert between them. By @sagudev in [#10294](https://github.com/gfx-rs/wgpu/pull/10294).
 - Add `as_core` and `from_core` methods on various wgpu resources. By @sagudev in [#10211](https://github.com/gfx-rs/wgpu/pull/10211).
+- Add `SurfaceColorSpace::PassThrough` on Vulkan and Metal, mapped to `VK_COLOR_SPACE_PASS_THROUGH_EXT` and a `nil` `CAMetalLayer.colorspace`, respectively, so applications can manage surface color interpretation themselves. By @yikerman in [#10546](https://github.com/gfx-rs/wgpu/pull/10546).
 - Add `TlasInstance::from_blas_untransformed` and `TlasInstance::from_blas_transformed` for easier construction an reability in simple cases. By @Vecvec in [#10476](https://github.com/gfx-rs/wgpu/pull/10476).
 - Added `Features::UNRESTRICTED_BYTES_PER_ROW`: `bytes_per_row` in `copy_buffer_to_texture` and `copy_texture_to_buffer` need only be a multiple of the texel block copy size, not of 256. Supported on Vulkan, Metal, GL, and DX12 with `UnrestrictedBufferTextureCopyPitchSupported`. By @michael-dm in [#10619](https://github.com/gfx-rs/wgpu/pull/10619).
 - Expose `is_surface_supported` on `Device`. By @sagudev in [#10896](https://github.com/gfx-rs/wgpu/pull/10896).
