@@ -21,15 +21,15 @@ void cs_main(uint3 id : SV_GroupThreadID)
     uint64_t _e3 = input;
     storage_atomic_scalar.InterlockedMax64(0, _e3);
     uint64_t _e7 = input;
-    storage_atomic_arr.InterlockedMax64(8, (1uL + _e7));
-    storage_struct.InterlockedMax64(0, 1uL);
+    storage_atomic_arr.InterlockedMax64(8, (1ULL + _e7));
+    storage_struct.InterlockedMax64(0, 1ULL);
     storage_struct.InterlockedMax64(8+8, uint64_t(id.x));
     GroupMemoryBarrierWithGroupSync();
     uint64_t _e20 = input;
     storage_atomic_scalar.InterlockedMin64(0, _e20);
     uint64_t _e24 = input;
-    storage_atomic_arr.InterlockedMin64(8, (1uL + _e24));
-    storage_struct.InterlockedMin64(0, 1uL);
+    storage_atomic_arr.InterlockedMin64(8, (1ULL + _e24));
+    storage_struct.InterlockedMin64(0, 1ULL);
     storage_struct.InterlockedMin64(8+8, uint64_t(id.x));
     return;
 }

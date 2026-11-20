@@ -1904,6 +1904,10 @@ impl dispatch::AdapterInterface for WebAdapter {
     fn cooperative_matrix_properties(&self) -> Vec<wgt::CooperativeMatrixProperties> {
         Vec::new()
     }
+
+    fn ray_tracing_invocation_reorder_mode(&self) -> wgt::RayTracingInvocationReorderMode {
+        wgt::RayTracingInvocationReorderMode::None
+    }
 }
 impl Drop for WebAdapter {
     fn drop(&mut self) {
@@ -4615,11 +4619,14 @@ impl dispatch::SurfaceInterface for WebSurface {
             }
             cs @ (wgt::SurfaceColorSpace::ExtendedSrgbLinear
             | wgt::SurfaceColorSpace::Bt2100Pq
-            | wgt::SurfaceColorSpace::Bt2100Hlg) => {
+            | wgt::SurfaceColorSpace::Bt2100Hlg
+            | wgt::SurfaceColorSpace::PassThrough) => {
                 // Not representable on a WebGPU canvas: `ExtendedSrgbLinear`
                 // needs a linear-transfer canvas (WebGPU has none), and
                 // `Bt2100Pq`/`Bt2100Hlg` need PQ/HLG canvas signaling (browsers expose
-                // none). `get_capabilities` never advertises these, but an app
+                // none). `PassThrough` requires control over canvas color interpretation,
+                // which WebGPU does not expose.
+                // `get_capabilities` never advertises these, but an app
                 // may still request one without checking; record the failure and
                 // report the surface as lost (as for a rejected `configure`)
                 // rather than panicking, since there is no `catch_unwind` on

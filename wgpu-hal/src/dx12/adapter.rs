@@ -1136,6 +1136,7 @@ impl super::Adapter {
             },
             downlevel,
             cooperative_matrix_properties: Vec::new(),
+            ray_tracing_invocation_reorder_mode: wgt::RayTracingInvocationReorderMode::None,
         };
 
         features.set(

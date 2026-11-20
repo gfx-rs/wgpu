@@ -32,6 +32,7 @@ impl Number {
     pub(super) const fn requires_enable_extension(&self) -> Option<ImplementedEnableExtension> {
         match *self {
             Number::F16(_) => Some(ImplementedEnableExtension::F16),
+            Number::F64(_) => Some(ImplementedEnableExtension::WgpuF64),
             _ => None,
         }
     }

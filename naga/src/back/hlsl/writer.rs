@@ -1223,6 +1223,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             if let TypeInner::BindingArray { base, size, .. } = module.types[global.ty].inner {
                 if let Some(overridden_size) = bt.binding_array_size {
                     write!(self.out, "[{overridden_size}]")?;
+                } else if matches!(size, crate::ArraySize::Dynamic) {
+                    // Unbounded descriptor array; legal since SM 5.1.
+                    write!(self.out, "[]")?;
                 } else {
                     self.write_array_size(module, base, size)?;
                 }
@@ -3880,12 +3883,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             // makes the type ambiguous which prevents overload resolution from
             // working. So we explicitly use the int() constructor syntax.
             crate::Literal::I32(value) => write!(self.out, "int({value})")?,
-            crate::Literal::U64(value) => write!(self.out, "{value}uL")?,
+            crate::Literal::U64(value) => write!(self.out, "{value}ULL")?,
             // I64 version of the minimum I32 value issue described above.
             crate::Literal::I64(value) if value == i64::MIN => {
-                write!(self.out, "({}L - 1L)", value + 1)?;
+                write!(self.out, "({}LL - 1LL)", value + 1)?;
             }
-            crate::Literal::I64(value) => write!(self.out, "{value}L")?,
+            crate::Literal::I64(value) => write!(self.out, "{value}LL")?,
             crate::Literal::Bool(value) => write!(self.out, "{value}")?,
             crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
                 return Err(Error::Custom(

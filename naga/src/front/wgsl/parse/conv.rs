@@ -579,6 +579,9 @@ pub fn map_predeclared_type(
         PredeclaredType::TypeInner(ref ty) if ty.scalar() == Some(Sc::F16) => {
             Some(&[ImplementedEnableExtension::F16])
         }
+        PredeclaredType::TypeInner(ref ty) if ty.scalar() == Some(Sc::F64) => {
+            Some(&[ImplementedEnableExtension::WgpuF64])
+        }
         PredeclaredType::TypeInner(ref ty) if matches!(ty.scalar(), Some(s) if s == Sc::I16 || s == Sc::U16) => {
             Some(&[ImplementedEnableExtension::WgpuInt16])
         }
