@@ -21,6 +21,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(HOST_TEXTURE_MULTITHREADED);
     vec.push(HOST_TEXTURE_TRANSITION_TO_HOST_COPY);
     vec.push(HOST_TEXTURE_WRITE_TEXTURE_ORDERING);
+    vec.push(HOST_TEXTURE_WRITE_TEXTURE_ORDERING_NO_IMPLICIT_HOST_COPY);
     vec.push(HOST_TEXTURE_WRITE_TEXTURE_HOST_VISIBLE);
     vec.push(HOST_TEXTURE_UPLOAD);
     vec.push(HOST_TEXTURE_UPLOAD_MAPPED_AT_CREATION);
@@ -2487,6 +2488,15 @@ async fn write_texture_ordering(ctx: TestingContext) {
 #[apply(gpu_test!)]
 static HOST_TEXTURE_WRITE_TEXTURE_ORDERING: GpuTestConfiguration =
     GpuTestConfiguration::new().run_async(write_texture_ordering);
+
+#[apply(gpu_test!)]
+static HOST_TEXTURE_WRITE_TEXTURE_ORDERING_NO_IMPLICIT_HOST_COPY: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .instance_flags(wgpu::InstanceFlags::DISABLE_IMPLICIT_HOST_TEXTURE_COPY),
+        )
+        .run_async(write_texture_ordering);
 
 async fn host_texture_write_texture_host_visible(ctx: TestingContext) {
     let texture = host_test_texture(

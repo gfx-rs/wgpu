@@ -1865,7 +1865,7 @@ pub struct Texture {
     pub(crate) state: ResourceState<TextureState>,
     pub(crate) device: Arc<Device>,
     pub(crate) desc: wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
-    pub(crate) _hal_usage: wgt::TextureUses,
+    pub(crate) hal_usage: wgt::TextureUses,
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) initialization_status: RwLock<TextureInitTracker>,
     pub(crate) full_range: TextureSelector,
@@ -1900,7 +1900,7 @@ impl Texture {
             }),
             device: device.clone(),
             desc: desc.map_label(|label| label.to_string()),
-            _hal_usage: hal_usage,
+            hal_usage,
             format_features,
             initialization_status: RwLock::new(
                 rank::TEXTURE_INITIALIZATION_STATUS,
@@ -1929,7 +1929,7 @@ impl Texture {
             state: ResourceState::Invalid,
             device: device.clone(),
             desc: desc.map_label(|label| label.to_string()),
-            _hal_usage: wgt::TextureUses::empty(),
+            hal_usage: wgt::TextureUses::empty(),
             format_features: wgt::TextureFormatFeatures {
                 allowed_usages: wgt::TextureUsages::empty(),
                 flags: wgt::TextureFormatFeatureFlags::empty(),

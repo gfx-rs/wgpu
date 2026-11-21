@@ -750,6 +750,18 @@ impl DeviceTextureTracker {
         self.metadata.owned_resources()
     }
 
+    /// Returns the state of `texture` if every subresource is in the same state.
+    pub fn uniform_state(&self, texture: &Texture) -> Option<TextureUses> {
+        let index = texture.tracker_index().as_usize();
+        if index >= self.current_state_set.size() || !self.metadata.contains(index) {
+            return None;
+        }
+        match self.current_state_set.simple[index] {
+            TextureUses::COMPLEX => None,
+            state => Some(state),
+        }
+    }
+
     /// Inserts a single texture and a state into the resource tracker.
     ///
     /// If the resource already exists in the tracker, it will be overwritten.

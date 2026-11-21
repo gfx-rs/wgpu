@@ -81,6 +81,8 @@ drop(mapped);
 texture.unmap();
 ```
 
+Independently of the feature, `Queue::write_texture` now writes directly from the CPU into idle textures where the backend reports that this doesn't make GPU access to the texture slower (currently Vulkan with `VK_EXT_host_image_copy`). This can be disabled with `InstanceFlags::DISABLE_IMPLICIT_HOST_TEXTURE_COPY`.
+
 By @inner-daemons in [#9053](https://github.com/gfx-rs/wgpu/pull/9053).
 
 #### `TEXTURE_COMPONENT_SWIZZLE` feature and `swizzle` field in `TextureViewDescriptor`

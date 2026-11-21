@@ -1278,6 +1278,7 @@ impl PhysicalDeviceFeatures {
 pub(super) struct HostImageCopyProperties {
     /// `VK_IMAGE_LAYOUT_GENERAL` is in both `pCopySrcLayouts` and `pCopyDstLayouts`.
     pub general_layout: bool,
+    pub identical_memory_type_requirements: bool,
 }
 
 /// This does not include device features; for those, see
@@ -2241,12 +2242,17 @@ impl super::InstanceShared {
                     unsafe {
                         get_device_properties.get_physical_device_properties2(phd, &mut properties2)
                     };
+                    let identical_memory_type_requirements =
+                        host_image_copy.identical_memory_type_requirements != 0;
                     let src_count = host_image_copy.copy_src_layout_count as usize;
                     let dst_count = host_image_copy.copy_dst_layout_count as usize;
                     let general_layout = src_layouts[..src_count]
                         .contains(&vk::ImageLayout::GENERAL)
                         && dst_layouts[..dst_count].contains(&vk::ImageLayout::GENERAL);
-                    capabilities.host_image_copy = Some(HostImageCopyProperties { general_layout });
+                    capabilities.host_image_copy = Some(HostImageCopyProperties {
+                        general_layout,
+                        identical_memory_type_requirements,
+                    });
                 }
 
                 // Query cooperative matrix properties
@@ -2679,6 +2685,18 @@ impl super::Instance {
         let alignments = phd_capabilities.to_hal_alignments(has_robust_buffer_access2);
 
         let private_caps = super::PrivateCapabilities {
+            implicit_host_image_copy: !self
+                .shared
+                .flags
+                .contains(wgt::InstanceFlags::DISABLE_IMPLICIT_HOST_TEXTURE_COPY)
+                && phd_features.supports_host_image_copy(&phd_capabilities),
+            host_image_copy_free_memory: phd_capabilities
+                .host_image_copy
+                .is_some_and(|p| p.identical_memory_type_requirements)
+                || matches!(
+                    phd_capabilities.properties.device_type,
+                    vk::PhysicalDeviceType::INTEGRATED_GPU | vk::PhysicalDeviceType::CPU
+                ),
             image_view_usage: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(khr::maintenance2::NAME),
             // VeriSilicon's proprietary driver, as on NXP's i.MX 8 SoCs, advertises timeline
@@ -2850,6 +2868,13 @@ impl super::Adapter {
 
         if !unsupported_extensions.is_empty() {
             log::debug!("Missing extensions: {unsupported_extensions:?}");
+        }
+
+        let mut supported_extensions = supported_extensions;
+        if !features.contains(wgt::Features::HOST_TEXTURE_COPY)
+            && self.private_caps.implicit_host_image_copy
+        {
+            supported_extensions.push(ext::host_image_copy::NAME);
         }
 
         log::debug!("Supported extensions: {supported_extensions:?}");

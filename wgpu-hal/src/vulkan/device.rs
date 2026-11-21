@@ -358,28 +358,19 @@ impl super::Device {
         None
     }
 
-    fn create_image_without_memory(
-        &self,
-        desc: &crate::TextureDescriptor,
-        external_memory_image_create_info: Option<&mut vk::ExternalMemoryImageCreateInfo>,
-    ) -> Result<ImageWithoutMemory, crate::DeviceError> {
-        self.create_image_without_memory_with_tiling(
-            desc,
-            vk::ImageTiling::OPTIMAL,
-            external_memory_image_create_info,
-            None,
-        )
-    }
-
-    fn create_image_without_memory_with_tiling(
+    /// The parts of the `VkImageCreateInfo` for `desc` that depend on wgpu's
+    /// texture description, and the formats for a `VkImageFormatListCreateInfo`.
+    fn image_create_params(
         &self,
         desc: &crate::TextureDescriptor,
         tiling: vk::ImageTiling,
-        external_memory_image_create_info: Option<&mut vk::ExternalMemoryImageCreateInfo>,
-        drm_modifier_info: Option<&mut vk::ImageDrmFormatModifierExplicitCreateInfoEXT>,
-    ) -> Result<ImageWithoutMemory, crate::DeviceError> {
-        let copy_size = desc.copy_extent();
-
+        has_external_memory: bool,
+    ) -> (
+        vk::ImageCreateFlags,
+        vk::Format,
+        vk::ImageUsageFlags,
+        Vec<vk::Format>,
+    ) {
         let mut raw_flags = vk::ImageCreateFlags::empty();
         if desc.dimension == wgt::TextureDimension::D3
             && desc.usage.contains(wgt::TextureUses::COLOR_TARGET)
@@ -423,7 +414,7 @@ impl super::Device {
         // usage the format supports so that such views stay valid. Images backed by external
         // memory are left alone: their usage has to match the resource being imported.
         if !usage.intersects(conv::VIEWABLE_IMAGE_USAGES)
-            && external_memory_image_create_info.is_none()
+            && !has_external_memory
             && super::adapter::supports_format(
                 &self.shared.instance.raw,
                 self.shared.physical_device,
@@ -434,6 +425,33 @@ impl super::Device {
         {
             usage |= vk::ImageUsageFlags::SAMPLED;
         }
+
+        (raw_flags, original_format, usage, vk_view_formats)
+    }
+
+    fn create_image_without_memory(
+        &self,
+        desc: &crate::TextureDescriptor,
+        external_memory_image_create_info: Option<&mut vk::ExternalMemoryImageCreateInfo>,
+    ) -> Result<ImageWithoutMemory, crate::DeviceError> {
+        self.create_image_without_memory_with_tiling(
+            desc,
+            vk::ImageTiling::OPTIMAL,
+            external_memory_image_create_info,
+            None,
+        )
+    }
+
+    fn create_image_without_memory_with_tiling(
+        &self,
+        desc: &crate::TextureDescriptor,
+        tiling: vk::ImageTiling,
+        external_memory_image_create_info: Option<&mut vk::ExternalMemoryImageCreateInfo>,
+        drm_modifier_info: Option<&mut vk::ImageDrmFormatModifierExplicitCreateInfoEXT>,
+    ) -> Result<ImageWithoutMemory, crate::DeviceError> {
+        let copy_size = desc.copy_extent();
+        let (raw_flags, original_format, usage, vk_view_formats) =
+            self.image_create_params(desc, tiling, external_memory_image_create_info.is_some());
 
         let mut vk_info = vk::ImageCreateInfo::default()
             .flags(raw_flags)
@@ -1234,6 +1252,54 @@ impl crate::Device for super::Device {
             }
             .unwrap();
         }
+    }
+
+    fn is_host_copy_free(&self, desc: &crate::TextureDescriptor) -> bool {
+        if !self.shared.private_caps.host_image_copy_free_memory
+            || self.shared.extension_fns.host_image_copy.is_none()
+        {
+            return false;
+        }
+
+        let tiling = vk::ImageTiling::OPTIMAL;
+        let (flags, format, usage, view_formats) = self.image_create_params(desc, tiling, false);
+        let mut format_list = vk::ImageFormatListCreateInfo::default().view_formats(&view_formats);
+        let mut info = vk::PhysicalDeviceImageFormatInfo2::default()
+            .format(format)
+            .ty(conv::map_texture_dimension(desc.dimension))
+            .tiling(tiling)
+            .usage(usage)
+            .flags(flags);
+        if !view_formats.is_empty() {
+            info = info.push_next(&mut format_list);
+        }
+        let mut performance = vk::HostImageCopyDevicePerformanceQueryEXT::default();
+        let mut properties = vk::ImageFormatProperties2::default().push_next(&mut performance);
+        let result = unsafe {
+            self.shared
+                .instance
+                .raw
+                .get_physical_device_image_format_properties2(
+                    self.shared.physical_device,
+                    &info,
+                    &mut properties,
+                )
+        };
+        let limits = properties.image_format_properties;
+        if result.is_err() || performance.optimal_device_access == vk::FALSE {
+            return false;
+        }
+
+        // The added usage must not make the texture impossible to create.
+        let extent = desc.copy_extent();
+        extent.width <= limits.max_extent.width
+            && extent.height <= limits.max_extent.height
+            && extent.depth <= limits.max_extent.depth
+            && desc.mip_level_count <= limits.max_mip_levels
+            && desc.array_layer_count() <= limits.max_array_layers
+            && limits
+                .sample_counts
+                .contains(vk::SampleCountFlags::from_raw(desc.sample_count))
     }
 
     unsafe fn create_texture(

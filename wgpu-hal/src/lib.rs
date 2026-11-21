@@ -1109,6 +1109,15 @@ pub trait Device: WasmNotSendSync {
     where
         T: Iterator<Item = HostTextureCopy>;
 
+    /// Returns whether adding [`HOST_COPY`](wgt::TextureUses::HOST_COPY) to `desc.usage`
+    /// is known to not make device access to the texture slower.
+    ///
+    /// The format of `desc` must support [`TextureFormatCapabilities::HOST_COPY`].
+    fn is_host_copy_free(&self, desc: &TextureDescriptor) -> bool {
+        let _ = desc;
+        false
+    }
+
     unsafe fn create_texture_view(
         &self,
         texture: &<Self::A as Api>::Texture,

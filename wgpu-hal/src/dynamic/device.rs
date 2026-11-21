@@ -69,6 +69,8 @@ pub trait DynDevice: DynResource {
         dst: &dyn DynTexture,
         regions: &[HostTextureCopy],
     ) -> Result<(), DeviceError>;
+    /// Dynamic version of [Device::is_host_copy_free]
+    fn is_host_copy_free(&self, desc: &TextureDescriptor) -> bool;
     /// Dynamic version of [Device::create_texture_view]
     unsafe fn create_texture_view(
         &self,
@@ -326,6 +328,10 @@ impl<D: Device + DynResource> DynDevice for D {
     ) -> Result<(), DeviceError> {
         let dst = dst.expect_downcast_ref();
         unsafe { D::copy_memory_to_texture(self, src, dst, regions.iter().cloned()) }
+    }
+
+    fn is_host_copy_free(&self, desc: &TextureDescriptor) -> bool {
+        D::is_host_copy_free(self, desc)
     }
 
     unsafe fn create_texture_view(
