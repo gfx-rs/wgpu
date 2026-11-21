@@ -203,15 +203,23 @@ impl<'a> DeviceAllocationContext<'a> {
         desc: &crate::TextureDescriptor,
         raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
     ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
-        let location = MemoryLocation::GpuOnly;
+        // Textures can't be placed in UPLOAD/READBACK heaps, so CPU-visible
+        // textures are committed resources on a CUSTOM heap.
+        let host_copy = desc.usage.contains(wgt::TextureUses::HOST_COPY);
+        let location = if host_copy {
+            MemoryLocation::GpuToCpu
+        } else {
+            MemoryLocation::GpuOnly
+        };
         let allocation_info =
             self.error_if_would_oom_on_resource_allocation(&raw_desc, location)?;
 
-        let (resource, allocation) = if self.shared.private_caps.suballocation_supported {
-            self.create_placed_texture(desc, raw_desc, allocation_info, location)?
-        } else {
-            self.create_committed_texture(desc, raw_desc)?
-        };
+        let (resource, allocation) =
+            if self.shared.private_caps.suballocation_supported && !host_copy {
+                self.create_placed_texture(desc, raw_desc, allocation_info, location)?
+            } else {
+                self.create_committed_texture(desc, raw_desc)?
+            };
 
         if let Some(label) = desc.label {
             resource.set_name(label)?;
@@ -458,13 +466,27 @@ impl<'a> DeviceAllocationContext<'a> {
         desc: &crate::TextureDescriptor,
         raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
     ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
+        let (cpu_page_property, memory_pool) = if desc.usage.contains(wgt::TextureUses::HOST_COPY) {
+            // Only valid on UMA; WRITE_BACK allows both CPU reads and writes.
+            (
+                Direct3D12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+                Direct3D12::D3D12_MEMORY_POOL_L0,
+            )
+        } else {
+            (
+                Direct3D12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
+                match self.shared.private_caps.memory_architecture {
+                    crate::dx12::MemoryArchitecture::NonUnified => Direct3D12::D3D12_MEMORY_POOL_L1,
+                    crate::dx12::MemoryArchitecture::Unified { .. } => {
+                        Direct3D12::D3D12_MEMORY_POOL_L0
+                    }
+                },
+            )
+        };
         let heap_properties = Direct3D12::D3D12_HEAP_PROPERTIES {
             Type: Direct3D12::D3D12_HEAP_TYPE_CUSTOM,
-            CPUPageProperty: Direct3D12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
-            MemoryPoolPreference: match self.shared.private_caps.memory_architecture {
-                crate::dx12::MemoryArchitecture::NonUnified => Direct3D12::D3D12_MEMORY_POOL_L1,
-                crate::dx12::MemoryArchitecture::Unified { .. } => Direct3D12::D3D12_MEMORY_POOL_L0,
-            },
+            CPUPageProperty: cpu_page_property,
+            MemoryPoolPreference: memory_pool,
             CreationNodeMask: 0,
             VisibleNodeMask: 0,
         };

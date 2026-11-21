@@ -17,6 +17,7 @@ mod compute_command;
 mod draw;
 mod encoder;
 mod encoder_command;
+mod map_texture;
 mod memory_init;
 mod pass;
 mod query;
@@ -56,6 +57,7 @@ pub use self::{
     compute_command::ArcComputeCommand,
     draw::{DrawError, Rect, RenderCommandError},
     encoder_command::{ArcCommand, ArcReferences, Command, ReferenceType},
+    map_texture::MapTextureOnCompletionError,
     query::{QueryError, QueryUseError, ResolveError, SimplifiedQueryType},
     ray_tracing_pass::{
         RayTracingBasePass, RayTracingPass, RayTracingPassDescriptor, RayTracingPassError,
@@ -76,6 +78,7 @@ pub use self::{
 pub(crate) use self::{
     clear::clear_texture,
     encoder::EncodingState,
+    map_texture::{abort_pending_texture_maps, cancel_queued_texture_maps, PendingTextureMap},
     memory_init::CommandBufferTextureMemoryActions,
     render::{get_dst_stride_of_indirect_args, get_src_stride_of_indirect_args, VertexState},
     transfer::{
@@ -524,6 +527,9 @@ pub struct CommandEncoder {
 
     /// The mutable state of this command encoder.
     pub(crate) data: Mutex<CommandEncoderStatus>,
+
+    /// Textures to map once this encoder's command buffer completes.
+    pub(crate) texture_maps: Mutex<Vec<PendingTextureMap>>,
 }
 
 crate::impl_resource_type!(CommandEncoder);
@@ -537,6 +543,7 @@ impl Drop for CommandEncoder {
         profiling::scope!("CommandEncoder::drop");
         api_log!("CommandEncoder::drop {:?}", self as *const _);
         resource_log!("Drop {}", self.error_ident());
+        abort_pending_texture_maps(mem::take(&mut *self.texture_maps.lock()));
     }
 }
 
@@ -900,6 +907,9 @@ pub struct CommandBuffer {
 
     /// The mutable state of this command buffer.
     pub(crate) data: Mutex<CommandEncoderStatus>,
+
+    /// Textures to map once this command buffer completes.
+    pub(crate) texture_maps: Mutex<Vec<PendingTextureMap>>,
 }
 
 impl Drop for CommandBuffer {
@@ -908,6 +918,7 @@ impl Drop for CommandBuffer {
         profiling::scope!("CommandBuffer::drop");
         api_log!("CommandBuffer::drop {:?}", self as *const _);
         resource_log!("Drop {}", self.error_ident());
+        abort_pending_texture_maps(mem::take(&mut *self.texture_maps.lock()));
     }
 }
 
@@ -952,6 +963,7 @@ impl CommandEncoder {
                     },
                 }),
             ),
+            texture_maps: Mutex::new(rank::COMMAND_BUFFER_TEXTURE_MAPS, Vec::new()),
         }
     }
 
@@ -964,6 +976,7 @@ impl CommandEncoder {
             device: device.clone(),
             label: label.to_string(),
             data: Mutex::new(rank::COMMAND_BUFFER_DATA, make_error_state(err)),
+            texture_maps: Mutex::new(rank::COMMAND_BUFFER_TEXTURE_MAPS, Vec::new()),
         })
     }
 
@@ -1095,6 +1108,7 @@ impl CommandEncoder {
     fn encode_commands(
         device: &Arc<Device>,
         cmd_buf_data: &mut CommandBufferMutable,
+        texture_maps: &[PendingTextureMap],
     ) -> Result<(), CommandEncoderError> {
         device.check_is_valid()?;
         let snatch_guard = device.snatchable_lock.read();
@@ -1328,6 +1342,27 @@ impl CommandEncoder {
             ))?;
         }
 
+        // Maps transition to `HOST_COPY` after every other command.
+        for map in texture_maps {
+            let raw_encoder = cmd_buf_data.encoder.open_if_closed()?;
+            let mut state = EncodingState {
+                device,
+                raw_encoder,
+                tracker: &mut cmd_buf_data.trackers,
+                buffer_memory_init_actions: &mut cmd_buf_data.buffer_memory_init_actions,
+                texture_memory_actions: &mut cmd_buf_data.texture_memory_actions,
+                as_actions: &mut cmd_buf_data.as_actions,
+                temp_resources: &mut cmd_buf_data.temp_resources,
+                indirect_draw_validation_resources: &mut cmd_buf_data
+                    .indirect_draw_validation_resources,
+                snatch_guard: &snatch_guard,
+                debug_scope_depth: &mut debug_scope_depth,
+                query_set_writes: &mut cmd_buf_data.query_set_writes,
+                deferred_query_set_resolves: &mut cmd_buf_data.deferred_query_set_resolves,
+            };
+            map_texture::encode_map_texture_on_completion(&mut state, &map.texture)?;
+        }
+
         // Close the encoder, unless it was closed already by a render or compute pass.
         cmd_buf_data.encoder.close_if_open()?;
 
@@ -1346,10 +1381,11 @@ impl CommandEncoder {
         profiling::scope!("CommandEncoder::finish");
 
         let status = self.data.lock().finish();
+        let mut texture_maps = mem::take(&mut *self.texture_maps.lock());
 
         let res = match status {
             CommandEncoderStatus::Finished(mut cmd_buf_data) => {
-                match Self::encode_commands(&self.device, &mut cmd_buf_data) {
+                match Self::encode_commands(&self.device, &mut cmd_buf_data, &texture_maps) {
                     Ok(()) => Ok(cmd_buf_data),
                     Err(error) => Err(EncoderErrorState {
                         error,
@@ -1394,11 +1430,20 @@ impl CommandEncoder {
             Ok(data) => (CommandEncoderStatus::Finished(data), None),
         };
 
+        let aborted_texture_maps = if matches!(data, CommandEncoderStatus::Finished(_)) {
+            Vec::new()
+        } else {
+            mem::take(&mut texture_maps)
+        };
+
         let cmd_buf = Arc::new(CommandBuffer {
             device: self.device.clone(),
             label: desc.label.to_string(),
             data: Mutex::new(rank::COMMAND_BUFFER_DATA, data),
+            texture_maps: Mutex::new(rank::COMMAND_BUFFER_TEXTURE_MAPS, texture_maps),
         });
+
+        abort_pending_texture_maps(aborted_texture_maps);
 
         (cmd_buf, error)
     }
@@ -1684,6 +1729,8 @@ pub enum CommandEncoderError {
     #[error(transparent)]
     TransitionResources(#[from] TransitionResourcesError),
     #[error(transparent)]
+    MapTextureOnCompletion(#[from] MapTextureOnCompletionError),
+    #[error(transparent)]
     ComputePass(#[from] ComputePassError),
     #[error(transparent)]
     RenderPass(#[from] RenderPassError),
@@ -1740,6 +1787,7 @@ impl WebGpuError for CommandEncoderError {
             Self::Query(e) => e.webgpu_error_type(),
             Self::BuildAccelerationStructure(e) => e.webgpu_error_type(),
             Self::TransitionResources(e) => e.webgpu_error_type(),
+            Self::MapTextureOnCompletion(e) => e.webgpu_error_type(),
             Self::ResourceUsage(e) => e.webgpu_error_type(),
             Self::ComputePass(e) => e.webgpu_error_type(),
             Self::RenderPass(e) => e.webgpu_error_type(),

@@ -44,6 +44,45 @@ Bottom level categories:
 
 ### Major changes
 
+#### Host texture copies
+
+Uploading a texture normally takes two copies, even on unified memory systems: one into a staging buffer, and one from the staging buffer into the texture on the queue. With the new `Features::HOST_TEXTURE_COPY`, textures created with `TextureUsages::HOST_VISIBLE` can be read and written directly from the CPU, without a staging buffer or a queue. This is generally available on unified memory systems, on Vulkan, Metal and DX12.
+
+A texture has to be mapped before the CPU can access it, and must be unmapped before the GPU can use it again. Mapped textures are always readable and writable. Map a texture by creating it with `mapped_at_creation: true`, or with `CommandEncoder::map_texture_on_completion`, which maps it once the command buffer has finished executing. Then call `Texture::get_mapped` to get a `MappedTexture`, and use `MappedTexture::copy_from_memory` and `MappedTexture::copy_to_memory`. Copies to different textures can run on several threads at once, while the GPU keeps working.
+
+`TextureDescriptor` has a new `mapped_at_creation` field. This is a breaking change.
+
+```rust
+// `device` was created with `Features::HOST_TEXTURE_COPY`.
+let texture = device.create_texture(&wgpu::TextureDescriptor {
+    // ...
+    usage: wgpu::TextureUsages::HOST_VISIBLE | wgpu::TextureUsages::TEXTURE_BINDING,
+    mapped_at_creation: true,
+});
+
+let mapped = texture.get_mapped().unwrap();
+mapped.copy_from_memory(
+    wgpu::TexelCopyTextureInfoBase {
+        texture: (),
+        mip_level: 0,
+        origin: wgpu::Origin3d::ZERO,
+        aspect: wgpu::TextureAspect::All,
+    },
+    &data,
+    wgpu::TexelCopyBufferLayout {
+        offset: 0,
+        bytes_per_row: Some(width * 4),
+        rows_per_image: Some(height),
+    },
+    wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+);
+// All `MappedTexture`s must be dropped before unmapping.
+drop(mapped);
+texture.unmap();
+```
+
+By @inner-daemons in [#9053](https://github.com/gfx-rs/wgpu/pull/9053).
+
 #### `TEXTURE_COMPONENT_SWIZZLE` feature and `swizzle` field in `TextureViewDescriptor`
 
 A new `swizzle` field is in `TextureViewDescriptor` used for mapping red/green/blue/alpha channels of the texture view

@@ -329,6 +329,7 @@ impl<A: hal::Api> Example<A> {
             memory_flags: hal::MemoryFlags::empty(),
             texture_binding_view_dimension: Some(wgpu_types::TextureViewDimension::D2),
             view_formats: vec![],
+            start_in_host_copy_state: false,
         };
         let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
 

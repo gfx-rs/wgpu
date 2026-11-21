@@ -514,6 +514,7 @@ impl Device {
             memory_flags: hal::MemoryFlags::empty(),
             view_formats: desc.view_formats.to_vec(),
             texture_binding_view_dimension: Some(view_dimension),
+            start_in_host_copy_state: false,
         };
 
         let hal_texture = {

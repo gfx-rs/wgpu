@@ -138,6 +138,10 @@ define_lock_ranks! {
         DEVICE_LOST_CLOSURE,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
+    rank TEXTURE_HOST_COPY "Texture::host_copy_lock" followed by {
+        TEXTURE_MAP_STATE,
+        DEVICE_SNATCHABLE_LOCK,
+    }
     rank DEVICE_SNATCHABLE_LOCK "Device::snatchable_lock" followed by {
         BUFFER_MAP_STATE,
         COMMAND_BUFFER_DATA,
@@ -161,6 +165,7 @@ define_lock_ranks! {
         TEXTURE_VIEWS,
     }
     rank DEVICE_COMMAND_INDICES "Device::command_indices" followed by {
+        COMMAND_BUFFER_TEXTURE_MAPS,
         COMMAND_BUFFER_DATA,
         BUFFER_MAP_STATE,
         BUFFER_POOL,
@@ -177,12 +182,14 @@ define_lock_ranks! {
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
         TEXTURE_CLEAR_MODE,
         TEXTURE_INITIALIZATION_STATUS,
+        TEXTURE_MAP_STATE,
         TLAS_BUILT_INDEX,
         TLAS_DEPENDENCIES,
         TLAS_MAX_INTERSECTION_IDX,
         TLAS_REQUIRED_INTERSECTION_TYPES,
     }
     rank COMMAND_BUFFER_DATA "CommandBuffer::data" followed by {
+        COMMAND_BUFFER_TEXTURE_MAPS,
         BUFFER_MAP_STATE,
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         BLAS_COMPACTION_STATE,
@@ -190,6 +197,7 @@ define_lock_ranks! {
         DEVICE_TRACE,
         DEVICE_USAGE_SCOPES,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
+        TEXTURE_MAP_STATE,
     }
     rank QUEUE_PENDING_WRITES "Queue::pending_writes" followed by {
         BUFFER_MAP_STATE,
@@ -197,6 +205,7 @@ define_lock_ranks! {
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         BUFFER_INITIALIZATION_STATUS,
         TEXTURE_INITIALIZATION_STATUS,
+        TEXTURE_MAP_STATE,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
     rank DEVICE_TRACKERS "Device::trackers" followed by {
@@ -206,6 +215,7 @@ define_lock_ranks! {
         TEXTURE_BIND_GROUPS,
         TEXTURE_CLEAR_MODE,
         TEXTURE_INITIALIZATION_STATUS,
+        TEXTURE_MAP_STATE,
         TEXTURE_VIEWS,
     }
     rank QUEUE_LIFE_TRACKER "Queue::life_tracker" followed by {
@@ -219,6 +229,7 @@ define_lock_ranks! {
         RESOURCE_POOL_INNER,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
         TEXTURE_CLEAR_MODE,
+        TEXTURE_MAP_STATE,
     }
     rank BLAS_COMPACTION_STATE "Blas::compaction_state" followed by {
         BLAS_BUILT_INDEX,
@@ -253,6 +264,10 @@ define_lock_ranks! {
     rank TEXTURE_BIND_GROUPS "Texture::bind_groups" followed by { }
     rank TEXTURE_CLEAR_MODE "Texture::clear_mode" followed by { }
     rank TEXTURE_INITIALIZATION_STATUS "Texture::initialization_status" followed by { }
+    rank TEXTURE_MAP_STATE "Texture::map_state" followed by { }
+    rank COMMAND_BUFFER_TEXTURE_MAPS "CommandBuffer::texture_maps" followed by {
+        TEXTURE_MAP_STATE,
+    }
     rank TEXTURE_VIEWS "Texture::views" followed by { }
     rank TLAS_MAX_INTERSECTION_IDX "Tlas::max_intersection_index" followed by { }
     rank TLAS_REQUIRED_INTERSECTION_TYPES "Tlas::required_intersection_types" followed by { }

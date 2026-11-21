@@ -597,6 +597,11 @@ impl super::Adapter {
         }
 
         features.set(
+            wgt::Features::HOST_TEXTURE_COPY,
+            features_architecture.UMA.into(),
+        );
+
+        features.set(
             wgt::Features::CONSERVATIVE_RASTERIZATION,
             options.ConservativeRasterizationTier
                 != Direct3D12::D3D12_CONSERVATIVE_RASTERIZATION_TIER_NOT_SUPPORTED,
@@ -1359,6 +1364,21 @@ impl crate::Adapter for super::Adapter {
         set_sample_count(4, Tfc::MULTISAMPLE_X4);
         set_sample_count(8, Tfc::MULTISAMPLE_X8);
         set_sample_count(16, Tfc::MULTISAMPLE_X16);
+
+        // CPU-visible textures need UMA. `Write`/`ReadFromSubresource` reject
+        // depth-stencil resources and non-power-of-two element sizes, and don't
+        // document planar formats.
+        caps.set(
+            Tfc::HOST_COPY,
+            matches!(
+                self.private_caps.memory_architecture,
+                super::MemoryArchitecture::Unified { .. }
+            ) && !format.is_depth_stencil_format()
+                && !format.is_multi_planar_format()
+                && format
+                    .block_copy_size(None)
+                    .is_some_and(u32::is_power_of_two),
+        );
 
         caps
     }

@@ -136,6 +136,10 @@ pub fn map_texture_usage(
         wgt::TextureUses::TRANSIENT,
         usage.contains(wgt::TextureUsages::TRANSIENT_ATTACHMENT),
     );
+    u.set(
+        wgt::TextureUses::HOST_COPY,
+        usage.contains(wgt::TextureUsages::HOST_VISIBLE),
+    );
     u
 }
 
@@ -150,6 +154,10 @@ pub fn map_texture_usage_for_texture(
             wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE
         } else if desc.usage.contains(wgt::TextureUsages::COPY_DST) {
             wgt::TextureUses::COPY_DST // (set already)
+        } else if desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE) {
+            // Clear with copies rather than render passes: render target usage can
+            // make host access slower, e.g. by enabling compression on Vulkan.
+            wgt::TextureUses::COPY_DST
         } else {
             // Use COPY_DST only if we can't use COLOR_TARGET
             if format_features
