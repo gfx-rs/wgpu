@@ -7408,6 +7408,11 @@ template <typename A>
             entry_point_names: Vec::with_capacity(ep_range.len()),
         };
 
+        let mut layouter = proc::Layouter::default();
+        layouter
+            .update(module.to_ctx())
+            .map_err(|e| Error::GenericValidation(format!("{e}")))?;
+
         for ep_index in ep_range {
             let ep = &module.entry_points[ep_index];
             let fun = &ep.function;
@@ -8436,6 +8441,10 @@ template <typename A>
                 }
             }
 
+            if !is_wrapped {
+                self.write_workgroup_memory(module, &layouter, fun_info)?;
+            }
+
             // Metal doesn't support private mutable variables outside of functions,
             // so we put them here, just like the locals.
             for (handle, var) in module.global_variables.iter() {
@@ -8469,22 +8478,6 @@ template <typename A>
                             writeln!(self.out, " = {{}};")?;
                         }
                     };
-                } else if var.space == crate::AddressSpace::WorkGroup {
-                    // Workgroup variables are declared as function variables but can
-                    // only be declared in the entry point. So we receive them as an
-                    // input reference here.
-                    if !is_wrapped {
-                        let tyvar = TypedGlobalVariable {
-                            module,
-                            names: &self.names,
-                            handle,
-                            usage,
-                            reference: false,
-                        };
-                        write!(self.out, "{}", back::INDENT)?;
-                        tyvar.try_fmt(&mut self.out)?;
-                        writeln!(self.out, ";")?;
-                    }
                 } else if let Some(ref binding) = var.binding {
                     let resolved = options.resolve_resource_binding(ep, binding).unwrap();
                     if let Some(sampler) = resolved.as_inline_sampler(options) {
@@ -8676,6 +8669,7 @@ template <typename A>
                     ep,
                     module,
                     mod_info,
+                    layouter: &layouter,
                     fun_info,
                     args,
                     local_invocation_index,
@@ -8687,6 +8681,60 @@ template <typename A>
         }
 
         Ok(info)
+    }
+
+    /// Declare the workgroup variables used by an entry point as fields of
+    /// a single `threadgroup` struct, and alias each field by the
+    /// variable's name.
+    pub(super) fn write_workgroup_memory(
+        &mut self,
+        module: &crate::Module,
+        layouter: &proc::Layouter,
+        fun_info: &valid::FunctionInfo,
+    ) -> BackendResult {
+        let mut vars: Vec<_> = module
+            .global_variables
+            .iter()
+            .filter(|&(handle, var)| {
+                var.space == crate::AddressSpace::WorkGroup && !fun_info[handle].is_empty()
+            })
+            .collect();
+        if vars.is_empty() {
+            return Ok(());
+        }
+        // Separate threadgroup variables can crash the Metal compiler on some
+        // older Apple GPUs. Sorting by alignment minimizes padding.
+        vars.sort_by_key(|&(_, var)| core::cmp::Reverse(layouter[var.ty].alignment));
+
+        let memory_name = self.namer.call("nagaWorkgroupMemory");
+        writeln!(self.out, "{}threadgroup struct {{", back::INDENT)?;
+        for &(handle, var) in &vars {
+            let ty = TypeContext {
+                handle: var.ty,
+                gctx: module.to_ctx(),
+                names: &self.names,
+                access: crate::StorageAccess::empty(),
+                first_time: false,
+            };
+            let name = &self.names[&NameKey::GlobalVariable(handle)];
+            writeln!(self.out, "{}{ty} {name};", back::Level(2))?;
+        }
+        writeln!(self.out, "{}}} {memory_name};", back::INDENT)?;
+
+        for &(handle, _) in &vars {
+            let tyvar = TypedGlobalVariable {
+                module,
+                names: &self.names,
+                handle,
+                usage: fun_info[handle],
+                reference: true,
+            };
+            write!(self.out, "{}", back::INDENT)?;
+            tyvar.try_fmt(&mut self.out)?;
+            let name = &self.names[&NameKey::GlobalVariable(handle)];
+            writeln!(self.out, " = {memory_name}.{name};")?;
+        }
+        Ok(())
     }
 
     pub(super) fn write_barrier(

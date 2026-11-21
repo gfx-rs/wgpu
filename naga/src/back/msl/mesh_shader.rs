@@ -8,8 +8,8 @@ use crate::{
     back::{
         self,
         msl::{
-            writer::{TypeContext, TypedGlobalVariable},
-            BackendResult, EntryPointArgument, Error, NAMESPACE, WRAPPED_ARRAY_FIELD,
+            writer::TypeContext, BackendResult, EntryPointArgument, Error, NAMESPACE,
+            WRAPPED_ARRAY_FIELD,
         },
     },
     proc::NameKey,
@@ -27,6 +27,7 @@ pub(super) struct NestedFunctionInfo<'a> {
     pub(super) ep: &'a crate::EntryPoint,
     pub(super) module: &'a crate::Module,
     pub(super) mod_info: &'a crate::valid::ModuleInfo,
+    pub(super) layouter: &'a crate::proc::Layouter,
     pub(super) fun_info: &'a crate::valid::FunctionInfo,
     pub(super) args: Vec<EntryPointArgument>,
     pub(super) local_invocation_index: Option<&'a NameKey>,
@@ -152,6 +153,7 @@ impl<W: core::fmt::Write> super::Writer<W> {
             ep,
             module,
             mod_info,
+            layouter,
             fun_info,
             args,
             local_invocation_index: local_invocation_index_key,
@@ -217,21 +219,7 @@ impl<W: core::fmt::Write> super::Writer<W> {
         writeln!(self.out, ") {{")?;
 
         // Function body
-        for (handle, var) in module.global_variables.iter() {
-            if var.space != crate::AddressSpace::WorkGroup || fun_info[handle].is_empty() {
-                continue;
-            }
-            let tyvar = TypedGlobalVariable {
-                module,
-                names: &self.names,
-                handle,
-                usage: crate::valid::GlobalUse::WRITE | crate::valid::GlobalUse::READ,
-                reference: false,
-            };
-            write!(self.out, "{}", back::INDENT)?;
-            tyvar.try_fmt(&mut self.out)?;
-            writeln!(self.out, ";")?;
-        }
+        self.write_workgroup_memory(module, layouter, fun_info)?;
         write!(self.out, "{indent}")?;
         let result_name = if ep.stage == crate::ShaderStage::Task {
             let name = self.namer.call("nagaGridSize");

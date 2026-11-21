@@ -70,8 +70,12 @@ kernel void main_(
 , constant type_15& global_nested_arrays_of_matrices_4x2_ [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
-    threadgroup type_2 wg;
-    threadgroup metal::atomic_uint at_1;
+    threadgroup struct {
+        type_2 wg;
+        metal::atomic_uint at_1;
+    } nagaWorkgroupMemory;
+    threadgroup type_2& wg = nagaWorkgroupMemory.wg;
+    threadgroup metal::atomic_uint& at_1 = nagaWorkgroupMemory.at_1;
     if (__local_invocation_index == 0u) {
         wg = {};
         metal::atomic_store_explicit(&at_1, 0, metal::memory_order_relaxed);
