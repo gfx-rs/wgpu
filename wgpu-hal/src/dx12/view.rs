@@ -2,6 +2,7 @@ use windows::Win32::Graphics::{Direct3D12, Dxgi};
 
 use crate::auxil;
 
+#[derive(Clone, Debug)]
 pub(super) struct ViewDescriptor {
     dimension: wgt::TextureViewDimension,
     pub aspects: crate::FormatAspects,
@@ -9,7 +10,7 @@ pub(super) struct ViewDescriptor {
     srv_uav_format: Option<Dxgi::Common::DXGI_FORMAT>,
     multisampled: bool,
     array_layer_base: u32,
-    array_layer_count: u32,
+    pub array_layer_count: u32,
     mip_level_base: u32,
     mip_level_count: u32,
     swizzle: wgt::TextureComponentSwizzle,
@@ -29,7 +30,10 @@ impl crate::TextureViewDescriptor<'_> {
             mip_level_base: self.range.base_mip_level,
             mip_level_count: self.range.mip_level_count.unwrap_or(!0),
             array_layer_base: self.range.base_array_layer,
-            array_layer_count: self.range.array_layer_count.unwrap_or(!0),
+            array_layer_count: self
+                .range
+                .array_layer_count
+                .unwrap_or(texture.array_layer_count() - self.range.base_array_layer),
             swizzle: self.swizzle,
             plane_slice_override: texture.plane_slice_override(),
         }
@@ -49,6 +53,15 @@ impl ViewDescriptor {
     pub(super) fn plane_slice(&self) -> u32 {
         self.plane_slice_override
             .unwrap_or_else(|| aspects_to_plane(self.aspects))
+    }
+
+    /// Returns a copy of this view that covers only the layer at `offset` from the base layer.
+    pub(super) fn single_layer(&self, offset: u32) -> Self {
+        Self {
+            array_layer_base: self.array_layer_base + offset,
+            array_layer_count: 1,
+            ..self.clone()
+        }
     }
 }
 

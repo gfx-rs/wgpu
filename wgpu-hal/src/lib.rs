@@ -3120,6 +3120,12 @@ pub struct RenderPassDescriptor<'a, Q: DynQuerySet + ?Sized, T: DynTextureView +
     pub sample_count: u32,
     pub color_attachments: &'a [Option<ColorAttachment<'a, T>>],
     pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, T>>,
+    /// The array layers of the attachments that the pass renders to. Bit `i` selects the
+    /// layer at offset `i` from the base layer of each view. With no mask, the pass renders
+    /// only to the base layer. The caller must not set bits at or above the layer count of the
+    /// attachment views.
+    ///
+    /// The load, store, and resolve operations apply only to the layers in the mask.
     pub multiview_mask: Option<NonZeroU32>,
     pub timestamp_writes: Option<PassTimestampWrites<'a, Q>>,
     pub occlusion_query_set: Option<&'a Q>,
