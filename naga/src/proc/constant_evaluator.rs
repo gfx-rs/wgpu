@@ -2741,9 +2741,12 @@ impl<'a> ConstantEvaluator<'a> {
                     )));
                 }
             },
-            Expression::Compose { ty: _, components } => {
-                for component in components.iter() {
-                    out.extend_from_slice(&self.expression_to_bytes(*component, span)?);
+            Expression::Compose { ty, components } => {
+                let components =
+                    crate::proc::flatten_compose(ty, &components, self.expressions, self.types)
+                        .collect::<Vec<_>>();
+                for component in components {
+                    out.extend_from_slice(&self.expression_to_bytes(component, span)?);
                 }
             }
             _ => {
