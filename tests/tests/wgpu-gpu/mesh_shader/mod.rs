@@ -380,6 +380,7 @@ fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
                 vendor: Some(0x10005),
                 adapter: None,
                 driver: None,
+                driver_version: None,
                 reasons: vec![],
                 behavior: wgpu_test::FailureBehavior::Ignore,
             }),

@@ -195,7 +195,7 @@ impl TestInfo {
         let running_msg = if let Some(reasons) = skip_application_reason {
             skip = true;
 
-            let names: ArrayVec<_, 4> = reasons.iter_names().map(|(name, _)| name).collect();
+            let names: ArrayVec<_, 6> = reasons.iter_names().map(|(name, _)| name).collect();
             let names_text = names.join(" | ");
 
             format!("Skipped Failure: {names_text}")
@@ -207,7 +207,7 @@ impl TestInfo {
                 skip = true;
             }
 
-            let names: ArrayVec<_, 4> = failure_application_reasons
+            let names: ArrayVec<_, 6> = failure_application_reasons
                 .iter_names()
                 .map(|(name, _)| name)
                 .collect();
