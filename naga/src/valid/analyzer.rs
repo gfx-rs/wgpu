@@ -909,6 +909,8 @@ impl FunctionInfo {
 
         let mut combined_uniformity = FunctionUniformity::new();
         for statement in statements {
+            // Calls count too: inlining replaces them with argument and result
+            // glue, and counting them keeps chains of empty callees from summing to zero.
             self.inlined_size = self.inlined_size.saturating_add(1);
             let uniformity = match *statement {
                 S::Emit(ref range) => {
