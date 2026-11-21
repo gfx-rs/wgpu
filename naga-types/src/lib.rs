@@ -6,6 +6,7 @@ extern crate std;
 
 mod immediates;
 mod ir;
+pub mod reflect;
 
 pub mod glsl;
 pub mod hlsl;
