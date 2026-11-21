@@ -6,10 +6,10 @@ struct Input {
 groupshared uint wg_var;
 
 [numthreads(1, 1, 1)]
-void compute1_(Input input, uint local_invocation_index : SV_GroupIndex)
+void compute1_(Input input)
 {
-    if (local_invocation_index == 0) {
-        wg_var = (uint)0;
+    if ((input.local_invocation_index == 0u)) {
+        wg_var = 0u;
     }
     GroupMemoryBarrierWithGroupSync();
     wg_var = (input.local_invocation_index * 2u);
