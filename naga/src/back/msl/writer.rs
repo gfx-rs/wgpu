@@ -2005,18 +2005,12 @@ impl<W: Write> Writer<W> {
         // Metal rejects a `constant` initializer that copies another `constant`
         // with class-type members, such as matrices or `packed_float3` (#4348).
         if let crate::Expression::Constant(handle) = arena[expr_handle] {
-            let constant = &module.constants[handle];
-            if !matches!(
-                module.types[constant.ty].inner,
-                crate::TypeInner::Scalar(_) | crate::TypeInner::Vector { .. }
-            ) {
-                return self.put_const_expression(
-                    constant.init,
-                    module,
-                    mod_info,
-                    &module.global_expressions,
-                );
-            }
+            return self.put_const_expression(
+                module.constants[handle].init,
+                module,
+                mod_info,
+                &module.global_expressions,
+            );
         }
         self.put_possibly_const_expression(
             expr_handle,
