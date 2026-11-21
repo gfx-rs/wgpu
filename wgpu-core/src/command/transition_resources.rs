@@ -34,6 +34,7 @@ impl CommandEncoder {
                 texture_transitions: texture_transitions
                     .map(|t| {
                         t.texture.check_valid()?;
+                        check_texture_transition_state(t.state)?;
                         Ok(wgt::TextureTransition {
                             texture: t.texture,
                             selector: t.selector,
@@ -103,6 +104,20 @@ pub(crate) fn transition_resources(
 }
 
 /// Error encountered while attempting to perform [`CommandEncoder::transition_resources`].
+/// Rejects states that only wgpu itself may put a texture in.
+pub(crate) fn check_texture_transition_state(
+    state: wgt::TextureUses,
+) -> Result<(), TransitionResourcesError> {
+    let internal = wgt::TextureUses::UNINITIALIZED
+        | wgt::TextureUses::HOST_COPY
+        | wgt::TextureUses::COMPLEX
+        | wgt::TextureUses::UNKNOWN;
+    if state.intersects(internal) {
+        return Err(TransitionResourcesError::InternalTextureState(state));
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum TransitionResourcesError {
@@ -114,6 +129,11 @@ pub enum TransitionResourcesError {
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     ResourceUsage(#[from] ResourceUsageCompatibilityError),
+    #[error(
+        "Textures can't be transitioned to {0:?}, which includes an internal state \
+        (`UNINITIALIZED`, `HOST_COPY`, `COMPLEX` or `UNKNOWN`)"
+    )]
+    InternalTextureState(wgt::TextureUses),
 }
 
 impl WebGpuError for TransitionResourcesError {
@@ -123,6 +143,7 @@ impl WebGpuError for TransitionResourcesError {
             Self::EncoderState(e) => e.webgpu_error_type(),
             Self::InvalidResource(e) => e.webgpu_error_type(),
             Self::ResourceUsage(e) => e.webgpu_error_type(),
+            Self::InternalTextureState(_) => ErrorType::Validation,
         }
     }
 }

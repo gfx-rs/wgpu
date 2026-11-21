@@ -2,6 +2,14 @@ use alloc::{sync::Arc, vec::Vec};
 
 use crate::{util::Mutex, *};
 
+/// A deferred texture mapping request captured during encoding (or a pass)
+/// and executed later when the command buffer is submitted.
+pub(crate) struct DeferredTextureMapping {
+    pub texture: api::Texture,
+    pub mode: MapMode,
+    pub callback: dispatch::TextureMapCallback,
+}
+
 /// A deferred buffer mapping request captured during encoding (or a pass)
 /// and executed later when the command buffer is submitted.
 pub(crate) struct DeferredBufferMapping {
@@ -18,12 +26,14 @@ pub(super) type SharedDeferredCommandBufferActions = Arc<Mutex<DeferredCommandBu
 #[derive(Default)]
 pub(crate) struct DeferredCommandBufferActions {
     pub buffer_mappings: Vec<DeferredBufferMapping>,
+    pub texture_mappings: Vec<DeferredTextureMapping>,
     pub on_submitted_work_done_callbacks: Vec<dispatch::BoxSubmittedWorkDoneCallback>,
 }
 
 impl DeferredCommandBufferActions {
     pub fn append(&mut self, other: &mut Self) {
         self.buffer_mappings.append(&mut other.buffer_mappings);
+        self.texture_mappings.append(&mut other.texture_mappings);
         self.on_submitted_work_done_callbacks
             .append(&mut other.on_submitted_work_done_callbacks);
     }
@@ -36,6 +46,9 @@ impl DeferredCommandBufferActions {
                 mapping.callback,
             );
         }
+        for mapping in self.texture_mappings {
+            mapping.texture.map_async(mapping.mode, mapping.callback);
+        }
         for callback in self.on_submitted_work_done_callbacks {
             queue.on_submitted_work_done(callback);
         }
@@ -46,6 +59,7 @@ impl core::fmt::Debug for DeferredCommandBufferActions {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("DeferredCommandBufferActions")
             .field("buffer_mappings.len()", &self.buffer_mappings.len())
+            .field("texture_mappings.len()", &self.texture_mappings.len())
             .field(
                 "on_submitted_work_done_callbacks.len()",
                 &self.on_submitted_work_done_callbacks.len(),
@@ -114,6 +128,33 @@ macro_rules! impl_deferred_command_buffer_actions {
                     mode,
                     offset,
                     size,
+                    callback: alloc::boxed::Box::new(callback),
+                },
+            );
+        }
+
+        /// On submission, maps the texture for access from the CPU, like
+        /// [`Texture::map_async()`]. The texture becomes accessible once the `callback`
+        /// is invoked with [`Ok`].
+        ///
+        /// Use this when you need to submit work that uses the texture before mapping it.
+        ///
+        /// If the texture is already mapped, or its map is pending, `callback` is
+        /// called with `Err`.
+        ///
+        /// # Panics During Submit
+        ///
+        /// - If the texture wasn't created with [`TextureUsages::HOST_VISIBLE`].
+        pub fn map_texture_on_submit(
+            &self,
+            texture: &api::Texture,
+            mode: MapMode,
+            callback: impl FnOnce(Result<(), TextureAsyncError>) + WasmNotSend + 'static,
+        ) {
+            self.actions.lock().texture_mappings.push(
+                crate::api::command_buffer_actions::DeferredTextureMapping {
+                    texture: texture.clone(),
+                    mode,
                     callback: alloc::boxed::Box::new(callback),
                 },
             );

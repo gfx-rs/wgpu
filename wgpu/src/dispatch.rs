@@ -68,6 +68,11 @@ pub type BoxSubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static>;
 #[cfg(not(send_sync))]
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + 'static>;
+#[cfg(send_sync)]
+pub type TextureMapCallback =
+    Box<dyn FnOnce(Result<(), crate::TextureAsyncError>) + Send + 'static>;
+#[cfg(not(send_sync))]
+pub type TextureMapCallback = Box<dyn FnOnce(Result<(), crate::TextureAsyncError>) + 'static>;
 
 #[cfg(send_sync)]
 pub type BlasCompactCallback = Box<dyn FnOnce(Result<(), crate::BlasAsyncError>) + Send + 'static>;
@@ -340,6 +345,28 @@ pub trait TextureInterface: CommonTraits {
     unsafe fn mark_externally_initialized(&self) {}
 
     fn texture_binding_view_dimension(&self) -> Option<crate::TextureViewDimension>;
+
+    fn map_async(&self, mode: crate::MapMode, callback: TextureMapCallback);
+
+    fn get_map_token(&self) -> Option<(alloc::sync::Arc<()>, crate::MapMode)>;
+
+    fn unmap(&self);
+
+    fn copy_texture_to_memory(
+        &self,
+        source: &wgt::TexelCopyTextureInfo<()>,
+        destination: &mut [u8],
+        layout: wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    );
+
+    fn copy_memory_to_texture(
+        &self,
+        destination: &wgt::TexelCopyTextureInfo<()>,
+        source: &[u8],
+        layout: wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    );
 }
 pub trait ExternalTextureInterface: CommonTraits {
     fn destroy(&self);

@@ -169,7 +169,7 @@ impl Global {
             textures, devices, ..
         } = &mut *hub;
         let device = devices.get(device_id);
-        let texture = device.create_texture_error(desc);
+        let texture = device.create_texture_error(&desc.to_core());
         textures.assign(id_in, texture);
     }
 
@@ -247,7 +247,7 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let texture = device.create_texture(desc);
+        let texture = device.create_texture(&desc.to_core());
 
         textures.assign(id_in, texture);
     }
@@ -260,7 +260,7 @@ impl Global {
         let hub = self.hub.borrow();
         hub.devices
             .get(device_id)
-            .validate_texture_descriptor(desc)
+            .validate_texture_descriptor(&desc.to_core())
             .err()
     }
 
@@ -287,8 +287,9 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let (texture, error) =
-            unsafe { device.create_texture_from_hal(hal_texture, desc, initial_state, cleared) };
+        let (texture, error) = unsafe {
+            device.create_texture_from_hal(hal_texture, &desc.to_core(), initial_state, cleared)
+        };
 
         let id = textures.assign(id_in, texture);
         (id, error)

@@ -416,6 +416,7 @@ struct DeviceExtensionFunctions {
     mesh_shading: Option<ext::mesh_shader::Device>,
     #[cfg_attr(not(unix), allow(dead_code))]
     external_memory_fd: Option<khr::external_memory_fd::Device>,
+    host_image_copy: Option<ext::host_image_copy::Device>,
 }
 
 struct RayTracingDeviceExtensionFunctions {
@@ -427,6 +428,9 @@ struct RayTracingDeviceExtensionFunctions {
 /// device geometry, but affect the code paths taken internally.
 #[derive(Clone, Debug)]
 struct PrivateCapabilities {
+    /// Images with `HOST_TRANSFER` usage can use the same memory types as
+    /// other images, or all memory is the same anyway.
+    host_image_copy_free_memory: bool,
     image_view_usage: bool,
     timeline_semaphores: bool,
     texture_d24: bool,

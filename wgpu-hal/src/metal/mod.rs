@@ -315,6 +315,12 @@ struct CapabilitiesQuery {
     supports_depth_clip_control: bool,
     supports_shader_primitive_index: bool,
     has_unified_memory: Option<bool>,
+    /// Host texture copies need `Shared` storage textures, which only Apple GPUs
+    /// fully support.
+    supports_host_texture_copy: bool,
+    /// The paravirtual device misplaces host copies into sub-regions of
+    /// compressed 3D textures.
+    host_copy_compressed: bool,
     timestamp_query_support: TimestampQuerySupport,
     supports_simd_scoped_operations: bool,
     supports_cooperative_matrix: bool,
@@ -347,6 +353,8 @@ struct PrivateCapabilities {
     low_power: bool,
     headless: bool,
     has_unified_memory: Option<bool>,
+    supports_host_texture_copy: bool,
+    host_copy_compressed: bool,
     timestamp_query_support: TimestampQuerySupport,
     supports_memoryless_storage: bool,
     mesh_shaders: bool,

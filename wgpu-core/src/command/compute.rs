@@ -443,6 +443,7 @@ fn transition_resources(
         texture_transition
             .texture
             .same_device(state.pass.base.device)?;
+        super::transition_resources::check_texture_transition_state(texture_transition.state)?;
 
         unsafe {
             state.pass.scope.textures.merge_single(

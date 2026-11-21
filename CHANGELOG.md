@@ -44,6 +44,47 @@ Bottom level categories:
 
 ### Major changes
 
+#### Host texture copies
+
+Uploading a texture normally takes two copies, even on unified memory systems: one into a staging buffer, and one from the staging buffer into the texture on the queue. With the new `Features::HOST_TEXTURE_COPY`, textures created with `TextureUsages::HOST_VISIBLE` can be read and written directly from the CPU, without a staging buffer or a queue. This is generally available on unified memory systems, on Vulkan, Metal and DX12.
+
+Mapping works like it does for buffers. Map a texture with `Texture::map_async`, or by creating it with `mapped_at_creation: true`, and unmap it with `Texture::unmap` before the GPU uses it again. As with buffer views, a texture mapped for `MapMode::Read` gives a `MappedTexture` with `copy_to_memory` through `Texture::get_mapped_texture`, and a texture mapped for `MapMode::Write` gives a write-only `MappedTextureMut` with `copy_from_memory` through `Texture::get_mapped_texture_mut`. `map_texture_on_submit` maps a texture once a command buffer is submitted, like `map_buffer_on_submit`. Copies to different textures can run on several threads at once, while the GPU keeps working.
+
+`TextureFormatFeatureFlags::HOST_VISIBLE_OPTIMAL` tells whether `HOST_VISIBLE` is known to not make device access to textures of a format slower.
+
+`TextureDescriptor` has a new `mapped_at_creation` field. This is a breaking change.
+
+```rust
+// `device` was created with `Features::HOST_TEXTURE_COPY`.
+let texture = device.create_texture(&wgpu::TextureDescriptor {
+    // ...
+    usage: wgpu::TextureUsages::HOST_VISIBLE | wgpu::TextureUsages::TEXTURE_BINDING,
+    mapped_at_creation: true,
+});
+
+let mapped = texture.get_mapped_texture_mut().unwrap();
+mapped.copy_from_memory(
+    wgpu::TexelCopyTextureInfoBase {
+        texture: (),
+        mip_level: 0,
+        origin: wgpu::Origin3d::ZERO,
+        aspect: wgpu::TextureAspect::All,
+    },
+    &data,
+    wgpu::TexelCopyBufferLayout {
+        offset: 0,
+        bytes_per_row: Some(width * 4),
+        rows_per_image: Some(height),
+    },
+    wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+);
+// All `MappedTexture`s must be dropped before unmapping.
+drop(mapped);
+texture.unmap();
+```
+
+By @inner-daemons in [#9053](https://github.com/gfx-rs/wgpu/pull/9053).
+
 #### `TEXTURE_COMPONENT_SWIZZLE` feature and `swizzle` field in `TextureViewDescriptor`
 
 A new `swizzle` field is in `TextureViewDescriptor` used for mapping red/green/blue/alpha channels of the texture view
