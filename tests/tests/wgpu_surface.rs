@@ -113,8 +113,11 @@ mod native {
         config.height = 512;
         surface.configure(&device, &config);
 
+        // Vulkan can return `Suboptimal` when the configured size differs from the window size.
         let current = surface.get_current_texture();
-        let wgpu::CurrentSurfaceTexture::Success(frame) = current else {
+        let (wgpu::CurrentSurfaceTexture::Success(frame)
+        | wgpu::CurrentSurfaceTexture::Suboptimal(frame)) = current
+        else {
             panic!("Unexpected get_current_texture result: {:?}", current);
         };
 
