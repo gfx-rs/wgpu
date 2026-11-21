@@ -23,24 +23,12 @@ pub fn map_address_space<'a>(
             Ok(crate::AddressSpace::TaskPayload)
         }
         "ray_payload" => {
-            if enable_extensions.contains(EnableExtensions::WGPU_RAY_TRACING_PIPELINE) {
-                Ok(crate::AddressSpace::RayPayload)
-            } else {
-                Err(Box::new(Error::EnableExtensionNotEnabled {
-                    span,
-                    kind: EnableExtensions::WGPU_RAY_TRACING_PIPELINE,
-                }))
-            }
+            enable_extensions.require(EnableExtensions::WGPU_RAY_TRACING_PIPELINE, span)?;
+            Ok(crate::AddressSpace::RayPayload)
         }
         "incoming_ray_payload" => {
-            if enable_extensions.contains(EnableExtensions::WGPU_RAY_TRACING_PIPELINE) {
-                Ok(crate::AddressSpace::IncomingRayPayload)
-            } else {
-                Err(Box::new(Error::EnableExtensionNotEnabled {
-                    span,
-                    kind: EnableExtensions::WGPU_RAY_TRACING_PIPELINE,
-                }))
-            }
+            enable_extensions.require(EnableExtensions::WGPU_RAY_TRACING_PIPELINE, span)?;
+            Ok(crate::AddressSpace::IncomingRayPayload)
         }
         _ => Err(Box::new(Error::UnknownAddressSpace(span))),
     }
@@ -65,12 +53,7 @@ pub fn map_ray_flag(
 ) -> Result<'static, ()> {
     match word {
         "vertex_return" => {
-            if !enable_extensions.contains(EnableExtensions::WGPU_RAY_QUERY_VERTEX_RETURN) {
-                return Err(Box::new(Error::EnableExtensionNotEnabled {
-                    span,
-                    kind: EnableExtensions::WGPU_RAY_QUERY_VERTEX_RETURN,
-                }));
-            }
+            enable_extensions.require(EnableExtensions::WGPU_RAY_QUERY_VERTEX_RETURN, span)?;
             Ok(())
         }
         _ => Err(Box::new(Error::UnknownRayFlag(span))),
@@ -571,50 +554,30 @@ pub fn map_predeclared_type(
         _ => return Ok(None),
     };
 
-    // Check for the enable extension required to use this type, if any.
-    // Slice should be at least len one otherwise extension_needed should be None.
-    let extensions_needed: Option<&[_]> = match ty {
-        PredeclaredType::TypeInner(ref ty) if ty.scalar() == Some(Sc::F16) => {
-            Some(&[EnableExtensions::F16])
-        }
-        PredeclaredType::TypeInner(ref ty) if ty.scalar() == Some(Sc::F64) => {
-            Some(&[EnableExtensions::WGPU_F64])
-        }
-        PredeclaredType::TypeInner(ref ty) if matches!(ty.scalar(), Some(s) if s == Sc::I16 || s == Sc::U16) => {
-            Some(&[EnableExtensions::WGPU_INT16])
-        }
+    type E = EnableExtensions;
+    let needed = match ty {
+        PredeclaredType::TypeInner(ref ty) => match ty.scalar() {
+            Some(Sc::F16) => E::F16,
+            Some(Sc::F64) => E::WGPU_F64,
+            Some(Sc::I16 | Sc::U16) => E::WGPU_INT16,
+            _ => E::empty(),
+        },
         PredeclaredType::RayDesc
         | PredeclaredType::RayIntersection
         | PredeclaredType::TypeGenerator(TypeGenerator::AccelerationStructure)
-        | PredeclaredType::TypeGenerator(TypeGenerator::RayQuery) => Some(&[
-            EnableExtensions::WGPU_RAY_QUERY,
-            EnableExtensions::WGPU_RAY_TRACING_PIPELINE,
-        ]),
+        | PredeclaredType::TypeGenerator(TypeGenerator::RayQuery) => {
+            E::WGPU_RAY_QUERY | E::WGPU_RAY_TRACING_PIPELINE
+        }
         PredeclaredType::TypeGenerator(TypeGenerator::HitObject) => {
-            Some(&[EnableExtensions::WGPU_RAY_TRACING_INVOCATION_REORDER])
+            E::WGPU_RAY_TRACING_INVOCATION_REORDER
         }
         PredeclaredType::TypeGenerator(TypeGenerator::CooperativeMatrix { .. }) => {
-            Some(&[EnableExtensions::WGPU_COOPERATIVE_MATRIX])
+            E::WGPU_COOPERATIVE_MATRIX
         }
-        PredeclaredType::TypeGenerator(TypeGenerator::BindingArray) => {
-            Some(&[EnableExtensions::WGPU_BINDING_ARRAY])
-        }
-        _ => None,
+        PredeclaredType::TypeGenerator(TypeGenerator::BindingArray) => E::WGPU_BINDING_ARRAY,
+        PredeclaredType::TypeGenerator(_) => E::empty(),
     };
-    if let Some(extensions_needed) = extensions_needed {
-        let mut any_extension_enabled = false;
-        for extension_needed in extensions_needed {
-            if enable_extensions.contains(*extension_needed) {
-                any_extension_enabled = true;
-            }
-        }
-        if !any_extension_enabled {
-            return Err(Box::new(Error::EnableExtensionNotEnabled {
-                span,
-                kind: extensions_needed[0],
-            }));
-        }
-    }
+    enable_extensions.require(needed, span)?;
 
     Ok(Some(ty))
 }

@@ -3985,15 +3985,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     return Ok(None);
                 }
                 "debugPrintf" => {
-                    if !ctx
-                        .enable_extensions
-                        .contains(EnableExtensions::WGPU_DEBUG_PRINTF)
-                    {
-                        return Err(Box::new(Error::EnableExtensionNotEnabled {
-                            span: function_span,
-                            kind: EnableExtensions::WGPU_DEBUG_PRINTF,
-                        }));
-                    }
+                    ctx.enable_extensions
+                        .require(EnableExtensions::WGPU_DEBUG_PRINTF, function_span)?;
 
                     if arguments.is_empty() {
                         return Err(Box::new(Error::WrongArgumentCount {
