@@ -1,0 +1,51 @@
+; Named constants built from other named constants. Metal rejects a
+; `constant` initializer that copies another `constant` of a type with
+; class-type members, such as matrices or `packed_float3`.
+; SPIR-V
+; Version: 1.0
+; Bound: 32
+; Schema: 0
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Fragment %main "main" %color
+               OpExecutionMode %main OriginUpperLeft
+               OpName %main "main"
+               OpName %color "color"
+               OpName %Packed "Packed"
+               OpName %VEC "VEC"
+               OpName %MATRIX "MATRIX"
+               OpName %MATRICES "MATRICES"
+               OpName %PACKED "PACKED"
+               OpName %PACKED_ARRAY "PACKED_ARRAY"
+               OpDecorate %color Location 0
+       %void = OpTypeVoid
+         %fn = OpTypeFunction %void
+      %float = OpTypeFloat 32
+       %uint = OpTypeInt 32 0
+    %v2float = OpTypeVector %float 2
+    %v3float = OpTypeVector %float 3
+    %v4float = OpTypeVector %float 4
+%mat2v2float = OpTypeMatrix %v2float 2
+     %uint_2 = OpConstant %uint 2
+%_arr_mat2v2float_uint_2 = OpTypeArray %mat2v2float %uint_2
+     %Packed = OpTypeStruct %v3float %float
+%_arr_Packed_uint_2 = OpTypeArray %Packed %uint_2
+%_ptr_Output_v4float = OpTypePointer Output %v4float
+      %color = OpVariable %_ptr_Output_v4float Output
+    %float_1 = OpConstant %float 1
+    %float_2 = OpConstant %float 2
+        %VEC = OpConstantComposite %v2float %float_1 %float_2
+     %MATRIX = OpConstantComposite %mat2v2float %VEC %VEC
+   %MATRICES = OpConstantComposite %_arr_mat2v2float_uint_2 %MATRIX %MATRIX
+         %v3 = OpConstantComposite %v3float %float_1 %float_1 %float_1
+     %PACKED = OpConstantComposite %Packed %v3 %float_2
+%PACKED_ARRAY = OpConstantComposite %_arr_Packed_uint_2 %PACKED %PACKED
+       %main = OpFunction %void None %fn
+      %entry = OpLabel
+          %m = OpCompositeExtract %float %MATRICES 1 0 1
+          %p = OpCompositeExtract %float %PACKED_ARRAY 1 0 2
+          %q = OpCompositeExtract %float %PACKED_ARRAY 0 1
+          %r = OpCompositeConstruct %v4float %m %p %q %float_1
+               OpStore %color %r
+               OpReturn
+               OpFunctionEnd
