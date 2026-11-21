@@ -2719,19 +2719,19 @@ impl Device {
                 None
             };
 
-        let info = create_validator(
-            self.features,
-            self.downlevel.flags,
-            naga::valid::ValidationFlags::all(),
-        )
-        .validate(&module)
-        .map_err(|inner| {
-            pipeline::CreateShaderModuleError::Validation(naga::error::ShaderError {
-                source,
-                label: desc.label.as_ref().map(|l| l.to_string()),
-                inner,
-            })
-        })?;
+        let mut validation_flags = naga::valid::ValidationFlags::all();
+        if !desc.runtime_checks.uniformity_analysis {
+            validation_flags -= naga::valid::ValidationFlags::CONTROL_FLOW_UNIFORMITY;
+        }
+        let info = create_validator(self.features, self.downlevel.flags, validation_flags)
+            .validate(&module)
+            .map_err(|inner| {
+                pipeline::CreateShaderModuleError::Validation(naga::error::ShaderError {
+                    source,
+                    label: desc.label.as_ref().map(|l| l.to_string()),
+                    inner,
+                })
+            })?;
 
         // Defer creating the `wgpu_hal` shader module until pipeline creation,
         // when we can apply the pipeline's override values and validate the

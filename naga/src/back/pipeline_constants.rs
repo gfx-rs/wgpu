@@ -293,7 +293,10 @@ pub fn process_overrides<'a>(
 fn revalidate(
     module: Module,
 ) -> Result<(Cow<'static, Module>, Cow<'static, ModuleInfo>), PipelineConstantError> {
-    let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
+    // The module was validated before its overrides were processed, and
+    // substituting override values can't make it less uniform.
+    let flags = ValidationFlags::all() - ValidationFlags::CONTROL_FLOW_UNIFORMITY;
+    let mut validator = Validator::new(flags, Capabilities::all());
     let module_info = validator.validate_resolved_overrides(&module)?;
     Ok((Cow::Owned(module), Cow::Owned(module_info)))
 }

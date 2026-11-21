@@ -205,6 +205,8 @@ pub enum FunctionError {
         Handle<crate::Expression>,
         UniformityDisruptor,
     ),
+    #[error(transparent)]
+    Uniformity(#[from] super::UniformityError),
     #[error("Functions that are not entry points cannot have `@location` or `@builtin` attributes on their arguments: \"{name}\" has attributes")]
     PipelineInputRegularFunction { name: String },
     #[error("Functions that are not entry points cannot have `@location` or `@builtin` attributes on their return value types")]
