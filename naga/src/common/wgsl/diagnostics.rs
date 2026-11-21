@@ -53,12 +53,14 @@ impl FilterableTriggeringRule {
 
 impl StandardFilterableTriggeringRule {
     const DERIVATIVE_UNIFORMITY: &'static str = "derivative_uniformity";
+    const SUBGROUP_UNIFORMITY: &'static str = "subgroup_uniformity";
 
     /// Convert from a sentinel word in WGSL into its associated
     /// [`StandardFilterableTriggeringRule`], if possible.
     pub fn from_wgsl_ident(s: &str) -> Option<Self> {
         Some(match s {
             Self::DERIVATIVE_UNIFORMITY => Self::DerivativeUniformity,
+            Self::SUBGROUP_UNIFORMITY => Self::SubgroupUniformity,
             _ => return None,
         })
     }
@@ -68,6 +70,7 @@ impl StandardFilterableTriggeringRule {
     pub const fn to_wgsl_ident(self) -> &'static str {
         match self {
             Self::DerivativeUniformity => Self::DERIVATIVE_UNIFORMITY,
+            Self::SubgroupUniformity => Self::SUBGROUP_UNIFORMITY,
         }
     }
 }

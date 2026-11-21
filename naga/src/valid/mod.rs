@@ -10,6 +10,7 @@ mod handles;
 pub(crate) mod immediates;
 mod interface;
 mod r#type;
+mod uniformity;
 
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
 use core::ops;
@@ -34,6 +35,7 @@ pub use function::{CallError, FunctionError, LocalVariableError, SubgroupError};
 pub use immediates::{ImmediateSlots, ImmediateSlotsOverflowError, ImmediateUsage};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
 pub use r#type::{Disalignment, ImmediateError, TypeError, TypeFlags, WidthError};
+pub use uniformity::{NonUniformCause, Operation as UniformityOperation, UniformityError};
 
 use self::handles::InvalidHandleError;
 
@@ -62,7 +64,12 @@ bitflags::bitflags! {
         const EXPRESSIONS = 0x1;
         /// Statements and blocks of them.
         const BLOCKS = 0x2;
-        /// Uniformity of control flow for operations that require it.
+        /// Uniformity of control flow for operations that require it, using
+        /// the [uniformity analysis] of the WGSL specification.
+        ///
+        /// The analysis applies WGSL's rules to modules from every frontend.
+        ///
+        /// [uniformity analysis]: https://www.w3.org/TR/WGSL/#uniformity
         const CONTROL_FLOW_UNIFORMITY = 0x4;
         /// Host-shareable structure layouts.
         const STRUCT_LAYOUTS = 0x8;
@@ -653,6 +660,11 @@ impl Validator {
         }
     }
 
+    const fn runs_uniformity_analysis(&self) -> bool {
+        self.flags
+            .contains(ValidationFlags::CONTROL_FLOW_UNIFORMITY)
+    }
+
     // TODO(https://github.com/gfx-rs/wgpu/issues/8207): Consider removing this
     pub const fn subgroup_stages(&mut self, stages: ShaderStages) -> &mut Self {
         self.subgroup_stages = stages;
@@ -885,8 +897,25 @@ impl Validator {
                 })?;
         }
 
+        let mut uniformity_summaries = Vec::new();
         for (handle, fun) in module.functions.iter() {
-            match self.validate_function(fun, module, &mod_info, false) {
+            let result = self
+                .validate_function(fun, module, &mod_info, false)
+                .and_then(|info| {
+                    if self.runs_uniformity_analysis() {
+                        let summary = uniformity::analyze_function(
+                            module,
+                            fun,
+                            &info,
+                            &uniformity_summaries,
+                            uniformity::FunctionKind::Regular,
+                        )
+                        .map_err(WithSpan::into_other)?;
+                        uniformity_summaries.push(summary);
+                    }
+                    Ok(info)
+                });
+            match result {
                 Ok(info) => mod_info.functions.push(info),
                 Err(error) => {
                     return Err(Box::new(error.and_then(|source| {
@@ -914,7 +943,26 @@ impl Validator {
                 )); // TODO: keep some EP span information?
             }
 
-            match self.validate_entry_point(ep, module, &mod_info) {
+            let result = self
+                .validate_entry_point(ep, module, &mod_info)
+                .and_then(|info| {
+                    if self.runs_uniformity_analysis() {
+                        uniformity::analyze_function(
+                            module,
+                            &ep.function,
+                            &info,
+                            &uniformity_summaries,
+                            uniformity::FunctionKind::EntryPoint(ep.stage),
+                        )
+                        .map_err(|error| {
+                            error
+                                .into_other::<FunctionError>()
+                                .into_other::<EntryPointError>()
+                        })?;
+                    }
+                    Ok(info)
+                });
+            match result {
                 Ok(info) => {
                     mod_info.entry_points.push(info);
                 }

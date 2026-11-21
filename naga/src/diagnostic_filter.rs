@@ -76,6 +76,7 @@ pub enum FilterableTriggeringRule {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum StandardFilterableTriggeringRule {
     DerivativeUniformity,
+    SubgroupUniformity,
 }
 
 impl StandardFilterableTriggeringRule {
@@ -85,7 +86,7 @@ impl StandardFilterableTriggeringRule {
     /// severities.
     pub(crate) const fn default_severity(self) -> Severity {
         match self {
-            Self::DerivativeUniformity => Severity::Error,
+            Self::DerivativeUniformity | Self::SubgroupUniformity => Severity::Error,
         }
     }
 }
