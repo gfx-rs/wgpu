@@ -172,29 +172,15 @@ WithMatArray mat_array_stores(int idx_2)
     return withmatarray;
 }
 
+Wide ZeroValueWide() {
+    return (Wide)0;
+}
+
 [numthreads(1, 1, 1)]
 void main(uint li : SV_GroupIndex)
 {
-    if (li == 0) {
-        w.d_0 = (float2)0;
-    }
-    if (li == 0) {
-        w.d_1 = (float2)0;
-    }
-    if (li == 0) {
-        w.d_2 = (float2)0;
-    }
-    if (li == 0) {
-        w.d_3 = (float2)0;
-    }
-    if (li == 0) {
-        w.b_0 = (float2)0;
-    }
-    if (li == 0) {
-        w.b_1 = (float2)0;
-    }
-    if (li == 0) {
-        w.b_2 = (float2)0;
+    if ((li == 0u)) {
+        w = ZeroValueWide();
     }
     GroupMemoryBarrierWithGroupSync();
     int idx_3 = int(li);

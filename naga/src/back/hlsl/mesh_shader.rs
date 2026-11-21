@@ -25,7 +25,10 @@ impl NestedEntryPointArgs {
             .iter()
             .map(String::as_str)
             .chain(self.task_payload.as_deref())
-            .chain(core::iter::once(self.local_invocation_index.as_str()));
+            .chain(
+                self.extra_local_invocation_index
+                    .then_some(self.local_invocation_index.as_str()),
+            );
         for (i, arg) in all_args.enumerate() {
             if i != 0 {
                 write!(out, ", ")?;
@@ -37,12 +40,10 @@ impl NestedEntryPointArgs {
 }
 
 impl<W: fmt::Write> super::Writer<'_, W> {
-    #[expect(clippy::too_many_arguments)]
     fn write_mesh_shader_wrapper(
         &mut self,
         module: &Module,
         func_ctx: &back::FunctionCtx,
-        need_workgroup_variables_initialization: bool,
         nested_name: &str,
         entry_point: &crate::EntryPoint,
         args: NestedEntryPointArgs,
@@ -94,13 +95,6 @@ impl<W: fmt::Write> super::Writer<'_, W> {
             }
         }
         writeln!(self.out, ") {{")?;
-        if need_workgroup_variables_initialization {
-            self.write_workgroup_variables_initialization(
-                func_ctx,
-                module,
-                &args.local_invocation_index,
-            )?;
-        }
         write!(self.out, "{}{nested_name}(", back::INDENT)?;
         args.write_call_args(&mut self.out)?;
         writeln!(self.out, ");")?;
@@ -221,22 +215,12 @@ impl<W: fmt::Write> super::Writer<'_, W> {
 
     fn write_task_shader_wrapper(
         &mut self,
-        module: &Module,
-        func_ctx: &back::FunctionCtx,
-        need_workgroup_variables_initialization: bool,
         nested_name: &str,
         entry_point: &crate::EntryPoint,
         args: NestedEntryPointArgs,
     ) -> BackendResult {
         // Task shader wrapper
         writeln!(self.out, ") {{")?;
-        if need_workgroup_variables_initialization {
-            self.write_workgroup_variables_initialization(
-                func_ctx,
-                module,
-                &args.local_invocation_index,
-            )?;
-        }
         let grid_size = self.namer.call("gridSize");
         write!(
             self.out,
@@ -294,7 +278,6 @@ impl<W: fmt::Write> super::Writer<'_, W> {
         func_ctx: &back::FunctionCtx,
         header: &str,
         name: &str,
-        need_workgroup_variables_initialization: bool,
         nested_name: &str,
         entry_point: &crate::EntryPoint,
         // Built in write_function alongside the inner function signature, so the
@@ -338,7 +321,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 self.write_semantic(&arg.binding, Some((stage, Io::Input)))?;
             }
         }
-        if need_workgroup_variables_initialization || stage == ShaderStage::Mesh {
+        if args.extra_local_invocation_index {
             write!(
                 self.out,
                 "{}uint {} : SV_GroupIndex",
@@ -350,21 +333,13 @@ impl<W: fmt::Write> super::Writer<'_, W> {
             self.write_mesh_shader_wrapper(
                 module,
                 func_ctx,
-                need_workgroup_variables_initialization,
                 nested_name,
                 entry_point,
                 args,
                 separator_if_needed,
             )?;
         } else {
-            self.write_task_shader_wrapper(
-                module,
-                func_ctx,
-                need_workgroup_variables_initialization,
-                nested_name,
-                entry_point,
-                args,
-            )?;
+            self.write_task_shader_wrapper(nested_name, entry_point, args)?;
         }
 
         writeln!(self.out, "}}")?;
