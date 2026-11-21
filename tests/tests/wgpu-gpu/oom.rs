@@ -2,8 +2,8 @@ use wgpu::{
     AccelerationStructureFlags, AccelerationStructureGeometryFlags,
     AccelerationStructureUpdateMode, Backends, BlasGeometrySizeDescriptors,
     BlasTriangleGeometrySizeDescriptor, BufferDescriptor, BufferUsages, CreateBlasDescriptor,
-    CreateTlasDescriptor, Error, ErrorFilter, Extent3d, Features, QuerySetDescriptor, QueryType,
-    TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, VertexFormat,
+    CreateTlasDescriptor, Error, ErrorFilter, Extent3d, Features, Limits, QuerySetDescriptor,
+    QueryType, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, VertexFormat,
 };
 use wgpu_test::GpuTestInitializer;
 use wgpu_test::{apply, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
@@ -173,6 +173,7 @@ static BLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .features(Features::EXPERIMENTAL_RAY_QUERY)
+            .limits(Limits::default().using_minimum_supported_acceleration_structure_values())
             .skip(FailureCase::backend(!OOM_DETECTION_IMPL))
             // see comment at the top of the file
             .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
@@ -215,6 +216,7 @@ static TLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .features(Features::EXPERIMENTAL_RAY_QUERY)
+            .limits(Limits::default().using_minimum_supported_acceleration_structure_values())
             .skip(FailureCase::backend(!OOM_DETECTION_IMPL))
             // see comment at the top of the file
             .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
