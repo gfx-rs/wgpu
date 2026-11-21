@@ -56,8 +56,13 @@ impl super::CommandEncoder {
         &mut self,
         key: super::FramebufferKey,
     ) -> Result<vk::Framebuffer, crate::DeviceError> {
+        self.framebuffer_uses += 1;
+        let last_used = self.framebuffer_uses;
         Ok(match self.framebuffers.entry(key) {
-            Entry::Occupied(e) => *e.get(),
+            Entry::Occupied(mut e) => {
+                e.get_mut().last_used = last_used;
+                e.get().raw
+            }
             Entry::Vacant(e) => {
                 let super::FramebufferKey {
                     raw_pass,
@@ -74,7 +79,7 @@ impl super::CommandEncoder {
                     .attachments(attachment_views);
 
                 let raw = unsafe { self.device.raw.create_framebuffer(&vk_info, None).unwrap() };
-                *e.insert(raw)
+                e.insert(super::CachedFramebuffer { raw, last_used }).raw
             }
         })
     }
@@ -188,14 +193,27 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.free
             .extend(cmd_bufs.into_iter().map(|cmd_buf| cmd_buf.raw));
         self.free.append(&mut self.discarded);
-        // The framebuffers stay for the render passes that are recorded again, since some
-        // drivers take long to create one: PowerVR's proprietary driver sets up a render
-        // target in the kernel for each. Nothing removes the framebuffer of a view that
-        // was destroyed, so the cache is emptied once it holds more than a few.
-        if self.framebuffers.len() > super::MAX_CACHED_FRAMEBUFFERS {
-            for (_, framebuffer) in self.framebuffers.drain() {
-                unsafe { self.device.raw.destroy_framebuffer(framebuffer, None) };
-            }
+        // Some drivers take long to create a framebuffer, so the most recently used ones stay.
+        // The others go, since nothing removes the framebuffer of a destroyed view.
+        let excess = self
+            .framebuffers
+            .len()
+            .saturating_sub(super::MAX_CACHED_FRAMEBUFFERS);
+        if excess > 0 {
+            let mut uses: smallvec::SmallVec<[u64; 32]> = self
+                .framebuffers
+                .values()
+                .map(|framebuffer| framebuffer.last_used)
+                .collect();
+            let (_, &mut newest_to_destroy, _) = uses.select_nth_unstable(excess - 1);
+            let device = &self.device.raw;
+            self.framebuffers.retain(|_, framebuffer| {
+                let keep = framebuffer.last_used > newest_to_destroy;
+                if !keep {
+                    unsafe { device.destroy_framebuffer(framebuffer.raw, None) };
+                }
+                keep
+            });
         }
         let _ = unsafe {
             self.device

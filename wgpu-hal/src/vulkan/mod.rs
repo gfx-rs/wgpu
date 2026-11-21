@@ -12,8 +12,8 @@ We cope with this requirement by the combination of the following ways:
 
 Render passes are cached on the device and kept forever.
 
-Framebuffers are cached on each command encoder, up to
-`MAX_CACHED_FRAMEBUFFERS` of them.
+Framebuffers are cached on each command encoder. When the encoder is reset,
+it keeps the `MAX_CACHED_FRAMEBUFFERS` most recently used ones.
 
 ## Fences
 
@@ -1166,6 +1166,12 @@ struct ResourceIdentity<T> {
 /// How many framebuffers a command encoder keeps across its resets.
 const MAX_CACHED_FRAMEBUFFERS: usize = 16;
 
+struct CachedFramebuffer {
+    raw: vk::Framebuffer,
+    /// The value of [`CommandEncoder::framebuffer_uses`] when a render pass last used it.
+    last_used: u64,
+}
+
 #[derive(Clone, Eq, Hash, PartialEq)]
 struct FramebufferKey {
     raw_pass: vk::RenderPass,
@@ -1244,7 +1250,9 @@ pub struct CommandEncoder {
     /// the given pool & location.
     end_of_pass_timer_query: Option<(vk::QueryPool, u32)>,
 
-    framebuffers: FastHashMap<FramebufferKey, vk::Framebuffer>,
+    framebuffers: FastHashMap<FramebufferKey, CachedFramebuffer>,
+    /// How many times a render pass asked for a framebuffer.
+    framebuffer_uses: u64,
     temp_texture_views: FastHashMap<TempTextureViewKey, IdentifiedTextureView>,
 
     counters: Arc<wgt::HalCounters>,
@@ -1272,7 +1280,7 @@ impl Drop for CommandEncoder {
         }
 
         for (_, fb) in self.framebuffers.drain() {
-            unsafe { self.device.raw.destroy_framebuffer(fb, None) };
+            unsafe { self.device.raw.destroy_framebuffer(fb.raw, None) };
         }
 
         for (_, view) in self.temp_texture_views.drain() {
