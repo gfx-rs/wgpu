@@ -249,7 +249,7 @@ struct main_Input {
 };
 [[max_total_threads_per_threadgroup(64)]] kernel void main_(
   uint subgroup_invocation_id [[thread_index_in_simdgroup]]
-, uint __local_invocation_index [[thread_index_in_threadgroup]]
+, uint local_invocation_index [[thread_index_in_threadgroup]]
 , constant UniformCompatible& input_uniform [[user(fake0)]]
 , device UniformCompatible const& input_storage [[user(fake0)]]
 , device StorageCompatible const& input_arrays [[user(fake0)]]
@@ -258,12 +258,12 @@ struct main_Input {
 , threadgroup ushort& shared_val
 ) {
     short private_variable = static_cast<short>(1);
-    if (__local_invocation_index == 0u) {
-        shared_val = {};
-    }
-    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     short sg_val = {};
     ushort sg_uval = {};
+    if (local_invocation_index == 0u) {
+        shared_val = static_cast<ushort>(0);
+    }
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     shared_val = static_cast<ushort>(0);
     ushort _e6 = uint16_function(static_cast<ushort>(67), input_uniform, input_storage, input_arrays, output, output_arrays);
     short _e8 = int16_function(static_cast<short>(60), private_variable, input_uniform, input_storage, input_arrays, output, output_arrays);
