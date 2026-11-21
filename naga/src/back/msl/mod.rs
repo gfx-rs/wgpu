@@ -442,6 +442,13 @@ pub struct PipelineOptions {
         serde(deserialize_with = "deserialize_binding_array_length_map")
     )]
     pub binding_array_length_map: crate::FastHashMap<crate::ResourceBinding, u32>,
+
+    /// The multiview mask of the render pipeline.
+    ///
+    /// Metal's `amplification_id` is the index of the view among the views in the mask. If the
+    /// mask is not of the form `0b1…1`, `@builtin(view_index)` is mapped from it to the array
+    /// layer index, which is what other backends provide.
+    pub multiview_mask: Option<core::num::NonZeroU32>,
 }
 
 #[cfg(feature = "deserialize")]

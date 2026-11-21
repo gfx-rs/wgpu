@@ -135,10 +135,7 @@ impl FeaturesManager {
         check_feature!(DUAL_SOURCE_BLENDING, 330, 300 /* with extension */);
         check_feature!(SUBGROUP_OPERATIONS, 430, 310);
         check_feature!(TEXTURE_ATOMICS, 420, 310);
-        match version {
-            Version::Embedded { is_webgl: true, .. } => check_feature!(MULTI_VIEW, 140, 300),
-            _ => check_feature!(MULTI_VIEW, 140, 310),
-        };
+        check_feature!(MULTI_VIEW, 140, 300);
         // Only available on glsl core, this means that opengl es can't query the number
         // of samples nor levels in a image and neither do bound checks on the sample nor
         // the level argument of texelFetch
@@ -239,13 +236,8 @@ impl FeaturesManager {
         }
 
         if self.0.contains(Features::MULTI_VIEW) {
-            if let Version::Embedded { is_webgl: true, .. } = options.version {
-                // https://www.khronos.org/registry/OpenGL/extensions/OVR/OVR_multiview2.txt
-                writeln!(out, "#extension GL_OVR_multiview2 : require")?;
-            } else {
-                // https://github.com/KhronosGroup/GLSL/blob/master/extensions/ext/GL_EXT_multiview.txt
-                writeln!(out, "#extension GL_EXT_multiview : require")?;
-            }
+            // https://www.khronos.org/registry/OpenGL/extensions/OVR/OVR_multiview2.txt
+            writeln!(out, "#extension GL_OVR_multiview2 : require")?;
         }
 
         if self.0.contains(Features::TEXTURE_SAMPLES) {

@@ -1671,14 +1671,26 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     // queries
 
+    /// Inside a render pass whose [`RenderPassDescriptor::multiview_mask`] has `n` bits set, the
+    /// query uses the `n` slots starting at `index`. The results of these slots sum to the result
+    /// for all views.
+    ///
     /// # Safety:
     ///
     /// - If `set` is an occlusion query set, it must be the same one as used in the [`RenderPassDescriptor::occlusion_query_set`] parameter.
+    /// - All slots used by the query must be in bounds and must have been reset.
     unsafe fn begin_query(&mut self, set: &<Self::A as Api>::QuerySet, index: u32);
     /// # Safety:
     ///
     /// - If `set` is an occlusion query set, it must be the same one as used in the [`RenderPassDescriptor::occlusion_query_set`] parameter.
     unsafe fn end_query(&mut self, set: &<Self::A as Api>::QuerySet, index: u32);
+    /// Inside a render pass whose [`RenderPassDescriptor::multiview_mask`] has `n` bits set, this
+    /// writes the `n` slots starting at `index`. The first slot holds the timestamp, and the
+    /// others hold zero or timestamps.
+    ///
+    /// # Safety:
+    ///
+    /// - All slots written must be in bounds and must have been reset.
     unsafe fn write_timestamp(&mut self, set: &<Self::A as Api>::QuerySet, index: u32);
     unsafe fn reset_queries(&mut self, set: &<Self::A as Api>::QuerySet, range: Range<u32>);
     unsafe fn copy_query_results(

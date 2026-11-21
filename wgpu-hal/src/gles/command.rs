@@ -40,6 +40,8 @@ pub(super) struct State {
     current_immediates_data: [u32; super::MAX_IMMEDIATES],
     end_of_pass_timestamp: Option<glow::Query>,
     clip_distance_count: u32,
+    /// Number of views of the current multiview render pass, or 1.
+    multiview_view_count: u32,
 }
 
 impl Default for State {
@@ -69,6 +71,7 @@ impl Default for State {
             current_immediates_data: [0; super::MAX_IMMEDIATES],
             end_of_pass_timestamp: Default::default(),
             clip_distance_count: Default::default(),
+            multiview_view_count: 1,
         }
     }
 }
@@ -462,12 +465,22 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .commands
             .push(C::BeginQuery(query, set.target));
     }
-    unsafe fn end_query(&mut self, set: &super::QuerySet, _index: u32) {
+    unsafe fn end_query(&mut self, set: &super::QuerySet, index: u32) {
         self.cmd_buffer.commands.push(C::EndQuery(set.target));
+        // The query counts all views, so the other slots of a multiview query hold zero.
+        for extra in index + 1..index + self.state.multiview_view_count {
+            let query = set.queries[extra as usize];
+            self.cmd_buffer
+                .commands
+                .push(C::BeginQuery(query, set.target));
+            self.cmd_buffer.commands.push(C::EndQuery(set.target));
+        }
     }
     unsafe fn write_timestamp(&mut self, set: &super::QuerySet, index: u32) {
-        let query = set.queries[index as usize];
-        self.cmd_buffer.commands.push(C::TimestampQuery(query));
+        for slot in index..index + self.state.multiview_view_count {
+            let query = set.queries[slot as usize];
+            self.cmd_buffer.commands.push(C::TimestampQuery(query));
+        }
     }
     unsafe fn reset_queries(&mut self, _set: &super::QuerySet, _range: Range<u32>) {
         //TODO: what do we do here?
@@ -510,6 +523,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
 
         self.state.render_size = desc.extent;
+        self.state.multiview_view_count = desc.multiview_mask.map_or(1, |mv| mv.get().count_ones());
         self.state.resolve_attachments.clear();
         self.state.invalidate_attachments.clear();
         if let Some(label) = desc.label {
@@ -725,6 +739,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
         self.state.vertex_attributes.clear();
         self.state.primitive = super::PrimitiveState::default();
+        self.state.multiview_view_count = 1;
 
         if let Some(query) = self.state.end_of_pass_timestamp.take() {
             self.cmd_buffer.commands.push(C::TimestampQuery(query));

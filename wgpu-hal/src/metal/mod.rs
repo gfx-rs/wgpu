@@ -1412,6 +1412,9 @@ struct CommandState {
 
     /// Timer query that should be executed when the next pass starts.
     pending_timer_queries: Vec<(QuerySet, u32)>,
+
+    /// Number of views of the current multiview render pass, or 1.
+    multiview_view_count: u32,
 }
 
 // Any state in this struct that may be dirty after an abandoned encoding must

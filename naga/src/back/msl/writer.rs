@@ -7877,6 +7877,7 @@ template <typename A>
             }
 
             let mut local_invocation_index = None;
+            let mut view_index_remap = None;
 
             // Then pass the remaining arguments not included in the varyings
             // struct.
@@ -7914,13 +7915,24 @@ template <typename A>
                 };
 
                 let resolved = options.resolve_local_binding(binding, in_mode)?;
-                let mut binding = String::new();
-                resolved.try_fmt(&mut binding)?;
+                let mut binding_str = String::new();
+                resolved.try_fmt(&mut binding_str)?;
+
+                let mut arg_name = name.clone();
+                if let (&crate::Binding::BuiltIn(crate::BuiltIn::ViewIndex), Some(mask)) =
+                    (binding, pipeline_options.multiview_mask)
+                {
+                    let mask = mask.get();
+                    if mask.trailing_ones() != mask.count_ones() {
+                        arg_name = self.namer.call("amplification_id");
+                        view_index_remap = Some((name.clone(), arg_name.clone(), mask));
+                    }
+                }
 
                 args.push(EntryPointArgument {
                     ty_name: format!("{ty_name}"),
-                    name: name.clone(),
-                    binding,
+                    name: arg_name,
+                    binding: binding_str,
                     init: None,
                 });
             }
@@ -8270,6 +8282,10 @@ template <typename A>
 
             // end of the entry point argument list
             writeln!(self.out, ") {{")?;
+
+            if let Some((ref view_index, ref amplification_id, mask)) = view_index_remap {
+                self.write_view_index_remap(view_index, amplification_id, mask)?;
+            }
 
             // Starting the function body.
             if do_vertex_pulling {
@@ -8672,6 +8688,34 @@ template <typename A>
         }
 
         Ok(info)
+    }
+
+    /// Maps `amplification_id`, the index of the view among the views in `mask`, to the array
+    /// layer index that `@builtin(view_index)` holds.
+    fn write_view_index_remap(
+        &mut self,
+        view_index: &str,
+        amplification_id: &str,
+        mask: u32,
+    ) -> BackendResult {
+        let layers = (0..32)
+            .filter(|layer| mask & (1 << layer) != 0)
+            .map(|layer| format!("{layer}u"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let map = self.namer.call("view_index_map");
+        writeln!(
+            self.out,
+            "{}const uint {map}[{}] = {{{layers}}};",
+            back::Level(1),
+            mask.count_ones(),
+        )?;
+        writeln!(
+            self.out,
+            "{}const uint {view_index} = {map}[{amplification_id}];",
+            back::Level(1),
+        )?;
+        Ok(())
     }
 
     pub(super) fn write_barrier(

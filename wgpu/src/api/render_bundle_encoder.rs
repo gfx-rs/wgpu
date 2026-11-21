@@ -44,8 +44,10 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     /// Sample count this render bundle is capable of rendering to. This must match the pipelines and
     /// the render passes it is used in.
     pub sample_count: u32,
-    /// If this render bundle will rendering to multiple array layers in the attachments at the same time.
-    pub multiview: Option<NonZeroU32>,
+    /// The multiview mask of the render passes this render bundle will be executed in, or `None`
+    /// if it will not be used with multiview. This must match the render passes it is executed in
+    /// and the pipelines it uses exactly. See [`RenderPassDescriptor::multiview_mask`].
+    pub multiview_mask: Option<NonZeroU32>,
 }
 static_assertions::assert_impl_all!(RenderBundleEncoderDescriptor<'_>: Send, Sync);
 

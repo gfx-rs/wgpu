@@ -45,6 +45,7 @@ impl Default for super::CommandState {
             vertex_buffer_size_map: Default::default(),
             immediates: Vec::new(),
             pending_timer_queries: Vec::new(),
+            multiview_view_count: 1,
         }
     }
 }
@@ -155,6 +156,63 @@ impl Encoder<'_> {
 }
 
 impl super::CommandEncoder {
+    fn write_timestamp_slot(&mut self, set: &super::QuerySet, index: u32) {
+        let support = self.shared.private_caps.timestamp_query_support;
+        debug_assert!(
+            support.contains(TimestampQuerySupport::STAGE_BOUNDARIES),
+            "Timestamp queries are not supported"
+        );
+        let sample_buffer = set.counter_sample_buffer.as_ref().unwrap();
+        let with_barrier = true;
+
+        // Try to use an existing encoder for timestamp query if possible.
+        // This works only if it's supported for the active encoder.
+        if let (true, Some(encoder)) = (
+            support.contains(TimestampQuerySupport::ON_BLIT_ENCODER),
+            self.state.blit.as_ref(),
+        ) {
+            unsafe {
+                encoder.sampleCountersInBuffer_atSampleIndex_withBarrier(
+                    sample_buffer,
+                    index as _,
+                    with_barrier,
+                )
+            };
+        } else if let (true, Some(encoder)) = (
+            support.contains(TimestampQuerySupport::ON_RENDER_ENCODER),
+            self.state.render.as_ref(),
+        ) {
+            unsafe {
+                encoder.sampleCountersInBuffer_atSampleIndex_withBarrier(
+                    sample_buffer,
+                    index as _,
+                    with_barrier,
+                )
+            };
+        } else if let (true, Some(encoder)) = (
+            support.contains(TimestampQuerySupport::ON_COMPUTE_ENCODER),
+            self.state.compute.as_ref(),
+        ) {
+            unsafe {
+                encoder.sampleCountersInBuffer_atSampleIndex_withBarrier(
+                    sample_buffer,
+                    index as _,
+                    with_barrier,
+                )
+            };
+        } else {
+            // If we're here it means we either have no encoder open, or it's not supported to sample within them.
+            // If this happens with render/compute open, this is an invalid usage!
+            debug_assert!(self.state.render.is_none() && self.state.compute.is_none());
+
+            // But otherwise it means we'll put defer this to the next created encoder.
+            self.state.pending_timer_queries.push((set.clone(), index));
+
+            // Ensure we didn't already have a blit open.
+            self.leave_blit();
+        };
+    }
+
     pub fn raw_command_buffer(&self) -> Option<&ProtocolObject<dyn MTLCommandBuffer>> {
         self.raw_cmd_buf.as_deref()
     }
@@ -547,6 +605,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             encoder.endEncoding();
         }
         self.state.pending_timer_queries.clear();
+        self.state.multiview_view_count = 1;
         self.deferred_multi_draws.clear();
         self.deferred_multi_draw_resources.clear();
         let had_command_buffer = self.raw_cmd_buf.is_some();
@@ -813,73 +872,27 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn end_query(&mut self, set: &super::QuerySet, index: u32) {
         match set.ty {
             wgt::QueryType::Occlusion => {
-                self.state
-                    .render
-                    .as_ref()
-                    .unwrap()
-                    .setVisibilityResultMode_offset(
-                        MTLVisibilityResultMode::Disabled,
-                        index as usize * crate::QUERY_SIZE as usize,
-                    );
+                let encoder = self.state.render.as_ref().unwrap();
+                encoder.setVisibilityResultMode_offset(
+                    MTLVisibilityResultMode::Disabled,
+                    index as usize * crate::QUERY_SIZE as usize,
+                );
+                // The query counts all views, so the other slots of a multiview query hold zero.
+                for extra in index + 1..index + self.state.multiview_view_count {
+                    let offset = extra as usize * crate::QUERY_SIZE as usize;
+                    encoder
+                        .setVisibilityResultMode_offset(MTLVisibilityResultMode::Boolean, offset);
+                    encoder
+                        .setVisibilityResultMode_offset(MTLVisibilityResultMode::Disabled, offset);
+                }
             }
             _ => {}
         }
     }
     unsafe fn write_timestamp(&mut self, set: &super::QuerySet, index: u32) {
-        let support = self.shared.private_caps.timestamp_query_support;
-        debug_assert!(
-            support.contains(TimestampQuerySupport::STAGE_BOUNDARIES),
-            "Timestamp queries are not supported"
-        );
-        let sample_buffer = set.counter_sample_buffer.as_ref().unwrap();
-        let with_barrier = true;
-
-        // Try to use an existing encoder for timestamp query if possible.
-        // This works only if it's supported for the active encoder.
-        if let (true, Some(encoder)) = (
-            support.contains(TimestampQuerySupport::ON_BLIT_ENCODER),
-            self.state.blit.as_ref(),
-        ) {
-            unsafe {
-                encoder.sampleCountersInBuffer_atSampleIndex_withBarrier(
-                    sample_buffer,
-                    index as _,
-                    with_barrier,
-                )
-            };
-        } else if let (true, Some(encoder)) = (
-            support.contains(TimestampQuerySupport::ON_RENDER_ENCODER),
-            self.state.render.as_ref(),
-        ) {
-            unsafe {
-                encoder.sampleCountersInBuffer_atSampleIndex_withBarrier(
-                    sample_buffer,
-                    index as _,
-                    with_barrier,
-                )
-            };
-        } else if let (true, Some(encoder)) = (
-            support.contains(TimestampQuerySupport::ON_COMPUTE_ENCODER),
-            self.state.compute.as_ref(),
-        ) {
-            unsafe {
-                encoder.sampleCountersInBuffer_atSampleIndex_withBarrier(
-                    sample_buffer,
-                    index as _,
-                    with_barrier,
-                )
-            };
-        } else {
-            // If we're here it means we either have no encoder open, or it's not supported to sample within them.
-            // If this happens with render/compute open, this is an invalid usage!
-            debug_assert!(self.state.render.is_none() && self.state.compute.is_none());
-
-            // But otherwise it means we'll put defer this to the next created encoder.
-            self.state.pending_timer_queries.push((set.clone(), index));
-
-            // Ensure we didn't already have a blit open.
-            self.leave_blit();
-        };
+        for slot in index..index + self.state.multiview_view_count {
+            self.write_timestamp_slot(set, slot);
+        }
     }
 
     unsafe fn reset_queries(&mut self, _set: &super::QuerySet, _range: Range<u32>) {}
@@ -1112,6 +1125,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         maps.as_ptr(),
                     )
                 };
+                self.state.multiview_view_count = mv.count_ones();
             }
             if let Some(label) = desc.label {
                 encoder.setLabel(Some(&NSString::from_str(label)));
@@ -1124,6 +1138,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn end_render_pass(&mut self) {
         self.state.render.take().unwrap().endEncoding();
+        self.state.multiview_view_count = 1;
     }
 
     unsafe fn set_bind_group(
