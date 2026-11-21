@@ -178,6 +178,7 @@ pub struct InstanceShared {
     extensions: Vec<&'static CStr>,
     flags: wgt::InstanceFlags,
     memory_budget_thresholds: wgt::MemoryBudgetThresholds,
+    backend_options: wgt::VulkanBackendOptions,
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<khr::get_physical_device_properties2::Instance>,
     entry: ash::Entry,
@@ -203,6 +204,7 @@ impl fmt::Debug for InstanceShared {
             extensions,
             flags,
             memory_budget_thresholds,
+            backend_options,
             debug_utils: _,
             get_physical_device_properties: _,
             entry: _,
@@ -215,6 +217,7 @@ impl fmt::Debug for InstanceShared {
             .field("extensions", extensions)
             .field("flags", flags)
             .field("memory_budget_thresholds", memory_budget_thresholds)
+            .field("backend_options", backend_options)
             .field("has_nv_optimus", has_nv_optimus)
             .field("android_sdk_version", android_sdk_version)
             .field("instance_api_version", instance_api_version)
@@ -416,6 +419,9 @@ struct DeviceExtensionFunctions {
     mesh_shading: Option<ext::mesh_shader::Device>,
     #[cfg_attr(not(unix), allow(dead_code))]
     external_memory_fd: Option<khr::external_memory_fd::Device>,
+    /// `Some` on devices below Vulkan 1.1, where `vkTrimCommandPool` comes
+    /// from `VK_KHR_maintenance1` (which the adapter requires there).
+    maintenance1: Option<khr::maintenance1::Device>,
 }
 
 struct RayTracingDeviceExtensionFunctions {
@@ -663,6 +669,20 @@ struct DeviceShared {
     // The `drop_guard` field must be the last field of this struct so it is dropped last.
     // Do not add new fields after it.
     drop_guard: Option<crate::DropGuard>,
+}
+
+impl DeviceShared {
+    /// Return the memory of a command pool's unused command buffers to the
+    /// driver (`vkTrimCommandPool`, core in 1.1, `VK_KHR_maintenance1` before).
+    unsafe fn trim_command_pool(&self, pool: vk::CommandPool) {
+        match &self.extension_fns.maintenance1 {
+            Some(ext) => unsafe { ext.trim_command_pool(pool, vk::CommandPoolTrimFlags::empty()) },
+            None => unsafe {
+                self.raw
+                    .trim_command_pool(pool, vk::CommandPoolTrimFlags::empty())
+            },
+        }
+    }
 }
 
 impl Drop for DeviceShared {
@@ -1234,6 +1254,10 @@ pub struct CommandEncoder {
     ///
     /// These could be in any Vulkan state except "pending".
     discarded: Vec<vk::CommandBuffer>,
+
+    /// Fewest buffers left in `free` at any reset since the last trim.
+    min_unused: usize,
+    resets_since_trim: u32,
 
     /// If this is true, the active renderpass enabled a debug span,
     /// and needs to be disabled on renderpass close.
