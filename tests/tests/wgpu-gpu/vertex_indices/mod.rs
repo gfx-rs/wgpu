@@ -9,9 +9,7 @@ use itertools::Itertools;
 use strum::IntoEnumIterator;
 use wgpu::util::{BufferInitDescriptor, DeviceExt, RenderEncoder};
 use wgpu::RenderBundleDescriptor;
-use wgpu_test::{
-    apply, gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext,
-};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
     vec.push(VERTEX_INDICES);
@@ -476,8 +474,6 @@ static VERTEX_INDICES: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .test_features_limits()
             .features(wgpu::Features::VERTEX_WRITABLE_STORAGE)
-            .features(wgpu::Features::INDIRECT_FIRST_INSTANCE)
-            // https://github.com/gfx-rs/wgpu/issues/9187
-            .expect_fail(FailureCase::kosmic_krisp().panic("assertion failed: !failed")),
+            .features(wgpu::Features::INDIRECT_FIRST_INSTANCE),
     )
     .run_async(vertex_index_common);
