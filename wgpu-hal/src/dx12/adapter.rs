@@ -555,6 +555,7 @@ impl super::Adapter {
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO
             | wgt::Features::CLEAR_TEXTURE
+            | wgt::Features::CLIP_DISTANCES
             | wgt::Features::DEPTH32FLOAT_STENCIL8
             | wgt::Features::DEPTH_CLIP_CONTROL
             | wgt::Features::DUAL_SOURCE_BLENDING

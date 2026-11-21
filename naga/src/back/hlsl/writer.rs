@@ -4,8 +4,9 @@ use alloc::{
     vec::Vec,
 };
 use core::{
-    fmt::{self, Write as _},
+    fmt::{self, Write},
     mem,
+    ops::Range,
 };
 
 use super::{
@@ -65,6 +66,75 @@ pub(super) struct EpStructMember {
     // (we `debug_assert!` this in `write_interface_struct`)
     pub(super) binding: Option<crate::Binding>,
     pub(super) index: u32,
+    /// For a `@builtin(clip_distances)` array with more than four elements, the
+    /// name of the vector that holds elements 4 and up. Set by
+    /// `write_interface_struct`.
+    pub(super) clip_distances_high_name: Option<String>,
+}
+
+impl EpStructMember {
+    /// If this is a `@builtin(clip_distances)` member, returns the vectors that
+    /// hold it in the interface struct: each vector's name and the range of
+    /// array elements it holds.
+    ///
+    /// DXC cannot pack a `float` array with more than two elements into the
+    /// `SV_ClipDistance` signature rows, so the array is split into a `float4`
+    /// in `SV_ClipDistance0` and the remainder in `SV_ClipDistance1`.
+    pub(super) fn clip_distances_vectors(
+        &self,
+        module: &Module,
+    ) -> Option<Vec<(&str, Range<u32>)>> {
+        let size = self.clip_distances_size(module)?;
+        let mut vectors = Vec::from([(self.name.as_str(), 0..size.min(4))]);
+        if size > 4 {
+            let high_name = self
+                .clip_distances_high_name
+                .as_deref()
+                .expect("`write_interface_struct` names the high clip distances vector");
+            vectors.push((high_name, 4..size));
+        }
+        Some(vectors)
+    }
+
+    fn clip_distances_size(&self, module: &Module) -> Option<u32> {
+        let Some(crate::Binding::BuiltIn(crate::BuiltIn::ClipDistances)) = self.binding else {
+            return None;
+        };
+        let TypeInner::Array {
+            size: crate::ArraySize::Constant(size),
+            ..
+        } = module.types[self.ty].inner
+        else {
+            unreachable!("`clip_distances` must be a fixed-size array");
+        };
+        Some(size.get())
+    }
+}
+
+/// Writes a `float{N}` that holds the elements `range` of the `array` expression.
+pub(super) fn write_clip_distances_vector(
+    out: &mut impl Write,
+    array: &str,
+    range: Range<u32>,
+) -> fmt::Result {
+    write!(out, "{}(", clip_distances_vector_type(range.len()))?;
+    for (i, element) in range.enumerate() {
+        if i != 0 {
+            write!(out, ", ")?;
+        }
+        write!(out, "{array}[{element}]")?;
+    }
+    write!(out, ")")
+}
+
+const fn clip_distances_vector_type(len: usize) -> &'static str {
+    match len {
+        1 => "float",
+        2 => "float2",
+        3 => "float3",
+        4 => "float4",
+        _ => unreachable!(),
+    }
 }
 
 /// Structure contains information required for generating
@@ -160,7 +230,7 @@ struct BindingArraySamplerInfo {
     binding_array_base_index_name: String,
 }
 
-impl<'a, W: fmt::Write> super::Writer<'a, W> {
+impl<'a, W: Write> super::Writer<'a, W> {
     pub fn new(out: W, options: &'a Options, pipeline_options: &'a PipelineOptions) -> Self {
         Self {
             out,
@@ -747,7 +817,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         writeln!(self.out, " {{")?;
         let mut local_invocation_index_name = None;
         let mut subgroup_id_used = false;
-        for m in members.iter() {
+        for m in members.iter_mut() {
             // Sanity check that each IO member is a built-in or is assigned a
             // location. Also see note about nesting in `write_ep_input_struct`.
             debug_assert!(m.binding.is_some());
@@ -763,6 +833,25 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
 
             if is_subgroup_builtin_binding(&m.binding) {
+                continue;
+            }
+            if let Some(size) = m.clip_distances_size(module) {
+                if size > 4 {
+                    m.clip_distances_high_name = Some(self.namer.call(&m.name));
+                }
+                for (row, (name, range)) in m
+                    .clip_distances_vectors(module)
+                    .unwrap()
+                    .into_iter()
+                    .enumerate()
+                {
+                    let ty = clip_distances_vector_type(range.len());
+                    writeln!(
+                        self.out,
+                        "{}{ty} {name} : SV_ClipDistance{row};",
+                        back::INDENT
+                    )?;
+                }
                 continue;
             }
             write!(self.out, "{}", back::INDENT)?;
@@ -831,6 +920,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             ty: member.ty,
                             binding: member.binding.clone(),
                             index,
+                            clip_distances_high_name: None,
                         });
                     }
                 }
@@ -842,6 +932,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         ty: arg.ty,
                         binding: arg.binding.clone(),
                         index,
+                        clip_distances_high_name: None,
                     });
                 }
             }
@@ -925,6 +1016,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 ty: member.ty,
                 binding: member.binding.clone(),
                 index: index as u32,
+                clip_distances_high_name: None,
             });
         }
 
@@ -2511,7 +2603,17 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     write!(self.out, ", ")?;
                                 }
                                 let member_name = &self.names[&NameKey::StructMember(ty, m.index)];
-                                write!(self.out, "{variable_name}.{member_name}")?;
+                                let member = format!("{variable_name}.{member_name}");
+                                if let Some(vectors) = m.clip_distances_vectors(module) {
+                                    for (i, (_, range)) in vectors.into_iter().enumerate() {
+                                        if i != 0 {
+                                            write!(self.out, ", ")?;
+                                        }
+                                        write_clip_distances_vector(&mut self.out, &member, range)?;
+                                    }
+                                } else {
+                                    write!(self.out, "{member}")?;
+                                }
                             }
                             writeln!(self.out, " }};")?;
                             final_name
@@ -5317,7 +5419,7 @@ fn returns_nothing(module: &Module, func_ctx: &back::FunctionCtx<'_>) -> bool {
 /// shared by entry points with different settings cannot use a conservative semantic.
 fn shared_early_depth_test(
     module: &Module,
-    entry_points: core::ops::Range<usize>,
+    entry_points: Range<usize>,
     ty: Handle<crate::Type>,
 ) -> Option<crate::EarlyDepthTest> {
     let mut users = entry_points

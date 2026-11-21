@@ -3,6 +3,11 @@ struct VertexOutput {
     vec4 position;
     float clip_distances[1];
 };
+struct VertexOutputSplit {
+    vec4 color;
+    float clip_distances[6];
+    vec4 position;
+};
 out float gl_ClipDistance[1];
 
 void main() {

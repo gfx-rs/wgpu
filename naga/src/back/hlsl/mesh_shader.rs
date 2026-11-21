@@ -10,7 +10,10 @@ use crate::{
     back::{
         self,
         hlsl::{
-            writer::{EntryPointBinding, EpStructMember, Io, NestedEntryPointArgs},
+            writer::{
+                write_clip_distances_vector, EntryPointBinding, EpStructMember, Io,
+                NestedEntryPointArgs,
+            },
             BackendResult, Error,
         },
     },
@@ -199,6 +202,18 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 for member in &io_interface.members {
                     let out_member_name = &member.name;
                     let in_member_name = &self.names[&NameKey::StructMember(ty, member.index)];
+                    if let Some(vectors) = member.clip_distances_vectors(module) {
+                        let in_member = format!("{item_name}.{in_member_name}");
+                        for (out_member_name, range) in vectors {
+                            write!(
+                                self.out,
+                                "{level}{out_var_name}[{index_name}].{out_member_name} = "
+                            )?;
+                            write_clip_distances_vector(&mut self.out, &in_member, range)?;
+                            writeln!(self.out, ";")?;
+                        }
+                        continue;
+                    }
                     writeln!(self.out, "{level}{out_var_name}[{index_name}].{out_member_name} = {item_name}.{in_member_name};",)?;
                 }
                 if is_primitive {
@@ -418,6 +433,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 ty: member.ty,
                 binding: member.binding.clone(),
                 index: index as u32,
+                clip_distances_high_name: None,
             })
         }
         self.write_interface_struct(

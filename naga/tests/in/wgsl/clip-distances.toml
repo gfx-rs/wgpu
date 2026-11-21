@@ -1,5 +1,5 @@
 capabilities = "CLIP_DISTANCES"
-targets = "SPIRV | GLSL | WGSL | METAL"
+targets = "SPIRV | GLSL | WGSL | METAL | HLSL"
 
 [glsl]
 version.Desktop = 330
