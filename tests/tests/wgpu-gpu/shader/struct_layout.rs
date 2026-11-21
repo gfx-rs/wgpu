@@ -3,7 +3,9 @@ use std::fmt::Write;
 use wgpu::{Backends, DownlevelFlags, Features, Limits};
 
 use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest, MAX_BUFFER_SIZE};
-use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{
+    apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -20,6 +22,22 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
+/// MoltenVK 1.4.2 drops the trailing padding of array elements.
+///
+/// Fixed upstream by <https://github.com/KhronosGroup/SPIRV-Cross/pull/2678>.
+fn molten_vk_vec3_padding() -> FailureCase {
+    FailureCase {
+        driver_info: Some("1.4.2"),
+        ..FailureCase::molten_vk()
+    }
+    .panic(concat!(
+        "failed tests: ",
+        "Alignment of 24 byte struct with a vec3<f32>, ",
+        "Alignment of 24 byte struct with a vec3<u32>, ",
+        "Alignment of 24 byte struct with a vec3<i32>\n",
+    ))
+}
+
 // Note that some specific subtests are marked as failing on GL due to
 // https://github.com/gfx-rs/wgpu/issues/4371.
 #[apply(gpu_test!)]
@@ -27,7 +45,8 @@ static UNIFORM_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
-            .limits(Limits::downlevel_defaults()),
+            .limits(Limits::downlevel_defaults())
+            .expect_fail(molten_vk_vec3_padding()),
     )
     .run_async(|ctx| {
         shader_input_output_test(
@@ -42,7 +61,8 @@ static STORAGE_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
-            .limits(Limits::downlevel_defaults()),
+            .limits(Limits::downlevel_defaults())
+            .expect_fail(molten_vk_vec3_padding()),
     )
     .run_async(|ctx| {
         shader_input_output_test(

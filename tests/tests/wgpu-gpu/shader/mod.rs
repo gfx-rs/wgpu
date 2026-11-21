@@ -288,7 +288,7 @@ async fn shader_input_output_test(
             },
         });
 
-    let mut fail = false;
+    let mut failed_tests = Vec::new();
     for test in tests {
         assert!(test.input_values.len() <= MAX_BUFFER_SIZE as usize / 4);
         assert!(test.output_values.len() <= MAX_BUFFER_SIZE as usize / 4);
@@ -391,14 +391,19 @@ async fn shader_input_output_test(
                 .failures
                 .contains(ctx.adapter.get_info().backend.into())
         {
-            fail |= true;
             if !failure {
                 eprintln!("Unexpected test success. Test {test_name}");
             }
+            failed_tests.push(test_name);
         }
 
         drop(mapped);
         mapping_buffer.unmap();
     }
-    assert!(!fail);
+    // The newline ends the list, so expectations do not match a longer list.
+    assert!(
+        failed_tests.is_empty(),
+        "failed tests: {}\n",
+        failed_tests.join(", ")
+    );
 }
