@@ -109,6 +109,7 @@ const TEXTURE_DESCRIPTOR: wgpu::TextureDescriptor = wgpu::TextureDescriptor {
     usage: wgpu::TextureUsages::COPY_DST.union(wgpu::TextureUsages::COPY_SRC),
     view_formats: &[],
     texture_binding_view_dimension: None,
+    mapped_at_creation: false,
 };
 
 const BYTES_PER_PIXEL: u32 = 4;

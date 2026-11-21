@@ -309,6 +309,7 @@ impl TextureSpec {
                 | extra_usages,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         })
     }
 }
@@ -1584,6 +1585,7 @@ static WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH24PLUS_STENCIL8: GpuTestCo
                     | TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
                 texture_binding_view_dimension: None,
+                mapped_at_creation: false,
             });
 
             let stencil_bytes_per_row = size.width;
@@ -1861,6 +1863,7 @@ async fn check_write_aspect_leaves_other_uninit(
         usage: TextureUsages::COPY_DST | TextureUsages::COPY_SRC,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
 
     let write_bytes_per_row = write.size.width * write.bpp;
@@ -2134,6 +2137,7 @@ static ZERO_INIT_MULTIPLANAR_TEXTURE: GpuTestConfiguration = GpuTestConfiguratio
             usage: wgt::TextureUsages::COPY_SRC,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
         let buffer = ctx.device.create_buffer(&wgt::BufferDescriptor {
             label: None,
@@ -2211,6 +2215,7 @@ async fn check_multiplanar_render_attachment_zero_init(
         usage: TextureUsages::COPY_SRC | TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
 
     let readback_buffers = ReadbackBuffers::new(&ctx.device, &texture);
@@ -2300,6 +2305,7 @@ fn create_3d_texture(ctx: &TestingContext, label: &str, depth: u32) -> Texture {
         usage: TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     })
 }
 
@@ -2676,6 +2682,7 @@ async fn check_vertex_buffer_tail_init(
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let output_view = output_texture.create_view(&Default::default());
 
@@ -2918,6 +2925,7 @@ async fn test_copy_texture_to_buffer_padding_init(
         usage: TextureUsages::COPY_SRC,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
 
     let readback = ctx.device.create_buffer(&BufferDescriptor {
@@ -3017,6 +3025,7 @@ static MARK_UNINITIALIZED_ZEROES_TEXTURE: GpuTestConfiguration = GpuTestConfigur
             usage: TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         for mip_level in 0..2 {
@@ -3122,6 +3131,7 @@ async fn check_mark_externally_initialized_case<A: hal::Api>(ctx: &TestingContex
         usage: TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
 
     // Write a non-zero pattern into the texture through its raw hal handle, entirely
@@ -3465,6 +3475,7 @@ async fn check_zero_size_binding(ctx: &TestingContext, case: ZeroBindingCase) {
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let output_view = output_texture.create_view(&Default::default());
 
@@ -3696,6 +3707,7 @@ async fn check_zero_size_index_binding_not_at_end(ctx: &TestingContext) {
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let output_view = output_texture.create_view(&Default::default());
 

@@ -139,6 +139,7 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
         usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());

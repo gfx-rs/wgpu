@@ -245,6 +245,7 @@ async fn single_texture_clear_test(
         usage: wgpu::TextureUsages::COPY_SRC | extra_usages,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let mut encoder = ctx
         .device

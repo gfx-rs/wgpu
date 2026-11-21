@@ -638,6 +638,8 @@ pub struct TextureDescriptor<L, V> {
     /// explicitly, or pass `None` to have it inferred from the texture's dimension and layer count.
     /// Otherwise it is ignored.
     pub texture_binding_view_dimension: Option<TextureViewDimension>,
+    /// Whether the texture will start in a mapped state. If true, it must be explicitly unmapped before it can be used on the GPU.
+    pub mapped_at_creation: bool,
 }
 
 impl<L, V> TextureDescriptor<L, V> {
@@ -657,6 +659,7 @@ impl<L, V> TextureDescriptor<L, V> {
             usage: self.usage,
             view_formats: self.view_formats.clone(),
             texture_binding_view_dimension: self.texture_binding_view_dimension,
+            mapped_at_creation: self.mapped_at_creation,
         }
     }
 
@@ -677,6 +680,7 @@ impl<L, V> TextureDescriptor<L, V> {
             usage: self.usage,
             view_formats: v_fun(&self.view_formats),
             texture_binding_view_dimension: self.texture_binding_view_dimension,
+            mapped_at_creation: self.mapped_at_creation,
         }
     }
 
@@ -700,6 +704,7 @@ impl<L, V> TextureDescriptor<L, V> {
     ///   usage: wgpu::TextureUsages::empty(),
     ///   view_formats: &[],
     ///   texture_binding_view_dimension: None,
+    ///   mapped_at_creation: false,
     /// };
     ///
     /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));

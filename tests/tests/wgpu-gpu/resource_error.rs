@@ -56,6 +56,7 @@ static BAD_TEXTURE_CREATE_VIEW: GpuTestConfiguration = GpuTestConfiguration::new
                     usage: wgpu::TextureUsages::all(),
                     view_formats: &[],
                     texture_binding_view_dimension: None,
+                    mapped_at_creation: false,
                 })
             },
             Some("dimension x is zero"),
@@ -93,6 +94,7 @@ static BAD_TEXTURE_WRITE: GpuTestConfiguration = GpuTestConfiguration::new()
                     usage: wgpu::TextureUsages::COPY_DST,
                     view_formats: &[],
                     texture_binding_view_dimension: None,
+                    mapped_at_creation: false,
                 })
             },
             Some("mip level count"),

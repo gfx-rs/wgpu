@@ -30,6 +30,7 @@ static TEXTURE_BLIT_WITH_LINEAR_FILTER_TEST: GpuTestConfiguration = GpuTestConfi
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         let target = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -46,6 +47,7 @@ static TEXTURE_BLIT_WITH_LINEAR_FILTER_TEST: GpuTestConfiguration = GpuTestConfi
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         let blitter = wgpu::util::TextureBlitterBuilder::new(
@@ -84,6 +86,7 @@ static TEXTURE_BLIT_WITH_NEAREST_FILTER_TEST: GpuTestConfiguration = GpuTestConf
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         let target = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -100,6 +103,7 @@ static TEXTURE_BLIT_WITH_NEAREST_FILTER_TEST: GpuTestConfiguration = GpuTestConf
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         let blitter = wgpu::util::TextureBlitterBuilder::new(
@@ -138,6 +142,7 @@ async fn downsample_red_channel(ctx: &TestingContext, filter: wgpu::FilterMode) 
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
 
     let column = [[0, 0, 0, 255], [255, 255, 255, 255]];
@@ -167,6 +172,7 @@ async fn downsample_red_channel(ctx: &TestingContext, filter: wgpu::FilterMode) 
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
 
     let blitter =

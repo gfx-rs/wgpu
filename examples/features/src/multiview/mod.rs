@@ -76,6 +76,7 @@ impl crate::framework::Example for Example {
             view_formats: &[],
             // Not usable on GLES/WebGL: the blitter binds single-layer `D2` views of this array texture.
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
         let entire_texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
             label: None,

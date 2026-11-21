@@ -37,6 +37,7 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
             sample_count: 1,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
         let data = vec![1u8; width as usize * 2];
         // Write the first two rows
@@ -137,6 +138,7 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
             sample_count: 1,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
         let data = vec![1u8; (width * height) as usize * 2];
         // Write the first two slices
@@ -234,6 +236,7 @@ static WRITE_TEXTURE_NO_OOB: GpuTestConfiguration = GpuTestConfiguration::new()
             sample_count: 1,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
         let data = vec![1u8; width as usize * 2 + 100]; // check that we don't attempt to copy OOB internally by adding 100 bytes here
         ctx.queue.write_texture(
@@ -282,6 +285,7 @@ static WRITE_TEXTURE_VIA_STAGING_BUFFER: GpuTestConfiguration = GpuTestConfigura
             sample_count: 1,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         let write_width: u32 = 31;

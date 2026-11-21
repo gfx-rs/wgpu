@@ -39,6 +39,7 @@ async fn scissor_test_impl(
         usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 

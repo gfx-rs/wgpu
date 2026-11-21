@@ -80,6 +80,7 @@ async fn dont_care(ctx: TestingContext) {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
 
     let readbacks = ReadbackBuffers::new(&ctx.device, &out_texture);
@@ -138,6 +139,7 @@ static DONT_CARE_COLOR_STRICT_WEBGPU_COMPLIANCE: GpuTestConfiguration = GpuTestC
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
         let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = ctx
@@ -184,6 +186,7 @@ static DONT_CARE_DEPTH_STRICT_WEBGPU_COMPLIANCE: GpuTestConfiguration = GpuTestC
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
         let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = ctx
@@ -230,6 +233,7 @@ static DONT_CARE_STENCIL_STRICT_WEBGPU_COMPLIANCE: GpuTestConfiguration =
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
                 texture_binding_view_dimension: None,
+                mapped_at_creation: false,
             });
             let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
             let mut encoder = ctx

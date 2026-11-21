@@ -40,6 +40,7 @@ fn create_depth(
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let depth_view = depth_texture.create_view(&Default::default());
     let state = wgpu::DepthStencilState {
@@ -309,6 +310,7 @@ async fn mesh_multi_draw_indirect_color_readback(ctx: TestingContext) {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     let readback = ReadbackBuffers::new(device, &texture);

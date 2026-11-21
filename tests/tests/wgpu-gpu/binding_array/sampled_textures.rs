@@ -120,6 +120,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         ctx.queue.write_texture(
@@ -159,6 +160,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
         usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
 
     let output_view = output_texture.create_view(&TextureViewDescriptor::default());
@@ -344,6 +346,7 @@ async fn partial_binding_array_followed_by_storage_buffer(ctx: TestingContext) {
         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let input_view = input_texture.create_view(&TextureViewDescriptor::default());
 
@@ -372,6 +375,7 @@ async fn partial_binding_array_followed_by_storage_buffer(ctx: TestingContext) {
         usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let output_view = output_texture.create_view(&TextureViewDescriptor::default());
 

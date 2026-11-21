@@ -24,6 +24,7 @@ fn create_external_texture() {
         usage: TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     };
 
     let r_texture = device.create_texture(&TextureDescriptor {
@@ -373,6 +374,7 @@ fn external_texture_binding() {
         usage: TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     };
     let external_texture_descriptor = ExternalTextureDescriptor {
         label: None,
@@ -437,6 +439,7 @@ fn external_texture_binding_texture_view() {
         usage: TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     };
 
     let texture = device.create_texture(&texture_descriptor);
@@ -588,6 +591,7 @@ fn destroyed_external_texture_plane() {
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let target_view = target_texture.create_view(&TextureViewDescriptor::default());
 
@@ -605,6 +609,7 @@ fn destroyed_external_texture_plane() {
         usage: TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let plane_view = plane_texture.create_view(&TextureViewDescriptor::default());
 
