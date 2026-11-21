@@ -22,6 +22,7 @@ pub mod module_label;
 pub mod numeric_builtins;
 pub mod shared_module_overrides;
 pub mod struct_layout;
+pub mod struct_matrix_members;
 pub mod unrestricted_pointer_parameters;
 pub mod workgroup_size_overrides;
 pub mod zero_init_workgroup_mem;
@@ -34,6 +35,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     numeric_builtins::all_tests(tests);
     shared_module_overrides::all_tests(tests);
     struct_layout::all_tests(tests);
+    struct_matrix_members::all_tests(tests);
     unrestricted_pointer_parameters::all_tests(tests);
     workgroup_size_overrides::all_tests(tests);
     zero_init_workgroup_mem::all_tests(tests);
