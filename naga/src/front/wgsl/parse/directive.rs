@@ -2,9 +2,11 @@
 //!
 //! See also <https://www.w3.org/TR/WGSL/#directives>.
 
-pub mod enable_extension;
 pub(crate) use naga_types::wgsl::language_extension;
 
+use crate::common::wgsl::EnableExtensions;
+use crate::front::wgsl::{Error, Result};
+use crate::Span;
 use alloc::boxed::Box;
 
 /// A parsed sentinel word indicating the type of directive to be parsed next.
@@ -13,7 +15,7 @@ use alloc::boxed::Box;
 pub(crate) enum DirectiveKind {
     /// A [`crate::diagnostic_filter`].
     Diagnostic,
-    /// An [`enable_extension`].
+    /// An [`EnableExtensions`] list.
     Enable,
     /// A [`language_extension`].
     Requires,
@@ -35,13 +37,30 @@ impl DirectiveKind {
     }
 }
 
+/// Enable-extensions that Naga recognizes but does not implement, with their tracking issues.
+pub(crate) const UNIMPLEMENTED_ENABLE_EXTENSIONS: &[(&str, u16)] = &[("subgroups", 5555)];
+
+impl EnableExtensions {
+    /// Errors unless `exts` is empty or at least one extension in it is enabled in `self`.
+    pub(crate) fn require(self, exts: Self, span: Span) -> Result<'static, ()> {
+        if exts.is_empty() || self.intersects(exts) {
+            Ok(())
+        } else {
+            Err(Box::new(Error::EnableExtensionNotEnabled {
+                span,
+                kind: exts,
+            }))
+        }
+    }
+}
+
 impl crate::diagnostic_filter::Severity {
     #[cfg(feature = "wgsl-in")]
     pub(crate) fn report_wgsl_parse_diag<'a>(
         self,
-        err: Box<crate::front::wgsl::error::Error<'a>>,
+        err: Box<Error<'a>>,
         source: &str,
-    ) -> crate::front::wgsl::Result<'a, ()> {
+    ) -> Result<'a, ()> {
         self.report_diag(err, |e, level| {
             let e = e.as_parse_error(source);
             log::log!(level, "{}", e.emit_to_string(source));

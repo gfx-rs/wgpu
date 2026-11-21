@@ -1,6 +1,4 @@
-use crate::front::wgsl::parse::directive::enable_extension::{
-    EnableExtensions, ImplementedEnableExtension,
-};
+use crate::common::wgsl::EnableExtensions;
 use crate::front::wgsl::{Error, Result, Scalar};
 use crate::{ImageClass, ImageDimension, Span, TypeInner, VectorSize};
 
@@ -21,28 +19,16 @@ pub fn map_address_space<'a>(
         "immediate" => Ok(crate::AddressSpace::Immediate),
         "function" => Ok(crate::AddressSpace::Function),
         "task_payload" => {
-            enable_extensions.require(ImplementedEnableExtension::WgpuMeshShader, span)?;
+            enable_extensions.require(EnableExtensions::WGPU_MESH_SHADER, span)?;
             Ok(crate::AddressSpace::TaskPayload)
         }
         "ray_payload" => {
-            if enable_extensions.contains(ImplementedEnableExtension::WgpuRayTracingPipeline) {
-                Ok(crate::AddressSpace::RayPayload)
-            } else {
-                Err(Box::new(Error::EnableExtensionNotEnabled {
-                    span,
-                    kind: ImplementedEnableExtension::WgpuRayTracingPipeline.into(),
-                }))
-            }
+            enable_extensions.require(EnableExtensions::WGPU_RAY_TRACING_PIPELINE, span)?;
+            Ok(crate::AddressSpace::RayPayload)
         }
         "incoming_ray_payload" => {
-            if enable_extensions.contains(ImplementedEnableExtension::WgpuRayTracingPipeline) {
-                Ok(crate::AddressSpace::IncomingRayPayload)
-            } else {
-                Err(Box::new(Error::EnableExtensionNotEnabled {
-                    span,
-                    kind: ImplementedEnableExtension::WgpuRayTracingPipeline.into(),
-                }))
-            }
+            enable_extensions.require(EnableExtensions::WGPU_RAY_TRACING_PIPELINE, span)?;
+            Ok(crate::AddressSpace::IncomingRayPayload)
         }
         _ => Err(Box::new(Error::UnknownAddressSpace(span))),
     }
@@ -67,12 +53,7 @@ pub fn map_ray_flag(
 ) -> Result<'static, ()> {
     match word {
         "vertex_return" => {
-            if !enable_extensions.contains(ImplementedEnableExtension::WgpuRayQueryVertexReturn) {
-                return Err(Box::new(Error::EnableExtensionNotEnabled {
-                    span,
-                    kind: ImplementedEnableExtension::WgpuRayQueryVertexReturn.into(),
-                }));
-            }
+            enable_extensions.require(EnableExtensions::WGPU_RAY_QUERY_VERTEX_RETURN, span)?;
             Ok(())
         }
         _ => Err(Box::new(Error::UnknownRayFlag(span))),
@@ -150,13 +131,13 @@ pub fn map_built_in(
     };
     match built_in {
         crate::BuiltIn::ClipDistances => {
-            enable_extensions.require(ImplementedEnableExtension::ClipDistances, span)?
+            enable_extensions.require(EnableExtensions::CLIP_DISTANCES, span)?
         }
         crate::BuiltIn::PrimitiveIndex => {
-            enable_extensions.require(ImplementedEnableExtension::PrimitiveIndex, span)?
+            enable_extensions.require(EnableExtensions::PRIMITIVE_INDEX, span)?
         }
         crate::BuiltIn::DrawIndex => {
-            enable_extensions.require(ImplementedEnableExtension::DrawIndex, span)?
+            enable_extensions.require(EnableExtensions::DRAW_INDEX, span)?
         }
         crate::BuiltIn::CullPrimitive
         | crate::BuiltIn::PointIndex
@@ -166,7 +147,7 @@ pub fn map_built_in(
         | crate::BuiltIn::Vertices
         | crate::BuiltIn::PrimitiveCount
         | crate::BuiltIn::Primitives => {
-            enable_extensions.require(ImplementedEnableExtension::WgpuMeshShader, span)?
+            enable_extensions.require(EnableExtensions::WGPU_MESH_SHADER, span)?
         }
         _ => {}
     }
@@ -183,7 +164,7 @@ pub fn map_interpolation(
         "flat" => Ok(crate::Interpolation::Flat),
         "perspective" => Ok(crate::Interpolation::Perspective),
         "per_vertex" => {
-            enable_extensions.require(ImplementedEnableExtension::WgpuPerVertex, span)?;
+            enable_extensions.require(EnableExtensions::WGPU_PER_VERTEX, span)?;
             Ok(crate::Interpolation::PerVertex)
         }
         _ => Err(Box::new(Error::UnknownAttribute(span))),
@@ -573,50 +554,30 @@ pub fn map_predeclared_type(
         _ => return Ok(None),
     };
 
-    // Check for the enable extension required to use this type, if any.
-    // Slice should be at least len one otherwise extension_needed should be None.
-    let extensions_needed: Option<&[_]> = match ty {
-        PredeclaredType::TypeInner(ref ty) if ty.scalar() == Some(Sc::F16) => {
-            Some(&[ImplementedEnableExtension::F16])
-        }
-        PredeclaredType::TypeInner(ref ty) if ty.scalar() == Some(Sc::F64) => {
-            Some(&[ImplementedEnableExtension::WgpuF64])
-        }
-        PredeclaredType::TypeInner(ref ty) if matches!(ty.scalar(), Some(s) if s == Sc::I16 || s == Sc::U16) => {
-            Some(&[ImplementedEnableExtension::WgpuInt16])
-        }
+    type E = EnableExtensions;
+    let needed = match ty {
+        PredeclaredType::TypeInner(ref ty) => match ty.scalar() {
+            Some(Sc::F16) => E::F16,
+            Some(Sc::F64) => E::WGPU_F64,
+            Some(Sc::I16 | Sc::U16) => E::WGPU_INT16,
+            _ => E::empty(),
+        },
         PredeclaredType::RayDesc
         | PredeclaredType::RayIntersection
         | PredeclaredType::TypeGenerator(TypeGenerator::AccelerationStructure)
-        | PredeclaredType::TypeGenerator(TypeGenerator::RayQuery) => Some(&[
-            ImplementedEnableExtension::WgpuRayQuery,
-            ImplementedEnableExtension::WgpuRayTracingPipeline,
-        ]),
+        | PredeclaredType::TypeGenerator(TypeGenerator::RayQuery) => {
+            E::WGPU_RAY_QUERY | E::WGPU_RAY_TRACING_PIPELINE
+        }
         PredeclaredType::TypeGenerator(TypeGenerator::HitObject) => {
-            Some(&[ImplementedEnableExtension::WgpuRayTracingInvocationReorder])
+            E::WGPU_RAY_TRACING_INVOCATION_REORDER
         }
         PredeclaredType::TypeGenerator(TypeGenerator::CooperativeMatrix { .. }) => {
-            Some(&[ImplementedEnableExtension::WgpuCooperativeMatrix])
+            E::WGPU_COOPERATIVE_MATRIX
         }
-        PredeclaredType::TypeGenerator(TypeGenerator::BindingArray) => {
-            Some(&[ImplementedEnableExtension::WgpuBindingArray])
-        }
-        _ => None,
+        PredeclaredType::TypeGenerator(TypeGenerator::BindingArray) => E::WGPU_BINDING_ARRAY,
+        PredeclaredType::TypeGenerator(_) => E::empty(),
     };
-    if let Some(extensions_needed) = extensions_needed {
-        let mut any_extension_enabled = false;
-        for extension_needed in extensions_needed {
-            if enable_extensions.contains(*extension_needed) {
-                any_extension_enabled = true;
-            }
-        }
-        if !any_extension_enabled {
-            return Err(Box::new(Error::EnableExtensionNotEnabled {
-                span,
-                kind: extensions_needed[0].into(),
-            }));
-        }
-    }
+    enable_extensions.require(needed, span)?;
 
     Ok(Some(ty))
 }

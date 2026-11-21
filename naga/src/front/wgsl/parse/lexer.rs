@@ -1,8 +1,6 @@
 use super::{number::consume_number, Error, ExpectedToken, Result};
+use crate::common::wgsl::EnableExtensions;
 use crate::front::wgsl::error::NumberError;
-use crate::front::wgsl::parse::directive::enable_extension::{
-    EnableExtensions, ImplementedEnableExtension,
-};
 use crate::front::wgsl::parse::Number;
 use crate::Span;
 
@@ -538,7 +536,7 @@ impl<'a> Lexer<'a> {
     /// Check that `extension` is enabled in `self`.
     pub(in crate::front::wgsl) fn require_enable_extension(
         &self,
-        extension: ImplementedEnableExtension,
+        extension: EnableExtensions,
         span: Span,
     ) -> Result<'static, ()> {
         self.enable_extensions.require(extension, span)

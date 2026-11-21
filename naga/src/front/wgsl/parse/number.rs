@@ -1,7 +1,7 @@
 use alloc::format;
 
+use crate::common::wgsl::EnableExtensions;
 use crate::front::wgsl::error::NumberError;
-use crate::front::wgsl::parse::directive::enable_extension::ImplementedEnableExtension;
 use crate::front::wgsl::parse::lexer::Token;
 use half::f16;
 
@@ -29,10 +29,10 @@ pub enum Number {
 }
 
 impl Number {
-    pub(super) const fn requires_enable_extension(&self) -> Option<ImplementedEnableExtension> {
+    pub(super) const fn requires_enable_extension(&self) -> Option<EnableExtensions> {
         match *self {
-            Number::F16(_) => Some(ImplementedEnableExtension::F16),
-            Number::F64(_) => Some(ImplementedEnableExtension::WgpuF64),
+            Number::F16(_) => Some(EnableExtensions::F16),
+            Number::F64(_) => Some(EnableExtensions::WGPU_F64),
             _ => None,
         }
     }
