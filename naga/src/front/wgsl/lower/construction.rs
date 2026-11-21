@@ -2,9 +2,11 @@ use alloc::{boxed::Box, vec, vec::Vec};
 use core::num::NonZeroU32;
 
 use crate::common::wgsl::{TryToWgsl, TypeContext};
+use crate::front::wgsl::lower::conversion::ScalarConversionExt;
 use crate::front::wgsl::lower::{ExpressionContext, Lowerer};
 use crate::front::wgsl::parse::ast;
 use crate::front::wgsl::{Error, Result};
+use crate::proc::ScalarExt;
 use crate::{Handle, Span};
 
 /// A [`constructor built-in function`].

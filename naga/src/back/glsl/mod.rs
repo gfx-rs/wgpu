@@ -125,9 +125,13 @@ impl crate::AtomicFunction {
     }
 }
 
-impl crate::AddressSpace {
+trait AddressSpaceGlslExt {
+    fn initializable(&self) -> bool;
+}
+
+impl AddressSpaceGlslExt for crate::AddressSpace {
     /// Whether a variable with this address space can be initialized
-    const fn initializable(&self) -> bool {
+    fn initializable(&self) -> bool {
         match *self {
             crate::AddressSpace::Function | crate::AddressSpace::Private => true,
             crate::AddressSpace::WorkGroup

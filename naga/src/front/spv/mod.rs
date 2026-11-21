@@ -171,8 +171,12 @@ impl<T> LookupHelper for FastHashMap<spirv::Word, T> {
     }
 }
 
-impl crate::ImageDimension {
-    const fn required_coordinate_size(&self) -> Option<crate::VectorSize> {
+trait ImageDimensionSpvExt {
+    fn required_coordinate_size(&self) -> Option<crate::VectorSize>;
+}
+
+impl ImageDimensionSpvExt for crate::ImageDimension {
+    fn required_coordinate_size(&self) -> Option<crate::VectorSize> {
         match *self {
             crate::ImageDimension::D1 => None,
             crate::ImageDimension::D2 => Some(crate::VectorSize::Bi),

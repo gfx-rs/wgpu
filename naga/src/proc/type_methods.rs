@@ -9,99 +9,23 @@ use crate::{ir, valid::MAX_TYPE_SIZE};
 
 use super::TypeResolution;
 
-impl crate::ScalarKind {
-    pub const fn is_numeric(self) -> bool {
-        match self {
-            crate::ScalarKind::Sint
-            | crate::ScalarKind::Uint
-            | crate::ScalarKind::Float
-            | crate::ScalarKind::AbstractInt
-            | crate::ScalarKind::AbstractFloat => true,
-            crate::ScalarKind::Bool => false,
-        }
-    }
+/// Constructors for [`TypeInner`](crate::TypeInner) values from a [`Scalar`](crate::Scalar).
+pub trait ScalarExt {
+    fn to_inner_scalar(self) -> crate::TypeInner;
+    fn to_inner_vector(self, size: crate::VectorSize) -> crate::TypeInner;
+    fn to_inner_atomic(self) -> crate::TypeInner;
 }
 
-impl crate::Scalar {
-    pub const I16: Self = Self {
-        kind: crate::ScalarKind::Sint,
-        width: 2,
-    };
-    pub const U16: Self = Self {
-        kind: crate::ScalarKind::Uint,
-        width: 2,
-    };
-    pub const I32: Self = Self {
-        kind: crate::ScalarKind::Sint,
-        width: 4,
-    };
-    pub const U32: Self = Self {
-        kind: crate::ScalarKind::Uint,
-        width: 4,
-    };
-    pub const F16: Self = Self {
-        kind: crate::ScalarKind::Float,
-        width: 2,
-    };
-    pub const F32: Self = Self {
-        kind: crate::ScalarKind::Float,
-        width: 4,
-    };
-    pub const F64: Self = Self {
-        kind: crate::ScalarKind::Float,
-        width: 8,
-    };
-    pub const I64: Self = Self {
-        kind: crate::ScalarKind::Sint,
-        width: 8,
-    };
-    pub const U64: Self = Self {
-        kind: crate::ScalarKind::Uint,
-        width: 8,
-    };
-    pub const BOOL: Self = Self {
-        kind: crate::ScalarKind::Bool,
-        width: crate::BOOL_WIDTH,
-    };
-    pub const ABSTRACT_INT: Self = Self {
-        kind: crate::ScalarKind::AbstractInt,
-        width: crate::ABSTRACT_WIDTH,
-    };
-    pub const ABSTRACT_FLOAT: Self = Self {
-        kind: crate::ScalarKind::AbstractFloat,
-        width: crate::ABSTRACT_WIDTH,
-    };
-
-    pub const fn is_abstract(self) -> bool {
-        match self.kind {
-            crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat => true,
-            crate::ScalarKind::Sint
-            | crate::ScalarKind::Uint
-            | crate::ScalarKind::Float
-            | crate::ScalarKind::Bool => false,
-        }
-    }
-
-    /// Construct a float `Scalar` with the given width.
-    ///
-    /// This is especially common when dealing with
-    /// `TypeInner::Matrix`, where the scalar kind is implicit.
-    pub const fn float(width: crate::Bytes) -> Self {
-        Self {
-            kind: crate::ScalarKind::Float,
-            width,
-        }
-    }
-
-    pub const fn to_inner_scalar(self) -> crate::TypeInner {
+impl ScalarExt for crate::Scalar {
+    fn to_inner_scalar(self) -> crate::TypeInner {
         crate::TypeInner::Scalar(self)
     }
 
-    pub const fn to_inner_vector(self, size: crate::VectorSize) -> crate::TypeInner {
+    fn to_inner_vector(self, size: crate::VectorSize) -> crate::TypeInner {
         crate::TypeInner::Vector { size, scalar: self }
     }
 
-    pub const fn to_inner_atomic(self) -> crate::TypeInner {
+    fn to_inner_atomic(self) -> crate::TypeInner {
         crate::TypeInner::Atomic(self)
     }
 }

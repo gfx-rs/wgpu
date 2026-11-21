@@ -17,6 +17,12 @@ use super::{
     storage::StoreValue,
     BackendResult, Error, FragmentEntryPoint, Options, PipelineOptions, ShaderModel,
 };
+use crate::back::hlsl::conv::BuiltInHlslExt;
+use crate::back::hlsl::conv::InterpolationHlslExt;
+use crate::back::hlsl::conv::SamplingHlslExt;
+use crate::back::hlsl::conv::ScalarHlslExt;
+use crate::back::hlsl::conv::ScalarKindHlslExt;
+use crate::back::hlsl::help::StorageFormatComponentsExt;
 use crate::{
     back::{self, get_entry_points, Baked},
     common,

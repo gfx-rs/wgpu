@@ -584,8 +584,12 @@ pub struct Writer<W> {
     needs_object_memory_barriers: bool,
 }
 
-impl crate::Scalar {
-    pub(super) fn to_msl_name(self) -> &'static str {
+pub(super) trait ScalarMslExt {
+    fn to_msl_name(self) -> &'static str;
+}
+
+impl ScalarMslExt for crate::Scalar {
+    fn to_msl_name(self) -> &'static str {
         use crate::ScalarKind as Sk;
         match self {
             Self {
@@ -715,11 +719,17 @@ fn should_pack_struct_member(
     }
 }
 
-impl crate::AddressSpace {
+trait AddressSpaceMslExt {
+    fn needs_pass_through(&self) -> bool;
+    fn needs_access_qualifier(&self) -> bool;
+    fn to_msl_name(self) -> Option<&'static str>;
+}
+
+impl AddressSpaceMslExt for crate::AddressSpace {
     /// Returns true if global variables in this address space are
     /// passed in function arguments. These arguments need to be
     /// passed through any functions called from the entry point.
-    const fn needs_pass_through(&self) -> bool {
+    fn needs_pass_through(&self) -> bool {
         match *self {
             Self::Uniform
             | Self::Storage { .. }
@@ -734,7 +744,7 @@ impl crate::AddressSpace {
     }
 
     /// Returns true if the address space may need a "const" qualifier.
-    const fn needs_access_qualifier(&self) -> bool {
+    fn needs_access_qualifier(&self) -> bool {
         match *self {
             //Note: we are ignoring the storage access here, and instead
             // rely on the actual use of a global by functions. This means we
@@ -752,7 +762,7 @@ impl crate::AddressSpace {
         }
     }
 
-    const fn to_msl_name(self) -> Option<&'static str> {
+    fn to_msl_name(self) -> Option<&'static str> {
         match self {
             Self::Handle => None,
             Self::Uniform | Self::Immediate => Some("constant"),

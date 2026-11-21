@@ -31,8 +31,9 @@ pub use compose::ComposeError;
 pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
 pub use function::{CallError, FunctionError, LocalVariableError, SubgroupError};
-pub use immediates::{ImmediateSlots, ImmediateSlotsOverflowError, ImmediateUsage};
+pub use immediates::{ImmediateSlotsExt, ImmediateUsageExt};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
+pub use naga_types::{ImmediateSlots, ImmediateSlotsOverflowError, ImmediateUsage};
 pub use r#type::{Disalignment, ImmediateError, TypeError, TypeFlags, WidthError};
 
 use self::handles::InvalidHandleError;

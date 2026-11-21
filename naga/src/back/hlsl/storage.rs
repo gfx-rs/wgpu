@@ -59,6 +59,8 @@ use alloc::format;
 use core::{fmt, mem};
 
 use super::{super::FunctionCtx, BackendResult, Error};
+use crate::back::hlsl::conv::ScalarHlslExt;
+use crate::back::hlsl::conv::ScalarKindHlslExt;
 use crate::{
     proc::{Alignment, NameKey, TypeResolution},
     Handle,
