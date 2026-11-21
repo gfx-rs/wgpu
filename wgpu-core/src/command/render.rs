@@ -1132,6 +1132,20 @@ struct RenderPassInfo {
     multiview_mask: Option<NonZeroU32>,
 }
 
+/// Returns the layers of `view` that a render pass with `multiview_mask` renders to.
+/// Bit `i` of the mask selects layer `view.base + i`. With no mask, only the base layer.
+fn multiview_layers(
+    view: &TextureView,
+    multiview_mask: Option<NonZeroU32>,
+) -> impl Iterator<Item = u32> {
+    let mask = multiview_mask.map_or(1, NonZeroU32::get);
+    let start = view.selector.layers.start;
+    view.selector
+        .layers
+        .clone()
+        .filter(move |layer| mask & (1 << (layer - start)) != 0)
+}
+
 impl RenderPassInfo {
     fn add_pass_texture_init_actions<V>(
         load_op: LoadOp<V>,
@@ -1140,6 +1154,7 @@ impl RenderPassInfo {
         view: &TextureView,
         depth_slice: Option<u32>,
         pending_discard_init_fixups: &mut SurfacesInDiscardState,
+        multiview_mask: Option<NonZeroU32>,
     ) {
         match (
             depth_slice,
@@ -1194,8 +1209,15 @@ impl RenderPassInfo {
                 ));
             } else {
                 // Clear + Store
-                texture_memory_actions
-                    .register_implicit_init(&view.parent, TextureInitRange::from(view));
+                for layer in multiview_layers(view, multiview_mask) {
+                    texture_memory_actions.register_implicit_init(
+                        &view.parent,
+                        TextureInitRange {
+                            mip_range: view.selector.mips.clone(),
+                            layer_range: layer..layer + 1,
+                        },
+                    );
+                }
             }
         }
         if store_op == StoreOp::Discard {
@@ -1208,11 +1230,21 @@ impl RenderPassInfo {
             // textures will be reinitialized at the end of the command buffer
             // (by [`BakedCommands::initialize_discarded_depth_slices`]),
             // because the primary init tracker does not track individual slices.
-            texture_memory_actions.discard(TextureSurfaceDiscard {
-                texture: view.parent.clone(),
-                mip_level: view.selector.mips.start,
-                layer_or_depth_slice: depth_slice.unwrap_or(view.selector.layers.start),
-            });
+            if let Some(depth_slice) = depth_slice {
+                texture_memory_actions.discard(TextureSurfaceDiscard {
+                    texture: view.parent.clone(),
+                    mip_level: view.selector.mips.start,
+                    layer_or_depth_slice: depth_slice,
+                });
+            } else {
+                for layer in multiview_layers(view, multiview_mask) {
+                    texture_memory_actions.discard(TextureSurfaceDiscard {
+                        texture: view.parent.clone(),
+                        mip_level: view.selector.mips.start,
+                        layer_or_depth_slice: layer,
+                    });
+                }
+            }
         }
     }
 
@@ -1338,6 +1370,7 @@ impl RenderPassInfo {
                     view,
                     None,
                     pending_discard_init_fixups,
+                    multiview_mask,
                 );
             } else if !ds_aspects.contains(hal::FormatAspects::DEPTH) {
                 Self::add_pass_texture_init_actions(
@@ -1347,6 +1380,7 @@ impl RenderPassInfo {
                     view,
                     None,
                     pending_discard_init_fixups,
+                    multiview_mask,
                 );
             } else {
                 // This is the only place (anywhere in wgpu) where Stencil &
@@ -1396,10 +1430,15 @@ impl RenderPassInfo {
                 // (possible optimization: Delay and potentially drop this zeroing)
                 if at.depth.store_op() != at.stencil.store_op() {
                     if !need_init_beforehand {
-                        texture_memory_actions.register_implicit_init(
-                            &view.parent,
-                            TextureInitRange::from(view.as_ref()),
-                        );
+                        for layer in multiview_layers(view, multiview_mask) {
+                            texture_memory_actions.register_implicit_init(
+                                &view.parent,
+                                TextureInitRange {
+                                    mip_range: view.selector.mips.clone(),
+                                    layer_range: layer..layer + 1,
+                                },
+                            );
+                        }
                     }
                     divergent_discarded_depth_stencil_aspect = Some((
                         if at.depth.store_op() == StoreOp::Discard {
@@ -1411,11 +1450,13 @@ impl RenderPassInfo {
                     ));
                 } else if at.depth.store_op() == StoreOp::Discard {
                     // Both are discarded using the regular path.
-                    texture_memory_actions.discard(TextureSurfaceDiscard {
-                        texture: view.parent.clone(),
-                        mip_level: view.selector.mips.start,
-                        layer_or_depth_slice: view.selector.layers.start,
-                    });
+                    for layer in multiview_layers(view, multiview_mask) {
+                        texture_memory_actions.discard(TextureSurfaceDiscard {
+                            texture: view.parent.clone(),
+                            mip_level: view.selector.mips.start,
+                            layer_or_depth_slice: layer,
+                        });
+                    }
                 }
             }
 
@@ -1588,6 +1629,7 @@ impl RenderPassInfo {
                 color_view,
                 at.depth_slice,
                 pending_discard_init_fixups,
+                multiview_mask,
             );
             render_attachments
                 .push(color_view.to_render_attachment(wgt::TextureUses::COLOR_TARGET));
@@ -1652,10 +1694,15 @@ impl RenderPassInfo {
                     });
                 }
 
-                texture_memory_actions.register_implicit_init(
-                    &resolve_view.parent,
-                    TextureInitRange::from(resolve_view.as_ref()),
-                );
+                for layer in multiview_layers(resolve_view, multiview_mask) {
+                    texture_memory_actions.register_implicit_init(
+                        &resolve_view.parent,
+                        TextureInitRange {
+                            mip_range: resolve_view.selector.mips.clone(),
+                            layer_range: layer..layer + 1,
+                        },
+                    );
+                }
                 render_attachments
                     .push(resolve_view.to_render_attachment(wgt::TextureUses::COLOR_TARGET));
 
