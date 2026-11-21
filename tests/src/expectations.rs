@@ -17,6 +17,7 @@ use core::fmt;
 ///     vendor: None,
 ///     adapter: Some("RTX"),
 ///     driver: None,
+///     driver_info: None,
 ///     reasons: vec![FailureReason::validation_error().with_message("Some error substring")],
 ///     behavior: FailureBehavior::AssertFailure,
 /// }
@@ -70,6 +71,15 @@ pub struct FailureCase {
     ///
     /// [`AdapterInfo::driver`]: wgpu::AdapterInfo::driver
     pub driver: Option<&'static str>,
+
+    /// Driver info expected to fail, or `None` for any driver info.
+    ///
+    /// If this is `Some(s)` and `s` is a substring of
+    /// [`AdapterInfo::driver_info`], then this `FailureCase` applies. If
+    /// this is `None`, the driver info isn't considered.
+    ///
+    /// [`AdapterInfo::driver_info`]: wgpu::AdapterInfo::driver_info
+    pub driver_info: Option<&'static str>,
 
     /// Reason why the test is expected to fail.
     ///
@@ -191,6 +201,29 @@ impl FailureCase {
         }
     }
 
+    /// Restrict this case to macOS with a version below `(major, minor, patch)`.
+    ///
+    /// On other targets, and on that macOS version or newer, return [`FailureCase::never()`].
+    pub fn macos_before(self, version: (u32, u32, u32)) -> Self {
+        /// macOS version, or `None` if it is unknown. Missing components are 0.
+        static MACOS_VERSION: std::sync::LazyLock<Option<(u32, u32, u32)>> =
+            std::sync::LazyLock::new(|| {
+                let output = std::process::Command::new("sw_vers")
+                    .arg("-productVersion")
+                    .output()
+                    .ok()?;
+                let text = String::from_utf8(output.stdout).ok()?;
+                let mut parts = text.trim().split('.').map(str::parse);
+                let mut next = || parts.next().unwrap_or(Ok(0)).ok();
+                Some((next()?, next()?, next()?))
+            });
+        if cfg!(target_os = "macos") && MACOS_VERSION.is_some_and(|current| current < version) {
+            self
+        } else {
+            FailureCase::never()
+        }
+    }
+
     /// Return the reasons why this case should fail.
     pub fn reasons(&self) -> &[FailureReason] {
         if self.reasons.is_empty() {
@@ -288,6 +321,13 @@ impl FailureCase {
             }
             reasons.set(FailureApplicationReasons::DRIVER, true);
         }
+        if let Some(driver_info) = self.driver_info {
+            let driver_info = driver_info.to_lowercase();
+            if !info.driver_info.contains(&driver_info) {
+                return None;
+            }
+            reasons.set(FailureApplicationReasons::DRIVER_INFO, true);
+        }
 
         // If we got this far but no specific reasons were triggered, then this
         // must be a wildcard.
@@ -327,7 +367,8 @@ bitflags::bitflags! {
         const VENDOR = 1 << 1;
         const ADAPTER = 1 << 2;
         const DRIVER = 1 << 3;
-        const ALWAYS = 1 << 4;
+        const DRIVER_INFO = 1 << 4;
+        const ALWAYS = 1 << 5;
     }
 }
 

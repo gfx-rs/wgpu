@@ -121,6 +121,7 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
             vendor: Some(0x10005),
             adapter: None,
             driver: None,
+            driver_info: None,
             reasons: vec![],
             behavior: wgpu_test::FailureBehavior::Ignore,
         }),

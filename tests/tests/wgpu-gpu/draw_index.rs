@@ -67,17 +67,7 @@ fn fragment() -> @location(0) vec4<f32> {
 
 #[apply(gpu_test!)]
 static DRAW_INDEX: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .features(Features::SHADER_DRAW_INDEX)
-            // https://github.com/gfx-rs/wgpu/issues/9184
-            .expect_fail(
-                wgpu_test::FailureCase::molten_vk()
-                    .validation_error("could not be compiled into pipeline")
-                    .validation_error("vkDestroyDevice")
-                    .unexpected_error("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
-            ),
-    )
+    .parameters(TestParameters::default().features(Features::SHADER_DRAW_INDEX))
     .run_async(test);
 
 async fn test_mesh(ctx: TestingContext, use_task: bool, mesh_uses_draw_id: bool) {
