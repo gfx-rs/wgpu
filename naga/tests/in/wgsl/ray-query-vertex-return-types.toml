@@ -1,0 +1,2 @@
+capabilities = "RAY_QUERY | RAY_HIT_VERTEX_POSITION"
+targets = "WGSL"

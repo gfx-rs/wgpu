@@ -8,7 +8,10 @@ use core::fmt::Write;
 
 use super::Error;
 use super::ToWgslIfImplemented as _;
-use crate::{back::wgsl::polyfill::InversePolyfill, common::wgsl::TypeContext};
+use crate::{
+    back::wgsl::polyfill::InversePolyfill,
+    common::wgsl::{EnableExtensions, TypeContext},
+};
 use crate::{
     back::{self, Baked},
     common::{
@@ -285,53 +288,26 @@ impl<W: Write> Writer<W> {
     /// Helper method which writes all the `enable` declarations
     /// needed for a module.
     fn write_enable_declarations(&mut self, module: &Module) -> BackendResult {
-        #[derive(Default)]
-        struct RequiredEnabled {
-            f16: bool,
-            f64: bool,
-            int16: bool,
-            dual_source_blending: bool,
-            clip_distances: bool,
-            mesh_shaders: bool,
-            primitive_index: bool,
-            cooperative_matrix: bool,
-            draw_index: bool,
-            ray_tracing_pipeline: bool,
-            per_vertex: bool,
-            binding_array: bool,
-            debug_printf: bool,
-        }
-        let mut needed = RequiredEnabled {
-            mesh_shaders: module.uses_mesh_shaders(),
-            ..Default::default()
-        };
+        type E = EnableExtensions;
+        let mut needed = E::empty();
+        needed.set(E::WGPU_MESH_SHADER, module.uses_mesh_shaders());
+        needed.set(
+            E::WGPU_RAY_TRACING_INVOCATION_REORDER,
+            module.uses_invocation_reorder(),
+        );
+        needed.set(E::WGPU_DEBUG_PRINTF, module.uses_debug_printf());
 
-        let check_binding = |binding: &crate::Binding, needed: &mut RequiredEnabled| match *binding
-        {
+        let binding_extension = |binding: &crate::Binding| match *binding {
             crate::Binding::Location {
                 blend_src: Some(_), ..
-            } => {
-                needed.dual_source_blending = true;
-            }
-            crate::Binding::BuiltIn(crate::BuiltIn::ClipDistances) => {
-                needed.clip_distances = true;
-            }
-            crate::Binding::BuiltIn(crate::BuiltIn::PrimitiveIndex) => {
-                needed.primitive_index = true;
-            }
-            crate::Binding::Location {
-                per_primitive: true,
-                ..
-            } => {
-                needed.mesh_shaders = true;
-            }
+            } => E::DUAL_SOURCE_BLENDING,
             crate::Binding::Location {
                 interpolation: Some(crate::Interpolation::PerVertex),
                 ..
-            } => {
-                needed.per_vertex = true;
-            }
-            crate::Binding::BuiltIn(crate::BuiltIn::DrawIndex) => needed.draw_index = true,
+            } => E::WGPU_PER_VERTEX,
+            crate::Binding::BuiltIn(crate::BuiltIn::ClipDistances) => E::CLIP_DISTANCES,
+            crate::Binding::BuiltIn(crate::BuiltIn::PrimitiveIndex) => E::PRIMITIVE_INDEX,
+            crate::Binding::BuiltIn(crate::BuiltIn::DrawIndex) => E::DRAW_INDEX,
             crate::Binding::BuiltIn(
                 crate::BuiltIn::RayInvocationId
                 | crate::BuiltIn::NumRayInvocations
@@ -347,153 +323,68 @@ impl<W: Write> Writer<W> {
                 | crate::BuiltIn::WorldToObject
                 | crate::BuiltIn::HitKind
                 | crate::BuiltIn::HitBarycentrics,
-            ) => {
-                needed.ray_tracing_pipeline = true;
-            }
-            _ => {}
+            ) => E::WGPU_RAY_TRACING_PIPELINE,
+            _ => E::empty(),
         };
 
-        // Determine which `enable` declarations are needed
         for (_, ty) in module.types.iter() {
-            match ty.inner {
+            needed |= match ty.inner {
                 TypeInner::Scalar(scalar)
                 | TypeInner::Vector { scalar, .. }
-                | TypeInner::Matrix { scalar, .. } => {
-                    needed.f16 |= scalar == crate::Scalar::F16;
-                    needed.f64 |= scalar == crate::Scalar::F64;
-                    needed.int16 |= scalar == crate::Scalar::I16 || scalar == crate::Scalar::U16;
-                }
-                TypeInner::Struct { ref members, .. } => {
-                    for binding in members.iter().filter_map(|m| m.binding.as_ref()) {
-                        check_binding(binding, &mut needed);
-                    }
-                }
-                TypeInner::CooperativeMatrix { .. } => {
-                    needed.cooperative_matrix = true;
-                }
-                TypeInner::AccelerationStructure { .. } => {
-                    needed.ray_tracing_pipeline = true;
-                }
-                TypeInner::BindingArray { .. } => {
-                    needed.binding_array = true;
-                }
-                _ => {}
-            }
+                | TypeInner::Matrix { scalar, .. } => match scalar {
+                    crate::Scalar::F16 => E::F16,
+                    crate::Scalar::F64 => E::WGPU_F64,
+                    crate::Scalar::I16 | crate::Scalar::U16 => E::WGPU_INT16,
+                    _ => E::empty(),
+                },
+                TypeInner::Struct { ref members, .. } => members
+                    .iter()
+                    .filter_map(|m| m.binding.as_ref())
+                    .map(binding_extension)
+                    .collect(),
+                TypeInner::CooperativeMatrix { .. } => E::WGPU_COOPERATIVE_MATRIX,
+                TypeInner::BindingArray { .. } => E::WGPU_BINDING_ARRAY,
+                TypeInner::AccelerationStructure { .. } => E::WGPU_RAY_TRACING_PIPELINE,
+                _ => E::empty(),
+            };
         }
 
         for ep in &module.entry_points {
-            if let Some(res) = ep.function.result.as_ref().and_then(|a| a.binding.as_ref()) {
-                check_binding(res, &mut needed);
-            }
-            for arg in ep
+            let result = ep.function.result.as_ref().and_then(|r| r.binding.as_ref());
+            let args = ep
                 .function
                 .arguments
                 .iter()
-                .filter_map(|a| a.binding.as_ref())
-            {
-                check_binding(arg, &mut needed);
+                .filter_map(|a| a.binding.as_ref());
+            needed |= result
+                .into_iter()
+                .chain(args)
+                .map(binding_extension)
+                .collect();
+            if matches!(
+                ep.stage,
+                ShaderStage::RayGeneration
+                    | ShaderStage::AnyHit
+                    | ShaderStage::ClosestHit
+                    | ShaderStage::Miss
+            ) {
+                needed |= E::WGPU_RAY_TRACING_PIPELINE;
             }
         }
 
-        if module.global_variables.iter().any(|gv| {
-            gv.1.space == crate::AddressSpace::IncomingRayPayload
-                || gv.1.space == crate::AddressSpace::RayPayload
-        }) {
-            needed.ray_tracing_pipeline = true;
-        }
-
-        if module.entry_points.iter().any(|ep| {
+        if module.global_variables.iter().any(|(_, gv)| {
             matches!(
-                ep.stage,
-                ShaderStage::RayGeneration
-                    | ShaderStage::AnyHit
-                    | ShaderStage::ClosestHit
-                    | ShaderStage::Miss
+                gv.space,
+                crate::AddressSpace::IncomingRayPayload | crate::AddressSpace::RayPayload
             )
         }) {
-            needed.ray_tracing_pipeline = true;
+            needed |= E::WGPU_RAY_TRACING_PIPELINE;
         }
 
-        if module.global_variables.iter().any(|gv| {
-            gv.1.space == crate::AddressSpace::IncomingRayPayload
-                || gv.1.space == crate::AddressSpace::RayPayload
-        }) {
-            needed.ray_tracing_pipeline = true;
+        for ext in needed.iter() {
+            writeln!(self.out, "enable {};", ext.to_ident())?;
         }
-
-        if module.entry_points.iter().any(|ep| {
-            matches!(
-                ep.stage,
-                ShaderStage::RayGeneration
-                    | ShaderStage::AnyHit
-                    | ShaderStage::ClosestHit
-                    | ShaderStage::Miss
-            )
-        }) {
-            needed.ray_tracing_pipeline = true;
-        }
-
-        needed.debug_printf = module.uses_debug_printf();
-
-        // Write required declarations
-        let mut any_written = false;
-        if needed.f16 {
-            writeln!(self.out, "enable f16;")?;
-            any_written = true;
-        }
-        if needed.f64 {
-            writeln!(self.out, "enable wgpu_f64;")?;
-            any_written = true;
-        }
-        if needed.int16 {
-            writeln!(self.out, "enable wgpu_int16;")?;
-            any_written = true;
-        }
-        if needed.dual_source_blending {
-            writeln!(self.out, "enable dual_source_blending;")?;
-            any_written = true;
-        }
-        if needed.clip_distances {
-            writeln!(self.out, "enable clip_distances;")?;
-            any_written = true;
-        }
-        if module.uses_mesh_shaders() {
-            writeln!(self.out, "enable wgpu_mesh_shader;")?;
-            any_written = true;
-        }
-        if needed.binding_array {
-            writeln!(self.out, "enable wgpu_binding_array;")?;
-            any_written = true;
-        }
-        if needed.draw_index {
-            writeln!(self.out, "enable draw_index;")?;
-            any_written = true;
-        }
-        if needed.primitive_index {
-            writeln!(self.out, "enable primitive_index;")?;
-            any_written = true;
-        }
-        if needed.cooperative_matrix {
-            writeln!(self.out, "enable wgpu_cooperative_matrix;")?;
-            any_written = true;
-        }
-        if needed.ray_tracing_pipeline {
-            writeln!(self.out, "enable wgpu_ray_tracing_pipeline;")?;
-            any_written = true;
-        }
-        if module.uses_invocation_reorder() {
-            writeln!(self.out, "enable wgpu_ray_tracing_invocation_reorder;")?;
-            any_written = true;
-        }
-        if needed.per_vertex {
-            writeln!(self.out, "enable wgpu_per_vertex;")?;
-            any_written = true;
-        }
-        if needed.debug_printf {
-            writeln!(self.out, "enable wgpu_debug_printf;")?;
-            any_written = true;
-        }
-        if any_written {
+        if !needed.is_empty() {
             // Empty line for readability
             writeln!(self.out)?;
         }
