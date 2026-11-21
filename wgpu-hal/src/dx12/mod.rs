@@ -670,7 +670,7 @@ pub struct Device {
     options: wgt::Dx12BackendOptions,
     // CPU only pools
     rtv_pool: Arc<Mutex<descriptor::CpuPool>>,
-    dsv_pool: Mutex<descriptor::CpuPool>,
+    dsv_pool: Arc<Mutex<descriptor::CpuPool>>,
     srv_uav_pool: Mutex<descriptor::CpuPool>,
     // library
     library: Arc<D3D12Lib>,
@@ -887,6 +887,7 @@ pub struct CommandEncoder {
 
     rtv_pool: Arc<Mutex<descriptor::CpuPool>>,
     temp_rtv_handles: Vec<descriptor::Handle>,
+    dsv_pool: Arc<Mutex<descriptor::CpuPool>>,
 
     intermediate_copy_bufs: Vec<Buffer>,
 
@@ -1090,6 +1091,8 @@ pub struct TextureView {
     handle_dsv_rr: Option<descriptor::Handle>,
     /// Depth write stencil write view.
     handle_dsv_ww: Option<descriptor::Handle>,
+    /// Used to create single-layer RTVs and DSVs at render pass begin.
+    view_desc: view::ViewDescriptor,
 }
 
 impl crate::DynTextureView for TextureView {}

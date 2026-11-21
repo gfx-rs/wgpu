@@ -210,10 +210,10 @@ impl super::Device {
             features,
             shared: Arc::new(shared),
             rtv_pool: Arc::new(Mutex::new(rtv_pool)),
-            dsv_pool: Mutex::new(descriptor::CpuPool::new(
+            dsv_pool: Arc::new(Mutex::new(descriptor::CpuPool::new(
                 raw.clone(),
                 Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
-            )),
+            ))),
             srv_uav_pool: Mutex::new(descriptor::CpuPool::new(
                 raw.clone(),
                 Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
@@ -786,6 +786,7 @@ impl crate::Device for super::Device {
             } else {
                 None
             },
+            view_desc,
         })
     }
 
@@ -906,6 +907,7 @@ impl crate::Device for super::Device {
             mem_allocator: self.mem_allocator.clone(),
             rtv_pool: Arc::clone(&self.rtv_pool),
             temp_rtv_handles: Vec::new(),
+            dsv_pool: Arc::clone(&self.dsv_pool),
             intermediate_copy_bufs: Vec::new(),
             null_rtv_handle: self.null_rtv_handle,
             list: None,

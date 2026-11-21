@@ -675,8 +675,11 @@ pub struct RenderPassDescriptor<'a> {
     ///
     /// Note that setting bits higher than the number of texture layers is a validation error.
     ///
-    /// This doesn't influence load/store/clear/etc operations, as those are defined for attachments,
-    /// therefore affecting all attachments. Meaning, this affects only any shaders executed on the `RenderPass`.
+    /// The load, store, and resolve operations of the attachments apply only to the layers in
+    /// the mask. The other layers keep their contents.
+    ///
+    /// If this is `None` and an attachment view has more than one layer, the pass renders only
+    /// to the first layer of the view.
     pub multiview_mask: Option<NonZeroU32>,
 }
 #[cfg(send_sync)]
