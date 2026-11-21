@@ -724,17 +724,16 @@ fn no_flat_first_in_glsl() {
     };
     let mut glsl_writer = naga::back::glsl::Writer::new(
         String::new(),
-        &module,
-        &module_info,
         &options,
         &pipeline_options,
         Default::default(),
-    )
-    .unwrap();
+    );
 
-    let err = glsl_writer.write().expect_err(&format!(
-        "`{interpolate_attr}` should fail backend validation"
-    ));
+    let err = glsl_writer
+        .write(&module, &module_info)
+        .expect_err(&format!(
+            "`{interpolate_attr}` should fail backend validation"
+        ));
 
     assert!(matches!(
         err,
@@ -770,12 +769,11 @@ fn no_linear_interpolation_in_glsl_es() {
     };
     let err = naga::back::glsl::Writer::new(
         String::new(),
-        &module,
-        &module_info,
         &options,
         &pipeline_options,
         Default::default(),
     )
+    .write(&module, &module_info)
     .err()
     .unwrap_or_else(|| {
         panic!("`{interpolate_attr}` should fail backend validation on GLSL ES");
