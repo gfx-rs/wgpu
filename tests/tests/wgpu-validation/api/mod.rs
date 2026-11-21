@@ -1,3 +1,4 @@
+mod adapter;
 mod binding_arrays;
 mod buffer;
 mod buffer_mapping;
