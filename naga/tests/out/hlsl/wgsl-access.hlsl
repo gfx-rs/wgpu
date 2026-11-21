@@ -1,51 +1,3 @@
-typedef struct { float2 _0; float2 _1; } __mat2x2_f32;
-float2 __get_col_of_mat2x2_f32(__mat2x2_f32 mat, uint idx) {
-    switch(idx) {
-    case 0: { return mat._0; }
-    case 1: { return mat._1; }
-    default: { return (float2)0; }
-    }
-}
-void __set_col_of_mat2x2_f32(__mat2x2_f32 mat, uint idx, float2 value) {
-    switch(idx) {
-    case 0: { mat._0 = value; break; }
-    case 1: { mat._1 = value; break; }
-    }
-}
-void __set_el_of_mat2x2_f32(__mat2x2_f32 mat, uint idx, uint vec_idx, float value) {
-    switch(idx) {
-    case 0: { mat._0[vec_idx] = value; break; }
-    case 1: { mat._1[vec_idx] = value; break; }
-    }
-}
-
-typedef struct { float2 _0; float2 _1; float2 _2; float2 _3; } __mat4x2_f32;
-float2 __get_col_of_mat4x2_f32(__mat4x2_f32 mat, uint idx) {
-    switch(idx) {
-    case 0: { return mat._0; }
-    case 1: { return mat._1; }
-    case 2: { return mat._2; }
-    case 3: { return mat._3; }
-    default: { return (float2)0; }
-    }
-}
-void __set_col_of_mat4x2_f32(__mat4x2_f32 mat, uint idx, float2 value) {
-    switch(idx) {
-    case 0: { mat._0 = value; break; }
-    case 1: { mat._1 = value; break; }
-    case 2: { mat._2 = value; break; }
-    case 3: { mat._3 = value; break; }
-    }
-}
-void __set_el_of_mat4x2_f32(__mat4x2_f32 mat, uint idx, uint vec_idx, float value) {
-    switch(idx) {
-    case 0: { mat._0[vec_idx] = value; break; }
-    case 1: { mat._1[vec_idx] = value; break; }
-    case 2: { mat._2[vec_idx] = value; break; }
-    case 3: { mat._3[vec_idx] = value; break; }
-    }
-}
-
 struct GlobalConst {
     uint a;
     int _pad1_0;
@@ -61,11 +13,11 @@ struct AlignedWrapper {
 };
 
 struct Baz {
-    float2 m_0; float2 m_1; float2 m_2;
+    row_major float3x2 m;
 };
 
 struct MatCx2InArray {
-    __mat4x2_f32 am[2];
+    row_major float4x2 am[2];
 };
 
 struct AssignToMember {
@@ -85,6 +37,23 @@ struct Outer {
     uint thing;
 };
 
+struct Baz_std140_ {
+    float2 m_0_;
+    float2 m_1_;
+    float2 m_2_;
+};
+
+struct mat4x2f32_std140_ {
+    float2 c_0_;
+    float2 c_1_;
+    float2 c_2_;
+    float2 c_3_;
+};
+
+struct MatCx2InArray_std140_ {
+    mat4x2f32_std140_ am[2];
+};
+
 GlobalConst ConstructGlobalConst(uint arg0, uint3 arg1, int arg2) {
     GlobalConst ret = (GlobalConst)0;
     ret.a = arg0;
@@ -95,42 +64,14 @@ GlobalConst ConstructGlobalConst(uint arg0, uint3 arg1, int arg2) {
 
 static GlobalConst msl_padding_global_const = ConstructGlobalConst(0u, uint3(0u, 0u, 0u), int(0));
 RWByteAddressBuffer bar : register(u0);
-cbuffer baz : register(b1) { Baz baz; }
+cbuffer baz : register(b1) { Baz_std140_ baz; }
 RWByteAddressBuffer qux : register(u2);
-cbuffer nested_mat_cx2_ : register(b3) { MatCx2InArray nested_mat_cx2_; }
+cbuffer nested_mat_cx2_ : register(b3) { MatCx2InArray_std140_ nested_mat_cx2_; }
 
 Baz ConstructBaz(float3x2 arg0) {
     Baz ret = (Baz)0;
-    ret.m_0 = arg0[0];
-    ret.m_1 = arg0[1];
-    ret.m_2 = arg0[2];
+    ret.m = arg0;
     return ret;
-}
-
-float3x2 GetMatmOnBaz(Baz obj) {
-    return float3x2(obj.m_0, obj.m_1, obj.m_2);
-}
-
-void SetMatmOnBaz(Baz obj, float3x2 mat) {
-    obj.m_0 = mat[0];
-    obj.m_1 = mat[1];
-    obj.m_2 = mat[2];
-}
-
-void SetMatVecmOnBaz(Baz obj, float2 vec, uint mat_idx) {
-    switch(mat_idx) {
-    case 0: { obj.m_0 = vec; break; }
-    case 1: { obj.m_1 = vec; break; }
-    case 2: { obj.m_2 = vec; break; }
-    }
-}
-
-void SetMatScalarmOnBaz(Baz obj, float scalar, uint mat_idx, uint vec_idx) {
-    switch(mat_idx) {
-    case 0: { obj.m_0[vec_idx] = scalar; break; }
-    case 1: { obj.m_1[vec_idx] = scalar; break; }
-    case 2: { obj.m_2[vec_idx] = scalar; break; }
-    }
 }
 
 void test_matrix_within_struct_accesses()
@@ -138,40 +79,64 @@ void test_matrix_within_struct_accesses()
     int idx = int(1);
     Baz t = ConstructBaz(float3x2((1.0).xx, (2.0).xx, (3.0).xx));
 
-    int _e3 = idx;
-    idx = asint(asuint(_e3) - asuint(int(1)));
-    float3x2 l0_ = GetMatmOnBaz(baz);
-    float2 l1_ = GetMatmOnBaz(baz)[0];
-    int _e14 = idx;
-    float2 l2_ = GetMatmOnBaz(baz)[_e14];
-    float l3_ = GetMatmOnBaz(baz)[0].y;
-    int _e25 = idx;
-    float l4_ = GetMatmOnBaz(baz)[0][_e25];
-    int _e30 = idx;
-    float l5_ = GetMatmOnBaz(baz)[_e30].y;
-    int _e36 = idx;
-    int _e38 = idx;
-    float l6_ = GetMatmOnBaz(baz)[_e36][_e38];
-    int _e51 = idx;
-    idx = asint(asuint(_e51) + asuint(int(1)));
-    SetMatmOnBaz(t, float3x2((6.0).xx, (5.0).xx, (4.0).xx));
-    t.m_0 = (9.0).xx;
+    int _e2 = idx;
+    idx = asint(asuint(_e2) - asuint(int(1)));
+    float2 _e6 = baz.m_0_;
+    float2 _e8 = baz.m_1_;
+    float2 _e10 = baz.m_2_;
+    float3x2 l0_ = float3x2(_e6, _e8, _e10);
+    float2 l1_ = baz.m_0_;
+    int _e15 = idx;
+    float2 _e18 = baz.m_0_;
+    float2 _e20 = baz.m_1_;
+    float2 _e22 = baz.m_2_;
+    float2 l2_ = float3x2(_e18, _e20, _e22)[min(uint(_e15), 2u)];
+    float l3_ = baz.m_0_.y;
+    int _e31 = idx;
+    float l4_ = baz.m_0_[_e31];
+    int _e34 = idx;
+    float2 _e37 = baz.m_0_;
+    float2 _e39 = baz.m_1_;
+    float2 _e41 = baz.m_2_;
+    float l5_ = float3x2(_e37, _e39, _e41)[min(uint(_e34), 2u)].y;
+    int _e45 = idx;
+    int _e46 = idx;
+    float2 _e49 = baz.m_0_;
+    float2 _e51 = baz.m_1_;
+    float2 _e53 = baz.m_2_;
+    float l6_ = float3x2(_e49, _e51, _e53)[min(uint(_e45), 2u)][min(uint(_e46), 1u)];
     int _e66 = idx;
-    SetMatVecmOnBaz(t, (90.0).xx, _e66);
-    t.m_0[1] = 10.0;
-    int _e76 = idx;
-    t.m_0[_e76] = 20.0;
-    int _e80 = idx;
-    SetMatScalarmOnBaz(t, 30.0, _e80, 1);
-    int _e85 = idx;
-    int _e87 = idx;
-    SetMatScalarmOnBaz(t, 40.0, _e85, _e87);
+    idx = asint(asuint(_e66) + asuint(int(1)));
+    t.m = float3x2((6.0).xx, (5.0).xx, (4.0).xx);
+    t.m[0] = (9.0).xx;
+    int _e82 = idx;
+    t.m[min(uint(_e82), 2u)] = (90.0).xx;
+    t.m[0].y = 10.0;
+    int _e91 = idx;
+    t.m[0][min(uint(_e91), 1u)] = 20.0;
+    int _e94 = idx;
+    t.m[min(uint(_e94), 2u)].y = 30.0;
+    int _e98 = idx;
+    int _e100 = idx;
+    t.m[min(uint(_e98), 2u)][min(uint(_e100), 1u)] = 40.0;
     return;
+}
+
+typedef float4x2 ret_Constructarray2_float4x2_[2];
+ret_Constructarray2_float4x2_ Constructarray2_float4x2_(float4x2 arg0, float4x2 arg1) {
+    float4x2 ret[2] = { arg0, arg1 };
+    return ret;
+}
+
+typedef float4x2 ret_convert_std140_0_[2];
+ret_convert_std140_0_ convert_std140_0_(mat4x2f32_std140_ v[2])
+{
+    return Constructarray2_float4x2_(float4x2(v[0].c_0_, v[0].c_1_, v[0].c_2_, v[0].c_3_), float4x2(v[1].c_0_, v[1].c_1_, v[1].c_2_, v[1].c_3_));
 }
 
 MatCx2InArray ConstructMatCx2InArray(float4x2 arg0[2]) {
     MatCx2InArray ret = (MatCx2InArray)0;
-    ret.am = (__mat4x2_f32[2])arg0;
+    ret.am = arg0;
     return ret;
 }
 
@@ -185,36 +150,53 @@ void test_matrix_within_array_within_struct_accesses()
     int idx_1 = int(1);
     MatCx2InArray t_1 = ConstructMatCx2InArray(ZeroValuearray2_float4x2_());
 
-    int _e3 = idx_1;
-    idx_1 = asint(asuint(_e3) - asuint(int(1)));
-    float4x2 l0_1[2] = ((float4x2[2])nested_mat_cx2_.am);
-    float4x2 l1_1 = ((float4x2)nested_mat_cx2_.am[0]);
-    float2 l2_1 = nested_mat_cx2_.am[0]._0;
-    int _e20 = idx_1;
-    float2 l3_1 = __get_col_of_mat4x2_f32(nested_mat_cx2_.am[0], _e20);
-    float l4_1 = nested_mat_cx2_.am[0]._0.y;
-    int _e33 = idx_1;
-    float l5_1 = nested_mat_cx2_.am[0]._0[_e33];
-    int _e39 = idx_1;
-    float l6_1 = __get_col_of_mat4x2_f32(nested_mat_cx2_.am[0], _e39).y;
-    int _e46 = idx_1;
+    int _e2 = idx_1;
+    idx_1 = asint(asuint(_e2) - asuint(int(1)));
+    mat4x2f32_std140_ _e6[2] = nested_mat_cx2_.am;
+    const float4x2 _e132[2] = convert_std140_0_(_e6);
+    float2 _e11 = nested_mat_cx2_.am[0].c_0_;
+    float2 _e13 = nested_mat_cx2_.am[0].c_1_;
+    float2 _e15 = nested_mat_cx2_.am[0].c_2_;
+    float2 _e17 = nested_mat_cx2_.am[0].c_3_;
+    float4x2 l1_1 = float4x2(_e11, _e13, _e15, _e17);
+    float2 l2_1 = nested_mat_cx2_.am[0].c_0_;
+    int _e27 = idx_1;
+    float2 _e29 = nested_mat_cx2_.am[0].c_0_;
+    float2 _e31 = nested_mat_cx2_.am[0].c_1_;
+    float2 _e33 = nested_mat_cx2_.am[0].c_2_;
+    float2 _e35 = nested_mat_cx2_.am[0].c_3_;
+    float2 l3_1 = float4x2(_e29, _e31, _e33, _e35)[min(uint(_e27), 3u)];
+    float l4_1 = nested_mat_cx2_.am[0].c_0_.y;
     int _e48 = idx_1;
-    float l7_ = __get_col_of_mat4x2_f32(nested_mat_cx2_.am[0], _e46)[_e48];
-    int _e55 = idx_1;
-    idx_1 = asint(asuint(_e55) + asuint(int(1)));
-    t_1.am = (__mat4x2_f32[2])ZeroValuearray2_float4x2_();
-    t_1.am[0] = (__mat4x2_f32)float4x2((8.0).xx, (7.0).xx, (6.0).xx, (5.0).xx);
-    t_1.am[0]._0 = (9.0).xx;
-    int _e77 = idx_1;
-    __set_col_of_mat4x2_f32(t_1.am[0], _e77, (90.0).xx);
-    t_1.am[0]._0.y = 10.0;
-    int _e89 = idx_1;
-    t_1.am[0]._0[min(uint(_e89), 1u)] = 20.0;
-    int _e94 = idx_1;
-    __set_el_of_mat4x2_f32(t_1.am[0], _e94, 1, 30.0);
-    int _e100 = idx_1;
-    int _e102 = idx_1;
-    __set_el_of_mat4x2_f32(t_1.am[0], _e100, _e102, 40.0);
+    float l5_1 = nested_mat_cx2_.am[0].c_0_[_e48];
+    int _e54 = idx_1;
+    float2 _e56 = nested_mat_cx2_.am[0].c_0_;
+    float2 _e58 = nested_mat_cx2_.am[0].c_1_;
+    float2 _e60 = nested_mat_cx2_.am[0].c_2_;
+    float2 _e62 = nested_mat_cx2_.am[0].c_3_;
+    float l6_1 = float4x2(_e56, _e58, _e60, _e62)[min(uint(_e54), 3u)].y;
+    int _e69 = idx_1;
+    int _e70 = idx_1;
+    float2 _e72 = nested_mat_cx2_.am[0].c_0_;
+    float2 _e74 = nested_mat_cx2_.am[0].c_1_;
+    float2 _e76 = nested_mat_cx2_.am[0].c_2_;
+    float2 _e78 = nested_mat_cx2_.am[0].c_3_;
+    float l7_ = float4x2(_e72, _e74, _e76, _e78)[min(uint(_e69), 3u)][min(uint(_e70), 1u)];
+    int _e85 = idx_1;
+    idx_1 = asint(asuint(_e85) + asuint(int(1)));
+    t_1.am = ZeroValuearray2_float4x2_();
+    t_1.am[0] = float4x2((8.0).xx, (7.0).xx, (6.0).xx, (5.0).xx);
+    t_1.am[0][0] = (9.0).xx;
+    int _e107 = idx_1;
+    t_1.am[0][min(uint(_e107), 3u)] = (90.0).xx;
+    t_1.am[0][0].y = 10.0;
+    int _e118 = idx_1;
+    t_1.am[0][0][min(uint(_e118), 1u)] = 20.0;
+    int _e122 = idx_1;
+    t_1.am[0][min(uint(_e122), 3u)].y = 30.0;
+    int _e127 = idx_1;
+    int _e129 = idx_1;
+    t_1.am[0][min(uint(_e127), 3u)][min(uint(_e129), 1u)] = 40.0;
     return;
 }
 

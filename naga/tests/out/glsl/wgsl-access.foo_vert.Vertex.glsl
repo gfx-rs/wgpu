@@ -30,6 +30,20 @@ struct Outer {
     Inner om_nom_nom;
     uint thing;
 };
+struct Baz_std140_ {
+    vec2 m_0_;
+    vec2 m_1_;
+    vec2 m_2_;
+};
+struct mat4x2f32_std140_ {
+    vec2 c_0_;
+    vec2 c_1_;
+    vec2 c_2_;
+    vec2 c_3_;
+};
+struct MatCx2InArray_std140_ {
+    mat4x2f32_std140_ am[2];
+};
 GlobalConst msl_padding_global_const = GlobalConst(0u, uvec3(0u, 0u, 0u), 0);
 
 layout(std430) buffer Bar_block_0Vertex {
@@ -41,80 +55,113 @@ layout(std430) buffer Bar_block_0Vertex {
     AlignedWrapper data[];
 } _group_0_binding_0_vs;
 
-layout(std140) uniform Baz_block_1Vertex { Baz _group_0_binding_1_vs; };
+layout(std140) uniform Baz_std140_block_1Vertex { Baz_std140_ _group_0_binding_1_vs; };
 
 layout(std430) buffer type_13_block_2Vertex { ivec2 _group_0_binding_2_vs; };
 
-layout(std140) uniform MatCx2InArray_block_3Vertex { MatCx2InArray _group_0_binding_3_vs; };
+layout(std140) uniform MatCx2InArray_std140_block_3Vertex { MatCx2InArray_std140_ _group_0_binding_3_vs; };
 
 
 void test_matrix_within_struct_accesses() {
     int idx = 1;
     Baz t = Baz(mat3x2(vec2(1.0), vec2(2.0), vec2(3.0)));
-    int _e3 = idx;
-    idx = (_e3 - 1);
-    mat3x2 l0_ = _group_0_binding_1_vs.m;
-    vec2 l1_ = _group_0_binding_1_vs.m[0];
-    int _e14 = idx;
-    vec2 l2_ = _group_0_binding_1_vs.m[_e14];
-    float l3_ = _group_0_binding_1_vs.m[0][1];
-    int _e25 = idx;
-    float l4_ = _group_0_binding_1_vs.m[0][_e25];
-    int _e30 = idx;
-    float l5_ = _group_0_binding_1_vs.m[_e30][1];
-    int _e36 = idx;
-    int _e38 = idx;
-    float l6_ = _group_0_binding_1_vs.m[_e36][_e38];
-    int _e51 = idx;
-    idx = (_e51 + 1);
+    int _e2 = idx;
+    idx = (_e2 - 1);
+    vec2 _e6 = _group_0_binding_1_vs.m_0_;
+    vec2 _e8 = _group_0_binding_1_vs.m_1_;
+    vec2 _e10 = _group_0_binding_1_vs.m_2_;
+    mat3x2 l0_ = mat3x2(_e6, _e8, _e10);
+    vec2 l1_ = _group_0_binding_1_vs.m_0_;
+    int _e15 = idx;
+    vec2 _e18 = _group_0_binding_1_vs.m_0_;
+    vec2 _e20 = _group_0_binding_1_vs.m_1_;
+    vec2 _e22 = _group_0_binding_1_vs.m_2_;
+    vec2 l2_ = mat3x2(_e18, _e20, _e22)[_e15];
+    float l3_ = _group_0_binding_1_vs.m_0_.y;
+    int _e31 = idx;
+    float l4_ = _group_0_binding_1_vs.m_0_[_e31];
+    int _e34 = idx;
+    vec2 _e37 = _group_0_binding_1_vs.m_0_;
+    vec2 _e39 = _group_0_binding_1_vs.m_1_;
+    vec2 _e41 = _group_0_binding_1_vs.m_2_;
+    float l5_ = mat3x2(_e37, _e39, _e41)[_e34].y;
+    int _e45 = idx;
+    int _e46 = idx;
+    vec2 _e49 = _group_0_binding_1_vs.m_0_;
+    vec2 _e51 = _group_0_binding_1_vs.m_1_;
+    vec2 _e53 = _group_0_binding_1_vs.m_2_;
+    float l6_ = mat3x2(_e49, _e51, _e53)[_e45][_e46];
+    int _e66 = idx;
+    idx = (_e66 + 1);
     t.m = mat3x2(vec2(6.0), vec2(5.0), vec2(4.0));
     t.m[0] = vec2(9.0);
-    int _e66 = idx;
-    t.m[_e66] = vec2(90.0);
+    int _e82 = idx;
+    t.m[_e82] = vec2(90.0);
     t.m[0][1] = 10.0;
-    int _e76 = idx;
-    t.m[0][_e76] = 20.0;
-    int _e80 = idx;
-    t.m[_e80][1] = 30.0;
-    int _e85 = idx;
-    int _e87 = idx;
-    t.m[_e85][_e87] = 40.0;
+    int _e91 = idx;
+    t.m[0][_e91] = 20.0;
+    int _e94 = idx;
+    t.m[_e94][1] = 30.0;
+    int _e98 = idx;
+    int _e100 = idx;
+    t.m[_e98][_e100] = 40.0;
     return;
+}
+
+mat4x2[2] convert_std140_0_(mat4x2f32_std140_ v[2]) {
+    return mat4x2[2](mat4x2(v[0].c_0_, v[0].c_1_, v[0].c_2_, v[0].c_3_), mat4x2(v[1].c_0_, v[1].c_1_, v[1].c_2_, v[1].c_3_));
 }
 
 void test_matrix_within_array_within_struct_accesses() {
     int idx_1 = 1;
     MatCx2InArray t_1 = MatCx2InArray(mat4x2[2](mat4x2(0.0), mat4x2(0.0)));
-    int _e3 = idx_1;
-    idx_1 = (_e3 - 1);
-    mat4x2 l0_1[2] = _group_0_binding_3_vs.am;
-    mat4x2 l1_1 = _group_0_binding_3_vs.am[0];
-    vec2 l2_1 = _group_0_binding_3_vs.am[0][0];
-    int _e20 = idx_1;
-    vec2 l3_1 = _group_0_binding_3_vs.am[0][_e20];
-    float l4_1 = _group_0_binding_3_vs.am[0][0][1];
-    int _e33 = idx_1;
-    float l5_1 = _group_0_binding_3_vs.am[0][0][_e33];
-    int _e39 = idx_1;
-    float l6_1 = _group_0_binding_3_vs.am[0][_e39][1];
-    int _e46 = idx_1;
+    int _e2 = idx_1;
+    idx_1 = (_e2 - 1);
+    mat4x2f32_std140_ _e6[2] = _group_0_binding_3_vs.am;
+    mat4x2 _e132[2] = convert_std140_0_(_e6);
+    vec2 _e11 = _group_0_binding_3_vs.am[0].c_0_;
+    vec2 _e13 = _group_0_binding_3_vs.am[0].c_1_;
+    vec2 _e15 = _group_0_binding_3_vs.am[0].c_2_;
+    vec2 _e17 = _group_0_binding_3_vs.am[0].c_3_;
+    mat4x2 l1_1 = mat4x2(_e11, _e13, _e15, _e17);
+    vec2 l2_1 = _group_0_binding_3_vs.am[0].c_0_;
+    int _e27 = idx_1;
+    vec2 _e29 = _group_0_binding_3_vs.am[0].c_0_;
+    vec2 _e31 = _group_0_binding_3_vs.am[0].c_1_;
+    vec2 _e33 = _group_0_binding_3_vs.am[0].c_2_;
+    vec2 _e35 = _group_0_binding_3_vs.am[0].c_3_;
+    vec2 l3_1 = mat4x2(_e29, _e31, _e33, _e35)[_e27];
+    float l4_1 = _group_0_binding_3_vs.am[0].c_0_.y;
     int _e48 = idx_1;
-    float l7_ = _group_0_binding_3_vs.am[0][_e46][_e48];
-    int _e55 = idx_1;
-    idx_1 = (_e55 + 1);
+    float l5_1 = _group_0_binding_3_vs.am[0].c_0_[_e48];
+    int _e54 = idx_1;
+    vec2 _e56 = _group_0_binding_3_vs.am[0].c_0_;
+    vec2 _e58 = _group_0_binding_3_vs.am[0].c_1_;
+    vec2 _e60 = _group_0_binding_3_vs.am[0].c_2_;
+    vec2 _e62 = _group_0_binding_3_vs.am[0].c_3_;
+    float l6_1 = mat4x2(_e56, _e58, _e60, _e62)[_e54].y;
+    int _e69 = idx_1;
+    int _e70 = idx_1;
+    vec2 _e72 = _group_0_binding_3_vs.am[0].c_0_;
+    vec2 _e74 = _group_0_binding_3_vs.am[0].c_1_;
+    vec2 _e76 = _group_0_binding_3_vs.am[0].c_2_;
+    vec2 _e78 = _group_0_binding_3_vs.am[0].c_3_;
+    float l7_ = mat4x2(_e72, _e74, _e76, _e78)[_e69][_e70];
+    int _e85 = idx_1;
+    idx_1 = (_e85 + 1);
     t_1.am = mat4x2[2](mat4x2(0.0), mat4x2(0.0));
     t_1.am[0] = mat4x2(vec2(8.0), vec2(7.0), vec2(6.0), vec2(5.0));
     t_1.am[0][0] = vec2(9.0);
-    int _e77 = idx_1;
-    t_1.am[0][_e77] = vec2(90.0);
+    int _e107 = idx_1;
+    t_1.am[0][_e107] = vec2(90.0);
     t_1.am[0][0][1] = 10.0;
-    int _e89 = idx_1;
-    t_1.am[0][0][_e89] = 20.0;
-    int _e94 = idx_1;
-    t_1.am[0][_e94][1] = 30.0;
-    int _e100 = idx_1;
-    int _e102 = idx_1;
-    t_1.am[0][_e100][_e102] = 40.0;
+    int _e118 = idx_1;
+    t_1.am[0][0][_e118] = 20.0;
+    int _e122 = idx_1;
+    t_1.am[0][_e122][1] = 30.0;
+    int _e127 = idx_1;
+    int _e129 = idx_1;
+    t_1.am[0][_e127][_e129] = 40.0;
     return;
 }
 

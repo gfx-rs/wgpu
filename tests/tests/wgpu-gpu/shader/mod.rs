@@ -7,7 +7,7 @@
 use std::{borrow::Cow, fmt::Debug};
 
 use wgpu::{
-    Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
+    BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
     BindingType, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor,
     ComputePipelineDescriptor, MapMode, PipelineLayoutDescriptor, PollType, ShaderModuleDescriptor,
     ShaderSource, ShaderStages,
@@ -86,11 +86,6 @@ struct ShaderTest {
     ///
     /// Defaults to u32::MAX.
     output_initialization: u32,
-    /// Which backends this test will fail on. If the test passes on this
-    /// backend when it shouldn't, an assert will be raised.
-    ///
-    /// Defaults to Backends::empty().
-    failures: Backends,
 }
 impl ShaderTest {
     fn default_comparison_function<O: bytemuck::Pod + Debug + PartialEq>(
@@ -159,7 +154,6 @@ impl ShaderTest {
             output_values: vec![bytemuck::pod_collect_to_vec(output_values)],
             output_comparison_fn: Self::default_comparison_function::<O>,
             output_initialization: u32::MAX,
-            failures: Backends::empty(),
         }
     }
 
@@ -185,12 +179,6 @@ impl ShaderTest {
     ) -> Self {
         self.output_values
             .push(bytemuck::cast_slice(output_values).to_vec());
-
-        self
-    }
-
-    fn failures(mut self, failures: Backends) -> Self {
-        self.failures = failures;
 
         self
     }
@@ -386,15 +374,8 @@ async fn shader_input_output_test(
 
         let failure = !(test.output_comparison_fn)(&test_name, typed, &test.output_values);
         // We don't immediately panic to let all tests execute
-        if failure
-            != test
-                .failures
-                .contains(ctx.adapter.get_info().backend.into())
-        {
-            fail |= true;
-            if !failure {
-                eprintln!("Unexpected test success. Test {test_name}");
-            }
+        if failure {
+            fail = true;
         }
 
         drop(mapped);

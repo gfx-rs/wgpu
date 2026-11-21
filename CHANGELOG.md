@@ -263,6 +263,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Bit reinterpretation is now represented in the Naga IR by the new `naga::ir::Expression::Bitcast`, which names its result type. `naga::ir::Expression::As` now only converts, and its `kind` and `convert` fields are replaced by `target: Scalar`. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
 - The GLSL backend's `Writer` API now matches the other backends: `Writer::new(out, options, pipeline_options, policies)` no longer takes the module and cannot fail, and `Writer::write(module, info)` takes the module and returns all errors. By @inner-daemons in [#11045](https://github.com/gfx-rs/wgpu/pull/11045).
 - The GLSL backend's `ReflectionInfo` now reports resources by binding instead of `Handle<GlobalVariable>`, so it stays valid if the module is compacted before writing. `uniforms` is now a `Vec<BufferMapping>`, and `TextureMapping` carries a `GlobalResource` (binding and name) for the texture and sampler, plus the image's type. By @inner-daemons in [#11079](https://github.com/gfx-rs/wgpu/pull/11079).
+- The GLSL backend now gives uniform blocks that contain `matCx2<f32>` matrices the std140-compatible type names `*_std140_*`, so their block names change, e.g. `S_block_0Fragment` becomes `S_std140_block_0Fragment`. Code that hard-codes GLSL uniform block names needs updating. By @inner-daemons in [#11070](https://github.com/gfx-rs/wgpu/pull/11070).
 
 #### Hal
 
@@ -326,6 +327,8 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix ambiguous `metal::select` calls in the Metal backend's division/remainder zero guards for 64-bit integers: the guards now emit `L`/`uL` suffixed literals (e.g. `metal::select(rhs, 1uL, rhs == 0uL)`) so MSL generated for `i64`/`u64` `/` and `%` compiles. By @Statesman-forge in [#10278](https://github.com/gfx-rs/wgpu/pull/10278).
 - In the MSL backend, `subgroupBallot` now keeps lanes 32-63, which were lost on GPUs with 64-wide SIMD groups (AMD GPUs on macOS). By @ErkoRisthein in [#10797](https://github.com/gfx-rs/wgpu/pull/10797).
 - Report a WGSL error instead of panicking when the condition of a `const_assert` is a composite value, such as `const_assert(vec2i());`. By @MilosLord in [#10897](https://github.com/gfx-rs/wgpu/pull/10897).
+- Fix the layout of `matCx2<f32>` in GLSL uniform buffers ([#4371](https://github.com/gfx-rs/wgpu/issues/4371)) and of `matCx3<f16>` and `matCx4<f16>` in SPIR-V and HLSL uniform buffers (the uniform half of [#10083](https://github.com/gfx-rs/wgpu/issues/10083)). The HLSL backend also now pads `f16` and `i16` scalars and vectors in uniform buffers to their correct offsets. By @inner-daemons in [#11070](https://github.com/gfx-rs/wgpu/pull/11070).
+- Fix the HLSL backend losing whole-matrix stores to `matCx2` members of function-space structs ([#10658](https://github.com/gfx-rs/wgpu/issues/10658)), and generating invalid HLSL when a pointer to such a member is passed to a function ([#7415](https://github.com/gfx-rs/wgpu/issues/7415)). By @inner-daemons in [#11070](https://github.com/gfx-rs/wgpu/pull/11070).
 
 #### Validation
 

@@ -85,6 +85,18 @@ impl crate::TypeInner {
                 let last_el_size = gctx.types[base].inner.size_hlsl(gctx)?;
                 Ok(((count - 1) * stride) + last_el_size)
             }
+            Self::Struct { ref members, span } => match members.last() {
+                Some(last) => {
+                    let end = last.offset + gctx.types[last.ty].inner.size_hlsl(gctx)?;
+                    Ok(span.max(end))
+                }
+                None => Ok(span),
+            },
+            Self::Scalar(crate::Scalar::BOOL) => Ok(4),
+            Self::Vector {
+                size,
+                scalar: crate::Scalar::BOOL,
+            } => Ok(size as u32 * 4),
             _ => Ok(self.size(gctx)),
         }
     }

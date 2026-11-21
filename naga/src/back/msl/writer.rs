@@ -4836,7 +4836,13 @@ impl<W: Write> Writer<W> {
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
-        let (module, info) = back::passes::run(module.into(), &options.passes.into())?;
+        let (module, info) = back::passes::run(
+            module.into(),
+            &back::passes::Passes {
+                uniform_matrix_layout: false,
+                ..options.passes.into()
+            },
+        )?;
         let (module, info) = (&*module, &info);
         self.emit_int_div_checks = options.emit_int_div_checks;
         self.names.clear();

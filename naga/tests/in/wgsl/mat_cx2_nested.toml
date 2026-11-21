@@ -1,4 +1,4 @@
-targets = "HLSL | SPIRV"
+targets = "GLSL | HLSL | SPIRV"
 
 [spv]
 debug = true

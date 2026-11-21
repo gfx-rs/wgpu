@@ -15,6 +15,18 @@ if any pass changed the module, the runner compacts it, which removes the
 unused items and puts the rest in order, before validating it. With
 [`PassOptions::compact`], the runner always compacts, and removes everything
 the entry points don't use.
+
+The passes are:
+
+- Uniform matrix layout, selected by `Passes::uniform_matrix_layout`: gives
+  `var<uniform>` globals types that have std140-compatible layouts. Matrices
+  whose columns std140 would pad but WGSL does not (`matCx2<f32>` and
+  `matCx{2,3,4}<f16>`) are stored as column vectors: a struct member matrix
+  becomes one member per column of the containing struct, and any other
+  matrix becomes a struct of its columns. The pass rewrites the accesses and
+  loads that use them. A dynamic column index into such a matrix indexes the
+  loaded matrix, so it is bounds-checked under the `index` policy, not the
+  `buffer` policy.
 */
 #![cfg_attr(
     not(any(glsl_out, hlsl_out, msl_out, spv_out)),
@@ -25,6 +37,9 @@ the entry points don't use.
 )]
 
 mod emit;
+mod uniform_matrix_layout;
+
+pub use uniform_matrix_layout::UniformMatrixLayoutError;
 
 use alloc::{borrow::Cow, boxed::Box};
 
@@ -41,6 +56,8 @@ pub enum PassError {
     Reorder(#[from] ReorderError),
     #[error("module failed revalidation after backend passes")]
     Validation(#[from] Box<WithSpan<ValidationError>>),
+    #[error(transparent)]
+    UniformMatrixLayout(#[from] UniformMatrixLayoutError),
 }
 
 /// Options for the IR passes a backend runs before writing a module.
@@ -64,12 +81,17 @@ pub struct PassOptions {
 pub(crate) struct Passes {
     /// See [`PassOptions::compact`].
     pub compact: bool,
+    /// Give `var<uniform>` globals std140-compatible types.
+    pub uniform_matrix_layout: bool,
 }
 
 impl From<PassOptions> for Passes {
     fn from(options: PassOptions) -> Self {
         let PassOptions { compact } = options;
-        Self { compact }
+        Self {
+            compact,
+            ..Self::default()
+        }
     }
 }
 
@@ -81,13 +103,20 @@ pub(crate) fn run<'a>(
     module: Cow<'a, Module>,
     passes: &Passes,
 ) -> Result<(Cow<'a, Module>, ModuleInfo), PassError> {
-    let Passes { compact } = *passes;
+    let Passes {
+        compact,
+        uniform_matrix_layout,
+    } = *passes;
     // Each pass calls `Cow::to_mut` only if it will change the module, which
     // copies a borrowed module and is free for an owned one, reports whether
     // it changed it, and adds what it left for compaction to remove to
     // `dropped`.
-    let changed = false;
+    let mut module = module;
+    let mut changed = false;
     let dropped = Dropped::default();
+    if uniform_matrix_layout {
+        changed |= uniform_matrix_layout::run(&mut module)?;
+    }
     finish(module, changed, compact, &dropped)
 }
 

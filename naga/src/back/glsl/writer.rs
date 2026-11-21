@@ -40,7 +40,13 @@ impl<'a, W: Write> Writer<'a, W> {
         &mut self,
         module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
     ) -> Result<ReflectionInfo, Error> {
-        let (module, info) = back::passes::run(module.into(), &self.options.passes.into())?;
+        let (module, info) = back::passes::run(
+            module.into(),
+            &back::passes::Passes {
+                uniform_matrix_layout: true,
+                ..self.options.passes.into()
+            },
+        )?;
         let (module, info) = (&*module, &info);
         ModuleWriter::new(
             &mut self.out,
