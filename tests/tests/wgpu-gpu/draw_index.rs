@@ -73,6 +73,7 @@ static DRAW_INDEX: GpuTestConfiguration = GpuTestConfiguration::new()
             // https://github.com/gfx-rs/wgpu/issues/9184
             .expect_fail(
                 wgpu_test::FailureCase::molten_vk()
+                    .driver_version(..(1, 4, 2))
                     .validation_error("could not be compiled into pipeline")
                     .validation_error("vkDestroyDevice")
                     .unexpected_error("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),

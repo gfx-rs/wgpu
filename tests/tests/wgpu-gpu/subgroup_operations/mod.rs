@@ -36,6 +36,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
                 .panic("thread 0 failed tests: 27,\nthread 1 failed tests: 27, 28,\n")
                 // Prior versions fail 27, 28, and 29
                 .panic("thread 0 failed tests: 27, 29,\nthread 1 failed tests: 27, 28, 29,\n")
+                .macos_version(..(27, 0, 0))
         })
         .collect(),
         ..Default::default()
