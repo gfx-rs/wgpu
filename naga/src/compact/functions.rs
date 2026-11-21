@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use super::arena::HandleSet;
 use super::expressions::ForwardRefs;
 use super::reorder::Reorder;
@@ -21,10 +23,14 @@ pub struct FunctionTracer<'a> {
 
     /// Forward references among the function's expressions.
     pub forward_refs: ForwardRefs,
+
+    /// The functions this function calls.
+    pub callees: Vec<crate::Handle<crate::Function>>,
 }
 
 impl FunctionTracer<'_> {
     pub fn trace_call(&mut self, function: crate::Handle<crate::Function>) {
+        self.callees.push(function);
         if !self.functions_used.contains(function) {
             self.functions_used.insert(function);
             self.functions_pending.insert(function);
@@ -86,11 +92,13 @@ impl From<FunctionTracer<'_>> for FunctionMap {
             FunctionMap {
                 expressions,
                 reorder: Some(reorder),
+                callees: used.callees,
             }
         } else {
             FunctionMap {
                 expressions: HandleMap::from_set(used.expressions_used),
                 reorder: None,
+                callees: used.callees,
             }
         }
     }

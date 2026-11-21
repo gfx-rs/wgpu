@@ -14,6 +14,8 @@ use crate::{
 };
 use handle_set_map::HandleMap;
 
+type Index = crate::non_max_u32::NonMaxU32;
+
 #[cfg(test)]
 use alloc::{format, string::ToString};
 
@@ -58,15 +60,20 @@ impl From<KeepUnused> for bool {
 /// After removing items according to the rules above, all handles in the
 /// remaining objects are adjusted as necessary.
 ///
-/// Compaction preserves the order of the objects it retains, with one
-/// exception. A function's or entry point's expression arena is permitted to
-/// contain *forward references*: expressions that refer to later expressions,
-/// which [`Function::expressions`] otherwise forbids. Passes that rewrite
-/// function bodies, such as inlining, may produce these by appending new
-/// expressions to the arena. As long as the function's statements are valid
-/// (in particular, every expression is [`Emit`]ted before it is used),
-/// compaction renumbers that function's expressions so that every expression
-/// precedes its users. Global expressions may not contain forward references.
+/// Compaction preserves the order of the objects it retains, with two
+/// exceptions, which let passes that rewrite a module append to its arenas:
+///
+/// - A function's or entry point's expression arena may contain *forward
+///   references*: expressions that refer to later expressions, which
+///   [`Function::expressions`] otherwise forbids. As long as the function's
+///   statements are valid (in particular, every expression is [`Emit`]ted
+///   before it is used), compaction renumbers that function's expressions so
+///   that every expression precedes its users. Global expressions may not
+///   contain forward references.
+///
+/// - A function may call a later function. Compaction moves functions so that
+///   every function comes after the functions it calls, keeping their order
+///   otherwise.
 ///
 /// When `KeepUnused` is `Yes`, the
 /// resulting module should have all the named objects (except abstract-typed
@@ -211,12 +218,12 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     // to a function not already identified as used, adds the called function
     // to both `functions_used` and `functions_pending`.
     //
-    // Called functions are required to appear before their callers in the
-    // functions arena (recursion is disallowed). We have already traced the
-    // entry point(s) and added any functions called directly by the entry
-    // point(s) to `functions_pending`. We proceed by repeatedly tracing the
-    // last function in `functions_pending`. By an inductive argument, any
-    // functions after the last function in `functions_pending` must be unused.
+    // We have already traced the entry point(s) and added any functions called
+    // directly by the entry point(s) to `functions_pending`. We proceed by
+    // tracing functions from `functions_pending` until it is empty. Each
+    // function is added to it at most once, the first time it is found to be
+    // used, so each is traced at most once, whatever the order of the
+    // functions arena.
     //
     // When `KeepUnused` is active, we simply mark all functions as pending,
     // and then trace all of them.
@@ -291,7 +298,15 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     // produce maps from the `Handle`s that appear in `module` now to
     // the corresponding `Handle`s that will refer to the same items
     // in the compacted module.
-    let module_map = ModuleMap::from(module_tracer);
+    let mut module_map = ModuleMap::from(module_tracer);
+    let function_order = call_order(module, &function_maps);
+    if let Some(ref order) = function_order {
+        let mut functions = HandleMap::all_unused(module.functions.len());
+        for (index, &handle) in order.iter().enumerate() {
+            functions.insert(handle, Index::new(index as u32).unwrap());
+        }
+        module_map.functions = functions;
+    }
 
     // Drop unused types from the type arena.
     //
@@ -387,16 +402,35 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     let mut reused_named_expressions = crate::NamedExpressions::default();
 
     // Drop unused functions. Compact and adjust used functions.
-    module.functions.retain_mut(|handle, function| {
-        if let Some(map) = function_maps.get(handle) {
-            log::trace!("retaining and compacting function {:?}", function.name);
-            map.compact(function, &module_map, &mut reused_named_expressions);
-            true
-        } else {
-            log::trace!("dropping function {:?}", function.name);
-            false
+    match function_order {
+        None => module.functions.retain_mut(|handle, function| {
+            if let Some(map) = function_maps.get(handle) {
+                log::trace!("retaining and compacting function {:?}", function.name);
+                map.compact(function, &module_map, &mut reused_named_expressions);
+                true
+            } else {
+                log::trace!("dropping function {:?}", function.name);
+                false
+            }
+        }),
+        Some(order) => {
+            log::trace!("reordering functions");
+            let mut old: Vec<Option<_>> = module
+                .functions
+                .drain()
+                .map(|(_, function, span)| Some((function, span)))
+                .collect();
+            for handle in order {
+                let (mut function, span) = old[handle.index()].take().unwrap();
+                function_maps.get(handle).unwrap().compact(
+                    &mut function,
+                    &module_map,
+                    &mut reused_named_expressions,
+                );
+                module.functions.append(function, span);
+            }
         }
-    });
+    }
 
     // Compact each entry point.
     for (entry, map) in module.entry_points.iter_mut().zip(entry_point_maps.iter()) {
@@ -428,6 +462,52 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
             }
         }
     }
+}
+
+/// Return the used functions of `module` in an order in which every function
+/// comes after the functions it calls, or `None` if their current order
+/// already does.
+///
+/// Functions keep their current relative order where the calls allow it.
+fn call_order(
+    module: &crate::Module,
+    function_maps: &HandleMap<crate::Function, FunctionMap>,
+) -> Option<Vec<arena::Handle<crate::Function>>> {
+    let callees = |handle| &function_maps.get(handle).unwrap().callees;
+    let used = || {
+        module
+            .functions
+            .iter()
+            .map(|(handle, _)| handle)
+            .filter(|&handle| function_maps.get(handle).is_some())
+    };
+    if used().all(|handle| callees(handle).iter().all(|&callee| callee < handle)) {
+        return None;
+    }
+
+    let mut order = Vec::new();
+    let mut visited = HandleSet::for_arena(&module.functions);
+    // Each entry is a function and the index of the next callee to visit.
+    let mut stack = Vec::new();
+    for root in used() {
+        if visited.insert(root) {
+            stack.push((root, 0));
+        }
+        while let Some(&mut (handle, ref mut next)) = stack.last_mut() {
+            if let Some(&callee) = callees(handle).get(*next) {
+                *next += 1;
+                // A function visited already is either placed, or one of its
+                // callers on the stack, which a valid module cannot have.
+                if visited.insert(callee) {
+                    stack.push((callee, 0));
+                }
+            } else {
+                stack.pop();
+                order.push(handle);
+            }
+        }
+    }
+    Some(order)
 }
 
 pub(crate) struct ModuleTracer<'module> {
@@ -605,6 +685,7 @@ impl<'module> ModuleTracer<'module> {
             global_expressions_used: &mut self.global_expressions_used,
             expressions_used: HandleSet::for_arena(&function.expressions),
             forward_refs: Default::default(),
+            callees: Vec::new(),
         }
     }
 }
@@ -727,6 +808,9 @@ struct FunctionMap {
     /// The new order of the function's expressions, if compaction has to
     /// reorder them to eliminate forward references. See [`reorder`].
     reorder: Option<reorder::Reorder>,
+
+    /// The functions this function calls.
+    callees: Vec<arena::Handle<crate::Function>>,
 }
 
 #[test]
