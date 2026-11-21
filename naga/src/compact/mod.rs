@@ -306,6 +306,34 @@ pub(crate) fn compact_with_global_origins(
     global_origins
 }
 
+/// Remove the unused expressions of `function`, and reorder the others so
+/// that each expression comes after the expressions it uses.
+///
+/// `function` may contain forward references (see [`compact`]), but must
+/// otherwise be valid as a function of `module`. Nothing outside `function`
+/// changes. `function` must not be borrowed from `module`.
+pub(crate) fn reorder_function(module: &crate::Module, function: &mut crate::Function) {
+    // Treat everything outside the function as used, so that its handles
+    // stay the same.
+    let mut module_tracer = ModuleTracer::new(module);
+    module_tracer.functions_used.add_all();
+    module_tracer.types_used.add_all();
+    module_tracer.global_variables_used.add_all();
+    module_tracer.constants_used.add_all();
+    module_tracer.overrides_used.add_all();
+    module_tracer.global_expressions_used.add_all();
+
+    let mut function_tracer = module_tracer.as_function(function);
+    function_tracer.trace();
+    let map = FunctionMap::from(function_tracer);
+    let module_map = ModuleMap::from(module_tracer);
+    map.compact(
+        function,
+        &module_map,
+        &mut crate::NamedExpressions::default(),
+    );
+}
+
 /// What [`trace`] found to be used in a module.
 struct Traced<'module> {
     module_tracer: ModuleTracer<'module>,

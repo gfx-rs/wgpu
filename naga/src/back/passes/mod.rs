@@ -4,7 +4,9 @@ IR passes that backends run on a module before writing it.
 Backends don't take a [`ModuleInfo`]. Each backend runs `run` on the module
 it is given, which works on one copy of the module: it keeps only the entry
 point being written, compacts the module, replaces its overrides with the
-pipeline's constants, and validates the result. The backend then writes that
+pipeline's constants, runs the passes the backend asks for, puts the
+expressions of the functions they changed back in order, and validates the
+result. The backend then writes that
 module with its own [`ModuleInfo`].
 
 The module given to a backend must already have been validated: this
@@ -19,6 +21,7 @@ validation only checks the result of the passes.
 )]
 
 use alloc::{boxed::Box, vec::Vec};
+use core::mem;
 
 use crate::{
     back::{
@@ -27,7 +30,7 @@ use crate::{
     },
     compact::{compact_with_global_origins, KeepUnused},
     valid::{Capabilities, ModuleInfo, ValidationError, ValidationFlags, Validator},
-    GlobalVariable, Handle, Module, ShaderStage, WithSpan,
+    Function, GlobalVariable, Handle, Module, ShaderStage, WithSpan,
 };
 
 /// An error produced while running the passes a backend requested.
@@ -67,6 +70,30 @@ pub(crate) struct Prepared {
     pub global_origins: Option<Vec<Handle<GlobalVariable>>>,
 }
 
+/// Functions that a pass may have left with unused expressions, or with
+/// expressions that refer to later ones.
+#[derive(Default)]
+pub(crate) struct Dirty {
+    pub functions: crate::FastHashSet<Handle<Function>>,
+    /// Indices of entry points.
+    pub entry_points: crate::FastHashSet<usize>,
+}
+
+/// Remove unused expressions from the `dirty` functions of `module`, and put
+/// the others in order.
+fn reorder(module: &mut Module, dirty: &Dirty) {
+    for &handle in &dirty.functions {
+        let mut function = mem::take(&mut module.functions[handle]);
+        crate::compact::reorder_function(module, &mut function);
+        module.functions[handle] = function;
+    }
+    for &index in &dirty.entry_points {
+        let mut function = mem::take(&mut module.entry_points[index].function);
+        crate::compact::reorder_function(module, &mut function);
+        module.entry_points[index].function = function;
+    }
+}
+
 /// Prepare `module` for a backend: keep only [`Passes::entry_point`], remove
 /// what it doesn't use, replace its overrides with constants, and validate it.
 ///
@@ -95,6 +122,11 @@ pub(crate) fn run(module: &Module, passes: &Passes) -> Result<Prepared, PassErro
     let global_origins = compact_with_global_origins(&mut module, keep_unused);
 
     pipeline_constants::apply_overrides(&mut module, None, constants)?;
+
+    // Passes add the functions they leave with unused or out-of-order
+    // expressions to `dirty`.
+    let dirty = Dirty::default();
+    reorder(&mut module, &dirty);
 
     let info = Validator::new(ValidationFlags::all(), Capabilities::all())
         .validate_resolved_overrides(&module)?;

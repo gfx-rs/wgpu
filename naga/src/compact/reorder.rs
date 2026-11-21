@@ -439,6 +439,51 @@ mod tests {
         ));
     }
 
+    /// `reorder_function` fixes forward references in one function, and
+    /// leaves everything outside it alone, even if unused.
+    #[test]
+    fn reorder_function_keeps_module_items() {
+        let mut module = Module::default();
+        let f32 = scalar_type(&mut module, Scalar::F32);
+        let unused = scalar_type(&mut module, Scalar::U32);
+        let mut f = Function::default();
+        let v = local(&mut f, f32);
+
+        // e0, unused
+        add(&mut f, Expression::Literal(Literal::F32(2.0)));
+        // e1, refers forward to e2
+        let load = add(&mut f, Expression::Load { pointer: h(2) });
+        // e2
+        let pointer = add(&mut f, Expression::LocalVariable(v));
+
+        f.body.push(emit(1, 2), Span::default());
+        f.body.push(
+            Statement::Store {
+                pointer,
+                value: load,
+            },
+            Span::default(),
+        );
+        module.entry_points.push(entry_point(f));
+
+        let mut f = core::mem::take(&mut module.entry_points[0].function);
+        crate::compact::reorder_function(&module, &mut f);
+        module.entry_points[0].function = f;
+
+        validate(&module).expect("reordered module should be valid");
+        assert_eq!(module.types.len(), 2);
+        assert_eq!(module.types[unused].inner, TypeInner::Scalar(Scalar::U32));
+        let f = &module.entry_points[0].function;
+        assert_eq!(
+            expressions(f),
+            [
+                Expression::LocalVariable(v),
+                Expression::Load { pointer: h(0) },
+            ]
+        );
+        assert_eq!(emit_range(&f.body[0]), 1..2);
+    }
+
     /// An expression reached only through a forward reference must still be
     /// traced, so that the expressions *it* refers to are kept.
     #[test]
