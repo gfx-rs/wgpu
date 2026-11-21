@@ -41,8 +41,9 @@ EXAMPLES
   # Machine-readable diagnostics + reflection for tooling.
   naga shader.wgsl --format json
 
-  # Print the JSON Schema for the --config document.
+  # Print the JSON Schema for the --config document / the --format json document.
   naga --print-config-schema
+  naga --print-output-schema
 
 OPTIONS: FLAGS vs CONFIG
   Options can be set as individual flags OR via a JSON config (--config <file> /
@@ -55,9 +56,11 @@ OPTIONS: FLAGS vs CONFIG
   are exclusive with --config.
 
 STRUCTURED OUTPUT
-  --format json emits one JSON document on stdout with `diagnostics`
-  (severity/message/location/labels/notes) and `reflection` (entry points, resources,
-  overrides) — intended for editor integrations and CI. --json-out <file> writes that document
+  --format json emits one JSON document on stdout with `version`, `success`, `diagnostics`
+  (severity/message/location/labels/notes) and `reflection` (types with layouts, resources,
+  overrides, and per-entry-point inputs/outputs/used resources/workgroup info) — intended for
+  editor integrations, CI, and binding generators. The format is versioned but not yet stable;
+  `naga --print-output-schema` prints its JSON Schema. --json-out <file> writes that document
   to a file instead, so the shader can go to stdout.
 
 EXTERNAL TOOLS (found on PATH, or set with --spirv-val-path / --spirv-opt-path / --dxc-path)
@@ -242,6 +245,10 @@ pub struct Args {
     /// Print the JSON Schema for the config document and exit.
     #[arg(long)]
     pub print_config_schema: bool,
+
+    /// Print the JSON Schema for the `--format json` output document and exit.
+    #[arg(long, conflicts_with = "print_config_schema")]
+    pub print_output_schema: bool,
 
     /// After writing SPIR-V output, validate it with `spirv-val`.
     #[arg(long, group = "options")]

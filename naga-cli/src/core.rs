@@ -5,7 +5,7 @@ use crate::error::CliError;
 use crate::hooks::{run_dxc, Hooks};
 use crate::output::{
     glsl_parse_errors_to_diagnostics, spv_error_to_diagnostic, validation_error_to_diagnostic,
-    wgsl_parse_error_to_diagnostic, Diagnostic, JsonOutput, Reflection,
+    wgsl_parse_error_to_diagnostic, Diagnostic, JsonOutput,
 };
 use crate::params::Parameters;
 use anyhow::{anyhow, Context as _};
@@ -68,7 +68,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
     // In JSON mode we collect diagnostics and a success flag instead of
     // short-circuiting on errors.
     let mut json_diagnostics: Vec<Diagnostic> = Vec::new();
-    let mut json_reflection: Option<Reflection> = None;
+    let mut json_reflection: Option<naga::reflect::ModuleReflection> = None;
 
     // --- Parse step ---
     // In JSON mode, parse_input_json returns typed parse failures as diagnostics.
@@ -92,11 +92,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
         language,
     }) = parsed
     else {
-        let out = JsonOutput {
-            success: false,
-            diagnostics: json_diagnostics,
-            reflection: None,
-        };
+        let out = JsonOutput::new(false, json_diagnostics, None);
         emit_json(&out, params)?;
         return Ok(false);
     };
@@ -301,14 +297,10 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
     if output_paths.clone().next().is_none() {
         if is_json {
             let success = info.is_some();
-            if success {
-                json_reflection = Some(Reflection::from_module(&module));
+            if let Some(ref info) = info {
+                json_reflection = crate::output::reflect(&module, info);
             }
-            let out = JsonOutput {
-                success,
-                diagnostics: json_diagnostics,
-                reflection: json_reflection,
-            };
+            let out = JsonOutput::new(success, json_diagnostics, json_reflection);
             emit_json(&out, params)?;
             return Ok(success);
         } else if info.is_some() {
@@ -320,8 +312,8 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
     }
 
     // There are output paths; run them.
-    if is_json && info.is_some() {
-        json_reflection = Some(Reflection::from_module(&module));
+    if let (true, Some(info)) = (is_json, info.as_ref()) {
+        json_reflection = crate::output::reflect(&module, info);
     }
 
     for output_path in output_paths {
@@ -356,11 +348,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
         let success = !json_diagnostics
             .iter()
             .any(|d| matches!(d.severity, crate::output::Severity::Error));
-        let out = JsonOutput {
-            success,
-            diagnostics: json_diagnostics,
-            reflection: json_reflection,
-        };
+        let out = JsonOutput::new(success, json_diagnostics, json_reflection);
         emit_json(&out, params)?;
         return Ok(success);
     }

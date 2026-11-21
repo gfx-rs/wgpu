@@ -1,0 +1,375 @@
+{
+  "version": 1,
+  "success": true,
+  "diagnostics": [],
+  "reflection": {
+    "types": [
+      {
+        "name": null,
+        "size": 4,
+        "align": 4,
+        "inner": {
+          "scalar": {
+            "kind": "Float",
+            "width": 4
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 12,
+        "align": 16,
+        "inner": {
+          "vector": {
+            "size": "Tri",
+            "scalar": {
+              "kind": "Float",
+              "width": 4
+            }
+          }
+        }
+      },
+      {
+        "name": "Particle",
+        "size": 32,
+        "align": 16,
+        "inner": {
+          "struct": {
+            "members": [
+              {
+                "name": "position",
+                "ty": 1,
+                "offset": 0
+              },
+              {
+                "name": "velocity",
+                "ty": 1,
+                "offset": 16
+              },
+              {
+                "name": "age",
+                "ty": 0,
+                "offset": 28
+              }
+            ],
+            "span": 32
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 4,
+        "align": 4,
+        "inner": {
+          "scalar": {
+            "kind": "Uint",
+            "width": 4
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 4,
+        "align": 4,
+        "inner": {
+          "atomic": {
+            "kind": "Uint",
+            "width": 4
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 32,
+        "align": 16,
+        "inner": {
+          "array": {
+            "base": 2,
+            "size": "dynamic",
+            "stride": 32
+          }
+        }
+      },
+      {
+        "name": "Particles",
+        "size": 48,
+        "align": 16,
+        "inner": {
+          "struct": {
+            "members": [
+              {
+                "name": "count",
+                "ty": 4,
+                "offset": 0
+              },
+              {
+                "name": "items",
+                "ty": 5,
+                "offset": 16
+              }
+            ],
+            "span": 48
+          }
+        }
+      },
+      {
+        "name": "Params",
+        "size": 32,
+        "align": 16,
+        "inner": {
+          "struct": {
+            "members": [
+              {
+                "name": "dt",
+                "ty": 0,
+                "offset": 0
+              },
+              {
+                "name": "gravity",
+                "ty": 1,
+                "offset": 16
+              }
+            ],
+            "span": 32
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 1,
+        "align": 1,
+        "inner": {
+          "scalar": {
+            "kind": "Bool",
+            "width": 1
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 16,
+        "align": 16,
+        "inner": {
+          "vector": {
+            "size": "Quad",
+            "scalar": {
+              "kind": "Uint",
+              "width": 4
+            }
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 16,
+        "align": 16,
+        "inner": {
+          "array": {
+            "base": 9,
+            "size": "dynamic",
+            "stride": 16
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 1024,
+        "align": 16,
+        "inner": {
+          "array": {
+            "base": 1,
+            "size": {
+              "constant": 64
+            },
+            "stride": 16
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 12,
+        "align": 16,
+        "inner": {
+          "vector": {
+            "size": "Tri",
+            "scalar": {
+              "kind": "Uint",
+              "width": 4
+            }
+          }
+        }
+      }
+    ],
+    "resources": [
+      {
+        "name": "params",
+        "binding": {
+          "group": 0,
+          "binding": 0
+        },
+        "space": "Uniform",
+        "ty": 7,
+        "kind": {
+          "buffer": {
+            "minBindingSize": 32
+          }
+        },
+        "bindingArraySize": null
+      },
+      {
+        "name": "particles",
+        "binding": {
+          "group": 0,
+          "binding": 1
+        },
+        "space": {
+          "Storage": {
+            "access": "LOAD | STORE"
+          }
+        },
+        "ty": 6,
+        "kind": {
+          "buffer": {
+            "minBindingSize": 48
+          }
+        },
+        "bindingArraySize": null
+      },
+      {
+        "name": "seeds",
+        "binding": {
+          "group": 0,
+          "binding": 2
+        },
+        "space": {
+          "Storage": {
+            "access": "LOAD"
+          }
+        },
+        "ty": 10,
+        "kind": {
+          "buffer": {
+            "minBindingSize": 16
+          }
+        },
+        "bindingArraySize": null
+      }
+    ],
+    "overrides": [
+      {
+        "name": "block_size",
+        "id": 0,
+        "ty": 3,
+        "hasDefault": true
+      },
+      {
+        "name": "damping",
+        "id": null,
+        "ty": 0,
+        "hasDefault": false
+      },
+      {
+        "name": "use_gravity",
+        "id": null,
+        "ty": 8,
+        "hasDefault": true
+      }
+    ],
+    "entryPoints": [
+      {
+        "name": "simulate",
+        "stage": "Compute",
+        "inputs": [
+          {
+            "builtIn": {
+              "name": "id",
+              "builtIn": "GlobalInvocationId",
+              "ty": {
+                "vector": {
+                  "size": "Tri",
+                  "scalar": {
+                    "kind": "Uint",
+                    "width": 4
+                  }
+                }
+              },
+              "arraySize": null
+            }
+          },
+          {
+            "builtIn": {
+              "name": "local",
+              "builtIn": "LocalInvocationIndex",
+              "ty": {
+                "scalar": {
+                  "kind": "Uint",
+                  "width": 4
+                }
+              },
+              "arraySize": null
+            }
+          }
+        ],
+        "outputs": [],
+        "resources": [
+          0,
+          1,
+          2
+        ],
+        "samplingPairs": [],
+        "workgroupSize": [
+          1,
+          1,
+          1
+        ],
+        "workgroupSizeFromOverrides": [
+          true,
+          false,
+          false
+        ],
+        "workgroupStorageSize": 1040,
+        "dualSourceBlending": false,
+        "taskPayloadSize": null,
+        "meshInfo": null,
+        "immediateUsage": {
+          "Valid": {
+            "slots": 0,
+            "size": 0
+          }
+        },
+        "rayTracingPayload": null
+      },
+      {
+        "name": "reset",
+        "stage": "Compute",
+        "inputs": [],
+        "outputs": [],
+        "resources": [
+          1
+        ],
+        "samplingPairs": [],
+        "workgroupSize": [
+          8,
+          8,
+          1
+        ],
+        "workgroupSizeFromOverrides": [
+          false,
+          false,
+          false
+        ],
+        "workgroupStorageSize": 0,
+        "dualSourceBlending": false,
+        "taskPayloadSize": null,
+        "meshInfo": null,
+        "immediateUsage": {
+          "Valid": {
+            "slots": 0,
+            "size": 0
+          }
+        },
+        "rayTracingPayload": null
+      }
+    ]
+  }
+}

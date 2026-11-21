@@ -184,40 +184,58 @@ editor integrations, CI pipelines, and tooling that needs to inspect entry point
 naga triangle.wgsl --format json
 ```
 
-Real output (the full document is printed to stdout):
+Abridged real output (`types` and `vs_main` trimmed; run it to see the full document):
 
 ```json
 {
+  "version": 1,
   "success": true,
   "diagnostics": [],
   "reflection": {
-    "entry_points": [
-      {
-        "name": "vs_main",
-        "stage": "Vertex",
-        "workgroup_size": [0, 0, 0]
-      },
-      {
-        "name": "fs_main",
-        "stage": "Fragment",
-        "workgroup_size": [0, 0, 0]
-      }
+    "types": [
+      { "name": null, "size": 16, "align": 16,
+        "inner": { "vector": { "size": "Quad", "scalar": { "kind": "Float", "width": 4 } } } }
     ],
     "resources": [
       {
         "name": "tint",
-        "group": 0,
-        "binding": 0,
-        "address_space": "Uniform"
+        "binding": { "group": 0, "binding": 0 },
+        "space": "Uniform",
+        "ty": 0,
+        "kind": { "buffer": { "minBindingSize": 16 } },
+        "bindingArraySize": null
       }
     ],
-    "overrides": []
+    "overrides": [],
+    "entryPoints": [
+      {
+        "name": "fs_main",
+        "stage": "Fragment",
+        "inputs": [],
+        "outputs": [
+          { "location": { "name": null, "location": 0,
+              "ty": { "vector": { "size": "Quad", "scalar": { "kind": "Float", "width": 4 } } },
+              "interpolation": "Perspective", "sampling": "Center",
+              "perPrimitive": false, "blendSrc": null } }
+        ],
+        "resources": [0],
+        "samplingPairs": [],
+        "workgroupSize": [0, 0, 0],
+        "workgroupSizeFromOverrides": [false, false, false],
+        "workgroupStorageSize": 0,
+        "dualSourceBlending": false,
+        "taskPayloadSize": null,
+        "meshInfo": null,
+        "immediateUsage": { "Valid": { "slots": 0, "size": 0 } },
+        "rayTracingPayload": null
+      }
+    ]
   }
 }
 ```
 
 **Diagnostics shape:** each entry in `diagnostics` carries `severity` (`"error"` or
-`"warning"`), `message`, an optional `location` (`line`, `column`, `byte_offset`, `length` — no
+`"warning"`), `message`, an optional `location` (`line`, `column`, `byteOffset`, `length` — no
 file name, since the input is a single file/stream), zero or more `labels` (each with `message`
 and an optional `location`), and a `notes` array (may be empty for validation errors). SPIR-V
 parse errors have no source location.
@@ -229,9 +247,29 @@ To write the shader to stdout and the JSON document to a file, use `--json-out` 
 naga shader.wgsl - --output-kind spv --json-out report.json > out.spv
 ```
 
-**Reflection shape:** `entry_points` lists every shader stage with its `name`, `stage`, and
-`workgroup_size`; `resources` lists every global binding with its `name`, `group`, `binding`, and
-`address_space`; `overrides` lists pipeline-constant overrides.
+**Reflection shape:** reflection comes from `naga::reflect` and describes the module before
+pipeline overrides are applied. Indices (`ty`, `resources`, `samplingPairs`, `rayTracingPayload`)
+point into the top-level `types` and `resources` arrays.
+
+- `types`: every type in the module with its `size` and `align` in bytes (runtime-sized arrays
+  count one element), and its shape (struct members carry `offset`).
+- `resources`: every `@group`/`@binding` global, with its address `space`, declared type, `kind`
+  (`buffer` with `minBindingSize`, `texture`, `sampler`, or `accelerationStructure`), and the
+  element count of binding arrays.
+- `overrides`: name, `@id`, type, and whether it has a default (overrides without one must be
+  given a value when creating a pipeline).
+- `entryPoints`: per entry point, the flattened `inputs` and `outputs` (vertex attributes,
+  inter-stage variables, fragment outputs including `blendSrc`, built-ins, and mesh vertex and
+  primitive outputs), the `resources` it statically uses, texture/sampler pairs, workgroup size
+  (and which dimensions come from overrides), workgroup memory size, dual-source blending, task
+  payload size, mesh output limits, immediate data usage, and ray tracing payload type.
+
+The document carries a `version` number, but the format is not yet stable. Print its JSON Schema
+with:
+
+```sh
+naga --print-output-schema
+```
 
 ---
 

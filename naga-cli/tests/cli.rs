@@ -826,7 +826,7 @@ fn config_drives_json_format() {
     );
     let v: serde_json::Value = serde_json::from_slice(&r.stdout).unwrap();
     assert_eq!(v["success"], true);
-    assert_eq!(v["reflection"]["entry_points"][0]["name"], "main");
+    assert_eq!(v["reflection"]["entryPoints"][0]["name"], "main");
 }
 
 #[test]
@@ -942,7 +942,7 @@ fn config_schema_matches_snapshot() {
 #[test]
 fn invalid_wgsl_error_json_matches_snapshot() {
     // Pins the structured `--format json` output for an invalid WGSL file (severity,
-    // message, location {line,column,byte_offset,length}, labels, notes). The JSON carries
+    // message, location {line,column,byteOffset,length}, labels, notes). The JSON carries
     // no file path or version, so it is stable across machines.
     let expected = include_str!("snapshots/invalid-wgsl-error.json");
     let src = write_tmp("naga_cli_invalid_err", "invalid.wgsl", "fn f( {");
@@ -978,7 +978,7 @@ fn json_format_valid_shader_reflection() {
     assert!(out.status.success());
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(v["success"], true);
-    assert_eq!(v["reflection"]["entry_points"][0]["name"], "main");
+    assert_eq!(v["reflection"]["entryPoints"][0]["name"], "main");
     assert_eq!(v["diagnostics"].as_array().unwrap().len(), 0);
 }
 
@@ -1449,7 +1449,7 @@ fn readme_json_reflection_example() {
     );
     let v: serde_json::Value = serde_json::from_slice(&r.stdout).unwrap();
     assert_eq!(v["success"], true);
-    let names: Vec<&str> = v["reflection"]["entry_points"]
+    let names: Vec<&str> = v["reflection"]["entryPoints"]
         .as_array()
         .unwrap()
         .iter()
@@ -2071,13 +2071,13 @@ fn json_reflection_reports_overrides_and_resources() {
     assert!(
         resources
             .iter()
-            .any(|r| r["group"] == 0 && r["binding"] == 0),
+            .any(|r| r["binding"]["group"] == 0 && r["binding"]["binding"] == 0),
         "expected resource at group=0,binding=0; got: {resources:?}"
     );
     assert!(
         resources
             .iter()
-            .any(|r| r["group"] == 0 && r["binding"] == 1),
+            .any(|r| r["binding"]["group"] == 0 && r["binding"]["binding"] == 1),
         "expected resource at group=0,binding=1; got: {resources:?}"
     );
 }
@@ -2390,7 +2390,7 @@ fn json_out_writes_report_file_and_shader_to_stdout() {
     let v: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&report).unwrap()).unwrap();
     assert_eq!(v["success"], true);
-    assert!(v["reflection"]["entry_points"].is_array());
+    assert!(v["reflection"]["entryPoints"].is_array());
 }
 
 #[test]
@@ -2676,4 +2676,80 @@ fn spv_out_capabilities_in_schema_and_config() {
         .output()
         .unwrap();
     assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+}
+
+// ── Reflection snapshots ──────────────────────────────────────────────────────
+
+/// Compare `naga <fixture> --format json` against `snapshots/reflection-<name>.json`.
+///
+/// Set `NAGA_CLI_BLESS=1` to rewrite the snapshot instead.
+fn check_reflection_snapshot(name: &str) {
+    let manifest = env!("CARGO_MANIFEST_DIR");
+    let input = format!("{manifest}/tests/in/reflection/{name}.wgsl");
+    let snapshot = format!("{manifest}/tests/snapshots/reflection-{name}.json");
+    let out = naga()
+        .arg(&input)
+        .args(["--format", "json"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{name}: {}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let actual = String::from_utf8(out.stdout).unwrap();
+    if std::env::var_os("NAGA_CLI_BLESS").is_some() {
+        std::fs::write(&snapshot, &actual).unwrap();
+        return;
+    }
+    let expected = std::fs::read_to_string(&snapshot).unwrap_or_default();
+    assert_eq!(
+        norm(&actual),
+        norm(&expected),
+        "reflection for {name}.wgsl changed. If intentional, regenerate with:\n\
+         NAGA_CLI_BLESS=1 cargo nextest run -p naga-cli reflection_snapshot"
+    );
+}
+
+#[test]
+fn reflection_snapshot_render() {
+    check_reflection_snapshot("render");
+}
+
+#[test]
+fn reflection_snapshot_compute() {
+    check_reflection_snapshot("compute");
+}
+
+#[test]
+fn reflection_snapshot_mesh() {
+    check_reflection_snapshot("mesh");
+}
+
+#[test]
+fn reflection_snapshot_bindings() {
+    check_reflection_snapshot("bindings");
+}
+
+#[test]
+fn output_schema_matches_snapshot() {
+    let snapshot = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/snapshots/output-schema.json"
+    );
+    let out = naga().arg("--print-output-schema").output().unwrap();
+    assert!(out.status.success());
+    let actual = String::from_utf8(out.stdout).unwrap();
+    if std::env::var_os("NAGA_CLI_BLESS").is_some() {
+        std::fs::write(snapshot, &actual).unwrap();
+        return;
+    }
+    let expected = std::fs::read_to_string(snapshot).unwrap_or_default();
+    assert_eq!(
+        norm(&actual),
+        norm(&expected),
+        "--print-output-schema output changed. If intentional, regenerate with:\n\
+         NAGA_CLI_BLESS=1 cargo nextest run -p naga-cli output_schema"
+    );
 }
