@@ -46,6 +46,8 @@ pub enum PipelineConstantError {
     NegativeWorkgroupSize,
     #[error("max vertices or max primitives is negative")]
     NegativeMeshOutputMax,
+    #[error("entry point '{0}' not found in the shader")]
+    EntryPointNotFound(String),
 }
 
 /// Compact `module` and replace all overrides with constants.
@@ -74,26 +76,7 @@ pub fn process_overrides<'a>(
     entry_point: Option<(ir::ShaderStage, &str)>,
     pipeline_constants: &PipelineConstants,
 ) -> Result<(Cow<'a, Module>, Cow<'a, ModuleInfo>), PipelineConstantError> {
-    let mut handles = module
-        .overrides
-        .iter()
-        .map(|(handle, _)| handle)
-        .collect::<Vec<_>>();
-    for c in pipeline_constants.keys() {
-        let c_id = c.parse().ok();
-        if let Some((i, _)) = handles.iter().enumerate().find(|&(_, handle)| {
-            let o = &module.overrides[*handle];
-            if o.id.is_some() {
-                o.id == c_id
-            } else {
-                o.name.as_deref() == Some(c.as_str())
-            }
-        }) {
-            handles.swap_remove(i);
-        } else {
-            return Err(PipelineConstantError::NotFound(c.clone()));
-        }
-    }
+    check_constants_exist(module, pipeline_constants)?;
 
     if (entry_point.is_none() || module.entry_points.len() <= 1) && module.overrides.is_empty() {
         // We skip compacting the module here mostly to reduce the risk of
@@ -120,14 +103,93 @@ pub fn process_overrides<'a>(
     // not reachable from the/an entry point.
     compact(&mut module, KeepUnused::No);
 
-    // If there are no overrides in the module, then we can skip the rest.
+    apply_overrides(&mut module, None, pipeline_constants)?;
+    revalidate(module)
+}
+
+/// Return a copy of `module` in which the overrides that `entry_point` uses
+/// are replaced with constants.
+///
+/// Unlike [`process_overrides`], this neither compacts nor validates the
+/// module. The handles of types, global variables, functions and entry points
+/// do not change, so per-global and per-entry-point uses in `module`'s
+/// [`ModuleInfo`] still apply to the result. Items that `entry_point` does not
+/// use keep their overrides.
+///
+/// `module` must be valid.
+pub fn resolve_overrides<'a>(
+    module: &'a Module,
+    entry_point: (ir::ShaderStage, &str),
+    pipeline_constants: &PipelineConstants,
+) -> Result<Cow<'a, Module>, PipelineConstantError> {
+    check_constants_exist(module, pipeline_constants)?;
     if module.overrides.is_empty() {
-        return revalidate(module);
+        return Ok(Cow::Borrowed(module));
     }
+    let (stage, name) = entry_point;
+    let index = module
+        .entry_points
+        .iter()
+        .position(|ep| ep.stage == stage && ep.name == name)
+        .ok_or_else(|| PipelineConstantError::EntryPointNotFound(name.to_string()))?;
+    let mut module = module.clone();
+    apply_overrides(&mut module, Some(index), pipeline_constants)?;
+    Ok(Cow::Owned(module))
+}
+
+/// Return an error if a key of `pipeline_constants` names no override of `module`.
+fn check_constants_exist(
+    module: &Module,
+    pipeline_constants: &PipelineConstants,
+) -> Result<(), PipelineConstantError> {
+    let mut handles = module
+        .overrides
+        .iter()
+        .map(|(handle, _)| handle)
+        .collect::<Vec<_>>();
+    for c in pipeline_constants.keys() {
+        let c_id = c.parse().ok();
+        if let Some((i, _)) = handles.iter().enumerate().find(|&(_, handle)| {
+            let o = &module.overrides[*handle];
+            if o.id.is_some() {
+                o.id == c_id
+            } else {
+                o.name.as_deref() == Some(c.as_str())
+            }
+        }) {
+            handles.swap_remove(i);
+        } else {
+            return Err(PipelineConstantError::NotFound(c.clone()));
+        }
+    }
+    Ok(())
+}
+
+/// Replace the overrides that `module`'s entry points use with constants, in place.
+///
+/// If `entry_point` is given, only the overrides that entry point uses are
+/// replaced, and only that entry point is processed. Everything else keeps its
+/// overrides, so the module is only valid once that is removed, for example by
+/// [`compact`]. This does not validate the module.
+///
+/// Callers must check the keys of `pipeline_constants` with
+/// [`check_constants_exist`] before removing anything from `module`.
+///
+/// Return `true` if `module` was changed.
+fn apply_overrides(
+    module: &mut Module,
+    entry_point: Option<usize>,
+    pipeline_constants: &PipelineConstants,
+) -> Result<bool, PipelineConstantError> {
+    if module.overrides.is_empty() {
+        return Ok(false);
+    }
+    let reachable = crate::compact::reachable(module, entry_point);
 
     // A map from override handles to the handles of the constants
     // we've replaced them with.
-    let mut override_map = HandleVec::with_capacity(module.overrides.len());
+    let mut override_map =
+        HandleVec::<Override, Option<Handle<Constant>>>::with_capacity(module.overrides.len());
 
     // A map from `module`'s original global expression handles to
     // handles in the new, simplified global expression arena.
@@ -183,23 +245,34 @@ pub fn process_overrides<'a>(
     // `Override` expressions we encounter can only have initializers
     // referring to global expressions we've already simplified.
     for (old_h, expr, span) in module.global_expressions.drain() {
+        if !reachable.global_expressions.contains(old_h) {
+            // Keep it unevaluated, so that overrides without a value don't
+            // cause an error.
+            let mut expr = expr;
+            adjust_expr(&adjusted_global_expressions, &mut expr);
+            let h = module.global_expressions.append(expr, span);
+            global_expression_kind_tracker.insert(h, crate::proc::ExpressionKind::Override);
+            adjusted_global_expressions.insert(old_h, h);
+            continue;
+        }
         let mut expr = match expr {
             Expression::Override(h) => {
-                let c_h = if let Some(new_h) = override_map.get(h) {
-                    *new_h
+                let c_h = if let Some(&Some(new_h)) = override_map.get(h) {
+                    new_h
                 } else {
                     let mut new_h = None;
                     for entry in override_iter.by_ref() {
                         let stop = entry.0 == h;
-                        new_h = Some(process_override(
+                        new_h = process_override(
                             entry,
+                            &reachable,
                             pipeline_constants,
-                            &mut module,
+                            module,
                             &mut override_map,
                             &adjusted_global_expressions,
                             &mut adjusted_constant_initializers,
                             &mut global_expression_kind_tracker,
-                        )?);
+                        )?;
                         if stop {
                             break;
                         }
@@ -218,7 +291,7 @@ pub fn process_overrides<'a>(
             expr => expr,
         };
         let mut evaluator = ConstantEvaluator::for_wgsl_module(
-            &mut module,
+            module,
             &mut global_expression_kind_tracker,
             &mut layouter,
             false,
@@ -234,8 +307,9 @@ pub fn process_overrides<'a>(
             Override { name: Some(_), .. } | Override { id: Some(_), .. } => {
                 process_override(
                     entry,
+                    &reachable,
                     pipeline_constants,
-                    &mut module,
+                    module,
                     &mut override_map,
                     &adjusted_global_expressions,
                     &mut adjusted_constant_initializers,
@@ -270,24 +344,26 @@ pub fn process_overrides<'a>(
     }
 
     let mut functions = module.functions.take();
-    for (_, function) in functions.iter_mut() {
-        process_function(&mut module, &override_map, &mut layouter, function)?;
+    for (handle, function) in functions.iter_mut() {
+        if reachable.functions.contains(handle) {
+            process_function(module, &override_map, &mut layouter, function)?;
+        }
     }
     module.functions = functions;
 
     let mut entry_points = mem::take(&mut module.entry_points);
-    for ep in entry_points.iter_mut() {
-        process_function(&mut module, &override_map, &mut layouter, &mut ep.function)?;
-        process_workgroup_size_override(&mut module, &adjusted_global_expressions, ep)?;
-        process_mesh_shader_overrides(&mut module, &adjusted_global_expressions, ep)?;
+    for (index, ep) in entry_points.iter_mut().enumerate() {
+        if entry_point.is_some_and(|selected| selected != index) {
+            continue;
+        }
+        process_function(module, &override_map, &mut layouter, &mut ep.function)?;
+        process_workgroup_size_override(module, &adjusted_global_expressions, ep)?;
+        process_mesh_shader_overrides(module, &adjusted_global_expressions, ep)?;
     }
     module.entry_points = entry_points;
     module.overrides = overrides;
 
-    // Now that we've rewritten all the expressions, we need to
-    // recompute their types and other metadata. For the time being,
-    // do a full re-validation.
-    revalidate(module)
+    Ok(true)
 }
 
 fn revalidate(
@@ -358,15 +434,25 @@ fn process_mesh_shader_overrides(
 /// Add a [`Constant`] to `module` for the override `old_h`.
 ///
 /// Add the new `Constant` to `override_map` and `adjusted_constant_initializers`.
+#[expect(clippy::too_many_arguments)]
 fn process_override(
     (old_h, r#override, span): (Handle<Override>, &mut Override, &Span),
+    reachable: &crate::compact::Reachable,
     pipeline_constants: &PipelineConstants,
     module: &mut Module,
-    override_map: &mut HandleVec<Override, Handle<Constant>>,
+    override_map: &mut HandleVec<Override, Option<Handle<Constant>>>,
     adjusted_global_expressions: &HandleVec<Expression, Handle<Expression>>,
     adjusted_constant_initializers: &mut HashSet<Handle<Constant>>,
     global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
-) -> Result<Handle<Constant>, PipelineConstantError> {
+) -> Result<Option<Handle<Constant>>, PipelineConstantError> {
+    if !reachable.overrides.contains(old_h) {
+        if let Some(ref mut init) = r#override.init {
+            *init = adjusted_global_expressions[*init];
+        }
+        override_map.insert(old_h, None);
+        return Ok(None);
+    }
+
     // Determine which key to use for `r#override` in `pipeline_constants`.
     let key = if let Some(id) = r#override.id {
         Cow::Owned(id.to_string())
@@ -402,10 +488,10 @@ fn process_override(
         init,
     };
     let h = module.constants.append(constant, *span);
-    override_map.insert(old_h, h);
+    override_map.insert(old_h, Some(h));
     adjusted_constant_initializers.insert(h);
     r#override.init = Some(init);
-    Ok(h)
+    Ok(Some(h))
 }
 
 /// Replace all override expressions in `function` with fully-evaluated constants.
@@ -419,7 +505,7 @@ fn process_override(
 /// `Handle<Constant>` for the override's final value.
 fn process_function(
     module: &mut Module,
-    override_map: &HandleVec<Override, Handle<Constant>>,
+    override_map: &HandleVec<Override, Option<Handle<Constant>>>,
     layouter: &mut crate::proc::Layouter,
     function: &mut Function,
 ) -> Result<(), ConstantEvaluatorError> {
@@ -453,7 +539,9 @@ fn process_function(
 
     for (old_h, mut expr, span) in expressions.drain() {
         if let Expression::Override(h) = expr {
-            expr = Expression::Constant(override_map[h]);
+            expr = Expression::Constant(
+                override_map[h].expect("a reachable function only uses reachable overrides"),
+            );
         }
         adjust_expr(&adjusted_local_expressions, &mut expr);
         let h = evaluator.try_eval_and_append(expr, span)?;
