@@ -14,7 +14,11 @@ use objc2_metal::{
     MTLVertexStepFunction, MTLWinding,
 };
 
-pub fn map_texture_usage(format: wgt::TextureFormat, usage: wgt::TextureUses) -> MTLTextureUsage {
+pub fn map_texture_usage(
+    format: wgt::TextureFormat,
+    usage: wgt::TextureUses,
+    has_view_formats: bool,
+) -> MTLTextureUsage {
     use wgt::TextureUses as Tu;
 
     let mut mtl_usage = MTLTextureUsage::Unknown;
@@ -37,11 +41,12 @@ pub fn map_texture_usage(format: wgt::TextureFormat, usage: wgt::TextureUses) ->
         MTLTextureUsage::ShaderWrite,
         usage.intersects(Tu::STORAGE_WRITE_ONLY | Tu::STORAGE_READ_WRITE),
     );
-    // needed for combined depth/stencil formats since we might
-    // create a stencil-only view from them
+    // Needed for stencil-only views of combined depth/stencil formats and for
+    // sRGB views of some compressed formats (e.g. ETC2). Uncompressed sRGB
+    // views don't need it, and setting it disables lossless compression.
     mtl_usage.set(
         MTLTextureUsage::PixelFormatView,
-        format.is_combined_depth_stencil_format(),
+        format.is_combined_depth_stencil_format() || (has_view_formats && format.is_compressed()),
     );
 
     mtl_usage.set(

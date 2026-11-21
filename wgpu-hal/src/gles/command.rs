@@ -405,6 +405,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 src_target,
                 dst: dst_raw,
                 dst_target,
+                format: dst.format,
                 copy,
             })
         }

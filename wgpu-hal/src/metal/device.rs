@@ -619,7 +619,11 @@ impl crate::Device for super::Device {
                 unsafe { descriptor.setHeight(height) };
                 unsafe { descriptor.setMipmapLevelCount(desc.mip_level_count as usize) };
                 descriptor.setPixelFormat(mtl_format);
-                descriptor.setUsage(conv::map_texture_usage(desc.format, desc.usage));
+                descriptor.setUsage(conv::map_texture_usage(
+                    desc.format,
+                    desc.usage,
+                    !desc.view_formats.is_empty(),
+                ));
                 descriptor.setStorageMode(mtl_storage_mode);
 
                 let raw = self

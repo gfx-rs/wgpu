@@ -254,6 +254,8 @@ bitflags::bitflags! {
         /// Supports explicit DRM format modifiers via `EGL_EXT_image_dma_buf_import_modifiers`.
         #[cfg(all(unix, native))]
         const EGL_IMAGE_DMA_BUF_IMPORT_MODIFIERS = 1 << 22;
+        /// Supports `glCopyImageSubData`.
+        const COPY_IMAGE = 1 << 23;
     }
 }
 
@@ -523,10 +525,14 @@ impl Texture {
 
     /// Returns the GL texture bind target for a texture descriptor.
     fn get_info_from_desc(desc: &TextureDescriptor) -> u32 {
-        Self::target_for_view_dimension(
-            desc.texture_binding_view_dimension
-                .expect("GLES requires a texture binding view dimension"),
-        )
+        let view_dimension = desc
+            .texture_binding_view_dimension
+            .expect("GLES requires a texture binding view dimension");
+        // Multisampled arrays are not exposed on this backend.
+        if desc.sample_count > 1 && view_dimension == wgt::TextureViewDimension::D2 {
+            return glow::TEXTURE_2D_MULTISAMPLE;
+        }
+        Self::target_for_view_dimension(view_dimension)
     }
 
     /// GL bind target corresponding to a view dimension.
@@ -926,6 +932,7 @@ enum Command {
         src_target: BindTarget,
         dst: glow::Texture,
         dst_target: BindTarget,
+        format: wgt::TextureFormat,
         copy: crate::TextureCopy,
     },
     CopyBufferToTexture {
