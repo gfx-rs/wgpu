@@ -32,6 +32,7 @@ mod device;
 mod drm;
 mod instance;
 mod memory;
+mod memory_budget;
 mod pnext_chain;
 mod sampler;
 mod semaphore_list;

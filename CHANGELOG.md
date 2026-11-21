@@ -377,6 +377,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Polyfill workgroup zero init in mesh and task shaders on AMD's proprietary driver, which fails with `VK_ERROR_INITIALIZATION_FAILED` when they use `OpVariable` initializers. By @apollo-2006 in [#10692](https://github.com/gfx-rs/wgpu/pull/10692).
 - Fix a fence data race between submitting and polling on devices without timeline semaphores. By @JasperDeSutter in [#10960](https://github.com/gfx-rs/wgpu/pull/10960).
 - Fix pass timestamp queries on Vulkan sometimes reporting a duration of almost zero for a render or compute pass, when the GPU was busy with other work. By @kikijiki in [#10837](https://github.com/gfx-rs/wgpu/pull/10837).
+- Allow host-writable (`MAP_WRITE`) buffers to fall back to host memory when a BAR heap exceeds `MemoryBudgetThresholds`, and avoid false device loss, OOMs, or panics from full BAR/lazy heaps, zero `heapBudget`, or missing `VK_KHR_get_physical_device_properties2`. By @a1x-an in [#11065](https://github.com/gfx-rs/wgpu/pull/11065).
 
 #### Metal
 
