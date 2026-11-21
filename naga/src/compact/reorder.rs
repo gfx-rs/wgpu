@@ -983,4 +983,85 @@ mod tests {
             assert!(remaining.any(|k| k == kind), "expression was reordered");
         }
     }
+
+    /// A pass may append a function that earlier functions call. Compaction
+    /// moves callees before their callers, and adjusts calls and doc comments.
+    #[test]
+    fn callee_after_caller_is_moved_first() {
+        let mut module = Module::default();
+        let i32_ty = scalar_type(&mut module, Scalar::I32);
+        let result = |ty| Some(crate::FunctionResult { ty, binding: None });
+
+        // The caller comes first: `fn caller() -> i32 { return callee(); }`.
+        let mut caller = Function {
+            name: Some(String::from("caller")),
+            result: result(i32_ty),
+            ..Function::default()
+        };
+        let callee_handle = Handle::<Function>::new(super::Index::new(1).unwrap());
+        let call_result = add(&mut caller, Expression::CallResult(callee_handle));
+        caller.body.push(
+            Statement::Call {
+                function: callee_handle,
+                arguments: Vec::new(),
+                result: Some(call_result),
+            },
+            Span::default(),
+        );
+        caller.body.push(
+            Statement::Return {
+                value: Some(call_result),
+            },
+            Span::default(),
+        );
+        let caller_handle = module.functions.append(caller, Span::default());
+
+        // `fn callee() -> i32 { return 1; }`
+        let mut callee = Function {
+            name: Some(String::from("callee")),
+            result: result(i32_ty),
+            ..Function::default()
+        };
+        let one = add(&mut callee, Expression::Literal(Literal::I32(1)));
+        callee
+            .body
+            .push(Statement::Return { value: Some(one) }, Span::default());
+        assert_eq!(
+            module.functions.append(callee, Span::default()),
+            callee_handle
+        );
+
+        let mut main = Function::default();
+        let main_result = add(&mut main, Expression::CallResult(caller_handle));
+        main.body.push(
+            Statement::Call {
+                function: caller_handle,
+                arguments: Vec::new(),
+                result: Some(main_result),
+            },
+            Span::default(),
+        );
+        module.entry_points.push(entry_point(main));
+
+        let docs = module.get_or_insert_default_doc_comments();
+        docs.functions
+            .insert(caller_handle, alloc::vec![String::from("caller docs")]);
+        docs.functions
+            .insert(callee_handle, alloc::vec![String::from("callee docs")]);
+
+        compact(&mut module, KeepUnused::No);
+        validate(&module).expect("compacted module should be valid");
+
+        let names: Vec<_> = module
+            .functions
+            .iter()
+            .map(|(_, f)| f.name.clone().unwrap())
+            .collect();
+        assert_eq!(names, ["callee", "caller"]);
+        let docs = &module.doc_comments.as_ref().unwrap().functions;
+        for (&handle, doc) in docs {
+            let name = module.functions[handle].name.as_deref().unwrap();
+            assert_eq!(doc[0], alloc::format!("{name} docs"));
+        }
+    }
 }
