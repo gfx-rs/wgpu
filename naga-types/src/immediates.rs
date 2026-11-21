@@ -21,11 +21,13 @@ impl core::error::Error for ImmediateSlotsOverflowError {}
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct ImmediateSlots(u64);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum ImmediateUsage {
     Valid { slots: ImmediateSlots, size: u32 },
     // Used when a shader's immediate data type exceeds the maximum of 256 bytes and cannot

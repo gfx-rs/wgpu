@@ -25,6 +25,7 @@ pub type OverrideIndex = usize;
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[cfg_attr(
     any(feature = "serialize", feature = "deserialize"),
     serde(rename_all = "camelCase")
@@ -53,6 +54,7 @@ impl ModuleReflection {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[cfg_attr(
     any(feature = "serialize", feature = "deserialize"),
     serde(rename_all = "camelCase")
@@ -72,6 +74,7 @@ pub struct Type {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[cfg_attr(
     any(feature = "serialize", feature = "deserialize"),
     serde(rename_all = "camelCase", rename_all_fields = "camelCase")
@@ -127,6 +130,7 @@ pub enum TypeInner {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[cfg_attr(
     any(feature = "serialize", feature = "deserialize"),
     serde(rename_all = "camelCase")
@@ -143,6 +147,7 @@ pub enum ArraySize {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[cfg_attr(
     any(feature = "serialize", feature = "deserialize"),
     serde(rename_all = "camelCase")
@@ -157,6 +162,7 @@ pub struct StructMember {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[cfg_attr(
     any(feature = "serialize", feature = "deserialize"),
     serde(rename_all = "camelCase")
@@ -177,6 +183,7 @@ pub struct Resource {
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[cfg_attr(
     any(feature = "serialize", feature = "deserialize"),
     serde(rename_all = "camelCase", rename_all_fields = "camelCase")
@@ -203,6 +210,7 @@ pub enum ResourceKind {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[cfg_attr(
     any(feature = "serialize", feature = "deserialize"),
     serde(rename_all = "camelCase")
@@ -221,6 +229,7 @@ pub struct Override {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[cfg_attr(
     any(feature = "serialize", feature = "deserialize"),
     serde(rename_all = "camelCase", rename_all_fields = "camelCase")
@@ -242,6 +251,7 @@ pub enum NumericType {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[cfg_attr(
     any(feature = "serialize", feature = "deserialize"),
     serde(rename_all = "camelCase", rename_all_fields = "camelCase")
@@ -272,6 +282,7 @@ pub enum Varying {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[cfg_attr(
     any(feature = "serialize", feature = "deserialize"),
     serde(rename_all = "camelCase")
@@ -286,6 +297,7 @@ pub struct MeshInfo {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[cfg_attr(
     any(feature = "serialize", feature = "deserialize"),
     serde(rename_all = "camelCase")

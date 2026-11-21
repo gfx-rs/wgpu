@@ -39,6 +39,11 @@ fn real_main(args: &cli::Args) -> anyhow::Result<bool> {
         println!("{}", serde_json::to_string_pretty(&schema)?);
         return Ok(true);
     }
+    if args.print_output_schema {
+        let schema = schemars::schema_for!(crate::output::JsonOutput);
+        println!("{}", serde_json::to_string_pretty(&schema)?);
+        return Ok(true);
+    }
 
     let mut params = params::build_parameters(args)?;
 

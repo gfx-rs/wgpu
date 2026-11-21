@@ -1,0 +1,471 @@
+{
+  "version": 1,
+  "success": true,
+  "diagnostics": [],
+  "reflection": {
+    "types": [
+      {
+        "name": null,
+        "size": 16,
+        "align": 16,
+        "inner": {
+          "vector": {
+            "size": "Quad",
+            "scalar": {
+              "kind": "Float",
+              "width": 4
+            }
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 1,
+        "align": 1,
+        "inner": {
+          "scalar": {
+            "kind": "Bool",
+            "width": 1
+          }
+        }
+      },
+      {
+        "name": "TaskPayload",
+        "size": 32,
+        "align": 16,
+        "inner": {
+          "struct": {
+            "members": [
+              {
+                "name": "color",
+                "ty": 0,
+                "offset": 0
+              },
+              {
+                "name": "visible",
+                "ty": 1,
+                "offset": 16
+              }
+            ],
+            "span": 32
+          }
+        }
+      },
+      {
+        "name": "VertexOutput",
+        "size": 32,
+        "align": 16,
+        "inner": {
+          "struct": {
+            "members": [
+              {
+                "name": "position",
+                "ty": 0,
+                "offset": 0
+              },
+              {
+                "name": "color",
+                "ty": 0,
+                "offset": 16
+              }
+            ],
+            "span": 32
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 4,
+        "align": 4,
+        "inner": {
+          "scalar": {
+            "kind": "Uint",
+            "width": 4
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 12,
+        "align": 16,
+        "inner": {
+          "vector": {
+            "size": "Tri",
+            "scalar": {
+              "kind": "Uint",
+              "width": 4
+            }
+          }
+        }
+      },
+      {
+        "name": "PrimitiveOutput",
+        "size": 32,
+        "align": 16,
+        "inner": {
+          "struct": {
+            "members": [
+              {
+                "name": "indices",
+                "ty": 5,
+                "offset": 0
+              },
+              {
+                "name": "cull",
+                "ty": 1,
+                "offset": 12
+              },
+              {
+                "name": "mask",
+                "ty": 0,
+                "offset": 16
+              }
+            ],
+            "span": 32
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 96,
+        "align": 16,
+        "inner": {
+          "array": {
+            "base": 3,
+            "size": {
+              "constant": 3
+            },
+            "stride": 32
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 32,
+        "align": 16,
+        "inner": {
+          "array": {
+            "base": 6,
+            "size": {
+              "constant": 1
+            },
+            "stride": 32
+          }
+        }
+      },
+      {
+        "name": "MeshOutput",
+        "size": 144,
+        "align": 16,
+        "inner": {
+          "struct": {
+            "members": [
+              {
+                "name": "vertices",
+                "ty": 7,
+                "offset": 0
+              },
+              {
+                "name": "primitives",
+                "ty": 8,
+                "offset": 96
+              },
+              {
+                "name": "vertex_count",
+                "ty": 4,
+                "offset": 128
+              },
+              {
+                "name": "primitive_count",
+                "ty": 4,
+                "offset": 132
+              }
+            ],
+            "span": 144
+          }
+        }
+      },
+      {
+        "name": "FragmentInput",
+        "size": 32,
+        "align": 16,
+        "inner": {
+          "struct": {
+            "members": [
+              {
+                "name": "color",
+                "ty": 0,
+                "offset": 0
+              },
+              {
+                "name": "mask",
+                "ty": 0,
+                "offset": 16
+              }
+            ],
+            "span": 32
+          }
+        }
+      }
+    ],
+    "resources": [],
+    "overrides": [],
+    "entryPoints": [
+      {
+        "name": "ts_main",
+        "stage": "Task",
+        "inputs": [],
+        "outputs": [
+          {
+            "builtIn": {
+              "name": null,
+              "builtIn": "MeshTaskSize",
+              "ty": {
+                "vector": {
+                  "size": "Tri",
+                  "scalar": {
+                    "kind": "Uint",
+                    "width": 4
+                  }
+                }
+              },
+              "arraySize": null
+            }
+          }
+        ],
+        "resources": [],
+        "samplingPairs": [],
+        "workgroupSize": [
+          1,
+          1,
+          1
+        ],
+        "workgroupSizeFromOverrides": [
+          false,
+          false,
+          false
+        ],
+        "workgroupStorageSize": 0,
+        "dualSourceBlending": false,
+        "taskPayloadSize": 32,
+        "meshInfo": null,
+        "immediateUsage": {
+          "Valid": {
+            "slots": 0,
+            "size": 0
+          }
+        },
+        "rayTracingPayload": null
+      },
+      {
+        "name": "ms_main",
+        "stage": "Mesh",
+        "inputs": [],
+        "outputs": [
+          {
+            "builtIn": {
+              "name": "position",
+              "builtIn": {
+                "Position": {
+                  "invariant": false
+                }
+              },
+              "ty": {
+                "vector": {
+                  "size": "Quad",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "arraySize": null
+            }
+          },
+          {
+            "location": {
+              "name": "color",
+              "location": 0,
+              "ty": {
+                "vector": {
+                  "size": "Quad",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "interpolation": "Perspective",
+              "sampling": "Center",
+              "perPrimitive": false,
+              "blendSrc": null
+            }
+          },
+          {
+            "builtIn": {
+              "name": "indices",
+              "builtIn": "TriangleIndices",
+              "ty": {
+                "vector": {
+                  "size": "Tri",
+                  "scalar": {
+                    "kind": "Uint",
+                    "width": 4
+                  }
+                }
+              },
+              "arraySize": null
+            }
+          },
+          {
+            "builtIn": {
+              "name": "cull",
+              "builtIn": "CullPrimitive",
+              "ty": {
+                "scalar": {
+                  "kind": "Bool",
+                  "width": 1
+                }
+              },
+              "arraySize": null
+            }
+          },
+          {
+            "location": {
+              "name": "mask",
+              "location": 1,
+              "ty": {
+                "vector": {
+                  "size": "Quad",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "interpolation": "Perspective",
+              "sampling": "Center",
+              "perPrimitive": true,
+              "blendSrc": null
+            }
+          }
+        ],
+        "resources": [],
+        "samplingPairs": [],
+        "workgroupSize": [
+          1,
+          1,
+          1
+        ],
+        "workgroupSizeFromOverrides": [
+          false,
+          false,
+          false
+        ],
+        "workgroupStorageSize": 144,
+        "dualSourceBlending": false,
+        "taskPayloadSize": 32,
+        "meshInfo": {
+          "maxVertices": 3,
+          "maxPrimitives": 1,
+          "topology": "Triangles"
+        },
+        "immediateUsage": {
+          "Valid": {
+            "slots": 0,
+            "size": 0
+          }
+        },
+        "rayTracingPayload": null
+      },
+      {
+        "name": "fs_main",
+        "stage": "Fragment",
+        "inputs": [
+          {
+            "location": {
+              "name": "color",
+              "location": 0,
+              "ty": {
+                "vector": {
+                  "size": "Quad",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "interpolation": "Perspective",
+              "sampling": "Center",
+              "perPrimitive": false,
+              "blendSrc": null
+            }
+          },
+          {
+            "location": {
+              "name": "mask",
+              "location": 1,
+              "ty": {
+                "vector": {
+                  "size": "Quad",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "interpolation": "Perspective",
+              "sampling": "Center",
+              "perPrimitive": true,
+              "blendSrc": null
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "location": {
+              "name": null,
+              "location": 0,
+              "ty": {
+                "vector": {
+                  "size": "Quad",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "interpolation": "Perspective",
+              "sampling": "Center",
+              "perPrimitive": false,
+              "blendSrc": null
+            }
+          }
+        ],
+        "resources": [],
+        "samplingPairs": [],
+        "workgroupSize": [
+          0,
+          0,
+          0
+        ],
+        "workgroupSizeFromOverrides": [
+          false,
+          false,
+          false
+        ],
+        "workgroupStorageSize": 0,
+        "dualSourceBlending": false,
+        "taskPayloadSize": null,
+        "meshInfo": null,
+        "immediateUsage": {
+          "Valid": {
+            "slots": 0,
+            "size": 0
+          }
+        },
+        "rayTracingPayload": null
+      }
+    ]
+  }
+}

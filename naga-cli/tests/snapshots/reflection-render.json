@@ -1,0 +1,810 @@
+{
+  "version": 1,
+  "success": true,
+  "diagnostics": [],
+  "reflection": {
+    "types": [
+      {
+        "name": null,
+        "size": 4,
+        "align": 4,
+        "inner": {
+          "scalar": {
+            "kind": "Float",
+            "width": 4
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 64,
+        "align": 16,
+        "inner": {
+          "matrix": {
+            "columns": "Quad",
+            "rows": "Quad",
+            "scalar": {
+              "kind": "Float",
+              "width": 4
+            }
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 12,
+        "align": 16,
+        "inner": {
+          "vector": {
+            "size": "Tri",
+            "scalar": {
+              "kind": "Float",
+              "width": 4
+            }
+          }
+        }
+      },
+      {
+        "name": "Camera",
+        "size": 80,
+        "align": 16,
+        "inner": {
+          "struct": {
+            "members": [
+              {
+                "name": "view_proj",
+                "ty": 1,
+                "offset": 0
+              },
+              {
+                "name": "position",
+                "ty": 2,
+                "offset": 64
+              },
+              {
+                "name": "exposure",
+                "ty": 0,
+                "offset": 76
+              }
+            ],
+            "span": 80
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 8,
+        "align": 8,
+        "inner": {
+          "vector": {
+            "size": "Bi",
+            "scalar": {
+              "kind": "Float",
+              "width": 4
+            }
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 4,
+        "align": 4,
+        "inner": {
+          "scalar": {
+            "kind": "Uint",
+            "width": 4
+          }
+        }
+      },
+      {
+        "name": "VertexInput",
+        "size": 48,
+        "align": 16,
+        "inner": {
+          "struct": {
+            "members": [
+              {
+                "name": "position",
+                "ty": 2,
+                "offset": 0
+              },
+              {
+                "name": "normal",
+                "ty": 2,
+                "offset": 16
+              },
+              {
+                "name": "uv",
+                "ty": 4,
+                "offset": 32
+              },
+              {
+                "name": "material",
+                "ty": 5,
+                "offset": 40
+              }
+            ],
+            "span": 48
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 16,
+        "align": 16,
+        "inner": {
+          "vector": {
+            "size": "Quad",
+            "scalar": {
+              "kind": "Float",
+              "width": 4
+            }
+          }
+        }
+      },
+      {
+        "name": "VertexOutput",
+        "size": 48,
+        "align": 16,
+        "inner": {
+          "struct": {
+            "members": [
+              {
+                "name": "clip_position",
+                "ty": 7,
+                "offset": 0
+              },
+              {
+                "name": "uv",
+                "ty": 4,
+                "offset": 16
+              },
+              {
+                "name": "material",
+                "ty": 5,
+                "offset": 24
+              },
+              {
+                "name": "normal",
+                "ty": 2,
+                "offset": 32
+              }
+            ],
+            "span": 48
+          }
+        }
+      },
+      {
+        "name": "FragmentOutput",
+        "size": 48,
+        "align": 16,
+        "inner": {
+          "struct": {
+            "members": [
+              {
+                "name": "color",
+                "ty": 7,
+                "offset": 0
+              },
+              {
+                "name": "emissive",
+                "ty": 7,
+                "offset": 16
+              },
+              {
+                "name": "depth",
+                "ty": 0,
+                "offset": 32
+              }
+            ],
+            "span": 48
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 0,
+        "align": 1,
+        "inner": {
+          "image": {
+            "dim": "D2",
+            "arrayed": false,
+            "class": {
+              "Sampled": {
+                "kind": "Float",
+                "multi": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 0,
+        "align": 1,
+        "inner": {
+          "sampler": {
+            "comparison": false
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 0,
+        "align": 1,
+        "inner": {
+          "image": {
+            "dim": "D2",
+            "arrayed": true,
+            "class": {
+              "Depth": {
+                "multi": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 0,
+        "align": 1,
+        "inner": {
+          "sampler": {
+            "comparison": true
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 0,
+        "align": 1,
+        "inner": {
+          "image": {
+            "dim": "D2",
+            "arrayed": false,
+            "class": {
+              "Storage": {
+                "format": "Rgba8Unorm",
+                "access": "STORE"
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 1,
+        "align": 1,
+        "inner": {
+          "scalar": {
+            "kind": "Bool",
+            "width": 1
+          }
+        }
+      }
+    ],
+    "resources": [
+      {
+        "name": "camera",
+        "binding": {
+          "group": 0,
+          "binding": 0
+        },
+        "space": "Uniform",
+        "ty": 3,
+        "kind": {
+          "buffer": {
+            "minBindingSize": 80
+          }
+        },
+        "bindingArraySize": null
+      },
+      {
+        "name": "albedo",
+        "binding": {
+          "group": 1,
+          "binding": 0
+        },
+        "space": "Handle",
+        "ty": 10,
+        "kind": {
+          "texture": {
+            "dim": "D2",
+            "arrayed": false,
+            "class": {
+              "Sampled": {
+                "kind": "Float",
+                "multi": false
+              }
+            }
+          }
+        },
+        "bindingArraySize": null
+      },
+      {
+        "name": "albedo_sampler",
+        "binding": {
+          "group": 1,
+          "binding": 1
+        },
+        "space": "Handle",
+        "ty": 11,
+        "kind": {
+          "sampler": {
+            "comparison": false
+          }
+        },
+        "bindingArraySize": null
+      },
+      {
+        "name": "shadow_map",
+        "binding": {
+          "group": 1,
+          "binding": 2
+        },
+        "space": "Handle",
+        "ty": 12,
+        "kind": {
+          "texture": {
+            "dim": "D2",
+            "arrayed": true,
+            "class": {
+              "Depth": {
+                "multi": false
+              }
+            }
+          }
+        },
+        "bindingArraySize": null
+      },
+      {
+        "name": "shadow_sampler",
+        "binding": {
+          "group": 1,
+          "binding": 3
+        },
+        "space": "Handle",
+        "ty": 13,
+        "kind": {
+          "sampler": {
+            "comparison": true
+          }
+        },
+        "bindingArraySize": null
+      },
+      {
+        "name": "output_image",
+        "binding": {
+          "group": 1,
+          "binding": 4
+        },
+        "space": "Handle",
+        "ty": 14,
+        "kind": {
+          "texture": {
+            "dim": "D2",
+            "arrayed": false,
+            "class": {
+              "Storage": {
+                "format": "Rgba8Unorm",
+                "access": "STORE"
+              }
+            }
+          }
+        },
+        "bindingArraySize": null
+      }
+    ],
+    "overrides": [],
+    "entryPoints": [
+      {
+        "name": "vs_main",
+        "stage": "Vertex",
+        "inputs": [
+          {
+            "location": {
+              "name": "position",
+              "location": 0,
+              "ty": {
+                "vector": {
+                  "size": "Tri",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "interpolation": "Perspective",
+              "sampling": "Center",
+              "perPrimitive": false,
+              "blendSrc": null
+            }
+          },
+          {
+            "location": {
+              "name": "normal",
+              "location": 1,
+              "ty": {
+                "vector": {
+                  "size": "Tri",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "interpolation": "Perspective",
+              "sampling": "Center",
+              "perPrimitive": false,
+              "blendSrc": null
+            }
+          },
+          {
+            "location": {
+              "name": "uv",
+              "location": 2,
+              "ty": {
+                "vector": {
+                  "size": "Bi",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "interpolation": "Perspective",
+              "sampling": "Center",
+              "perPrimitive": false,
+              "blendSrc": null
+            }
+          },
+          {
+            "location": {
+              "name": "material",
+              "location": 3,
+              "ty": {
+                "scalar": {
+                  "kind": "Uint",
+                  "width": 4
+                }
+              },
+              "interpolation": null,
+              "sampling": null,
+              "perPrimitive": false,
+              "blendSrc": null
+            }
+          },
+          {
+            "builtIn": {
+              "name": "instance",
+              "builtIn": "InstanceIndex",
+              "ty": {
+                "scalar": {
+                  "kind": "Uint",
+                  "width": 4
+                }
+              },
+              "arraySize": null
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "builtIn": {
+              "name": "clip_position",
+              "builtIn": {
+                "Position": {
+                  "invariant": true
+                }
+              },
+              "ty": {
+                "vector": {
+                  "size": "Quad",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "arraySize": null
+            }
+          },
+          {
+            "location": {
+              "name": "uv",
+              "location": 0,
+              "ty": {
+                "vector": {
+                  "size": "Bi",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "interpolation": "Perspective",
+              "sampling": "Center",
+              "perPrimitive": false,
+              "blendSrc": null
+            }
+          },
+          {
+            "location": {
+              "name": "material",
+              "location": 1,
+              "ty": {
+                "scalar": {
+                  "kind": "Uint",
+                  "width": 4
+                }
+              },
+              "interpolation": "Flat",
+              "sampling": null,
+              "perPrimitive": false,
+              "blendSrc": null
+            }
+          },
+          {
+            "location": {
+              "name": "normal",
+              "location": 2,
+              "ty": {
+                "vector": {
+                  "size": "Tri",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "interpolation": "Linear",
+              "sampling": "Centroid",
+              "perPrimitive": false,
+              "blendSrc": null
+            }
+          }
+        ],
+        "resources": [
+          0
+        ],
+        "samplingPairs": [],
+        "workgroupSize": [
+          0,
+          0,
+          0
+        ],
+        "workgroupSizeFromOverrides": [
+          false,
+          false,
+          false
+        ],
+        "workgroupStorageSize": 0,
+        "dualSourceBlending": false,
+        "taskPayloadSize": null,
+        "meshInfo": null,
+        "immediateUsage": {
+          "Valid": {
+            "slots": 0,
+            "size": 0
+          }
+        },
+        "rayTracingPayload": null
+      },
+      {
+        "name": "fs_main",
+        "stage": "Fragment",
+        "inputs": [
+          {
+            "builtIn": {
+              "name": "clip_position",
+              "builtIn": {
+                "Position": {
+                  "invariant": true
+                }
+              },
+              "ty": {
+                "vector": {
+                  "size": "Quad",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "arraySize": null
+            }
+          },
+          {
+            "location": {
+              "name": "uv",
+              "location": 0,
+              "ty": {
+                "vector": {
+                  "size": "Bi",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "interpolation": "Perspective",
+              "sampling": "Center",
+              "perPrimitive": false,
+              "blendSrc": null
+            }
+          },
+          {
+            "location": {
+              "name": "material",
+              "location": 1,
+              "ty": {
+                "scalar": {
+                  "kind": "Uint",
+                  "width": 4
+                }
+              },
+              "interpolation": "Flat",
+              "sampling": null,
+              "perPrimitive": false,
+              "blendSrc": null
+            }
+          },
+          {
+            "location": {
+              "name": "normal",
+              "location": 2,
+              "ty": {
+                "vector": {
+                  "size": "Tri",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "interpolation": "Linear",
+              "sampling": "Centroid",
+              "perPrimitive": false,
+              "blendSrc": null
+            }
+          },
+          {
+            "builtIn": {
+              "name": "front",
+              "builtIn": "FrontFacing",
+              "ty": {
+                "scalar": {
+                  "kind": "Bool",
+                  "width": 1
+                }
+              },
+              "arraySize": null
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "location": {
+              "name": "color",
+              "location": 0,
+              "ty": {
+                "vector": {
+                  "size": "Quad",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "interpolation": "Perspective",
+              "sampling": "Center",
+              "perPrimitive": false,
+              "blendSrc": null
+            }
+          },
+          {
+            "location": {
+              "name": "emissive",
+              "location": 1,
+              "ty": {
+                "vector": {
+                  "size": "Quad",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "interpolation": "Perspective",
+              "sampling": "Center",
+              "perPrimitive": false,
+              "blendSrc": null
+            }
+          },
+          {
+            "builtIn": {
+              "name": "depth",
+              "builtIn": "FragDepth",
+              "ty": {
+                "scalar": {
+                  "kind": "Float",
+                  "width": 4
+                }
+              },
+              "arraySize": null
+            }
+          }
+        ],
+        "resources": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "samplingPairs": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ]
+        ],
+        "workgroupSize": [
+          0,
+          0,
+          0
+        ],
+        "workgroupSizeFromOverrides": [
+          false,
+          false,
+          false
+        ],
+        "workgroupStorageSize": 0,
+        "dualSourceBlending": false,
+        "taskPayloadSize": null,
+        "meshInfo": null,
+        "immediateUsage": {
+          "Valid": {
+            "slots": 0,
+            "size": 0
+          }
+        },
+        "rayTracingPayload": null
+      },
+      {
+        "name": "fs_write",
+        "stage": "Fragment",
+        "inputs": [],
+        "outputs": [],
+        "resources": [
+          5
+        ],
+        "samplingPairs": [],
+        "workgroupSize": [
+          0,
+          0,
+          0
+        ],
+        "workgroupSizeFromOverrides": [
+          false,
+          false,
+          false
+        ],
+        "workgroupStorageSize": 0,
+        "dualSourceBlending": false,
+        "taskPayloadSize": null,
+        "meshInfo": null,
+        "immediateUsage": {
+          "Valid": {
+            "slots": 0,
+            "size": 0
+          }
+        },
+        "rayTracingPayload": null
+      }
+    ]
+  }
+}

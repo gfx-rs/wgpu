@@ -2,8 +2,12 @@
 
 use serde::Serialize;
 
+/// Version of the `--format json` document. Bump on any incompatible change.
+pub const JSON_OUTPUT_VERSION: u32 = 1;
+
 /// A source position, mirroring `naga::SourceLocation` (which lacks `Serialize`).
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct Location {
     /// 1-based line number.
     pub line: u32,
@@ -26,21 +30,21 @@ impl From<naga::SourceLocation> for Location {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
     Error,
     Warning,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 pub struct Label {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub location: Option<Location>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 pub struct Diagnostic {
     pub severity: Severity,
     pub message: String,
@@ -50,84 +54,40 @@ pub struct Diagnostic {
     pub notes: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct EntryPointReflection {
-    pub name: String,
-    pub stage: naga::ShaderStage,
-    pub workgroup_size: [u32; 3],
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ResourceReflection {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    pub group: u32,
-    pub binding: u32,
-    pub address_space: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct OverrideReflection {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<u16>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct Reflection {
-    pub entry_points: Vec<EntryPointReflection>,
-    pub resources: Vec<ResourceReflection>,
-    pub overrides: Vec<OverrideReflection>,
-}
-
-#[derive(Debug, Clone, Serialize)]
+/// The `--format json` document.
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct JsonOutput {
+    /// See [`JSON_OUTPUT_VERSION`]. The format is not yet stable.
+    pub version: u32,
     pub success: bool,
     pub diagnostics: Vec<Diagnostic>,
-    pub reflection: Option<Reflection>,
+    /// Reflection of the validated module, before pipeline overrides are applied.
+    pub reflection: Option<naga::reflect::ModuleReflection>,
 }
 
-impl Reflection {
-    pub fn from_module(module: &naga::Module) -> Reflection {
-        let entry_points = module
-            .entry_points
-            .iter()
-            .map(|ep| EntryPointReflection {
-                name: ep.name.clone(),
-                stage: ep.stage,
-                workgroup_size: ep.workgroup_size,
-            })
-            .collect();
-
-        let resources = module
-            .global_variables
-            .iter()
-            .filter_map(|(_, gv)| {
-                gv.binding.as_ref().map(|b| ResourceReflection {
-                    name: gv.name.clone(),
-                    group: b.group,
-                    binding: b.binding,
-                    address_space: format!("{:?}", gv.space),
-                })
-            })
-            .collect();
-
-        let overrides = module
-            .overrides
-            .iter()
-            .map(|(_, ov)| OverrideReflection {
-                name: ov.name.clone(),
-                id: ov.id,
-            })
-            .collect();
-
-        Reflection {
-            entry_points,
-            resources,
-            overrides,
+impl JsonOutput {
+    pub fn new(
+        success: bool,
+        diagnostics: Vec<Diagnostic>,
+        reflection: Option<naga::reflect::ModuleReflection>,
+    ) -> Self {
+        JsonOutput {
+            version: JSON_OUTPUT_VERSION,
+            success,
+            diagnostics,
+            reflection,
         }
     }
+}
+
+/// Reflect a validated module. Layout failures cannot happen after successful
+/// validation, so they are reported as a missing reflection.
+pub fn reflect(
+    module: &naga::Module,
+    info: &naga::valid::ModuleInfo,
+) -> Option<naga::reflect::ModuleReflection> {
+    naga::reflect::reflect(module, info).ok()
 }
 
 /// Build a `Location` from a `naga::Span` against the source.
@@ -251,9 +211,9 @@ mod tests {
 
     #[test]
     fn json_output_shape() {
-        let out = JsonOutput {
-            success: false,
-            diagnostics: vec![Diagnostic {
+        let out = JsonOutput::new(
+            false,
+            vec![Diagnostic {
                 severity: Severity::Error,
                 message: "boom".into(),
                 location: Some(Location {
@@ -268,12 +228,13 @@ mod tests {
                 }],
                 notes: vec!["note".into()],
             }],
-            reflection: None,
-        };
+            None,
+        );
         let json = serde_json::to_string(&out).unwrap();
+        assert!(json.contains(r#""version":1"#));
         assert!(json.contains(r#""success":false"#));
         assert!(json.contains(r#""severity":"error""#));
-        assert!(json.contains(r#""line":2"#));
+        assert!(json.contains(r#""byteOffset":12"#));
         assert!(json.contains(r#""reflection":null"#));
     }
 
@@ -344,15 +305,22 @@ mod tests {
             fn main() { _ = u; }
         "#;
         let module = naga::front::wgsl::Frontend::new().parse(src).unwrap();
-        let r = Reflection::from_module(&module);
+        let info = naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
+        )
+        .validate(&module)
+        .unwrap();
+        let r = reflect(&module, &info).unwrap();
         assert_eq!(r.entry_points.len(), 1);
         assert_eq!(r.entry_points[0].name, "main");
         assert_eq!(r.entry_points[0].workgroup_size, [8, 4, 1]);
         assert_eq!(r.entry_points[0].stage, naga::ShaderStage::Compute);
+        assert_eq!(r.entry_points[0].resources, [0]);
         assert!(r
             .resources
             .iter()
-            .any(|res| res.group == 0 && res.binding == 1));
+            .any(|res| res.binding.group == 0 && res.binding.binding == 1));
         assert!(r
             .overrides
             .iter()
