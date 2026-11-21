@@ -125,7 +125,11 @@ pub(super) struct NestedEntryPointArgs {
     /// Arguments literally declared by the user
     pub user_args: Vec<String>,
     pub task_payload: Option<String>,
+    /// An expression for the local invocation index.
     pub local_invocation_index: String,
+    /// Whether `local_invocation_index` is an argument of its own, rather than
+    /// one of `user_args` or a member of one.
+    pub extra_local_invocation_index: bool,
 }
 
 const fn is_subgroup_builtin_binding(binding: &Option<crate::Binding>) -> bool {
@@ -1108,6 +1112,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
         }
         assert!(fake_iter.next().is_none());
+        // The wrapper of a nested entry point is written after its body, and
+        // needs the input struct too.
+        self.entry_point_io
+            .get_mut(&(ep_index as usize))
+            .unwrap()
+            .input = Some(ep_input);
         Ok(())
     }
 
@@ -1783,6 +1793,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         let needs_local_invocation_index_name = need_workgroup_variables_initialization || nested;
         let mut local_invocation_index_name = None;
+        let mut extra_local_invocation_index = false;
         // For nested entry points, collect arg names as we write them so that
         // write_nested_function_outer can pass the exact same names to the call site.
         let mut nested_wgsl_args: Vec<String> = Vec::new();
@@ -1819,6 +1830,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     write!(self.out, "{} {}", ep_input.ty_name, ep_input.arg_name)?;
                     separator();
                     nested_wgsl_args.push(ep_input.arg_name.clone());
+                    local_invocation_index_name = ep_input
+                        .local_invocation_index_name
+                        .as_ref()
+                        .map(|member| format!("{}.{member}", ep_input.arg_name));
                 } else {
                     let stage = ep.stage;
                     for (index, arg) in func.arguments.iter().enumerate() {
@@ -1863,6 +1878,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     write!(self.out, "{}uint {name}", separator())?;
                     write!(self.out, " : SV_GroupIndex")?;
                     local_invocation_index_name = Some(name);
+                    extra_local_invocation_index = true;
                 }
             }
         }
@@ -1970,6 +1986,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     task_payload: nested_task_payload_name,
                     // guaranteed to be set for nested functions (task/mesh shaders)
                     local_invocation_index: local_invocation_index_name.unwrap(),
+                    extra_local_invocation_index,
                 },
             )?;
         }

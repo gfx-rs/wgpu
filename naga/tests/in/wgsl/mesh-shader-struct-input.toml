@@ -1,0 +1,12 @@
+capabilities = "MESH_SHADER | SUBGROUP"
+targets = "WGSL | SPIRV | HLSL | METAL"
+
+[spv]
+version = [1, 4]
+capabilities = ["MeshShadingEXT", "GroupNonUniform"]
+
+[msl]
+lang_version = [3, 0]
+
+[hlsl]
+shader_model = "V6_5"
