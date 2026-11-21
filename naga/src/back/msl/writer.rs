@@ -1677,6 +1677,10 @@ impl<W: Write> Writer<W> {
         write!(self.out, ".atomic_{op}(")?;
         // coordinates in IR are int, but Metal expects uint
         self.put_cast_to_uint_scalar_or_vector(address.coordinate, &context.expression)?;
+        if let Some(array_index) = address.array_index {
+            write!(self.out, ", ")?;
+            self.put_cast_to_uint_scalar_or_vector(array_index, &context.expression)?;
+        }
         write!(self.out, ", ")?;
         self.put_expression(value, &context.expression, true)?;
         writeln!(self.out, ");")?;

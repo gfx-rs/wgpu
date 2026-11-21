@@ -4118,7 +4118,7 @@ impl<'a, W: Write> Writer<'a, W> {
         self.write_texture_coord(
             ctx,
             // Get the size of the coordinate vector
-            self.get_coordinate_vector_size(dim, false),
+            self.get_coordinate_vector_size(dim, array_index.is_some()),
             coordinate,
             array_index,
             tex_1d_hack,
