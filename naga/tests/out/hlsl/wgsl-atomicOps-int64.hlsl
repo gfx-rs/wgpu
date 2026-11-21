@@ -32,31 +32,21 @@ groupshared Struct workgroup_struct;
 [numthreads(2, 1, 1)]
 void cs_main(uint3 id : SV_GroupThreadID, uint local_invocation_index : SV_GroupIndex)
 {
-    if (local_invocation_index == 0) {
-        workgroup_atomic_scalar = (uint64_t)0;
-    }
-    [loop]
-    for (uint zero_flat_index = local_invocation_index; zero_flat_index < 2u; zero_flat_index += 2u) {
-        uint zero_index = zero_flat_index;
-        workgroup_atomic_arr[zero_index] = (int64_t)0;
-    }
-    if (local_invocation_index == 0) {
-        workgroup_struct.atomic_scalar = (uint64_t)0;
-    }
-    [loop]
-    for (uint zero_flat_index_1 = local_invocation_index; zero_flat_index_1 < 2u; zero_flat_index_1 += 2u) {
-        uint zero_index_1 = zero_flat_index_1;
-        workgroup_struct.atomic_arr[zero_index_1] = (int64_t)0;
+    { int64_t dummy = 0; InterlockedExchange(workgroup_atomic_arr[min(uint(local_invocation_index), 1u)], 0LL, dummy); }
+    { int64_t dummy_1 = 0; InterlockedExchange(workgroup_struct.atomic_arr[min(uint(local_invocation_index), 1u)], 0LL, dummy_1); }
+    if ((local_invocation_index == 0u)) {
+        { uint64_t dummy_2 = 0; InterlockedExchange(workgroup_atomic_scalar, 0ULL, dummy_2); }
+        { uint64_t dummy_3 = 0; InterlockedExchange(workgroup_struct.atomic_scalar, 0ULL, dummy_3); }
     }
     GroupMemoryBarrierWithGroupSync();
-    { uint64_t dummy = 0; storage_atomic_scalar.InterlockedExchange(0, 1ULL, dummy); }
-    { int64_t dummy_1 = 0; storage_atomic_arr.InterlockedExchange(8, 1LL, dummy_1); }
-    { uint64_t dummy_2 = 0; storage_struct.InterlockedExchange(0, 1ULL, dummy_2); }
-    { int64_t dummy_3 = 0; storage_struct.InterlockedExchange(8+8, 1LL, dummy_3); }
-    { uint64_t dummy_4 = 0; InterlockedExchange(workgroup_atomic_scalar, 1ULL, dummy_4); }
-    { int64_t dummy_5 = 0; InterlockedExchange(workgroup_atomic_arr[1], 1LL, dummy_5); }
-    { uint64_t dummy_6 = 0; InterlockedExchange(workgroup_struct.atomic_scalar, 1ULL, dummy_6); }
-    { int64_t dummy_7 = 0; InterlockedExchange(workgroup_struct.atomic_arr[1], 1LL, dummy_7); }
+    { uint64_t dummy_4 = 0; storage_atomic_scalar.InterlockedExchange(0, 1ULL, dummy_4); }
+    { int64_t dummy_5 = 0; storage_atomic_arr.InterlockedExchange(8, 1LL, dummy_5); }
+    { uint64_t dummy_6 = 0; storage_struct.InterlockedExchange(0, 1ULL, dummy_6); }
+    { int64_t dummy_7 = 0; storage_struct.InterlockedExchange(8+8, 1LL, dummy_7); }
+    { uint64_t dummy_8 = 0; InterlockedExchange(workgroup_atomic_scalar, 1ULL, dummy_8); }
+    { int64_t dummy_9 = 0; InterlockedExchange(workgroup_atomic_arr[1], 1LL, dummy_9); }
+    { uint64_t dummy_10 = 0; InterlockedExchange(workgroup_struct.atomic_scalar, 1ULL, dummy_10); }
+    { int64_t dummy_11 = 0; InterlockedExchange(workgroup_struct.atomic_arr[1], 1LL, dummy_11); }
     GroupMemoryBarrierWithGroupSync();
     uint64_t l0_; storage_atomic_scalar.InterlockedOr(0, 0, l0_);
     int64_t l1_; storage_atomic_arr.InterlockedOr(8, 0, l1_);

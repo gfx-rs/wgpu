@@ -28,8 +28,36 @@ struct FragmentInput_fs_main {
     uint index_2 : SV_PrimitiveID;
 };
 
+VertexOutput ZeroValueVertexOutput() {
+    return (VertexOutput)0;
+}
+
+PrimitiveOutput ZeroValuePrimitiveOutput() {
+    return (PrimitiveOutput)0;
+}
+
 void _ms_main(uint local_invocation_index : SV_GroupIndex)
 {
+    uint zero_init_index = (uint)0;
+
+    zero_init_index = local_invocation_index;
+    uint2 loop_bound = uint2(4294967295u, 4294967295u);
+    while(true) {
+        if (all(loop_bound == uint2(0u, 0u))) { break; }
+        loop_bound -= uint2(loop_bound.y == 0u, 1u);
+        uint _e50 = zero_init_index;
+        if ((_e50 >= 3u)) {
+            break;
+        }
+        mesh_output.vertices_[min(uint(_e50), 2u)] = ZeroValueVertexOutput();
+        zero_init_index = (_e50 + 1u);
+    }
+    mesh_output.primitives_[min(uint(local_invocation_index), 0u)] = ZeroValuePrimitiveOutput();
+    if ((local_invocation_index == 0u)) {
+        mesh_output.vertex_count = 0u;
+        mesh_output.primitive_count = 0u;
+    }
+    GroupMemoryBarrierWithGroupSync();
     mesh_output.vertex_count = 3u;
     mesh_output.primitive_count = 1u;
     mesh_output.vertices_[0].position = float4(0.0, 1.0, 0.0, 1.0);
@@ -42,28 +70,6 @@ void _ms_main(uint local_invocation_index : SV_GroupIndex)
 [numthreads(1, 1, 1)]
 [outputtopology("triangle")]
 void ms_main(uint local_invocation_index : SV_GroupIndex, out indices uint3 triangleIndices[1], out vertices MeshVertexOutput_ms_main vertices_[3], out primitives MeshPrimitiveOutput_ms_main primitives_[1]) {
-    [loop]
-    for (uint zero_flat_index = local_invocation_index; zero_flat_index < 3u; zero_flat_index += 1u) {
-        uint zero_index = zero_flat_index;
-        mesh_output.vertices_[zero_index].position = (float4)0;
-    }
-    [loop]
-    for (uint zero_flat_index_1 = local_invocation_index; zero_flat_index_1 < 1u; zero_flat_index_1 += 1u) {
-        uint zero_index_1 = zero_flat_index_1;
-        mesh_output.primitives_[zero_index_1].indices_ = (uint3)0;
-    }
-    [loop]
-    for (uint zero_flat_index_2 = local_invocation_index; zero_flat_index_2 < 1u; zero_flat_index_2 += 1u) {
-        uint zero_index_1 = zero_flat_index_2;
-        mesh_output.primitives_[zero_index_1].index = (uint)0;
-    }
-    if (local_invocation_index == 0) {
-        mesh_output.vertex_count = (uint)0;
-    }
-    if (local_invocation_index == 0) {
-        mesh_output.primitive_count = (uint)0;
-    }
-    GroupMemoryBarrierWithGroupSync();
     _ms_main(local_invocation_index);
     GroupMemoryBarrierWithGroupSync();
     SetMeshOutputCounts(mesh_output.vertex_count, mesh_output.primitive_count);
