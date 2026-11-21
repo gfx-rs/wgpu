@@ -29,6 +29,7 @@ static QUEUE_WRITE_TEXTURE_THEN_DESTROY: GpuTestConfiguration = GpuTestConfigura
             usage: wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         let data = vec![255; 1024];
@@ -80,6 +81,7 @@ static QUEUE_WRITE_TEXTURE_OVERFLOW: GpuTestConfiguration = GpuTestConfiguration
             usage: wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         let data = vec![255; 128];
@@ -132,6 +134,7 @@ static QUEUE_WRITE_TEXTURE_BUFFER_OOB: GpuTestConfiguration =
                 usage: wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
                 texture_binding_view_dimension: None,
+                mapped_at_creation: false,
             });
 
             let data = vec![255; 128];

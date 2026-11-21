@@ -138,6 +138,7 @@ fn mesh_draw_in_multiview_pass(
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let depth_view = depth.create_view(&TextureViewDescriptor {
         dimension: Some(TextureViewDimension::D2Array),

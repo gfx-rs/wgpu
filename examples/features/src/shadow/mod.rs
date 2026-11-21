@@ -202,6 +202,7 @@ impl Example {
             label: None,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
@@ -388,6 +389,7 @@ impl crate::framework::Example for Example {
             label: None,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
         let shadow_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor::default());
 

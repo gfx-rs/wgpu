@@ -34,6 +34,9 @@ impl CommandEncoder {
                 texture_transitions: texture_transitions
                     .map(|t| {
                         t.texture.check_valid()?;
+                        if t.state.contains(wgt::TextureUses::HOST_COPY) {
+                            return Err(TransitionResourcesError::HostCopyState);
+                        }
                         Ok(wgt::TextureTransition {
                             texture: t.texture,
                             selector: t.selector,
@@ -114,6 +117,8 @@ pub enum TransitionResourcesError {
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     ResourceUsage(#[from] ResourceUsageCompatibilityError),
+    #[error("Textures can't be transitioned to `TextureUses::HOST_COPY`, map them instead")]
+    HostCopyState,
 }
 
 impl WebGpuError for TransitionResourcesError {
@@ -123,6 +128,7 @@ impl WebGpuError for TransitionResourcesError {
             Self::EncoderState(e) => e.webgpu_error_type(),
             Self::InvalidResource(e) => e.webgpu_error_type(),
             Self::ResourceUsage(e) => e.webgpu_error_type(),
+            Self::HostCopyState => ErrorType::Validation,
         }
     }
 }

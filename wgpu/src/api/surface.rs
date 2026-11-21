@@ -161,6 +161,7 @@ impl Surface<'_> {
                 dimension: TextureDimension::D2,
                 texture_binding_view_dimension: None,
                 view_formats: &[],
+                mapped_at_creation: false,
             })
         };
         let (texture, status, detail) = self.inner.get_current_texture(desc);

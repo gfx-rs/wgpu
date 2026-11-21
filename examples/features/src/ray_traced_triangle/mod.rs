@@ -249,6 +249,7 @@ impl crate::framework::Example for Example {
             usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         let sampler = device.create_sampler(&SamplerDescriptor {

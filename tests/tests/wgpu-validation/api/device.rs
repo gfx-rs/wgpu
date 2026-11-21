@@ -20,6 +20,7 @@ fn recursive_uncaptured_error() {
         usage: wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     };
 
     let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());

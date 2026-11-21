@@ -1,5 +1,6 @@
 #[cfg(wgpu_core)]
 use core::ops::Deref;
+use core::{error, fmt};
 
 use crate::*;
 
@@ -205,6 +206,26 @@ impl Texture {
     pub fn texture_binding_view_dimension(&self) -> Option<TextureViewDimension> {
         self.inner.texture_binding_view_dimension()
     }
+
+    /// Returns a mapped handle if this texture is currently mapped, `None` otherwise.
+    ///
+    /// The texture must have been mapped via [`CommandEncoder::map_texture_on_completion`]
+    /// or created with `mapped_at_creation: true`. The handle prevents unmapping while alive.
+    pub fn get_mapped(&self) -> Option<MappedTexture> {
+        let token = self.inner.get_map_token()?;
+        Some(MappedTexture {
+            texture: self.clone(),
+            _token: token,
+        })
+    }
+
+    /// Returns the texture to GPU-exclusive ownership so it can be used in GPU commands.
+    ///
+    /// All [`MappedTexture`] handles obtained from [`Texture::get_mapped`] must be
+    /// dropped before calling this, or the call will fail with an error.
+    pub fn unmap(&self) {
+        self.inner.unmap();
+    }
 }
 
 #[cfg(wgpu_core)]
@@ -234,3 +255,67 @@ impl Texture {
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputexturedescriptor).
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, &'a [TextureFormat]>;
 static_assertions::assert_impl_all!(TextureDescriptor<'_>: Send, Sync);
+
+/// A mapped texture that can be copied to/from host memory.
+///
+/// The parent [`Texture`] cannot be unmapped while any `MappedTexture` handle
+/// exists. Drop this handle before calling [`Texture::unmap`].
+#[derive(Debug)]
+pub struct MappedTexture {
+    texture: Texture,
+    _token: alloc::sync::Arc<()>,
+}
+
+impl MappedTexture {
+    /// Copies from the texture into `destination`, on the calling thread.
+    ///
+    /// Reads of the same texture can run concurrently on several threads.
+    /// `destination_layout` has no alignment requirements.
+    pub fn copy_to_memory(
+        &self,
+        source_range: TexelCopyTextureInfoBase<()>,
+        destination: &mut [u8],
+        destination_layout: TexelCopyBufferLayout,
+        copy_size: Extent3d,
+    ) {
+        self.texture.inner.copy_texture_to_memory(
+            &source_range,
+            destination,
+            destination_layout,
+            &copy_size,
+        );
+    }
+
+    /// Copies `source` into the texture, on the calling thread.
+    ///
+    /// Copies into the same texture from several threads run one at a time, but
+    /// copies to different textures run in parallel. `source_layout` has no
+    /// alignment requirements.
+    pub fn copy_from_memory(
+        &self,
+        destination_range: TexelCopyTextureInfoBase<()>,
+        source: &[u8],
+        source_layout: TexelCopyBufferLayout,
+        copy_size: Extent3d,
+    ) {
+        self.texture.inner.copy_memory_to_texture(
+            &destination_range,
+            source,
+            source_layout,
+            &copy_size,
+        );
+    }
+}
+
+/// Error occurred when trying to async map a texture.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct TextureAsyncError;
+static_assertions::assert_impl_all!(TextureAsyncError: Send, Sync);
+
+impl fmt::Display for TextureAsyncError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Error occurred when trying to async map a texture")
+    }
+}
+
+impl error::Error for TextureAsyncError {}

@@ -287,6 +287,7 @@ impl GPUDevice {
       texture_binding_view_dimension: descriptor
         .texture_binding_view_dimension
         .map(Into::into),
+      mapped_at_creation: false,
     };
 
     // 2. ? Validate texture format required features of descriptor.format with this.[[device]].

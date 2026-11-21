@@ -1143,6 +1143,7 @@ impl Device {
                 user_closures.submissions,
                 user_closures.mappings,
                 user_closures.blas_compact_ready,
+                user_closures.texture_map_closures,
                 queue_empty,
             ) = queue_result;
             // DEADLOCK PREVENTION: We must drop `snatch_guard` before `queue` goes out of scope.
@@ -2003,6 +2004,12 @@ impl Device {
             }
         }
 
+        if desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE) {
+            self.require_features(wgt::Features::HOST_TEXTURE_COPY)
+                .map_err(|e| CreateTextureError::MissingFeatures(desc.format, e))?;
+            self.check_host_copy_support(desc)?;
+        }
+
         let format_features = self
             .describe_format_features(desc.format)
             .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
@@ -2075,7 +2082,10 @@ impl Device {
             };
         }
 
-        let missing_allowed_usages = desc.usage - format_features.allowed_usages;
+        // HOST_VISIBLE is validated separately above (requires HOST_TEXTURE_COPY feature).
+        // Exclude it here so format-level allowed_usages checks don't reject it.
+        let usage_to_check = desc.usage - wgt::TextureUsages::HOST_VISIBLE;
+        let missing_allowed_usages = usage_to_check - format_features.allowed_usages;
         if !missing_allowed_usages.is_empty() {
             // detect downlevel incompatibilities
             let wgpu_allowed_usages = desc
@@ -2088,6 +2098,10 @@ impl Device {
                 desc.format,
                 wgpu_missing_usages.is_empty(),
             ));
+        }
+
+        if desc.mapped_at_creation && !desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE) {
+            return Err(CreateTextureError::MappedAtCreationRequiresHostVisible);
         }
 
         let mut hal_view_formats = Vec::new();
@@ -2171,6 +2185,70 @@ impl Device {
         }
     }
 
+    /// Checks that textures described by `desc` can be copied to and from the host.
+    fn check_host_copy_support(
+        &self,
+        desc: &resource::TextureDescriptor,
+    ) -> Result<(), resource::CreateTextureError> {
+        if desc.sample_count > 1 {
+            return Err(resource::CreateTextureError::HostVisibleMultisampled(
+                desc.sample_count,
+            ));
+        }
+        // Zero-initialization from the host needs a defined layout for every
+        // aspect, which e.g. `Depth24Plus` does not have.
+        let all_aspects_copyable = hal::FormatAspects::from(desc.format)
+            .iter()
+            .all(|aspect| desc.format.block_copy_size(Some(aspect.map())).is_some());
+        if !all_aspects_copyable
+            || !self
+                .adapter
+                .get_texture_format_features(desc.format)
+                .allowed_usages
+                .contains(wgt::TextureUsages::HOST_VISIBLE)
+        {
+            return Err(resource::CreateTextureError::HostVisibleUnsupportedFormat(
+                desc.format,
+            ));
+        }
+        // D3D12 can't access 3D textures with more than one mip level from the host.
+        if self.backend() == wgt::Backend::Dx12
+            && desc.dimension == wgt::TextureDimension::D3
+            && desc.mip_level_count > 1
+        {
+            return Err(resource::CreateTextureError::HostVisible3dMipmapped);
+        }
+        Ok(())
+    }
+
+    /// Whether to add host copy usage to a texture that didn't ask for it, so
+    /// that [`Queue::write_texture`](crate::device::queue::Queue::write_texture)
+    /// can write it from the host.
+    fn use_implicit_host_copy(
+        &self,
+        desc: &resource::TextureDescriptor,
+        hal_desc: &hal::TextureDescriptor,
+    ) -> bool {
+        if self
+            .instance_flags
+            .contains(wgt::InstanceFlags::DISABLE_IMPLICIT_HOST_TEXTURE_COPY)
+            || desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE)
+            || !desc.usage.contains(wgt::TextureUsages::COPY_DST)
+            || desc
+                .usage
+                .contains(wgt::TextureUsages::TRANSIENT_ATTACHMENT)
+            || self.check_host_copy_support(desc).is_err()
+        {
+            return false;
+        }
+        let hal_desc = hal::TextureDescriptor {
+            usage: hal_desc.usage | wgt::TextureUses::HOST_COPY,
+            start_in_host_copy_state: true,
+            ..hal_desc.clone()
+        };
+        self.raw().is_host_copy_free(&hal_desc)
+    }
+
     fn create_texture_inner(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
@@ -2181,7 +2259,7 @@ impl Device {
 
         let texture_binding_view_dimension = self.resolve_texture_binding_view_dimension(desc);
 
-        let hal_desc = hal::TextureDescriptor {
+        let mut hal_desc = hal::TextureDescriptor {
             label: desc.label.to_hal(self.instance_flags),
             size: desc.size,
             mip_level_count: desc.mip_level_count,
@@ -2192,7 +2270,13 @@ impl Device {
             memory_flags: hal::MemoryFlags::empty(),
             view_formats: hal_view_formats,
             texture_binding_view_dimension,
+            start_in_host_copy_state: desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE),
         };
+        if self.use_implicit_host_copy(desc, &hal_desc) {
+            hal_desc.usage |= wgt::TextureUses::HOST_COPY;
+            hal_desc.start_in_host_copy_state = true;
+        }
+        let hal_usage = hal_desc.usage;
 
         let raw_texture = unsafe { self.raw().create_texture(&hal_desc) }
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
@@ -2248,10 +2332,17 @@ impl Device {
 
         let texture = Arc::new(texture);
 
-        self.trackers
-            .lock()
-            .textures
-            .insert_single(&texture, wgt::TextureUses::UNINITIALIZED);
+        if desc.mapped_at_creation {
+            *texture.map_state.lock() = resource::TextureMapState::Mapped(Arc::new(()));
+        }
+
+        let state = if hal_desc.start_in_host_copy_state {
+            wgt::TextureUses::HOST_COPY
+        } else {
+            wgt::TextureUses::UNINITIALIZED
+        };
+
+        self.trackers.lock().textures.insert_single(&texture, state);
 
         Ok(texture)
     }

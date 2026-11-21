@@ -117,6 +117,7 @@ impl Example {
             label: None,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         };
 
         device

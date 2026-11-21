@@ -38,6 +38,7 @@ static CREATE_TEXTURE_VALIDATION: GpuTestConfiguration = GpuTestConfiguration::n
                 usage: wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
                 texture_binding_view_dimension: Some(dim),
+                mapped_at_creation: false,
             })
         };
 
@@ -84,6 +85,7 @@ static SAMPLED_BIND_GROUP_VALIDATION: GpuTestConfiguration = GpuTestConfiguratio
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
             texture_binding_view_dimension: Some(ViewDim::D2Array),
+            mapped_at_creation: false,
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor {
             dimension: Some(ViewDim::D2),
@@ -151,6 +153,7 @@ static STORAGE_BIND_GROUP_VALIDATION: GpuTestConfiguration = GpuTestConfiguratio
             usage: wgpu::TextureUsages::STORAGE_BINDING,
             view_formats: &[],
             texture_binding_view_dimension: Some(ViewDim::D2Array),
+            mapped_at_creation: false,
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor {
             dimension: Some(ViewDim::D2),

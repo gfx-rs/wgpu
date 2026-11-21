@@ -255,6 +255,7 @@ async fn run_test_inner(
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let out_texture_view = out_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -552,6 +553,7 @@ fn create_rgba8_render_target(
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     (texture, view)
@@ -687,6 +689,7 @@ async fn run_multi_draw_indirect_after_discarded_3d_attachment(ctx: TestingConte
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     let args = vec![
@@ -1345,6 +1348,7 @@ async fn run_multi_draw_indirect_sampled_texture(ctx: TestingContext) {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         },
         wgpu::util::TextureDataOrder::LayerMajor,
         &[u8::MAX; 4],
@@ -1769,6 +1773,7 @@ async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let out_texture_view = out_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -2320,6 +2325,7 @@ async fn indirect_buffer_offsets(ctx: TestingContext) {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let out_texture_view = out_texture.create_view(&wgpu::TextureViewDescriptor::default());
 

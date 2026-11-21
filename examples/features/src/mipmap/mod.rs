@@ -246,6 +246,7 @@ impl crate::framework::Example for Example {
             label: None,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         //Note: we could use queue.write_texture instead, and this is what other

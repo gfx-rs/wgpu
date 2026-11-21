@@ -46,6 +46,7 @@ impl MultiTargetRenderer {
             usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         let ball_texture_data = &create_ball_texture_data(WIDTH, HEIGHT);
@@ -400,6 +401,7 @@ impl TextureTargets {
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[format],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
         let green_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -413,6 +415,7 @@ impl TextureTargets {
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[format],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
         let red_view = red_texture.create_view(&wgpu::TextureViewDescriptor {
             format: Some(format),

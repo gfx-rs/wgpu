@@ -197,6 +197,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
         let target_view = texture_for_view.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -210,6 +211,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             usage: wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         let texture_for_write = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -222,6 +224,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             usage: wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         // Create some buffers.
@@ -314,6 +317,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             usage: wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         encoder_for_clear.clear_texture(
@@ -584,6 +588,7 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         let my_texture_view = my_texture.create_view(&wgpu::TextureViewDescriptor {
@@ -686,6 +691,7 @@ static DEVICE_DESTROY_THEN_BUFFER_CLEANUP: GpuTestConfiguration = GpuTestConfigu
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         // Destroy the device.

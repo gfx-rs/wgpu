@@ -104,6 +104,7 @@ async fn binding_array_samplers(ctx: TestingContext, partially_bound: bool) {
         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
 
     ctx.queue.write_texture(

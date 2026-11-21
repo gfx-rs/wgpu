@@ -467,6 +467,33 @@ impl CommandEncoder {
             }),
         );
     }
+
+    /// Maps `texture` for host access once this encoder's command buffer has
+    /// finished executing on the GPU.
+    ///
+    /// When this command buffer is submitted, the texture becomes pending
+    /// mapping, and can't be used by other submissions or [`Queue::write_texture`]
+    /// until it is mapped and then unmapped again. Commands before it in the same
+    /// submission can still use it.
+    ///
+    /// `callback` is always called exactly once: with `Ok` once the texture is
+    /// mapped, after which [`Texture::get_mapped`] returns a [`MappedTexture`].
+    /// With `Err(`[`TextureAsyncError`]`)` if this call or the command buffer is
+    /// invalid, the command buffer is dropped without being submitted, the
+    /// submission fails, or the texture is destroyed first. If the device is
+    /// lost first, it is called with `Err` at the latest when the queue is
+    /// dropped.
+    ///
+    /// Requires [`TextureUsages::HOST_VISIBLE`] and
+    /// [`Features::HOST_TEXTURE_COPY`].
+    pub fn map_texture_on_completion(
+        &mut self,
+        texture: &Texture,
+        callback: dispatch::TextureMapCallback,
+    ) {
+        self.inner
+            .map_texture_on_completion(&texture.inner, callback);
+    }
 }
 
 #[cfg(wgpu_core)]

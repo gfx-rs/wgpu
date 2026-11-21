@@ -151,6 +151,7 @@ impl ComputepassState {
                     usage: wgpu::TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
                     texture_binding_view_dimension: None,
+                    mapped_at_creation: false,
                 });
             texture_views.push(texture.create_view(&wgpu::TextureViewDescriptor {
                 label: Some(&format!("Texture View {i}")),
@@ -178,6 +179,7 @@ impl ComputepassState {
                     usage: wgpu::TextureUsages::STORAGE_BINDING,
                     view_formats: &[],
                     texture_binding_view_dimension: None,
+                    mapped_at_creation: false,
                 });
             storage_texture_views.push(texture.create_view(&wgpu::TextureViewDescriptor {
                 label: Some(&format!("StorageTexture View {i}")),

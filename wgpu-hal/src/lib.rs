@@ -1073,6 +1073,51 @@ pub trait Device: WasmNotSendSync {
     /// A hook for when a wgpu-core texture is created from a raw wgpu-hal texture.
     unsafe fn add_raw_texture(&self, texture: &<Self::A as Api>::Texture);
 
+    /// Copies texture data into host memory, without using a queue.
+    ///
+    /// # Safety
+    ///
+    /// - `src` must have been created with [`HOST_COPY`](wgt::TextureUses::HOST_COPY) usage,
+    ///   be in the `HOST_COPY` state, and not be in use by the device.
+    /// - Each region must be in bounds of both `src` and `dst`, and its `host_layout`
+    ///   offset and `bytes_per_row` must be multiples of the texel block size.
+    /// - No other host copy may write to the same subresources concurrently.
+    unsafe fn copy_texture_to_memory<T>(
+        &self,
+        src: &<Self::A as Api>::Texture,
+        dst: &mut [u8],
+        regions: T,
+    ) -> Result<(), DeviceError>
+    where
+        T: Iterator<Item = HostTextureCopy>;
+
+    /// Copies host memory into a texture, without using a queue.
+    ///
+    /// # Safety
+    ///
+    /// - `dst` must have been created with [`HOST_COPY`](wgt::TextureUses::HOST_COPY) usage,
+    ///   be in the `HOST_COPY` state, and not be in use by the device.
+    /// - Each region must be in bounds of both `src` and `dst`, and its `host_layout`
+    ///   offset and `bytes_per_row` must be multiples of the texel block size.
+    /// - No other host copy may access the same subresources concurrently.
+    unsafe fn copy_memory_to_texture<T>(
+        &self,
+        src: &[u8],
+        dst: &<Self::A as Api>::Texture,
+        regions: T,
+    ) -> Result<(), DeviceError>
+    where
+        T: Iterator<Item = HostTextureCopy>;
+
+    /// Returns whether adding [`HOST_COPY`](wgt::TextureUses::HOST_COPY) to `desc.usage`
+    /// is known to not make device access to the texture slower.
+    ///
+    /// The format of `desc` must support [`TextureFormatCapabilities::HOST_COPY`].
+    fn is_host_copy_free(&self, desc: &TextureDescriptor) -> bool {
+        let _ = desc;
+        false
+    }
+
     unsafe fn create_texture_view(
         &self,
         texture: &<Self::A as Api>::Texture,
@@ -2099,6 +2144,12 @@ bitflags!(
         const COPY_SRC = 1 << 15;
         /// Format can be copied to.
         const COPY_DST = 1 << 16;
+        /// Format supports host-side texture copies (`TextureUsages::HOST_VISIBLE`).
+        ///
+        /// On Vulkan this is per-format (`VK_FORMAT_FEATURE_2_HOST_IMAGE_TRANSFER_BIT`),
+        /// so depth/stencil formats commonly lack it even when the device exposes
+        /// the host-texture-copy feature.
+        const HOST_COPY = 1 << 17;
     }
 );
 
@@ -2415,6 +2466,11 @@ pub struct TextureDescriptor<'a> {
     /// Allows views of this texture to have a different format
     /// than the texture does.
     pub view_formats: Vec<wgt::TextureFormat>,
+    /// Create the texture in the [`HOST_COPY`](wgt::TextureUses::HOST_COPY) state
+    /// instead of [`UNINITIALIZED`](wgt::TextureUses::UNINITIALIZED).
+    ///
+    /// Requires `usage` to contain `HOST_COPY`.
+    pub start_in_host_copy_state: bool,
 }
 
 impl TextureDescriptor<'_> {
@@ -3075,6 +3131,14 @@ pub struct TextureCopy {
 #[derive(Clone, Debug)]
 pub struct BufferTextureCopy {
     pub buffer_layout: wgt::TexelCopyBufferLayout,
+    pub texture_base: TextureCopyBase,
+    pub size: CopyExtent,
+}
+
+/// Like [`BufferTextureCopy`], but `host_layout` describes host memory.
+#[derive(Clone, Debug)]
+pub struct HostTextureCopy {
+    pub host_layout: wgt::TexelCopyBufferLayout,
     pub texture_base: TextureCopyBase,
     pub size: CopyExtent,
 }

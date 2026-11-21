@@ -64,6 +64,7 @@ fn read_only_depth_test(ctx: &TestingContext, sample_depth: bool) {
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let color_view = color_texture.create_view(&TextureViewDescriptor::default());
 
@@ -82,6 +83,7 @@ fn read_only_depth_test(ctx: &TestingContext, sample_depth: bool) {
         usage: depth_usage,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let depth_view = depth_texture.create_view(&TextureViewDescriptor::default());
 

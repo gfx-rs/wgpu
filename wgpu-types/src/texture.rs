@@ -212,6 +212,18 @@ bitflags::bitflags! {
         //
         /// Allows a texture to be used with image atomics. Requires [`Features::TEXTURE_ATOMIC`].
         const STORAGE_ATOMIC = 1 << 16;
+        /// Allows a texture to be read and written from the CPU, without a staging
+        /// buffer or a queue.
+        ///
+        /// Map it with `CommandEncoder::map_texture_on_completion` or
+        /// `mapped_at_creation`, access it through `wgpu::MappedTexture`, and
+        /// unmap it before using it on the GPU again.
+        ///
+        /// Requires [`Features::HOST_TEXTURE_COPY`]. Support depends on the format,
+        /// see [`TextureFormatFeatures::allowed_usages`]; it is commonly missing for
+        /// depth/stencil formats. The texture can't be multisampled. On DX12, 3D
+        /// textures can't have more than one mip level.
+        const HOST_VISIBLE = 1 << 17;
     }
 }
 
@@ -262,7 +274,7 @@ bitflags::bitflags! {
         const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_READ.bits()| Self::STENCIL_READ.bits() | Self::STORAGE_READ_ONLY.bits();
         /// The combination of states that a texture must exclusively be in.
         /// cbindgen:ignore
-        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
+        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits() | Self::HOST_COPY.bits();
 
         /// Flag used by the wgpu-core texture tracker to say a texture is in different states for every sub-resource
         const COMPLEX = 1 << 15;
@@ -274,6 +286,10 @@ bitflags::bitflags! {
         const DEPTH_SAMPLED = 1 << 17;
         /// Flag used by texture tracker to say the read-only stencil aspect of texture is sampled.
         const STENCIL_SAMPLED = 1 << 18;
+        /// The texture is accessed by host texture copies. Maps to `GENERAL` on Vulkan and
+        /// `COMMON` on D3D12.
+        /// cbindgen:ignore
+        const HOST_COPY = 1 << 19;
     }
 }
 
@@ -638,6 +654,11 @@ pub struct TextureDescriptor<L, V> {
     /// explicitly, or pass `None` to have it inferred from the texture's dimension and layer count.
     /// Otherwise it is ignored.
     pub texture_binding_view_dimension: Option<TextureViewDimension>,
+    /// Whether the texture will start in a mapped state. If true, it must be explicitly unmapped before it can be used on the GPU.
+    ///
+    /// Requires [`TextureUsages::HOST_VISIBLE`].
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub mapped_at_creation: bool,
 }
 
 impl<L, V> TextureDescriptor<L, V> {
@@ -657,6 +678,7 @@ impl<L, V> TextureDescriptor<L, V> {
             usage: self.usage,
             view_formats: self.view_formats.clone(),
             texture_binding_view_dimension: self.texture_binding_view_dimension,
+            mapped_at_creation: self.mapped_at_creation,
         }
     }
 
@@ -677,6 +699,7 @@ impl<L, V> TextureDescriptor<L, V> {
             usage: self.usage,
             view_formats: v_fun(&self.view_formats),
             texture_binding_view_dimension: self.texture_binding_view_dimension,
+            mapped_at_creation: self.mapped_at_creation,
         }
     }
 
@@ -700,6 +723,7 @@ impl<L, V> TextureDescriptor<L, V> {
     ///   usage: wgpu::TextureUsages::empty(),
     ///   view_formats: &[],
     ///   texture_binding_view_dimension: None,
+    ///   mapped_at_creation: false,
     /// };
     ///
     /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));

@@ -131,6 +131,7 @@ async fn set_array_stride_to_0(ctx: TestingContext) {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let out_texture_view = out_texture.create_view(&wgpu::TextureViewDescriptor::default());
 

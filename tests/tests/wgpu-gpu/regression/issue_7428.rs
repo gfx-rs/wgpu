@@ -38,6 +38,7 @@ async fn test_impl(ctx: &TestingContext) {
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
         texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
+        mapped_at_creation: false,
     });
 
     ctx.queue.write_texture(

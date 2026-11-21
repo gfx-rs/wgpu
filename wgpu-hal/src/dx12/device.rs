@@ -37,6 +37,43 @@ use crate::{
 // this has to match Naga's HLSL backend, and also needs to be null-terminated
 const NAGA_LOCATION_SEMANTIC: &[u8] = c"LOC".to_bytes();
 
+/// Returns the box clamped to the mip's virtual size, and the host row and depth pitches.
+fn host_copy_box_and_pitches(
+    texture: &super::Texture,
+    region: &crate::HostTextureCopy,
+) -> Result<(Direct3D12::D3D12_BOX, u32, u32), crate::DeviceError> {
+    let (block_width, block_height) = texture.format.block_dimensions();
+    let block_size = texture
+        .format
+        .block_copy_size(Some(region.texture_base.aspect.map()))
+        .ok_or(crate::DeviceError::Unexpected)?;
+    let block_rows = region.size.height.div_ceil(block_height);
+    let row_pitch = match region.host_layout.bytes_per_row {
+        Some(bytes_per_row) => u64::from(bytes_per_row),
+        None => u64::from(region.size.width.div_ceil(block_width)) * u64::from(block_size),
+    };
+    let rows_per_image = match region.host_layout.rows_per_image {
+        Some(rows_per_image) if region.size.depth > 1 => rows_per_image,
+        _ => block_rows,
+    };
+    let depth_pitch = row_pitch * u64::from(rows_per_image);
+
+    let full_size = crate::CopyExtent::map_extent_to_copy_size(&texture.size, texture.dimension);
+    let size = region
+        .texture_base
+        .max_copy_size(&full_size)
+        .min(&region.size);
+    let copy_box = super::command::make_box(&region.texture_base.origin, &size);
+
+    let row_pitch = row_pitch
+        .try_into()
+        .map_err(|_| crate::DeviceError::Unexpected)?;
+    let depth_pitch = depth_pitch
+        .try_into()
+        .map_err(|_| crate::DeviceError::Unexpected)?;
+    Ok((copy_box, row_pitch, depth_pitch))
+}
+
 impl super::Device {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
@@ -651,6 +688,69 @@ impl crate::Device for super::Device {
 
     unsafe fn add_raw_texture(&self, _texture: &super::Texture) {
         self.counters.textures.add(1);
+    }
+
+    unsafe fn copy_memory_to_texture<T>(
+        &self,
+        src: &[u8],
+        dst: &<Self::A as crate::Api>::Texture,
+        regions: T,
+    ) -> Result<(), crate::DeviceError>
+    where
+        T: Iterator<Item = crate::HostTextureCopy>,
+    {
+        let resource = &dst.resource;
+        for region in regions {
+            let subresource = dst.calc_subresource_for_copy(&region.texture_base);
+            let (dst_box, row_pitch, depth_pitch) = host_copy_box_and_pitches(dst, &region)?;
+            let src_ptr = unsafe { src.as_ptr().add(region.host_layout.offset as usize) };
+            let empty_range = Direct3D12::D3D12_RANGE { Begin: 0, End: 0 };
+            unsafe { resource.Map(subresource, Some(&empty_range), None) }
+                .into_device_result("Map texture")?;
+            let result = unsafe {
+                resource.WriteToSubresource(
+                    subresource,
+                    Some(&dst_box),
+                    src_ptr.cast::<ffi::c_void>(),
+                    row_pitch,
+                    depth_pitch,
+                )
+            };
+            unsafe { resource.Unmap(subresource, None) };
+            result.into_device_result("WriteToSubresource")?;
+        }
+        Ok(())
+    }
+
+    unsafe fn copy_texture_to_memory<T>(
+        &self,
+        src: &<Self::A as crate::Api>::Texture,
+        dst: &mut [u8],
+        regions: T,
+    ) -> Result<(), crate::DeviceError>
+    where
+        T: Iterator<Item = crate::HostTextureCopy>,
+    {
+        let resource = &src.resource;
+        for region in regions {
+            let subresource = src.calc_subresource_for_copy(&region.texture_base);
+            let (src_box, row_pitch, depth_pitch) = host_copy_box_and_pitches(src, &region)?;
+            let dst_ptr = unsafe { dst.as_mut_ptr().add(region.host_layout.offset as usize) };
+            unsafe { resource.Map(subresource, None, None) }.into_device_result("Map texture")?;
+            let result = unsafe {
+                resource.ReadFromSubresource(
+                    dst_ptr.cast::<ffi::c_void>(),
+                    row_pitch,
+                    depth_pitch,
+                    subresource,
+                    Some(&src_box),
+                )
+            };
+            let empty_range = Direct3D12::D3D12_RANGE { Begin: 0, End: 0 };
+            unsafe { resource.Unmap(subresource, Some(&empty_range)) };
+            result.into_device_result("ReadFromSubresource")?;
+        }
+        Ok(())
     }
 
     unsafe fn create_texture_view(

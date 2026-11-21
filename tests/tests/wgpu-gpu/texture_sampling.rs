@@ -89,6 +89,7 @@ async fn test_impl(ctx: TestingContext) {
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
         texture_binding_view_dimension: Some(wgpu::TextureViewDimension::Cube),
+        mapped_at_creation: false,
     });
 
     // Fill the whole cube with the background color, then recolor the center

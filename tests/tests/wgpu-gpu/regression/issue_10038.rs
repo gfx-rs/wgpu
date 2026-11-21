@@ -30,6 +30,7 @@ static TEXTURE_COUNTERS_BALANCED: GpuTestConfiguration = GpuTestConfiguration::n
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         let alive = ctx.device.get_internal_counters().hal;

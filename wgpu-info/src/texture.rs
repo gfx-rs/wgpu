@@ -39,6 +39,7 @@ mod tests {
                 usage: wgpu::TextureUsages::empty(),
                 view_formats: &[],
                 texture_binding_view_dimension: None,
+                mapped_at_creation: false,
             };
 
             if format.is_multi_planar_format() {
@@ -63,6 +64,7 @@ mod tests {
                 usage: wgpu::TextureUsages::empty(),
                 view_formats: &[],
                 texture_binding_view_dimension: None,
+                mapped_at_creation: false,
             };
 
             assert_eq!(

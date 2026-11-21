@@ -242,9 +242,18 @@ pub struct PhysicalDeviceFeatures {
     vulkan_memory_model: Option<vk::PhysicalDeviceVulkanMemoryModelFeaturesKHR<'static>>,
 
     shader_draw_parameters: Option<vk::PhysicalDeviceShaderDrawParametersFeatures<'static>>,
+
+    host_image_copy: Option<vk::PhysicalDeviceHostImageCopyFeaturesEXT<'static>>,
 }
 
 impl PhysicalDeviceFeatures {
+    /// Whether host image copies can be used, with the `GENERAL` layout that
+    /// the `HOST_COPY` state maps to.
+    fn supports_host_image_copy(&self, caps: &PhysicalDeviceProperties) -> bool {
+        self.host_image_copy.is_some_and(|f| f.host_image_copy != 0)
+            && caps.host_image_copy.is_some_and(|p| p.general_layout)
+    }
+
     pub fn get_core(&self) -> vk::PhysicalDeviceFeatures {
         self.core
     }
@@ -334,6 +343,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.shader_draw_parameters {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.host_image_copy {
             info = info.push_next(feature);
         }
         info
@@ -758,6 +770,11 @@ impl PhysicalDeviceFeatures {
                     vk::PhysicalDeviceShaderDrawParametersFeatures::default()
                         .shader_draw_parameters(needed),
                 )
+            } else {
+                None
+            },
+            host_image_copy: if enabled_extensions.contains(&ext::host_image_copy::NAME) {
+                Some(vk::PhysicalDeviceHostImageCopyFeaturesEXT::default().host_image_copy(true))
             } else {
                 None
             },
@@ -1233,6 +1250,8 @@ impl PhysicalDeviceFeatures {
                 || caps.supports_extension(khr::shader_non_semantic_info::NAME),
         );
 
+        features.set(F::HOST_TEXTURE_COPY, self.supports_host_image_copy(caps));
+
         (features, dl_flags)
     }
 }
@@ -1255,6 +1274,13 @@ impl PhysicalDeviceFeatures {
 /// use that as a shortcut for searching for an extension, if the
 /// extension has been promoted to core in the current version.
 ///
+#[derive(Clone, Copy, Debug)]
+pub(super) struct HostImageCopyProperties {
+    /// `VK_IMAGE_LAYOUT_GENERAL` is in both `pCopySrcLayouts` and `pCopyDstLayouts`.
+    pub general_layout: bool,
+    pub identical_memory_type_requirements: bool,
+}
+
 /// This does not include device features; for those, see
 /// [`PhysicalDeviceFeatures`].
 #[derive(Default, Debug)]
@@ -1320,6 +1346,10 @@ pub struct PhysicalDeviceProperties {
 
     /// `VK_EXT_pci_bus_info` extension.
     pci_bus_info: Option<vk::PhysicalDevicePCIBusInfoPropertiesEXT<'static>>,
+
+    /// `VK_EXT_host_image_copy` properties. Only queried on Vulkan 1.3+, where
+    /// all of the extension's dependencies are core.
+    host_image_copy: Option<HostImageCopyProperties>,
 
     /// The device API version.
     ///
@@ -1496,6 +1526,10 @@ impl PhysicalDeviceProperties {
             if requested_features.contains(wgt::Features::DEBUG_PRINTF) {
                 extensions.push(khr::shader_non_semantic_info::NAME);
             }
+        }
+
+        if requested_features.intersects(wgt::Features::HOST_TEXTURE_COPY) {
+            extensions.push(ext::host_image_copy::NAME);
         }
 
         // Optional `VK_KHR_swapchain_mutable_format`
@@ -2186,6 +2220,41 @@ impl super::InstanceShared {
                     get_device_properties.get_physical_device_properties2(phd, &mut properties2)
                 };
 
+                if capabilities.device_api_version >= vk::API_VERSION_1_3
+                    && capabilities.supports_extension(ext::host_image_copy::NAME)
+                {
+                    let mut counts = vk::PhysicalDeviceHostImageCopyPropertiesEXT::default();
+                    let mut properties2 =
+                        vk::PhysicalDeviceProperties2::default().push_next(&mut counts);
+                    unsafe {
+                        get_device_properties.get_physical_device_properties2(phd, &mut properties2)
+                    };
+                    let mut src_layouts =
+                        vec![vk::ImageLayout::UNDEFINED; counts.copy_src_layout_count as usize];
+                    let mut dst_layouts =
+                        vec![vk::ImageLayout::UNDEFINED; counts.copy_dst_layout_count as usize];
+                    let mut host_image_copy =
+                        vk::PhysicalDeviceHostImageCopyPropertiesEXT::default()
+                            .copy_src_layouts(&mut src_layouts)
+                            .copy_dst_layouts(&mut dst_layouts);
+                    let mut properties2 =
+                        vk::PhysicalDeviceProperties2::default().push_next(&mut host_image_copy);
+                    unsafe {
+                        get_device_properties.get_physical_device_properties2(phd, &mut properties2)
+                    };
+                    let identical_memory_type_requirements =
+                        host_image_copy.identical_memory_type_requirements != 0;
+                    let src_count = host_image_copy.copy_src_layout_count as usize;
+                    let dst_count = host_image_copy.copy_dst_layout_count as usize;
+                    let general_layout = src_layouts[..src_count]
+                        .contains(&vk::ImageLayout::GENERAL)
+                        && dst_layouts[..dst_count].contains(&vk::ImageLayout::GENERAL);
+                    capabilities.host_image_copy = Some(HostImageCopyProperties {
+                        general_layout,
+                        identical_memory_type_requirements,
+                    });
+                }
+
                 // Query cooperative matrix properties
                 if capabilities.supports_extension(khr::cooperative_matrix::NAME) {
                     let coop_matrix =
@@ -2419,6 +2488,15 @@ impl super::InstanceShared {
                 features2 = features2.push_next(next);
             }
 
+            if capabilities.device_api_version >= vk::API_VERSION_1_3
+                && capabilities.supports_extension(ext::host_image_copy::NAME)
+            {
+                let next = features
+                    .host_image_copy
+                    .insert(vk::PhysicalDeviceHostImageCopyFeaturesEXT::default());
+                features2 = features2.push_next(next);
+            }
+
             unsafe { get_device_properties.get_physical_device_features2(phd, &mut features2) };
             features2.features
         } else {
@@ -2607,6 +2685,18 @@ impl super::Instance {
         let alignments = phd_capabilities.to_hal_alignments(has_robust_buffer_access2);
 
         let private_caps = super::PrivateCapabilities {
+            implicit_host_image_copy: !self
+                .shared
+                .flags
+                .contains(wgt::InstanceFlags::DISABLE_IMPLICIT_HOST_TEXTURE_COPY)
+                && phd_features.supports_host_image_copy(&phd_capabilities),
+            host_image_copy_free_memory: phd_capabilities
+                .host_image_copy
+                .is_some_and(|p| p.identical_memory_type_requirements)
+                || matches!(
+                    phd_capabilities.properties.device_type,
+                    vk::PhysicalDeviceType::INTEGRATED_GPU | vk::PhysicalDeviceType::CPU
+                ),
             image_view_usage: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(khr::maintenance2::NAME),
             // VeriSilicon's proprietary driver, as on NXP's i.MX 8 SoCs, advertises timeline
@@ -2780,6 +2870,13 @@ impl super::Adapter {
             log::debug!("Missing extensions: {unsupported_extensions:?}");
         }
 
+        let mut supported_extensions = supported_extensions;
+        if !features.contains(wgt::Features::HOST_TEXTURE_COPY)
+            && self.private_caps.implicit_host_image_copy
+        {
+            supported_extensions.push(ext::host_image_copy::NAME);
+        }
+
         log::debug!("Supported extensions: {supported_extensions:?}");
         supported_extensions
     }
@@ -2926,6 +3023,32 @@ impl super::Adapter {
         } else {
             None
         };
+        let host_image_copy_fns = if enabled_extensions.contains(&ext::host_image_copy::NAME) {
+            // Some drivers report the extension but fail to provide the function pointers
+            // (e.g. software renderers). Verify the primary entry point is reachable first.
+            let probe = unsafe {
+                self.instance
+                    .raw
+                    .get_device_proc_addr(raw_device.handle(), c"vkCopyMemoryToImageEXT".as_ptr())
+            };
+            if probe.is_some() {
+                Some(ext::host_image_copy::Device::new(
+                    &self.instance.raw,
+                    &raw_device,
+                ))
+            } else {
+                log::warn!("VK_EXT_host_image_copy enabled but vkCopyMemoryToImageEXT unavailable — disabling");
+                None
+            }
+        } else {
+            None
+        };
+
+        // Fail device creation rather than silently poisoning the device later
+        // when HOST_TEXTURE_COPY operations return DeviceError::Lost.
+        if host_image_copy_fns.is_none() && features.contains(wgt::Features::HOST_TEXTURE_COPY) {
+            return Err(crate::DeviceError::Unexpected);
+        }
 
         let naga_options = {
             use naga::back::spv;
@@ -3198,6 +3321,7 @@ impl super::Adapter {
                 ray_tracing_pipelines: ray_tracing_pipeline_fns,
                 mesh_shading: mesh_shading_fns,
                 external_memory_fd: external_memory_fd_fn,
+                host_image_copy: host_image_copy_fns,
             },
             pipeline_cache_validation_key,
             vendor_id: self.phd_capabilities.properties.vendor_id,
@@ -3432,6 +3556,28 @@ impl crate::Adapter for super::Adapter {
 
         // Vulkan is very permissive about MSAA
         flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.is_compressed());
+
+        // Host-copy support is per-format, and often missing for depth/stencil.
+        if self
+            .phd_features
+            .supports_host_image_copy(&self.phd_capabilities)
+        {
+            let mut properties3 = vk::FormatProperties3::default();
+            let mut properties2 = vk::FormatProperties2::default().push_next(&mut properties3);
+            unsafe {
+                self.instance.raw.get_physical_device_format_properties2(
+                    self.raw,
+                    vk_format,
+                    &mut properties2,
+                );
+            }
+            flags.set(
+                Tfc::HOST_COPY,
+                properties3
+                    .optimal_tiling_features
+                    .contains(vk::FormatFeatureFlags2::HOST_IMAGE_TRANSFER_EXT),
+            );
+        }
 
         // get the supported sample counts
         let format_aspect = crate::FormatAspects::from(format);
