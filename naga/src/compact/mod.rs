@@ -116,153 +116,11 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     // not sure, then you could be marking it too late to be noticed. The thing
     // itself will be retained by compaction, but since it will not be traced,
     // anything it refers to could be compacted away.
-    let mut module_tracer = ModuleTracer::new(module);
-
-    // Observe what each entry point actually uses.
-    log::trace!("tracing entry points");
-    let entry_point_maps = module
-        .entry_points
-        .iter()
-        .map(|e| {
-            log::trace!("tracing entry point {:?}", e.function.name);
-
-            if let Some(sizes) = e.workgroup_size_overrides {
-                for size in sizes.iter().filter_map(|x| *x) {
-                    module_tracer.global_expressions_used.insert(size);
-                }
-            }
-
-            if let Some(task_payload) = e.task_payload {
-                module_tracer.global_variables_used.insert(task_payload);
-            }
-            if let Some(incoming_ray_payload) = e.incoming_ray_payload {
-                module_tracer
-                    .global_variables_used
-                    .insert(incoming_ray_payload);
-            }
-            if let Some(ref mesh_info) = e.mesh_info {
-                module_tracer
-                    .global_variables_used
-                    .insert(mesh_info.output_variable);
-                module_tracer
-                    .types_used
-                    .insert(mesh_info.vertex_output_type);
-                module_tracer
-                    .types_used
-                    .insert(mesh_info.primitive_output_type);
-                if let Some(max_vertices_override) = mesh_info.max_vertices_override {
-                    module_tracer
-                        .global_expressions_used
-                        .insert(max_vertices_override);
-                }
-                if let Some(max_primitives_override) = mesh_info.max_primitives_override {
-                    module_tracer
-                        .global_expressions_used
-                        .insert(max_primitives_override);
-                }
-            }
-            if e.stage == crate::ShaderStage::Task || e.stage == crate::ShaderStage::Mesh {
-                // Mesh shaders always need a u32 type, as it is e.g. the type of some
-                // expressions. We tolerate its absence here because compaction is
-                // infallible, but the module will fail validation.
-                if let Some(u32_type) = module.types.iter().find_map(|tuple| {
-                    (tuple.1.inner == crate::TypeInner::Scalar(crate::Scalar::U32))
-                        .then_some(tuple.0)
-                }) {
-                    module_tracer.types_used.insert(u32_type);
-                }
-            }
-
-            let mut used = module_tracer.as_function(&e.function);
-            used.trace();
-            FunctionMap::from(used)
-        })
-        .collect::<Vec<_>>();
-
-    // Observe which types, constant expressions, constants, and expressions
-    // each function uses, and produce maps for each function from
-    // pre-compaction to post-compaction expression handles.
-    //
-    // The function tracing logic here works in conjunction with
-    // `FunctionTracer::trace_call`, which, when tracing a `Statement::Call`
-    // to a function not already identified as used, adds the called function
-    // to both `functions_used` and `functions_pending`.
-    //
-    // Called functions are required to appear before their callers in the
-    // functions arena (recursion is disallowed). We have already traced the
-    // entry point(s) and added any functions called directly by the entry
-    // point(s) to `functions_pending`. We proceed by repeatedly tracing the
-    // last function in `functions_pending`. By an inductive argument, any
-    // functions after the last function in `functions_pending` must be unused.
-    //
-    // When `KeepUnused` is active, we simply mark all functions as pending,
-    // and then trace all of them.
-    log::trace!("tracing functions");
-    let mut function_maps = HandleMap::with_capacity(module.functions.len());
-    if keep_unused.into() {
-        module_tracer.functions_used.add_all();
-        module_tracer.functions_pending.add_all();
-    }
-    while let Some(handle) = module_tracer.functions_pending.pop() {
-        let function = &module.functions[handle];
-        log::trace!("tracing function {function:?}");
-        let mut function_tracer = module_tracer.as_function(function);
-        function_tracer.trace();
-        function_maps.insert(handle, FunctionMap::from(function_tracer));
-    }
-
-    // We treat all special types as used by definition.
-    log::trace!("tracing special types");
-    module_tracer.trace_special_types(&module.special_types);
-
-    log::trace!("tracing global variables");
-    if keep_unused.into() {
-        module_tracer.global_variables_used.add_all();
-    }
-    for global in module_tracer.global_variables_used.iter() {
-        log::trace!("tracing global {:?}", module.global_variables[global].name);
-        module_tracer
-            .types_used
-            .insert(module.global_variables[global].ty);
-        if let Some(init) = module.global_variables[global].init {
-            module_tracer.global_expressions_used.insert(init);
-        }
-    }
-
-    // We treat all named constants as used by definition, unless they have an
-    // abstract type as we do not want those reaching the validator.
-    log::trace!("tracing named constants");
-    for (handle, constant) in module.constants.iter() {
-        if constant.name.is_none() || module.types[constant.ty].inner.is_abstract(&module.types) {
-            continue;
-        }
-
-        log::trace!("tracing constant {:?}", constant.name.as_ref().unwrap());
-        module_tracer.constants_used.insert(handle);
-        module_tracer.types_used.insert(constant.ty);
-        module_tracer.global_expressions_used.insert(constant.init);
-    }
-
-    if keep_unused.into() {
-        // Treat all named overrides as used.
-        for (handle, r#override) in module.overrides.iter() {
-            if r#override.name.is_some() && module_tracer.overrides_used.insert(handle) {
-                module_tracer.types_used.insert(r#override.ty);
-                if let Some(init) = r#override.init {
-                    module_tracer.global_expressions_used.insert(init);
-                }
-            }
-        }
-
-        // Treat all named types as used.
-        for (handle, ty) in module.types.iter() {
-            if ty.name.is_some() {
-                module_tracer.types_used.insert(handle);
-            }
-        }
-    }
-
-    module_tracer.type_expression_tandem();
+    let Traced {
+        module_tracer,
+        entry_point_maps,
+        function_maps,
+    } = trace(module, keep_unused, None);
 
     // Now that we know what is used and what is never touched,
     // produce maps from the `Handle`s that appear in `module` now to
@@ -404,6 +262,197 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
                     .adjust(max_primitives_override);
             }
         }
+    }
+}
+
+/// What [`trace`] found to be used in a module.
+struct Traced<'module> {
+    module_tracer: ModuleTracer<'module>,
+    entry_point_maps: Vec<FunctionMap>,
+    function_maps: HandleMap<crate::Function, FunctionMap>,
+}
+
+/// Mark everything in `module` that compaction must retain.
+///
+/// If `entry_point` is given, only that entry point is traced.
+fn trace(
+    module: &crate::Module,
+    keep_unused: KeepUnused,
+    entry_point: Option<usize>,
+) -> Traced<'_> {
+    let mut module_tracer = ModuleTracer::new(module);
+
+    // Observe what each entry point actually uses.
+    log::trace!("tracing entry points");
+    let entry_point_maps = module
+        .entry_points
+        .iter()
+        .enumerate()
+        .filter(|&(index, _)| entry_point.is_none() || entry_point == Some(index))
+        .map(|(_, e)| {
+            log::trace!("tracing entry point {:?}", e.function.name);
+
+            if let Some(sizes) = e.workgroup_size_overrides {
+                for size in sizes.iter().filter_map(|x| *x) {
+                    module_tracer.global_expressions_used.insert(size);
+                }
+            }
+
+            if let Some(task_payload) = e.task_payload {
+                module_tracer.global_variables_used.insert(task_payload);
+            }
+            if let Some(incoming_ray_payload) = e.incoming_ray_payload {
+                module_tracer
+                    .global_variables_used
+                    .insert(incoming_ray_payload);
+            }
+            if let Some(ref mesh_info) = e.mesh_info {
+                module_tracer
+                    .global_variables_used
+                    .insert(mesh_info.output_variable);
+                module_tracer
+                    .types_used
+                    .insert(mesh_info.vertex_output_type);
+                module_tracer
+                    .types_used
+                    .insert(mesh_info.primitive_output_type);
+                if let Some(max_vertices_override) = mesh_info.max_vertices_override {
+                    module_tracer
+                        .global_expressions_used
+                        .insert(max_vertices_override);
+                }
+                if let Some(max_primitives_override) = mesh_info.max_primitives_override {
+                    module_tracer
+                        .global_expressions_used
+                        .insert(max_primitives_override);
+                }
+            }
+            if e.stage == crate::ShaderStage::Task || e.stage == crate::ShaderStage::Mesh {
+                // Mesh shaders always need a u32 type, as it is e.g. the type of some
+                // expressions. We tolerate its absence here because compaction is
+                // infallible, but the module will fail validation.
+                if let Some(u32_type) = module.types.iter().find_map(|tuple| {
+                    (tuple.1.inner == crate::TypeInner::Scalar(crate::Scalar::U32))
+                        .then_some(tuple.0)
+                }) {
+                    module_tracer.types_used.insert(u32_type);
+                }
+            }
+
+            let mut used = module_tracer.as_function(&e.function);
+            used.trace();
+            FunctionMap::from(used)
+        })
+        .collect::<Vec<_>>();
+
+    // Observe which types, constant expressions, constants, and expressions
+    // each function uses, and produce maps for each function from
+    // pre-compaction to post-compaction expression handles.
+    //
+    // The function tracing logic here works in conjunction with
+    // `FunctionTracer::trace_call`, which, when tracing a `Statement::Call`
+    // to a function not already identified as used, adds the called function
+    // to both `functions_used` and `functions_pending`.
+    //
+    // Called functions are required to appear before their callers in the
+    // functions arena (recursion is disallowed). We have already traced the
+    // entry point(s) and added any functions called directly by the entry
+    // point(s) to `functions_pending`. We proceed by repeatedly tracing the
+    // last function in `functions_pending`. By an inductive argument, any
+    // functions after the last function in `functions_pending` must be unused.
+    //
+    // When `KeepUnused` is active, we simply mark all functions as pending,
+    // and then trace all of them.
+    log::trace!("tracing functions");
+    let mut function_maps = HandleMap::with_capacity(module.functions.len());
+    if keep_unused.into() {
+        module_tracer.functions_used.add_all();
+        module_tracer.functions_pending.add_all();
+    }
+    while let Some(handle) = module_tracer.functions_pending.pop() {
+        let function = &module.functions[handle];
+        log::trace!("tracing function {function:?}");
+        let mut function_tracer = module_tracer.as_function(function);
+        function_tracer.trace();
+        function_maps.insert(handle, FunctionMap::from(function_tracer));
+    }
+
+    // We treat all special types as used by definition.
+    log::trace!("tracing special types");
+    module_tracer.trace_special_types(&module.special_types);
+
+    log::trace!("tracing global variables");
+    if keep_unused.into() {
+        module_tracer.global_variables_used.add_all();
+    }
+    for global in module_tracer.global_variables_used.iter() {
+        log::trace!("tracing global {:?}", module.global_variables[global].name);
+        module_tracer
+            .types_used
+            .insert(module.global_variables[global].ty);
+        if let Some(init) = module.global_variables[global].init {
+            module_tracer.global_expressions_used.insert(init);
+        }
+    }
+
+    // We treat all named constants as used by definition, unless they have an
+    // abstract type as we do not want those reaching the validator.
+    log::trace!("tracing named constants");
+    for (handle, constant) in module.constants.iter() {
+        if constant.name.is_none() || module.types[constant.ty].inner.is_abstract(&module.types) {
+            continue;
+        }
+
+        log::trace!("tracing constant {:?}", constant.name.as_ref().unwrap());
+        module_tracer.constants_used.insert(handle);
+        module_tracer.types_used.insert(constant.ty);
+        module_tracer.global_expressions_used.insert(constant.init);
+    }
+
+    if keep_unused.into() {
+        // Treat all named overrides as used.
+        for (handle, r#override) in module.overrides.iter() {
+            if r#override.name.is_some() && module_tracer.overrides_used.insert(handle) {
+                module_tracer.types_used.insert(r#override.ty);
+                if let Some(init) = r#override.init {
+                    module_tracer.global_expressions_used.insert(init);
+                }
+            }
+        }
+
+        // Treat all named types as used.
+        for (handle, ty) in module.types.iter() {
+            if ty.name.is_some() {
+                module_tracer.types_used.insert(handle);
+            }
+        }
+    }
+
+    module_tracer.type_expression_tandem();
+
+    Traced {
+        module_tracer,
+        entry_point_maps,
+        function_maps,
+    }
+}
+
+/// The items of a module that an entry point uses, directly or indirectly.
+pub(crate) struct Reachable {
+    pub functions: HandleSet<crate::Function>,
+    pub overrides: HandleSet<crate::Override>,
+    pub global_expressions: HandleSet<crate::Expression>,
+}
+
+/// Return what entry point `entry_point` of `module` uses, or what any entry point uses if `None`.
+///
+/// This is what [`compact`] with [`KeepUnused::No`] would retain.
+pub(crate) fn reachable(module: &crate::Module, entry_point: Option<usize>) -> Reachable {
+    let tracer = trace(module, KeepUnused::No, entry_point).module_tracer;
+    Reachable {
+        functions: tracer.functions_used,
+        overrides: tracer.overrides_used,
+        global_expressions: tracer.global_expressions_used,
     }
 }
 
