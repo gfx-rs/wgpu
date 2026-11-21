@@ -195,15 +195,17 @@ impl super::Device {
         match stage.module.source {
             ShaderModuleSource::Naga(ref naga_shader) => {
                 let stage_bit = map_naga_stage(naga_stage);
-                let (module, module_info) = naga::back::pipeline_constants::process_overrides(
+                // The MSL writer applies the constants itself; this copy is only
+                // read for workgroup sizes, which can depend on them.
+                let module = naga::back::pipeline_constants::resolve_overrides(
                     &naga_shader.module,
-                    &naga_shader.info,
-                    Some((naga_stage, stage.entry_point)),
+                    (naga_stage, stage.entry_point),
                     stage.constants,
                 )
                 .map_err(|e| {
                     crate::PipelineError::PipelineConstants(stage_bit, format!("MSL: {e:?}"))
                 })?;
+                let module_info = &naga_shader.info;
 
                 let ep_resources = &layout.per_stage_map[naga_stage];
 
@@ -277,15 +279,21 @@ impl super::Device {
                     vertex_pulling_transform: true,
                     vertex_buffer_mappings: vertex_buffer_mappings.to_vec(),
                     binding_array_length_map: layout.binding_array_length_map.clone(),
+                    constants: stage.constants.clone(),
                 };
 
-                let (source, info) = naga::back::msl::write_string(
-                    &module,
-                    &module_info,
-                    &options,
-                    &pipeline_options,
-                )
-                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {e:?}")))?;
+                let (source, info) =
+                    naga::back::msl::write_string(&naga_shader.module, &options, &pipeline_options)
+                        .map_err(|e| match e {
+                            // Bad override values, among other things.
+                            naga::back::msl::Error::Pass(_) => {
+                                crate::PipelineError::PipelineConstants(
+                                    stage_bit,
+                                    format!("MSL: {e}"),
+                                )
+                            }
+                            _ => crate::PipelineError::Linkage(stage_bit, format!("MSL: {e:?}")),
+                        })?;
 
                 log::debug!(
                     "Naga generated shader for entry point '{ep}' and stage {naga_stage:?}\n{source}",
@@ -355,9 +363,10 @@ impl super::Device {
                                 immutable_buffer_mask |= 1 << slot;
                             }
 
-                            if module.types[var.ty]
-                                .inner
-                                .needs_host_buffer_byte_size(&module.types)
+                            if !ep_info[var_handle].is_empty()
+                                && module.types[var.ty]
+                                    .inner
+                                    .needs_host_buffer_byte_size(&module.types)
                             {
                                 let n = match module.types[var.ty].inner {
                                     naga::TypeInner::BindingArray { size, .. } => {

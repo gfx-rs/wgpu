@@ -455,15 +455,15 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
     uint _e310; InterlockedOr(data[2].atoms[18], 0, _e310);
     ok = (_e305 & (_e310 == 42u));
     bool _e314 = ok;
-    uint _e321 = dynamic[36u];
-    ok = (_e314 & (_e321 == 42u));
-    bool _e325 = ok;
-    float _e332 = floats[36u];
-    ok = (_e325 & (_e332 == 42.0));
+    uint _e318 = dynamic[36u];
+    ok = (_e314 & (_e318 == 42u));
+    bool _e322 = ok;
+    float _e326 = floats[36u];
+    ok = (_e322 & (_e326 == 42.0));
     uint index = (((group.x * width) * height) + zero_flat_index);
-    uint _e344 = asuint(output.Load(index*4));
-    bool _e347 = ok;
-    output.Store(index*4, asuint((_e344 | (_e347 ? 2u : 1u))));
+    uint _e338 = asuint(output.Load(index*4));
+    bool _e341 = ok;
+    output.Store(index*4, asuint((_e338 | (_e341 ? 2u : 1u))));
     return;
 }
 

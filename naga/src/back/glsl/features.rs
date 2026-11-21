@@ -1,6 +1,6 @@
 use core::fmt::Write;
 
-use super::{BackendResult, Error, Version, Writer};
+use super::{writer::ModuleWriter, BackendResult, Error, Version};
 use crate::{
     back::glsl::{Options, WriterFlags},
     AddressSpace, Binding, Expression, Handle, ImageClass, ImageDimension, Interpolation,
@@ -323,7 +323,7 @@ impl FeaturesManager {
     }
 }
 
-impl<W> Writer<'_, W> {
+impl<W> ModuleWriter<'_, W> {
     /// Helper method that searches the module for all the needed [`Features`]
     ///
     /// # Errors

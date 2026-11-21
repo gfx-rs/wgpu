@@ -336,9 +336,19 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     pub fn write(
         &mut self,
         module: &Module,
-        module_info: &valid::ModuleInfo,
         fragment_entry_point: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<super::ReflectionInfo, Error> {
+        let passes = back::passes::Passes {
+            entry_point: self
+                .pipeline_options
+                .entry_point
+                .as_ref()
+                .map(|&(stage, ref name)| (stage, name.as_str())),
+            constants: Some(&self.pipeline_options.constants),
+        };
+        let prepared = back::passes::run(module, &passes)?;
+        let (module, module_info) = (&prepared.module, &prepared.info);
+
         self.reset(module);
 
         if module.uses_mesh_shaders() && self.options.shader_model < ShaderModel::V6_5 {

@@ -4833,10 +4833,19 @@ impl<W: Write> Writer<W> {
     pub fn write(
         &mut self,
         module: &crate::Module,
-        info: &valid::ModuleInfo,
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
+        let passes = back::passes::Passes {
+            entry_point: pipeline_options
+                .entry_point
+                .as_ref()
+                .map(|&(stage, ref name)| (stage, name.as_str())),
+            constants: Some(&pipeline_options.constants),
+        };
+        let prepared = back::passes::run(module, &passes)?;
+        let (module, info) = (&prepared.module, &prepared.info);
+
         self.emit_int_div_checks = options.emit_int_div_checks;
         self.names.clear();
         self.namer.reset(

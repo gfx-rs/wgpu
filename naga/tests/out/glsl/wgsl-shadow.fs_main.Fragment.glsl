@@ -28,7 +28,7 @@ layout(std140) uniform Globals_block_0Fragment { Globals _group_0_binding_0_fs; 
 
 layout(std140) uniform Entity_block_1Fragment { Entity _group_1_binding_0_fs; };
 
-layout(std430) readonly buffer type_8_block_2Fragment { Light _group_0_binding_1_fs[]; };
+layout(std430) readonly buffer type_6_block_2Fragment { Light _group_0_binding_1_fs[]; };
 
 uniform highp sampler2DArrayShadow _group_0_binding_2_fs;
 
@@ -51,7 +51,7 @@ void main() {
     VertexOutput in_ = VertexOutput(gl_FragCoord, _vs2fs_location0, _vs2fs_location1);
     vec3 color = c_ambient;
     uint i = 0u;
-    vec3 normal_1 = normalize(in_.world_normal);
+    vec3 normal = normalize(in_.world_normal);
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
@@ -71,7 +71,7 @@ void main() {
             uint _e19 = i;
             float _e23 = fetch_shadow(_e19, (light.proj * in_.world_position));
             vec3 light_dir = normalize((light.pos.xyz - in_.world_position.xyz));
-            float diffuse = max(0.0, dot(normal_1, light_dir));
+            float diffuse = max(0.0, dot(normal, light_dir));
             vec3 _e33 = color;
             color = (_e33 + ((_e23 * diffuse) * light.color.xyz));
         }
