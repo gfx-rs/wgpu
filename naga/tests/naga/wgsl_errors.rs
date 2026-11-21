@@ -9,7 +9,7 @@
 
 use naga::{
     compact::KeepUnused,
-    front::wgsl::{EnableExtension, ImplementedEnableExtension},
+    front::wgsl::EnableExtensions,
     valid::{self, Capabilities},
 };
 
@@ -1271,38 +1271,19 @@ macro_rules! check_extension_validation {
         $(other_caps = $other_caps;)?
         let caps = $caps;
         let source = $source;
-        let mut ext = None;
-        for cap in caps.iter() {
-            match cap.extension() {
-                Some(this_ext) if ext.is_none() => ext = Some(this_ext),
-                Some(this_ext) if ext.is_some_and(|ext| ext != this_ext) => {
-                    panic!(
-                        concat!(
-                            "the capabilities {:?} in `check_extension_validation` ",
-                            "are not all covered by the same extension ",
-                            "(found both {:?} and {:?})",
-                        ),
-                        caps, ext, this_ext,
-                    );
-                }
-                _ => {}
-            }
-        }
-        let Some(ext) = ext else {
-            panic!(
-                concat!(
-                    "None of the capabilities {:?} in `check_extension_validation` ",
-                    "are associated with an extension. ",
-                    "Use `check_validation!` to check validator behavior ",
-                    "when there isn't a corresponding parse error.",
-                ),
-                caps
-            );
-        };
-        let directive = format!(
-            "enable {};",
-            naga::front::wgsl::EnableExtension::Implemented(ext).to_ident()
+        let ext = caps.extension();
+        assert!(
+            ext.iter().count() == 1,
+            concat!(
+                "the capabilities {:?} in `check_extension_validation` must be covered by ",
+                "exactly one extension, but found {:?}. ",
+                "Use `check_validation!` to check validator behavior ",
+                "when there isn't a corresponding parse error.",
+            ),
+            caps,
+            ext,
         );
+        let directive = format!("enable {};", ext.to_ident());
         assert!(
             !source.contains(&directive),
             "test case for `check_extension_validation!` should not contain the enable directive",
@@ -5146,11 +5127,9 @@ fn invalid_clip_distances() {
 
 #[test]
 fn recognized_but_unimplemented_enable_extension() {
-    let extension = naga::front::wgsl::UnimplementedEnableExtension::Subgroups;
-    // NOTE: We match exhaustively here to help maintainers add or remove variants to the above
-    // array.
-    let snapshot = match extension {
-            naga::front::wgsl::UnimplementedEnableExtension::Subgroups => "\
+    check(
+        "enable subgroups;",
+        "\
 error: the `subgroups` enable-extension is not yet supported
   ┌─ wgsl:1:8
   │
@@ -5160,14 +5139,7 @@ error: the `subgroups` enable-extension is not yet supported
   = note: Let Naga maintainers know that you ran into this at <https://github.com/gfx-rs/wgpu/issues/5555>, so they can prioritize it!
 
 ",
-        };
-
-    let shader = {
-        let extension = naga::front::wgsl::EnableExtension::Unimplemented(extension);
-        format!("enable {};", extension.to_ident())
-    };
-
-    check(&shader, snapshot);
+    );
 }
 
 #[test]
@@ -6302,8 +6274,8 @@ fn check_with_capabilities(input: &str, snapshot: &str, capabilities: Capabiliti
 
 #[test]
 fn enable_without_capability() {
-    for extension in ImplementedEnableExtension::all() {
-        let ident = EnableExtension::from(*extension).to_ident();
+    for extension in EnableExtensions::all().iter() {
+        let ident = extension.to_ident();
         let carets = "^".repeat(ident.len());
         check_with_capabilities(
             &format!("enable {ident};"),
@@ -6316,7 +6288,7 @@ fn enable_without_capability() {
 
 "
             ),
-            !extension.capability(),
+            !extension.capabilities(),
         );
     }
 }

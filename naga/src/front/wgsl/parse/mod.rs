@@ -1,14 +1,13 @@
 use alloc::{boxed::Box, vec::Vec};
-use directive::enable_extension::ImplementedEnableExtension;
 
+use crate::common::wgsl::EnableExtensions;
 use crate::diagnostic_filter::{
     self, DiagnosticFilter, DiagnosticFilterMap, DiagnosticFilterNode, FilterableTriggeringRule,
     ShouldConflictOnFullDuplicate, StandardFilterableTriggeringRule,
 };
 use crate::front::wgsl::error::{DiagnosticAttributeNotSupportedPosition, Error, ExpectedToken};
-use crate::front::wgsl::parse::directive::enable_extension::{EnableExtension, EnableExtensions};
 use crate::front::wgsl::parse::directive::language_extension::LanguageExtension;
-use crate::front::wgsl::parse::directive::DirectiveKind;
+use crate::front::wgsl::parse::directive::{DirectiveKind, UNIMPLEMENTED_ENABLE_EXTENSIONS};
 use crate::front::wgsl::parse::lexer::{Lexer, Token, TokenSpan};
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::Result;
@@ -218,10 +217,8 @@ impl<'a> BindingParser<'a> {
                 self.invariant.set(true, name_span)?;
             }
             "blend_src" => {
-                lexer.require_enable_extension(
-                    ImplementedEnableExtension::DualSourceBlending,
-                    name_span,
-                )?;
+                lexer
+                    .require_enable_extension(EnableExtensions::DUAL_SOURCE_BLENDING, name_span)?;
 
                 lexer.expect(Token::Paren('('))?;
                 self.blend_src
@@ -230,10 +227,7 @@ impl<'a> BindingParser<'a> {
                 lexer.expect(Token::Paren(')'))?;
             }
             "per_primitive" => {
-                lexer.require_enable_extension(
-                    ImplementedEnableExtension::WgpuMeshShader,
-                    name_span,
-                )?;
+                lexer.require_enable_extension(EnableExtensions::WGPU_MESH_SHADER, name_span)?;
                 self.per_primitive.set((), name_span)?;
             }
             _ => return Err(Box::new(Error::UnknownAttribute(name_span))),
@@ -1923,18 +1917,14 @@ impl Parser {
                     shader_stage_error_span = name_span;
                 }
                 "task" => {
-                    lexer.require_enable_extension(
-                        ImplementedEnableExtension::WgpuMeshShader,
-                        name_span,
-                    )?;
+                    lexer
+                        .require_enable_extension(EnableExtensions::WGPU_MESH_SHADER, name_span)?;
                     stage.set(ShaderStage::Task, name_span)?;
                     shader_stage_error_span = name_span;
                 }
                 "mesh" => {
-                    lexer.require_enable_extension(
-                        ImplementedEnableExtension::WgpuMeshShader,
-                        name_span,
-                    )?;
+                    lexer
+                        .require_enable_extension(EnableExtensions::WGPU_MESH_SHADER, name_span)?;
                     stage.set(ShaderStage::Mesh, name_span)?;
                     shader_stage_error_span = name_span;
 
@@ -1944,7 +1934,7 @@ impl Parser {
                 }
                 "ray_generation" => {
                     lexer.require_enable_extension(
-                        ImplementedEnableExtension::WgpuRayTracingPipeline,
+                        EnableExtensions::WGPU_RAY_TRACING_PIPELINE,
                         name_span,
                     )?;
                     stage.set(ShaderStage::RayGeneration, name_span)?;
@@ -1952,7 +1942,7 @@ impl Parser {
                 }
                 "any_hit" => {
                     lexer.require_enable_extension(
-                        ImplementedEnableExtension::WgpuRayTracingPipeline,
+                        EnableExtensions::WGPU_RAY_TRACING_PIPELINE,
                         name_span,
                     )?;
                     stage.set(ShaderStage::AnyHit, name_span)?;
@@ -1960,7 +1950,7 @@ impl Parser {
                 }
                 "closest_hit" => {
                     lexer.require_enable_extension(
-                        ImplementedEnableExtension::WgpuRayTracingPipeline,
+                        EnableExtensions::WGPU_RAY_TRACING_PIPELINE,
                         name_span,
                     )?;
                     stage.set(ShaderStage::ClosestHit, name_span)?;
@@ -1968,24 +1958,22 @@ impl Parser {
                 }
                 "miss" => {
                     lexer.require_enable_extension(
-                        ImplementedEnableExtension::WgpuRayTracingPipeline,
+                        EnableExtensions::WGPU_RAY_TRACING_PIPELINE,
                         name_span,
                     )?;
                     stage.set(ShaderStage::Miss, name_span)?;
                     shader_stage_error_span = name_span;
                 }
                 "payload" => {
-                    lexer.require_enable_extension(
-                        ImplementedEnableExtension::WgpuMeshShader,
-                        name_span,
-                    )?;
+                    lexer
+                        .require_enable_extension(EnableExtensions::WGPU_MESH_SHADER, name_span)?;
                     lexer.expect(Token::Paren('('))?;
                     payload.set(lexer.next_ident_with_span()?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;
                 }
                 "incoming_payload" => {
                     lexer.require_enable_extension(
-                        ImplementedEnableExtension::WgpuRayTracingPipeline,
+                        EnableExtensions::WGPU_RAY_TRACING_PIPELINE,
                         name_span,
                     )?;
                     lexer.expect(Token::Paren('('))?;
@@ -2270,25 +2258,28 @@ impl Parser {
                     }
                     DirectiveKind::Enable => {
                         self.directive_ident_list(&mut lexer, |ident, span| {
-                            let kind = EnableExtension::from_ident(ident, span)?;
-                            let extension = match kind {
-                                EnableExtension::Implemented(kind) => kind,
-                                EnableExtension::Unimplemented(kind) => {
-                                    return Err(Box::new(Error::EnableExtensionNotYetImplemented {
-                                        kind,
-                                        span,
-                                    }))
-                                }
+                            let Some(kind) = EnableExtensions::from_ident(ident) else {
+                                let unimplemented = UNIMPLEMENTED_ENABLE_EXTENSIONS
+                                    .iter()
+                                    .find(|&&(name, _)| name == ident);
+                                return Err(Box::new(match unimplemented {
+                                    Some(&(_, tracking_issue)) => {
+                                        Error::EnableExtensionNotYetImplemented {
+                                            ident,
+                                            tracking_issue,
+                                            span,
+                                        }
+                                    }
+                                    None => Error::UnknownEnableExtension(span, ident),
+                                }));
                             };
-                            // Check if the required capability is supported
-                            let required_capability = extension.capability();
-                            if !options.capabilities.intersects(required_capability) {
+                            if !options.capabilities.intersects(kind.capabilities()) {
                                 return Err(Box::new(Error::EnableExtensionNotSupported {
                                     kind,
                                     span,
                                 }));
                             }
-                            enable_extensions.add(extension);
+                            enable_extensions |= kind;
                             Ok(())
                         })?;
                     }
