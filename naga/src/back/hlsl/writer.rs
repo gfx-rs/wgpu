@@ -362,6 +362,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 .as_ref()
                 .map(|&(stage, ref name)| (stage, name.as_str())),
             constants: Some(&self.pipeline_options.constants),
+            workgroup_zero_init: false,
         };
         let prepared = back::passes::run(module, &passes)?;
         let (module, module_info) = (&prepared.module, &prepared.info);

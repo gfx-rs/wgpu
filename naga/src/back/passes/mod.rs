@@ -20,6 +20,8 @@ validation only checks the result of the passes.
     )
 )]
 
+pub mod workgroup_zero_init;
+
 use alloc::{boxed::Box, vec::Vec};
 use core::mem;
 
@@ -38,6 +40,8 @@ use crate::{
 pub enum PassError {
     #[error(transparent)]
     Overrides(Box<PipelineConstantError>),
+    #[error(transparent)]
+    WorkgroupZeroInit(#[from] workgroup_zero_init::WorkgroupZeroInitError),
     #[error("module failed revalidation after backend passes")]
     Validation(#[from] Box<WithSpan<ValidationError>>),
 }
@@ -55,6 +59,8 @@ pub(crate) struct Passes<'a> {
     pub entry_point: Option<(ShaderStage, &'a str)>,
     /// Values for the pipeline-overridable constants.
     pub constants: Option<&'a PipelineConstants>,
+    /// Run [`workgroup_zero_init`].
+    pub workgroup_zero_init: bool,
 }
 
 /// A module prepared for a backend by [`run`].
@@ -125,7 +131,10 @@ pub(crate) fn run(module: &Module, passes: &Passes) -> Result<Prepared, PassErro
 
     // Passes add the functions they leave with unused or out-of-order
     // expressions to `dirty`.
-    let dirty = Dirty::default();
+    let mut dirty = Dirty::default();
+    if passes.workgroup_zero_init {
+        workgroup_zero_init::run(&mut module, &mut dirty)?;
+    }
     reorder(&mut module, &dirty);
 
     let info = Validator::new(ValidationFlags::all(), Capabilities::all())

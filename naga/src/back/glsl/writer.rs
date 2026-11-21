@@ -43,6 +43,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 &self.pipeline_options.entry_point,
             )),
             constants: Some(&self.pipeline_options.constants),
+            workgroup_zero_init: false,
         };
         let prepared = back::passes::run(module, &passes)?;
         let mut reflection = ModuleWriter::new(

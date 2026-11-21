@@ -4072,6 +4072,7 @@ impl Writer {
         let passes = crate::back::passes::Passes {
             entry_point: pipeline_options.map(|po| (po.shader_stage, po.entry_point.as_str())),
             constants: pipeline_options.map(|po| &po.constants),
+            workgroup_zero_init: false,
         };
         let prepared = crate::back::passes::run(ir_module, &passes)?;
         let (ir_module, info) = (&prepared.module, &prepared.info);
