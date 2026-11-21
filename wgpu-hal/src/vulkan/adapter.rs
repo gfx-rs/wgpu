@@ -3371,6 +3371,9 @@ impl crate::Adapter for super::Adapter {
         let features = properties.optimal_tiling_features;
 
         let storage_image = features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE);
+        // Bgra8Unorm has no SPIR-V image format, so reading it would need
+        // `shaderStorageImageReadWithoutFormat`, which we don't enable.
+        let storage_read = storage_image && format != wgt::TextureFormat::Bgra8Unorm;
 
         let mut flags = Tfc::empty();
         flags.set(
@@ -3385,9 +3388,10 @@ impl crate::Adapter for super::Adapter {
         //     Tfc::SAMPLED_MINMAX,
         //     features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_MINMAX),
         // );
+        flags.set(Tfc::STORAGE_WRITE_ONLY, storage_image);
         flags.set(
-            Tfc::STORAGE_READ_WRITE | Tfc::STORAGE_WRITE_ONLY | Tfc::STORAGE_READ_ONLY,
-            storage_image,
+            Tfc::STORAGE_READ_WRITE | Tfc::STORAGE_READ_ONLY,
+            storage_read,
         );
         flags.set(
             Tfc::STORAGE_ATOMIC,
