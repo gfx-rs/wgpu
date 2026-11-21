@@ -66,6 +66,15 @@ impl From<KeepUnused> for bool {
 ///
 /// If `module` would not pass validation, this may panic.
 pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
+    compact_with_global_origins(module, keep_unused);
+}
+
+/// Like [`compact`], and return the handle each global variable of the
+/// compacted module had before compaction.
+pub(crate) fn compact_with_global_origins(
+    module: &mut crate::Module,
+    keep_unused: KeepUnused,
+) -> Vec<arena::Handle<crate::GlobalVariable>> {
     // The trickiest part of compaction is determining what is used and what is
     // not. Once we have computed that correctly, it's easy enough to call
     // `retain_mut` on each arena, drop unused elements, and fix up the handles
@@ -195,6 +204,13 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
         }
     }
 
+    let global_origins = module
+        .global_variables
+        .iter()
+        .map(|(handle, _)| handle)
+        .filter(|&handle| module_map.globals.used(handle))
+        .collect();
+
     // Drop unused global variables, reusing existing storage.
     // Adjust used global variables' types and initializers.
     log::trace!("adjusting global variables");
@@ -263,6 +279,8 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
             }
         }
     }
+
+    global_origins
 }
 
 /// What [`trace`] found to be used in a module.
