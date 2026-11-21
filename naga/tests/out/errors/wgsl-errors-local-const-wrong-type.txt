@@ -1,0 +1,6 @@
+error: the type of `c` is expected to be `i32`, but got `u32`
+  ┌─ wgsl:2:11
+  │
+2 │     const c: i32 = 5u;
+  │           ^ definition of `c`
+

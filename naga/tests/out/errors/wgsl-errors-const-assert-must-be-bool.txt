@@ -1,0 +1,6 @@
+error: must be a const-expression that resolves to a `bool`
+  ┌─ wgsl:1:14
+  │
+1 │ const_assert(5); // 5 is not bool
+  │              ^ must resolve to `bool`
+

@@ -1,0 +1,8 @@
+error: redefinition of `a`
+  ┌─ wgsl:2:5
+  │
+2 │     a: f32,
+  │     ^ previous definition of `a`
+3 │     a: f32,
+  │     ^ redefinition of `a`
+

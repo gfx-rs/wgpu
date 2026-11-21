@@ -1,0 +1,6 @@
+error: hit object operation is done on a pointer to a non-hit-object
+  ┌─ wgsl:9:24
+  │
+9 │     _ = hitObjectIsHit(&rq);
+  │                        ^^^ hit object pointer is invalid
+

@@ -1,0 +1,6 @@
+error: numeric literal not representable by target type: `0x80000000i`
+  ┌─ wgsl:3:17
+  │
+3 │ const i32min = -0x80000000i;
+  │                 ^^^^^^^^^^^ numeric literal not representable by target type
+

@@ -1,0 +1,6 @@
+error: input/output binding is not consistent
+  ┌─ wgsl:1:8
+  │
+1 │ fn foo(@builtin(vertex_index) @location(0) x: u32) {}
+  │        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ input/output binding is not consistent
+

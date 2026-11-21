@@ -1,0 +1,6 @@
+error: cannot cast a vec2<f32> to a i32
+  ┌─ wgsl:2:16
+  │
+2 │     return i32(vec2<f32>(0.0));
+  │                ^^^^^^^^^^^^^^ cannot cast a vec2<f32> to a i32
+

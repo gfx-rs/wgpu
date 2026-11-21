@@ -1,0 +1,10 @@
+error: invalid left-hand side of assignment
+  ┌─ wgsl:2:17
+  │
+2 │             let a = array(1, 2);
+  │                 ^ this is an immutable binding
+3 │             a[0] = 1;
+  │             ^^^^ cannot assign to this expression
+  │
+  = note: consider declaring `a` with `var` instead of `let`
+

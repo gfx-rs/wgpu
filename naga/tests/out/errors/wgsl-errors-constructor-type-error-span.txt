@@ -1,0 +1,8 @@
+error: automatic conversions cannot convert `{AbstractFloat}` to `i32`
+  ┌─ wgsl:2:28
+  │
+2 │     var a: array<i32, 1> = array<i32, 1>(1.0);
+  │                            ^^^^^^^^^^^^^ ^^^ this expression has type {AbstractFloat}
+  │                            │              
+  │                            a value of type i32 is required here
+

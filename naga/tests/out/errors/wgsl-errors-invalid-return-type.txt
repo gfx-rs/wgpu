@@ -1,0 +1,6 @@
+error: expected `i32`, found `u32`
+  ┌─ wgsl:1:42
+  │
+1 │ fn invalid_return_type() -> i32 { return 0u; }
+  │                                          ^^ this expression has type `u32`
+

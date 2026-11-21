@@ -1,0 +1,8 @@
+error: too many arguments passed to `sin`
+  ┌─ wgsl:2:20
+  │
+2 │             return sin(1.0, 2.0);
+  │                    ^^^      ^^^ unexpected argument #2
+  │
+  = note: The `sin` function accepts at most 1 argument(s)
+

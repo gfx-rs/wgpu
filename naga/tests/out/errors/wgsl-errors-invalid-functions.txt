@@ -1,0 +1,6 @@
+error: direct access to atomic variable is not allowed
+  ┌─ wgsl:8:11
+  │
+8 │    return atom;
+  │           ^^^^ atomic variables cannot be accessed directly; use atomic built-in functions
+

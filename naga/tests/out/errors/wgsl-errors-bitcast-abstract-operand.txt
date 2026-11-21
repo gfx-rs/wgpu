@@ -1,0 +1,6 @@
+error: the concrete type `u32` cannot represent the abstract value `4294967296` accurately
+  ┌─ wgsl:1:37
+  │
+1 │ fn f() -> u32 { return bitcast<u32>(4294967296); }
+  │                                     ^^^^^^^^^^ see msg
+

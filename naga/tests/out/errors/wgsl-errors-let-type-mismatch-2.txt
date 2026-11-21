@@ -1,0 +1,6 @@
+error: the type of `x` is expected to be `f32`, but got `bool`
+  ┌─ wgsl:2:9
+  │
+2 │     let x: f32 = true;
+  │         ^ definition of `x`
+

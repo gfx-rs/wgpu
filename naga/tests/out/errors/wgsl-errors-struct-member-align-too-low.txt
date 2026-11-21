@@ -1,0 +1,6 @@
+error: struct member alignment must be at least 16
+  ┌─ wgsl:2:12
+  │
+2 │     @align(8) data: vec3<f32>
+  │            ^ must be at least 16
+

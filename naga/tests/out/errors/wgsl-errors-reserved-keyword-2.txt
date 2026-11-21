@@ -1,0 +1,6 @@
+error: name `break` is a reserved keyword
+  ┌─ wgsl:3:7
+  │
+3 │ const break: bool = true;
+  │       ^^^^^ definition of `break`
+

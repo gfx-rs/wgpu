@@ -1,0 +1,6 @@
+error: << operation overflowed
+  ┌─ wgsl:1:16
+  │
+1 │ const N: i32 = 1i << 31;
+  │                ^^^^^^^^ see msg
+

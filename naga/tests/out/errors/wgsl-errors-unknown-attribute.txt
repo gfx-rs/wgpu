@@ -1,0 +1,6 @@
+error: unknown attribute: `a`
+  ┌─ wgsl:1:2
+  │
+1 │ @a
+  │  ^ unknown attribute
+

@@ -1,0 +1,6 @@
+error: automatic conversions cannot convert elements of `{AbstractFloat}` to `u32`
+  ┌─ wgsl:9:19
+  │
+9 │     reorderThread(1.0, 2u);
+  │                   ^^^ this expression has type {AbstractFloat}
+

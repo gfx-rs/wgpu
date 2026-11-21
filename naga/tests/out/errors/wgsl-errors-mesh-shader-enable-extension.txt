@@ -1,0 +1,8 @@
+error: the `wgpu_mesh_shader` enable extension is not enabled
+  ┌─ wgsl:8:30
+  │
+8 │ @compute @workgroup_size(1) @payload(foo)
+  │                              ^^^^^^^ the `wgpu_mesh_shader` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_mesh_shader;` at the top of the shader, before any other items.
+

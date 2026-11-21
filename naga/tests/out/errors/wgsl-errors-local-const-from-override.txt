@@ -1,0 +1,6 @@
+error: Unexpected override-expression
+  ┌─ wgsl:3:15
+  │
+3 │     const c = o;
+  │               ^ see msg
+

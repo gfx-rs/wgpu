@@ -1,0 +1,6 @@
+error: declaration of `x` needs a type specifier or initializer
+  ┌─ wgsl:2:9
+  │
+2 │     var x;
+  │         ^ needs a type specifier or initializer
+

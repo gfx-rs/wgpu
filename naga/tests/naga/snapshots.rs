@@ -567,6 +567,29 @@ fn convert_snapshots_wgsl() {
     }
 }
 
+#[cfg_attr(miri, ignore)]
+#[test]
+fn convert_snapshots_wgsl_errors() {
+    let _ = env_logger::try_init();
+
+    for input in Input::files_in_dir("wgsl-errors", &["wgsl"], DIR_IN) {
+        let source = input.read_source(DIR_IN, true);
+        let source = source.replace('\r', "");
+
+        let params = input.read_parameters(DIR_IN);
+
+        let mut frontend = naga::front::wgsl::Frontend::new_with_options((&params.wgsl_in).into());
+        let error = match frontend.parse(&source) {
+            Ok(_) => panic!(
+                "{}: expected a parse error, but parsing succeeded",
+                input.input_path(DIR_IN).display()
+            ),
+            Err(e) => e.emit_to_string(&source),
+        };
+        input.write_output_file("errors", "txt", error, DIR_OUT);
+    }
+}
+
 // miri doesn't allow us to shell out to `spirv-as`
 #[cfg_attr(miri, ignore)]
 #[test]

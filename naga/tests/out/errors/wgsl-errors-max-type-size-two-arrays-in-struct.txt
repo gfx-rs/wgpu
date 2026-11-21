@@ -1,0 +1,11 @@
+error: type is too large
+  ┌─ wgsl:4:1
+  │  
+4 │ ╭ struct TwoArrays {
+5 │ │     arr1: array<u32, 1 << 28>,
+6 │ │     arr2: array<u32, 1 << 28>,
+7 │ │ }
+  │ ╰─^ this type exceeds the maximum size
+  │  
+  = note: the maximum size is 2147483647 bytes
+

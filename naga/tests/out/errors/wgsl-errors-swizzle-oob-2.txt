@@ -1,0 +1,6 @@
+error: invalid field accessor `xyzw`
+  ┌─ wgsl:6:27
+  │
+6 │     let r : vec4<i32> = v.xyzw;
+  │                           ^^^^ invalid accessor
+

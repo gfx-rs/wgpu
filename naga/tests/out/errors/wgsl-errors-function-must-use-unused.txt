@@ -1,0 +1,9 @@
+error: unused return value from function annotated with @must_use
+  ┌─ wgsl:7:3
+  │
+7 │   use_me(1);
+  │   ^^^^^^
+  │
+  = note: function 'use_me' is declared with `@must_use` attribute
+  = note: use a phony assignment or declare a value using the function call as the initializer
+

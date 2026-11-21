@@ -1,0 +1,6 @@
+error: RHS of shift operation is greater than or equal to 32
+  ┌─ wgsl:1:16
+  │
+1 │ const N: i32 = 1i >> 32;
+  │                ^^^^^^^^ see msg
+

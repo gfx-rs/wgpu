@@ -1,0 +1,8 @@
+error: function does not return any value
+  ┌─ wgsl:6:18
+  │
+6 │             let a = x();
+  │                     ^^^
+  │
+  = note: perhaps you meant to call the function in a separate statement?
+

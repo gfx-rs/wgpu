@@ -1,0 +1,6 @@
+error: `offset` + `count` must be at most 32, the bit width of the operand of the extractBits built-in function, but 30 + 8 is greater
+  ┌─ wgsl:4:30
+  │
+4 │ fn f(e: u32) -> u32 { return extractBits(e, 30u, 8u); }
+  │                              ^^^^^^^^^^^ see msg
+

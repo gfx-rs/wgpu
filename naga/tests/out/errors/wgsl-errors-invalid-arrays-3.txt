@@ -1,0 +1,6 @@
+error: array element count must be positive (> 0)
+  ┌─ wgsl:1:24
+  │
+1 │ alias Bad = array<f32, 0>;
+  │                        ^ must be positive
+

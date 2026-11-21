@@ -1,0 +1,6 @@
+error: Unexpected runtime-expression
+  ┌─ wgsl:3:15
+  │
+3 │     const c = v;
+  │               ^ see msg
+

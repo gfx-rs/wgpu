@@ -1,0 +1,6 @@
+error: struct member alignment must be a power of 2
+  ┌─ wgsl:2:12
+  │
+2 │     @align(7) data: array<f32>
+  │            ^ must be a power of 2
+

@@ -1,0 +1,6 @@
+error: invalid `switch` selector
+  ┌─ wgsl:2:12
+  │
+2 │     switch y {
+  │            ^ `switch` selector must be a scalar integer
+

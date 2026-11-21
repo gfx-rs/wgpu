@@ -1,0 +1,6 @@
+error: this operation is not supported in a const context
+  ┌─ wgsl:3:18
+  │
+3 │     const_assert a != 0;
+  │                  ^ operation not supported here
+

@@ -1,0 +1,6 @@
+error: name `switch` is a reserved keyword
+  ┌─ wgsl:3:14
+  │
+3 │ struct Foo { switch: f32 }
+  │              ^^^^^^ definition of `switch`
+

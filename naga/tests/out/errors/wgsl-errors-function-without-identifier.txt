@@ -1,0 +1,6 @@
+error: expected identifier, found "("
+  ┌─ wgsl:1:4
+  │
+1 │ fn () {}
+  │    ^ expected identifier
+

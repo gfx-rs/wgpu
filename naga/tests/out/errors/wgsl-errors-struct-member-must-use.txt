@@ -1,0 +1,6 @@
+error: unknown attribute: `must_use`
+  ┌─ wgsl:2:4
+  │
+2 │   @must_use a: i32,
+  │    ^^^^^^^^ unknown attribute
+

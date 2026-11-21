@@ -1,0 +1,13 @@
+error: declaration of `f` is cyclic
+  ┌─ wgsl:1:4
+  │
+1 │ fn f() {
+  │    ^
+2 │     g();
+  │     ^ uses `g`
+3 │ }
+4 │ fn g() {
+  │    ^
+5 │     f();
+  │     ^ ending the cycle
+

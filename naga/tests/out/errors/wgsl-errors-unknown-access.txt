@@ -1,0 +1,6 @@
+error: unknown access: `unknown_access`
+  ┌─ wgsl:1:13
+  │
+1 │ var<storage,unknown_access> x: array<u32>;
+  │             ^^^^^^^^^^^^^^ unknown access
+

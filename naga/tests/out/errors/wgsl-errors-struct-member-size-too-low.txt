@@ -1,0 +1,6 @@
+error: struct member size must be at least 4
+  ┌─ wgsl:2:11
+  │
+2 │     @size(0) data: array<f32, 1>
+  │           ^ must be at least 4
+

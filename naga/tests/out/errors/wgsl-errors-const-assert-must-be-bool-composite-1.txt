@@ -1,0 +1,6 @@
+error: must be a const-expression that resolves to a `bool`
+  ┌─ wgsl:1:14
+  │
+1 │ const_assert(vec2i());
+  │              ^^^^^^^ must resolve to `bool`
+

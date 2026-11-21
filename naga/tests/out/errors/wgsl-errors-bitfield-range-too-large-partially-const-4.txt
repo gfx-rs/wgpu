@@ -1,0 +1,6 @@
+error: `offset` + `count` must be at most 32, the bit width of the operand of the insertBits built-in function, but 30 + 8 is greater
+  ┌─ wgsl:1:38
+  │
+1 │ fn f(e: u32, n: u32) -> u32 { return insertBits(e, n, 30u, 8u); }
+  │                                      ^^^^^^^^^^ see msg
+

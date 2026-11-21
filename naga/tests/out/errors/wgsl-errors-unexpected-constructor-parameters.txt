@@ -1,0 +1,6 @@
+error: unexpected components
+  ┌─ wgsl:2:16
+  │
+2 │     _ = i32(0, 1);
+  │                ^ unexpected components
+
