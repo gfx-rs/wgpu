@@ -335,6 +335,14 @@ fn validate_metal(path: &Path, xcrun: &str) -> anyhow::Result<()> {
 }
 
 fn validate_glsl(path: &Path, type_arg: &str, glslang_validator: &str) -> anyhow::Result<()> {
+    // `glslangValidator` doesn't support clip distances in GLSL ES under any extension name.
+    let source =
+        std::fs::read_to_string(path).with_context(|| format!("failed to read {path:?}"))?;
+    if source.contains("_clip_cull_distance") {
+        log::info!("skipping {path:?}: glslang doesn't support GLSL ES clip distances");
+        return Ok(());
+    }
+
     EasyCommand::new(glslang_validator, |cmd| {
         cmd.args([&*path.to_string_lossy(), "-S"]).arg(type_arg)
     })
