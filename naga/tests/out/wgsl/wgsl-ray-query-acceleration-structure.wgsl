@@ -1,4 +1,4 @@
-enable wgpu_ray_tracing_pipeline;
+enable wgpu_ray_query;
 
 @group(0) @binding(0)
 var acc: acceleration_structure;

@@ -327,6 +327,9 @@ impl<W: Write> Writer<W> {
             _ => E::empty(),
         };
 
+        // Types that either `wgpu_ray_query` or `wgpu_ray_tracing_pipeline` permit.
+        let mut uses_ray_types = module.special_types.ray_desc.is_some()
+            || module.special_types.ray_intersection.is_some();
         for (_, ty) in module.types.iter() {
             needed |= match ty.inner {
                 TypeInner::Scalar(scalar)
@@ -344,7 +347,17 @@ impl<W: Write> Writer<W> {
                     .collect(),
                 TypeInner::CooperativeMatrix { .. } => E::WGPU_COOPERATIVE_MATRIX,
                 TypeInner::BindingArray { .. } => E::WGPU_BINDING_ARRAY,
-                TypeInner::AccelerationStructure { .. } => E::WGPU_RAY_TRACING_PIPELINE,
+                TypeInner::RayQuery { vertex_return } => {
+                    let mut ext = E::WGPU_RAY_QUERY;
+                    ext.set(E::WGPU_RAY_QUERY_VERTEX_RETURN, vertex_return);
+                    ext
+                }
+                TypeInner::AccelerationStructure { vertex_return } => {
+                    uses_ray_types = true;
+                    let mut ext = E::empty();
+                    ext.set(E::WGPU_RAY_QUERY_VERTEX_RETURN, vertex_return);
+                    ext
+                }
                 _ => E::empty(),
             };
         }
@@ -379,6 +392,10 @@ impl<W: Write> Writer<W> {
             )
         }) {
             needed |= E::WGPU_RAY_TRACING_PIPELINE;
+        }
+
+        if uses_ray_types && !needed.intersects(E::WGPU_RAY_TRACING_PIPELINE) {
+            needed |= E::WGPU_RAY_QUERY;
         }
 
         for ext in needed.iter() {
