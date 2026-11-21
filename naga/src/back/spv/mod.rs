@@ -1091,9 +1091,8 @@ pub struct Options<'a> {
     /// requires capabilities beyond these is rejected with an error.
     ///
     /// If this is `None`, all capabilities are permitted.
-    // Skipped for schemars: FastHashSet<spirv::Capability> has no JsonSchema impl
-    // (spirv crate does not enable schemars).
-    #[cfg_attr(feature = "schemars", schemars(skip))]
+    // `spirv::Capability` has no JsonSchema impl; it serializes as its variant name.
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<Vec<String>>"))]
     pub capabilities: Option<crate::FastHashSet<Capability>>,
 
     /// How should generate code handle array, vector, matrix, or image texel
