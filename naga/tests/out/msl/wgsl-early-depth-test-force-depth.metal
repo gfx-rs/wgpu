@@ -27,6 +27,6 @@ struct color_and_depthOutput {
 [[early_fragment_tests]] fragment color_and_depthOutput color_and_depth(
   metal::float4 pos_1 [[position]]
 ) {
-    const auto _tmp = ColorAndDepth {metal::float4(0.4, 0.3, 0.2, 0.1), pos_1.z};
+    const auto _tmp = ColorAndDepth {metal::float4(0.4, 0.3, 0.2, 0.1), pos_1.z, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
     return color_and_depthOutput { _tmp.color };
 }
