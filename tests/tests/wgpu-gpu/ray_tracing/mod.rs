@@ -49,9 +49,24 @@ impl AsBuildContext {
         additional_blas_flags: AccelerationStructureFlags,
         additional_tlas_flags: AccelerationStructureFlags,
     ) -> Self {
+        Self::with_vertices(
+            ctx,
+            [[0.0; 3]; 3],
+            additional_blas_flags,
+            additional_tlas_flags,
+        )
+    }
+
+    /// Like [`Self::new`], but the BLAS holds a triangle with the given vertices.
+    pub fn with_vertices(
+        ctx: &TestingContext,
+        triangle: [[f32; 3]; 3],
+        additional_blas_flags: AccelerationStructureFlags,
+        additional_tlas_flags: AccelerationStructureFlags,
+    ) -> Self {
         let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
             label: None,
-            contents: &[0; mem::size_of::<[[f32; 3]; 3]>()],
+            contents: bytemuck::cast_slice(&triangle),
             usage: BufferUsages::BLAS_INPUT,
         });
 

@@ -1149,12 +1149,13 @@ fn matrix_with_bad_type() {
 fn matrix_constructor_inferred() {
     check(
         r#"
+            enable wgpu_f64;
             const m: mat2x2<f64> = mat2x2<f32>(vec2(0), vec2(1));
         "#,
         r#"error: the type of `m` is expected to be `mat2x2<f64>`, but got `mat2x2<f32>`
-  ┌─ wgsl:2:19
+  ┌─ wgsl:3:19
   │
-2 │             const m: mat2x2<f64> = mat2x2<f32>(vec2(0), vec2(1));
+3 │             const m: mat2x2<f64> = mat2x2<f32>(vec2(0), vec2(1));
   │                   ^ definition of `m`
 
 "#,
@@ -4302,6 +4303,37 @@ fn const_assert_must_be_bool() {
   │
 2 │             const_assert(5); // 5 is not bool
   │                          ^ must resolve to `bool`
+
+"###,
+    );
+}
+
+#[test]
+fn const_assert_must_be_bool_composite() {
+    check(
+        "
+            const_assert(vec2i());
+        ",
+        r###"error: must be a const-expression that resolves to a `bool`
+  ┌─ wgsl:2:26
+  │
+2 │             const_assert(vec2i());
+  │                          ^^^^^^^ must resolve to `bool`
+
+"###,
+    );
+
+    check(
+        "
+            fn foo() {
+                const_assert vec2(true, false);
+            }
+        ",
+        r###"error: must be a const-expression that resolves to a `bool`
+  ┌─ wgsl:3:30
+  │
+3 │                 const_assert vec2(true, false);
+  │                              ^^^^^^^^^^^^^^^^^ must resolve to `bool`
 
 "###,
     );

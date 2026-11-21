@@ -3,7 +3,8 @@ import express from "express";
 import path from "path";
 
 const PORT = 3000;
-const TIMEOUT = 10000;
+// Below the 90 s limit of the nextest `wasm` profile.
+const TIMEOUT = 60000;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 const app = express();
