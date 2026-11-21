@@ -2769,7 +2769,12 @@ impl<'a> ConstantEvaluator<'a> {
                 Ok(Literal::I16(i16::from_le_bytes(bytes.try_into().unwrap())))
             }
             (ScalarKind::Float, 2) => {
-                Ok(Literal::F16(f16::from_le_bytes(bytes.try_into().unwrap())))
+                let v = f16::from_le_bytes(bytes.try_into().unwrap());
+                if v.is_infinite() || v.is_nan() {
+                    Err(ConstantEvaluatorError::TypeNotConstructible)
+                } else {
+                    Ok(Literal::F16(v))
+                }
             }
             (ScalarKind::Uint, 4) => {
                 Ok(Literal::U32(u32::from_le_bytes(bytes.try_into().unwrap())))
@@ -2778,7 +2783,12 @@ impl<'a> ConstantEvaluator<'a> {
                 Ok(Literal::I32(i32::from_le_bytes(bytes.try_into().unwrap())))
             }
             (ScalarKind::Float, 4) => {
-                Ok(Literal::F32(f32::from_le_bytes(bytes.try_into().unwrap())))
+                let v = f32::from_le_bytes(bytes.try_into().unwrap());
+                if v.is_infinite() || v.is_nan() {
+                    Err(ConstantEvaluatorError::TypeNotConstructible)
+                } else {
+                    Ok(Literal::F32(v))
+                }
             }
             (ScalarKind::Uint, 8) => {
                 Ok(Literal::U64(u64::from_le_bytes(bytes.try_into().unwrap())))
@@ -2787,7 +2797,12 @@ impl<'a> ConstantEvaluator<'a> {
                 Ok(Literal::I64(i64::from_le_bytes(bytes.try_into().unwrap())))
             }
             (ScalarKind::Float, 8) => {
-                Ok(Literal::F64(f64::from_le_bytes(bytes.try_into().unwrap())))
+                let v = f64::from_le_bytes(bytes.try_into().unwrap());
+                if v.is_infinite() || v.is_nan() {
+                    Err(ConstantEvaluatorError::TypeNotConstructible)
+                } else {
+                    Ok(Literal::F64(v))
+                }
             }
             _ => Err(ConstantEvaluatorError::NotImplemented(format!(
                 "Building {:?} literal with width {:?} is not implemented",
@@ -2809,7 +2824,6 @@ impl<'a> ConstantEvaluator<'a> {
             from: format!("{:?}", expr),
             to: format!("{:?}", target_ty),
         };
-
         match *target_ty {
             TypeInner::Scalar(scalar) => {
                 if scalar.width as usize != bytes.len() {

@@ -68,7 +68,6 @@ webgpu:shader,validation,expression,access,matrix:* // 93%, runtime OOB matrix a
 webgpu:shader,validation,expression,access,vector:* // 52%, https://github.com/gfx-rs/wgpu/issues/4390, and missing swizzle validation
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:* // 92%, https://github.com/gfx-rs/wgpu/issues/8440
 webgpu:shader,validation,expression,call,builtin,atomics:* // 86%, atomics in vertex shaders, invalid address spaces/access modes
-webgpu:shader,validation,expression,call,builtin,bitcast:* // 57%, bitcast const-eval unimplemented; size validation missing; f16 vector validation incorrect
 webgpu:shader,validation,expression,call,builtin,clamp:* // 71%, clamp low<=high constraint not checked for const/override parameters
 webgpu:shader,validation,expression,call,builtin,cross:* // 86%, abstract int/float overflow issues in const eval
 webgpu:shader,validation,expression,call,builtin,determinant:* // 71%, abstract int/float const eval issues
