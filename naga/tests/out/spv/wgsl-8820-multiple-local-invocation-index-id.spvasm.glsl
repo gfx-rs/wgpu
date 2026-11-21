@@ -12,7 +12,7 @@ shared uint _6;
 void main()
 {
     _5 _9 = _5(gl_LocalInvocationID, gl_LocalInvocationIndex);
-    if (gl_LocalInvocationIndex == 0u)
+    if (_9._m1 == 0u)
     {
         _6 = 0u;
     }

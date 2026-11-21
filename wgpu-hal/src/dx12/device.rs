@@ -347,19 +347,10 @@ impl super::Device {
                     _ => None,
                 }
                 .transpose()?;
-                let (module, info) = naga::back::pipeline_constants::process_overrides(
-                    &naga_shader.module,
-                    &naga_shader.info,
-                    Some((naga_stage, stage.entry_point)),
-                    stage.constants,
-                )
-                .map_err(|e| {
-                    crate::PipelineError::PipelineConstants(stage_bit, format!("HLSL: {e:?}"))
-                })?;
-
                 let pipeline_options = hlsl::PipelineOptions {
                     entry_point: Some((naga_stage, stage.entry_point.to_string())),
                     multisampled,
+                    constants: stage.constants.clone(),
                 };
 
                 //TODO: reuse the writer
@@ -370,10 +361,14 @@ impl super::Device {
 
                     profiling::scope!("naga::back::hlsl::write");
                     let mut reflection_info = writer
-                        .write(&module, &info, frag_ep.as_ref())
-                        .map_err(|e| {
-                            crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}"))
-                        })?;
+                        .write(&naga_shader.module, frag_ep.as_ref())
+                        .map_err(|e| match e {
+                        // Bad override values, among other things.
+                        hlsl::Error::Pass(_) => {
+                            crate::PipelineError::PipelineConstants(stage_bit, format!("HLSL: {e}"))
+                        }
+                        _ => crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")),
+                    })?;
 
                     assert_eq!(reflection_info.entry_point_names.len(), 1);
 

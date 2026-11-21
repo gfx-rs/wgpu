@@ -53,9 +53,26 @@ pub(crate) const RAY_QUERY_TRACKER_VARIABLE_PREFIX: &str = "naga_query_init_trac
 /// Prefix for variables in a naga statement
 pub(crate) const INTERNAL_PREFIX: &str = "naga_";
 
+#[derive(Clone, Copy)]
 enum Index {
     Expression(Handle<crate::Expression>),
     Static(u32),
+}
+
+/// A store to a dynamically indexed column (or an element of it) of a
+/// `matCx2` that is held as separate `vec2` fields.
+///
+/// See [`super::Writer::write_mat_cx2_column_store`].
+struct MatCx2ColumnStore<'a> {
+    /// The struct holding the columns.
+    base: Handle<crate::Expression>,
+    /// What to write after `base` to name a column, before its number:
+    /// `.m_` for a struct member `m`, `._` for a `__matCx2` struct.
+    field_prefix: &'a str,
+    columns: crate::VectorSize,
+    vec_index: Handle<crate::Expression>,
+    scalar: Option<Index>,
+    value: Handle<crate::Expression>,
 }
 
 pub(super) struct EpStructMember {
@@ -126,6 +143,8 @@ pub(super) struct NestedEntryPointArgs {
     pub user_args: Vec<String>,
     pub task_payload: Option<String>,
     pub local_invocation_index: String,
+    /// Whether `local_invocation_index` is not one of `user_args`.
+    pub extra_local_invocation_index: bool,
 }
 
 const fn is_subgroup_builtin_binding(binding: &Option<crate::Binding>) -> bool {
@@ -139,15 +158,6 @@ const fn is_subgroup_builtin_binding(binding: &Option<crate::Binding>) -> bool {
             | crate::BuiltIn::NumSubgroups
             | crate::BuiltIn::SubgroupId
     )
-}
-
-/// The invocations that share the zero initialization of workgroup variables.
-#[derive(Clone, Copy)]
-struct WorkgroupInitInvocations<'a> {
-    /// Name of the local invocation index.
-    local_index: &'a str,
-    /// Number of invocations in the workgroup.
-    workgroup_size: u32,
 }
 
 /// Information for how to generate a `binding_array<sampler>` access.
@@ -336,9 +346,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     pub fn write(
         &mut self,
         module: &Module,
-        module_info: &valid::ModuleInfo,
         fragment_entry_point: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<super::ReflectionInfo, Error> {
+        let passes = back::passes::Passes {
+            entry_point: self
+                .pipeline_options
+                .entry_point
+                .as_ref()
+                .map(|&(stage, ref name)| (stage, name.as_str())),
+            constants: Some(&self.pipeline_options.constants),
+            workgroup_zero_init: self.options.zero_initialize_workgroup_memory,
+        };
+        let prepared = back::passes::run(module, &passes)?;
+        let (module, module_info) = (&prepared.module, &prepared.info);
+
         self.reset(module);
 
         if module.uses_mesh_shaders() && self.options.shader_model < ShaderModel::V6_5 {
@@ -1768,9 +1789,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         // Write function name
         write!(self.out, " {nested_name}(")?;
 
-        let need_workgroup_variables_initialization =
-            self.need_workgroup_variables_initialization(func_ctx, module);
-
         let mut any_args_written = false;
         let mut separator = || {
             if any_args_written {
@@ -1781,8 +1799,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
         };
 
-        let needs_local_invocation_index_name = need_workgroup_variables_initialization || nested;
         let mut local_invocation_index_name = None;
+        let mut extra_local_invocation_index = false;
         // For nested entry points, collect arg names as we write them so that
         // write_nested_function_outer can pass the exact same names to the call site.
         let mut nested_wgsl_args: Vec<String> = Vec::new();
@@ -1858,11 +1876,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         }
                     }
                 }
-                if needs_local_invocation_index_name && local_invocation_index_name.is_none() {
+                if nested && local_invocation_index_name.is_none() {
                     let name = self.namer.call("local_invocation_index");
                     write!(self.out, "{}uint {name}", separator())?;
                     write!(self.out, " : SV_GroupIndex")?;
                     local_invocation_index_name = Some(name);
+                    extra_local_invocation_index = true;
                 }
             }
         }
@@ -1882,16 +1901,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         // Function body start
         writeln!(self.out)?;
         writeln!(self.out, "{{")?;
-
-        if need_workgroup_variables_initialization && !nested {
-            // need_workgroup_variables_initialization forces this to be written
-            // if the user doesn't specify it (so this must be Some())
-            self.write_workgroup_variables_initialization(
-                func_ctx,
-                module,
-                local_invocation_index_name.as_ref().unwrap(),
-            )?;
-        }
 
         if let back::FunctionType::EntryPoint(index) = func_ctx.ty {
             self.write_ep_arguments_initialization(module, func, index)?;
@@ -1962,7 +1971,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 func_ctx,
                 &header,
                 name,
-                need_workgroup_variables_initialization,
                 &nested_name,
                 ep.unwrap(),
                 NestedEntryPointArgs {
@@ -1970,6 +1978,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     task_payload: nested_task_payload_name,
                     // guaranteed to be set for nested functions (task/mesh shaders)
                     local_invocation_index: local_invocation_index_name.unwrap(),
+                    extra_local_invocation_index,
                 },
             )?;
         }
@@ -2041,185 +2050,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             plane_names[0], plane_names[1], plane_names[2],
         )?;
         Ok(())
-    }
-
-    fn need_workgroup_variables_initialization(
-        &mut self,
-        func_ctx: &back::FunctionCtx,
-        module: &Module,
-    ) -> bool {
-        self.options.zero_initialize_workgroup_memory
-            && func_ctx.ty.is_compute_like_entry_point(module)
-            && module.global_variables.iter().any(|(handle, var)| {
-                !func_ctx.info[handle].is_empty() && var.space.is_workgroup_like()
-            })
-    }
-
-    /// Writes code that zeroes `access`, of type `ty`, with the work spread over the workgroup.
-    ///
-    /// `struct_array_element` is true if `access` is an element of an array that is a struct member.
-    fn write_compute_workgroup_init(
-        &mut self,
-        module: &Module,
-        ty: proc::TypeResolution,
-        access: &str,
-        struct_array_element: bool,
-        dimensions: &mut Vec<(String, u32)>,
-        invocations: WorkgroupInitInvocations,
-    ) -> BackendResult {
-        match *ty.inner_with(&module.types) {
-            TypeInner::Array { base, size, .. } => {
-                let proc::IndexableLength::Known(count) = size.resolve(module.to_ctx())? else {
-                    unreachable!();
-                };
-                let index = self.namer.call("zero_index");
-                let element = format!("{access}[{index}]");
-                dimensions.push((index, count));
-                self.write_compute_workgroup_init(
-                    module,
-                    proc::TypeResolution::Handle(base),
-                    &element,
-                    struct_array_element,
-                    dimensions,
-                    invocations,
-                )?;
-                dimensions.pop();
-            }
-            TypeInner::Struct { ref members, .. } => {
-                for (index, member) in members.iter().enumerate() {
-                    let name =
-                        &self.names[&NameKey::StructMember(ty.handle().unwrap(), index as u32)];
-                    let field = format!("{access}.{name}");
-                    match module.types[member.ty].inner {
-                        TypeInner::Matrix {
-                            columns,
-                            rows: crate::VectorSize::Bi,
-                            scalar,
-                        } if member.binding.is_none() => {
-                            for column in 0..columns as u8 {
-                                self.write_compute_workgroup_init(
-                                    module,
-                                    proc::TypeResolution::Value(TypeInner::Vector {
-                                        size: crate::VectorSize::Bi,
-                                        scalar,
-                                    }),
-                                    &format!("{field}_{column}"),
-                                    false,
-                                    dimensions,
-                                    invocations,
-                                )?;
-                            }
-                        }
-                        _ => {
-                            self.write_compute_workgroup_init(
-                                module,
-                                proc::TypeResolution::Handle(member.ty),
-                                &field,
-                                matches!(module.types[member.ty].inner, TypeInner::Array { .. }),
-                                dimensions,
-                                invocations,
-                            )?;
-                        }
-                    }
-                }
-            }
-            ref inner => {
-                let level = back::Level(1);
-                let body = level.next();
-                let WorkgroupInitInvocations {
-                    local_index,
-                    workgroup_size,
-                } = invocations;
-                if dimensions.is_empty() {
-                    writeln!(self.out, "{level}if ({local_index} == 0) {{")?;
-                } else {
-                    let count = dimensions
-                        .iter()
-                        .try_fold(1u32, |total, &(_, size)| total.checked_mul(size))
-                        .ok_or_else(|| {
-                            Error::Custom("Workgroup array element count overflow".into())
-                        })?;
-                    let index = self.namer.call("zero_flat_index");
-                    // Keep DXC from expanding large aggregate initializers during optimization.
-                    writeln!(self.out, "{level}[loop]")?;
-                    writeln!(self.out, "{level}for (uint {index} = {local_index}; {index} < {count}u; {index} += {workgroup_size}u) {{")?;
-                    let mut stride = count;
-                    for (i, &(ref dimension, size)) in dimensions.iter().enumerate() {
-                        stride /= size;
-                        let mut value = index.clone();
-                        if stride != 1 {
-                            value = format!("{value} / {stride}u");
-                        }
-                        // The loop bound keeps the outermost index in range.
-                        if i != 0 {
-                            if stride != 1 {
-                                value = format!("({value})");
-                            }
-                            value = format!("{value} % {size}u");
-                        }
-                        writeln!(self.out, "{body}uint {dimension} = {value};")?;
-                    }
-                }
-                write!(self.out, "{body}{access} = (")?;
-                if struct_array_element
-                    && matches!(
-                        inner,
-                        TypeInner::Matrix {
-                            rows: crate::VectorSize::Bi,
-                            ..
-                        }
-                    )
-                {
-                    self.write_global_type(module, ty.handle().unwrap())?;
-                } else {
-                    self.write_value_type(module, inner)?;
-                }
-                writeln!(self.out, ")0;")?;
-                writeln!(self.out, "{level}}}")?;
-            }
-        }
-        Ok(())
-    }
-
-    /// Writes the zero initialization of the workgroup variables that the entry point uses,
-    /// followed by a workgroup barrier.
-    pub(super) fn write_workgroup_variables_initialization(
-        &mut self,
-        func_ctx: &back::FunctionCtx,
-        module: &Module,
-        local_invocation_index: &str,
-    ) -> BackendResult {
-        let back::FunctionType::EntryPoint(ep_index) = func_ctx.ty else {
-            unreachable!();
-        };
-        let entry_point = &module.entry_points[ep_index as usize];
-        let workgroup_size = entry_point
-            .workgroup_size
-            .iter()
-            .try_fold(1u32, |total, &size| total.checked_mul(size))
-            .ok_or_else(|| Error::Custom("Workgroup invocation count overflow".into()))?;
-        for (handle, var) in module.global_variables.iter() {
-            // The task payload is read-only in mesh shaders.
-            let task_needs_zero = var.space == crate::AddressSpace::TaskPayload
-                && entry_point.stage == ShaderStage::Task;
-            if !func_ctx.info[handle].is_empty()
-                && (var.space == crate::AddressSpace::WorkGroup || task_needs_zero)
-            {
-                let name = self.names[&NameKey::GlobalVariable(handle)].clone();
-                self.write_compute_workgroup_init(
-                    module,
-                    proc::TypeResolution::Handle(var.ty),
-                    &name,
-                    false,
-                    &mut Vec::new(),
-                    WorkgroupInitInvocations {
-                        local_index: local_invocation_index,
-                        workgroup_size,
-                    },
-                )?;
-            }
-        }
-        self.write_control_barrier(crate::Barrier::WORK_GROUP, back::Level(1))
     }
 
     /// Helper method used to write switches
@@ -2364,6 +2194,49 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             writeln!(self.out, "{level}}}")?;
         }
 
+        Ok(())
+    }
+
+    /// Writes a store to a dynamically indexed column of a `matCx2` held as
+    /// separate `vec2` fields, or to an element of that column, as a `switch`
+    /// over the column index.
+    ///
+    /// Only the selected column is written, so a store to a `var<workgroup>`
+    /// struct doesn't write back the other columns.
+    ///
+    /// The caller has already written the indentation for the first line.
+    fn write_mat_cx2_column_store(
+        &mut self,
+        module: &Module,
+        func_ctx: &back::FunctionCtx<'_>,
+        level: back::Level,
+        store: MatCx2ColumnStore<'_>,
+    ) -> BackendResult {
+        let MatCx2ColumnStore {
+            base,
+            field_prefix,
+            columns,
+            vec_index,
+            scalar,
+            value,
+        } = store;
+        write!(self.out, "switch(")?;
+        self.write_expr(module, vec_index, func_ctx)?;
+        writeln!(self.out, ") {{")?;
+        for i in 0..columns as u8 {
+            write!(self.out, "{level}case {i}: {{ ")?;
+            self.write_expr(module, base, func_ctx)?;
+            write!(self.out, "{field_prefix}{i}")?;
+            if let Some(scalar_index) = scalar {
+                write!(self.out, "[")?;
+                self.write_index(module, scalar_index, func_ctx)?;
+                write!(self.out, "]")?;
+            }
+            write!(self.out, " = ")?;
+            self.write_expr(module, value, func_ctx)?;
+            writeln!(self.out, "; break; }}")?;
+        }
+        writeln!(self.out, "{level}}}")?;
         Ok(())
     }
 
@@ -2576,7 +2449,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         },
                         Struct {
                             columns: crate::VectorSize,
-                            width: u8,
                             base: Handle<crate::Expression>,
                         },
                     }
@@ -2619,7 +2491,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     if let Some(MatrixType {
                                         columns,
                                         rows: crate::VectorSize::Bi,
-                                        width,
+                                        ..
                                     }) = get_inner_matrix_of_struct_array_member(
                                         module,
                                         matrix_expr,
@@ -2629,7 +2501,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                         Some((
                                             MatrixAccess::Struct {
                                                 columns,
-                                                width,
                                                 base: matrix_expr,
                                             },
                                             vector,
@@ -2670,81 +2541,86 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 self.write_expr(module, value, func_ctx)?;
                                 writeln!(self.out, ";")?;
                             } else {
-                                let access = WrappedStructMatrixAccess { ty, index };
-                                match (&vector, &scalar) {
-                                    (&Some(_), &Some(_)) => {
-                                        self.write_wrapped_struct_matrix_set_scalar_function_name(
-                                            access,
+                                // Write the store inline, touching only the columns
+                                // (or the element) being stored. Going through a helper
+                                // that takes the struct `inout` would copy the whole
+                                // struct back, which races with other invocations
+                                // storing to the same `var<workgroup>` struct.
+                                let field_name =
+                                    self.names[&NameKey::StructMember(ty, index)].clone();
+                                let columns = match module.types[ty].inner {
+                                    TypeInner::Struct { ref members, .. } => {
+                                        match module.types[members[index as usize].ty].inner {
+                                            TypeInner::Matrix { columns, .. } => columns,
+                                            _ => unreachable!(),
+                                        }
+                                    }
+                                    _ => unreachable!(),
+                                };
+                                match vector {
+                                    Some(Index::Expression(vec_index)) => {
+                                        self.write_mat_cx2_column_store(
+                                            module,
+                                            func_ctx,
+                                            level,
+                                            MatCx2ColumnStore {
+                                                base,
+                                                field_prefix: &format!(".{field_name}_"),
+                                                columns,
+                                                vec_index,
+                                                scalar,
+                                                value,
+                                            },
                                         )?;
                                     }
-                                    (&Some(_), &None) => {
-                                        self.write_wrapped_struct_matrix_set_vec_function_name(
-                                            access,
-                                        )?;
-                                    }
-                                    (&None, _) => {
-                                        self.write_wrapped_struct_matrix_set_function_name(access)?;
+                                    Some(Index::Static(_)) => unreachable!(),
+                                    None => {
+                                        // Evaluate the value once, then store it column by
+                                        // column.
+                                        let member_ty = match module.types[ty].inner {
+                                            TypeInner::Struct { ref members, .. } => {
+                                                members[index as usize].ty
+                                            }
+                                            _ => unreachable!(),
+                                        };
+                                        let tmp = self.namer.call("mat");
+                                        writeln!(self.out, "{{")?;
+                                        let inner = level.next();
+                                        write!(self.out, "{inner}")?;
+                                        self.write_type(module, member_ty)?;
+                                        write!(self.out, " {tmp} = ")?;
+                                        self.write_expr(module, value, func_ctx)?;
+                                        writeln!(self.out, ";")?;
+                                        for i in 0..columns as u8 {
+                                            write!(self.out, "{inner}")?;
+                                            self.write_expr(module, base, func_ctx)?;
+                                            writeln!(self.out, ".{field_name}_{i} = {tmp}[{i}];")?;
+                                        }
+                                        writeln!(self.out, "{level}}}")?;
                                     }
                                 }
-
-                                write!(self.out, "(")?;
-                                self.write_expr(module, base, func_ctx)?;
-                                write!(self.out, ", ")?;
-                                self.write_expr(module, value, func_ctx)?;
-
-                                if let Some(Index::Expression(vec_index)) = vector {
-                                    write!(self.out, ", ")?;
-                                    self.write_expr(module, vec_index, func_ctx)?;
-
-                                    if let Some(scalar_index) = scalar {
-                                        write!(self.out, ", ")?;
-                                        self.write_index(module, scalar_index, func_ctx)?;
-                                    }
-                                }
-                                writeln!(self.out, ");")?;
                             }
                         }
                         Some((
-                            MatrixAccess::Struct {
-                                columns,
-                                width,
-                                base,
-                            },
+                            MatrixAccess::Struct { columns, base },
                             Some(Index::Expression(vec_index)),
                             scalar,
                         )) => {
-                            // We handle `Store`s to __matCx2 column vectors and scalar elements via
-                            // the previously injected functions __set_col_of_matCx2 / __set_el_of_matCx2.
-
-                            if scalar.is_some() {
-                                write!(
-                                    self.out,
-                                    "__set_el_of_mat{}x2_f{}",
-                                    columns as u8,
-                                    width * 8
-                                )?;
-                            } else {
-                                write!(
-                                    self.out,
-                                    "__set_col_of_mat{}x2_f{}",
-                                    columns as u8,
-                                    width * 8
-                                )?;
-                            }
-                            write!(self.out, "(")?;
-                            self.write_expr(module, base, func_ctx)?;
-                            write!(self.out, ", ")?;
-                            self.write_expr(module, vec_index, func_ctx)?;
-
-                            if let Some(scalar_index) = scalar {
-                                write!(self.out, ", ")?;
-                                self.write_index(module, scalar_index, func_ctx)?;
-                            }
-
-                            write!(self.out, ", ")?;
-                            self.write_expr(module, value, func_ctx)?;
-
-                            writeln!(self.out, ");")?;
+                            // Store to a column or element of a `__matCx2` (a matCx2 in an
+                            // array in a struct) inline, touching only that column.
+                            self.write_mat_cx2_column_store(
+                                module,
+                                func_ctx,
+                                level,
+                                MatCx2ColumnStore {
+                                    base,
+                                    field_prefix: "._",
+                                    columns,
+                                    vec_index,
+                                    scalar,
+                                    value,
+                                },
+                            )?;
                         }
                         Some((MatrixAccess::Struct { .. }, Some(Index::Static(_)), _))
                         | Some((MatrixAccess::Struct { .. }, None, _))

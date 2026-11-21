@@ -1,8 +1,85 @@
 use super::*;
 
-/// Writer responsible for all code generation.
+/// Writes a [`Module`](crate::Module) as GLSL.
 #[expect(missing_debug_implementations, reason = "would be way too verbose?")]
 pub struct Writer<'a, W> {
+    out: W,
+    options: &'a Options,
+    pipeline_options: &'a PipelineOptions,
+    policies: proc::BoundsCheckPolicies,
+}
+
+impl<'a, W: Write> Writer<'a, W> {
+    /// Creates a new [`Writer`] instance.
+    pub const fn new(
+        out: W,
+        options: &'a Options,
+        pipeline_options: &'a PipelineOptions,
+        policies: proc::BoundsCheckPolicies,
+    ) -> Self {
+        Self {
+            out,
+            options,
+            pipeline_options,
+            policies,
+        }
+    }
+
+    /// Writes the entry point selected by the [`PipelineOptions`] of `module` as GLSL to the output.
+    ///
+    /// # Errors
+    /// - If the version specified is invalid or supported.
+    /// - If the entry point couldn't be found in the module.
+    /// - If the version specified doesn't support some used features.
+    ///
+    /// If an error occurs while writing, the output might have been written partially.
+    ///
+    /// # Panics
+    /// Might panic if the module is invalid
+    pub fn write(&mut self, module: &crate::Module) -> Result<ReflectionInfo, Error> {
+        let passes = back::passes::Passes {
+            entry_point: Some((
+                self.pipeline_options.shader_stage,
+                &self.pipeline_options.entry_point,
+            )),
+            constants: Some(&self.pipeline_options.constants),
+            workgroup_zero_init: self.options.zero_initialize_workgroup_memory,
+        };
+        let prepared = back::passes::run(module, &passes)?;
+        let mut reflection = ModuleWriter::new(
+            &mut self.out,
+            &prepared.module,
+            &prepared.info,
+            self.options,
+            self.pipeline_options,
+            self.policies,
+        )?
+        .write()?;
+
+        // Report handles of the caller's module, not of the prepared one.
+        if let Some(ref origins) = prepared.global_origins {
+            let origin = |handle: Handle<crate::GlobalVariable>| origins[handle.index()];
+            reflection.uniforms = reflection
+                .uniforms
+                .into_iter()
+                .map(|(handle, name)| (origin(handle), name))
+                .collect();
+            for mapping in reflection.texture_mapping.values_mut() {
+                mapping.texture = origin(mapping.texture);
+                mapping.sampler = mapping.sampler.map(origin);
+            }
+        }
+        Ok(reflection)
+    }
+
+    /// Consumes the writer and returns the output.
+    pub fn finish(self) -> W {
+        self.out
+    }
+}
+
+/// Writer responsible for all code generation for one module and entry point.
+pub(super) struct ModuleWriter<'a, W> {
     // Inputs
     /// The module being written.
     pub(in crate::back::glsl) module: &'a crate::Module,
@@ -47,14 +124,8 @@ pub struct Writer<'a, W> {
     clip_distance_count: u32,
 }
 
-impl<'a, W: Write> Writer<'a, W> {
-    /// Creates a new [`Writer`] instance.
-    ///
-    /// # Errors
-    /// - If the version specified is invalid or supported.
-    /// - If the entry point couldn't be found in the module.
-    /// - If the version specified doesn't support some used features.
-    pub fn new(
+impl<'a, W: Write> ModuleWriter<'a, W> {
+    fn new(
         out: W,
         module: &'a crate::Module,
         info: &'a valid::ModuleInfo,
@@ -122,14 +193,7 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(this)
     }
 
-    /// Writes the [`Module`](crate::Module) as glsl to the output
-    ///
-    /// # Notes
-    /// If an error occurs while writing, the output might have been written partially
-    ///
-    /// # Panics
-    /// Might panic if the module is invalid
-    pub fn write(&mut self) -> Result<ReflectionInfo, Error> {
+    fn write(&mut self) -> Result<ReflectionInfo, Error> {
         // We use `writeln!(self.out)` throughout the write to add newlines
         // to make the output more readable
 
@@ -741,7 +805,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // A global variable in the `Function` address space is a
             // contradiction in terms.
             crate::AddressSpace::Function => unreachable!(),
-            // Textures and samplers are handled directly in `Writer::write`.
+            // Textures and samplers are handled directly in `ModuleWriter::write`.
             crate::AddressSpace::Handle => unreachable!(),
             // ray tracing pipelines unsupported
             crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload => {
@@ -1061,7 +1125,7 @@ impl<'a, W: Write> Writer<'a, W> {
     /// shader stages are being connected, and choose the `in` or `out` storage
     /// qualifier.
     ///
-    /// [`self.entry_point`]: Writer::entry_point
+    /// [`self.entry_point`]: ModuleWriter::entry_point
     /// [`self.entry_point.stage`]: crate::EntryPoint::stage
     /// [`Location`]: crate::Binding::Location
     /// [`BuiltIn`]: crate::Binding::BuiltIn
@@ -1351,12 +1415,6 @@ impl<'a, W: Write> Writer<'a, W> {
         // Close the parentheses and open braces to start the function body
         writeln!(self.out, ") {{")?;
 
-        if self.options.zero_initialize_workgroup_memory
-            && ctx.ty.is_compute_like_entry_point(self.module)
-        {
-            self.write_workgroup_variables_initialization(&ctx)?;
-        }
-
         // Compose the function arguments from globals, in case of an entry point.
         if let back::FunctionType::EntryPoint(ep_index) = ctx.ty {
             let stage = self.module.entry_points[ep_index as usize].stage;
@@ -1439,38 +1497,6 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Close braces and add a newline
         writeln!(self.out, "}}")?;
-
-        Ok(())
-    }
-
-    fn write_workgroup_variables_initialization(
-        &mut self,
-        ctx: &back::FunctionCtx,
-    ) -> BackendResult {
-        let mut vars = self
-            .module
-            .global_variables
-            .iter()
-            .filter(|&(handle, var)| {
-                !ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
-            })
-            .peekable();
-
-        if vars.peek().is_some() {
-            let level = back::Level(1);
-
-            writeln!(self.out, "{level}if (gl_LocalInvocationID == uvec3(0u)) {{")?;
-
-            for (handle, var) in vars {
-                let name = &self.names[&NameKey::GlobalVariable(handle)];
-                write!(self.out, "{}{} = ", level.next(), name)?;
-                self.write_zero_init_value(var.ty)?;
-                writeln!(self.out, ";")?;
-            }
-
-            writeln!(self.out, "{level}}}")?;
-            self.write_control_barrier(crate::Barrier::WORK_GROUP, level)?;
-        }
 
         Ok(())
     }

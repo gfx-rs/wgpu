@@ -161,10 +161,11 @@ impl<'d> StageCompiler<'d> {
                 ref shader,
                 runtime_checks,
             } => {
-                let (module, info) = naga::back::pipeline_constants::process_overrides(
+                // The backend applies the override values itself. This copy is
+                // only for checking the values that depend on them.
+                let resolved = naga::back::pipeline_constants::resolve_overrides(
                     &shader.module,
-                    &shader.info,
-                    Some((stage.to_naga(), &entry_point)),
+                    (stage.to_naga(), &entry_point),
                     &desc.constants,
                 )
                 .map_err(|error| CreatePipelineError::PipelineConstants {
@@ -173,7 +174,7 @@ impl<'d> StageCompiler<'d> {
                 })?;
 
                 let interface =
-                    validation::Interface::new(&module, &info, self.device.limits.clone());
+                    validation::Interface::new(&resolved, &shader.info, self.device.limits.clone());
                 self.io = interface
                     .check_stage(
                         &mut self.resources,
@@ -185,15 +186,13 @@ impl<'d> StageCompiler<'d> {
                     .map_err(stage_err)?;
                 self.validated |= stage_bit;
 
-                // `process_overrides` returns a fresh copy when the module has overrides
-                // or more than one entry point; otherwise these `into_owned` calls clone
-                // it. That's not ideal: `wgpu_hal` doesn't actually need the `Module` or
-                // `ModuleInfo` any more once it's created the pipeline, so it should be
-                // satisfied with a borrow. But since `wgpu_hal::ShaderModule` owns its
-                // contents, we can't avoid this until wgpu#10543 is fixed.
+                // `wgpu_hal` doesn't actually need the `Module` or `ModuleInfo` any
+                // more once it's created the pipeline, so it should be satisfied with
+                // a borrow. But since `wgpu_hal::ShaderModule` owns its contents, we
+                // can't avoid these clones until wgpu#10543 is fixed.
                 let hal_shader = hal::ShaderInput::Naga(hal::NagaShader {
-                    module: Cow::Owned(module.into_owned()),
-                    info: info.into_owned(),
+                    module: Cow::Owned(shader.module.as_ref().clone()),
+                    info: shader.info.clone(),
                     debug_source: shader.debug_source.clone(),
                 });
                 let hal_desc = hal::ShaderModuleDescriptor {
@@ -224,8 +223,7 @@ impl<'d> StageCompiler<'d> {
                         raw: ManuallyDrop::new(raw),
                     }),
                     entry_point,
-                    // The overrides have already been applied.
-                    constants: Cow::Owned(Default::default()),
+                    constants: Cow::Borrowed(&desc.constants),
                     zero_initialize_workgroup_memory: desc.zero_initialize_workgroup_memory,
                 })
             }

@@ -24,7 +24,7 @@ fn write_and_validate(file_name: &str, source_code: &str) {
         naga::valid::ValidationFlags::all(),
         naga::valid::Capabilities::empty(),
     );
-    let info = validator.validate(&module).unwrap();
+    validator.validate(&module).unwrap();
 
     let mut options = naga::back::spv::Options::default();
     // `Options::default()` only sets `DEBUG` under `debug_assertions`, so force it
@@ -37,12 +37,12 @@ fn write_and_validate(file_name: &str, source_code: &str) {
     });
 
     let pipeline_options = naga::back::spv::PipelineOptions {
+        constants: Default::default(),
         entry_point: "main".to_string(),
         shader_stage: naga::ShaderStage::Compute,
     };
 
-    let words =
-        naga::back::spv::write_vec(&module, &info, &options, Some(&pipeline_options)).unwrap();
+    let words = naga::back::spv::write_vec(&module, &options, Some(&pipeline_options)).unwrap();
     let bytes = words_to_bytes(&words);
 
     let mut child = Command::new("spirv-val")

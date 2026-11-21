@@ -5,15 +5,29 @@ shared int _8[128];
 
 void main()
 {
-    if (gl_LocalInvocationIndex == 0u)
+    uint _22 = 0u;
+    uvec2 _39 = uvec2(4294967295u);
+    _22 = gl_LocalInvocationIndex;
+    for (;;)
     {
-        _8 = int[](0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        if (all(equal(uvec2(0u), _39)))
+        {
+            break;
+        }
+        _39 -= uvec2(uint(_39.y == 0u), 1u);
+        if (_22 >= 128u)
+        {
+            break;
+        }
+        _8[_22] = 0;
+        _22 += 4u;
+        continue;
     }
     barrier();
     barrier();
-    int _33 = _8[gl_WorkGroupID.x];
+    int _61 = _8[gl_WorkGroupID.x];
     barrier();
-    if (_33 > 10)
+    if (_61 > 10)
     {
         barrier();
         return;

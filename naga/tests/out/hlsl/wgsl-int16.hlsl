@@ -39,6 +39,7 @@ RWByteAddressBuffer output_arrays : register(u4);
 groupshared uint16_t shared_val;
 
 struct ComputeInput_main {
+    uint local_invocation_index_1 : SV_GroupIndex;
 };
 
 int16_t naga_div(int16_t lhs, int16_t rhs) {
@@ -256,16 +257,17 @@ uint16_t uint16_function(uint16_t x_1)
 }
 
 [numthreads(64, 1, 1)]
-void main(ComputeInput_main computeinput_main, uint local_invocation_index : SV_GroupIndex)
+void main(ComputeInput_main computeinput_main)
 {
-    if (local_invocation_index == 0) {
-        shared_val = (uint16_t)0;
-    }
-    GroupMemoryBarrierWithGroupSync();
     uint subgroup_invocation_id = WaveGetLaneIndex();
+    uint local_invocation_index = computeinput_main.local_invocation_index_1;
     int16_t sg_val = (int16_t)0;
     uint16_t sg_uval = (uint16_t)0;
 
+    if ((local_invocation_index == 0u)) {
+        shared_val = uint16_t(0);
+    }
+    GroupMemoryBarrierWithGroupSync();
     shared_val = uint16_t(0);
     const uint16_t _e6 = uint16_function(uint16_t(67));
     const int16_t _e8 = int16_function(int16_t(60));

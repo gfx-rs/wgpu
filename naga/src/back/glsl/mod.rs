@@ -217,6 +217,12 @@ pub struct PipelineOptions {
     pub entry_point: String,
     /// How many views to render to, if doing multiview rendering.
     pub multiview: Option<core::num::NonZeroU32>,
+    /// Values for the pipeline-overridable constants of the entry point.
+    ///
+    /// The writer applies them, so the module doesn't need to go through
+    /// [`process_overrides`](crate::back::pipeline_constants::process_overrides) first.
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub constants: back::PipelineConstants,
 }
 
 #[derive(Debug)]
@@ -411,6 +417,8 @@ type BackendResult<T = ()> = Result<T, Error>;
 /// A GLSL compilation error.
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error(transparent)]
+    Pass(#[from] back::passes::PassError),
     /// A error occurred while writing to the output.
     #[error("Format error")]
     FmtError(#[from] FmtError),
