@@ -2002,6 +2002,16 @@ impl<W: Write> Writer<W> {
         mod_info: &valid::ModuleInfo,
         arena: &crate::Arena<crate::Expression>,
     ) -> BackendResult {
+        // Metal rejects a `constant` initializer that copies another `constant`
+        // with class-type members, such as matrices or `packed_float3` (#4348).
+        if let crate::Expression::Constant(handle) = arena[expr_handle] {
+            return self.put_const_expression(
+                module.constants[handle].init,
+                module,
+                mod_info,
+                &module.global_expressions,
+            );
+        }
         self.put_possibly_const_expression(
             expr_handle,
             arena,
