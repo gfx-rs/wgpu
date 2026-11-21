@@ -137,8 +137,32 @@ pub fn resolve_overrides<'a>(
     Ok(Cow::Owned(module))
 }
 
+/// Whether anything in `module` still refers to an override through an expression.
+///
+/// Array sizes may refer to overrides directly, but they are resolved through
+/// the override's initializer, so they don't need processing on their own.
+fn uses_override_expressions(module: &Module) -> bool {
+    let is_override = |expression: &Expression| matches!(*expression, Expression::Override(_));
+    module
+        .global_expressions
+        .iter()
+        .any(|(_, e)| is_override(e))
+        || module
+            .functions
+            .iter()
+            .map(|(_, f)| f)
+            .chain(module.entry_points.iter().map(|ep| &ep.function))
+            .any(|f| f.expressions.iter().any(|(_, e)| is_override(e)))
+        || module.entry_points.iter().any(|ep| {
+            ep.workgroup_size_overrides.is_some()
+                || ep.mesh_info.as_ref().is_some_and(|mesh| {
+                    mesh.max_vertices_override.is_some() || mesh.max_primitives_override.is_some()
+                })
+        })
+}
+
 /// Return an error if a key of `pipeline_constants` names no override of `module`.
-fn check_constants_exist(
+pub(crate) fn check_constants_exist(
     module: &Module,
     pipeline_constants: &PipelineConstants,
 ) -> Result<(), PipelineConstantError> {
@@ -176,12 +200,16 @@ fn check_constants_exist(
 /// [`check_constants_exist`] before removing anything from `module`.
 ///
 /// Return `true` if `module` was changed.
-fn apply_overrides(
+pub(crate) fn apply_overrides(
     module: &mut Module,
     entry_point: Option<usize>,
     pipeline_constants: &PipelineConstants,
 ) -> Result<bool, PipelineConstantError> {
-    if module.overrides.is_empty() {
+    // A module that was already processed has nothing left to do.
+    let processed = pipeline_constants.is_empty()
+        && module.overrides.iter().all(|(_, o)| o.init.is_some())
+        && !uses_override_expressions(module);
+    if module.overrides.is_empty() || processed {
         return Ok(false);
     }
     let reachable = crate::compact::reachable(module, entry_point);

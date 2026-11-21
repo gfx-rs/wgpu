@@ -36,20 +36,39 @@ impl<'a, W: Write> Writer<'a, W> {
     ///
     /// # Panics
     /// Might panic if the module is invalid
-    pub fn write(
-        &mut self,
-        module: &crate::Module,
-        info: &valid::ModuleInfo,
-    ) -> Result<ReflectionInfo, Error> {
-        ModuleWriter::new(
+    pub fn write(&mut self, module: &crate::Module) -> Result<ReflectionInfo, Error> {
+        let passes = back::passes::Passes {
+            entry_point: Some((
+                self.pipeline_options.shader_stage,
+                &self.pipeline_options.entry_point,
+            )),
+            constants: Some(&self.pipeline_options.constants),
+        };
+        let prepared = back::passes::run(module, &passes)?;
+        let mut reflection = ModuleWriter::new(
             &mut self.out,
-            module,
-            info,
+            &prepared.module,
+            &prepared.info,
             self.options,
             self.pipeline_options,
             self.policies,
         )?
-        .write()
+        .write()?;
+
+        // Report handles of the caller's module, not of the prepared one.
+        if let Some(ref origins) = prepared.global_origins {
+            let origin = |handle: Handle<crate::GlobalVariable>| origins[handle.index()];
+            reflection.uniforms = reflection
+                .uniforms
+                .into_iter()
+                .map(|(handle, name)| (origin(handle), name))
+                .collect();
+            for mapping in reflection.texture_mapping.values_mut() {
+                mapping.texture = origin(mapping.texture);
+                mapping.sampler = mapping.sampler.map(origin);
+            }
+        }
+        Ok(reflection)
     }
 
     /// Consumes the writer and returns the output.

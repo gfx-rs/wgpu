@@ -714,13 +714,14 @@ fn no_flat_first_in_glsl() {
     } = DummyInterpolationShader::new(naga::Interpolation::Flat, Some(naga::Sampling::First));
 
     let mut validator = naga::valid::Validator::new(Default::default(), Default::default());
-    let module_info = validator.validate(&module).unwrap();
+    validator.validate(&module).unwrap();
 
     let options = Default::default();
     let pipeline_options = naga::back::glsl::PipelineOptions {
         shader_stage: naga::ShaderStage::Fragment,
         entry_point: entry_point.to_owned(),
         multiview: None,
+        constants: Default::default(),
     };
     let mut glsl_writer = naga::back::glsl::Writer::new(
         String::new(),
@@ -729,11 +730,9 @@ fn no_flat_first_in_glsl() {
         Default::default(),
     );
 
-    let err = glsl_writer
-        .write(&module, &module_info)
-        .expect_err(&format!(
-            "`{interpolate_attr}` should fail backend validation"
-        ));
+    let err = glsl_writer.write(&module).expect_err(&format!(
+        "`{interpolate_attr}` should fail backend validation"
+    ));
 
     assert!(matches!(
         err,
@@ -753,7 +752,7 @@ fn no_linear_interpolation_in_glsl_es() {
     } = DummyInterpolationShader::new(naga::Interpolation::Linear, None);
 
     let mut validator = naga::valid::Validator::new(Default::default(), valid::Capabilities::all());
-    let module_info = validator.validate(&module).unwrap();
+    validator.validate(&module).unwrap();
 
     let options = naga::back::glsl::Options {
         version: naga::back::glsl::Version::Embedded {
@@ -766,6 +765,7 @@ fn no_linear_interpolation_in_glsl_es() {
         shader_stage: naga::ShaderStage::Fragment,
         entry_point: entry_point.to_owned(),
         multiview: None,
+        constants: Default::default(),
     };
     let err = naga::back::glsl::Writer::new(
         String::new(),
@@ -773,7 +773,7 @@ fn no_linear_interpolation_in_glsl_es() {
         &pipeline_options,
         Default::default(),
     )
-    .write(&module, &module_info)
+    .write(&module)
     .err()
     .unwrap_or_else(|| {
         panic!("`{interpolate_attr}` should fail backend validation on GLSL ES");
@@ -1728,6 +1728,31 @@ fn unused() {
         module.global_variables.len()
     );
     assert_eq!(resolved.entry_points.len(), module.entry_points.len());
+
+    // Backends apply pipeline constants without `process_overrides`.
+    let write_spv = |entry_point: &str, constants: &HashMap<String, f64>| {
+        let pipeline_options = naga::back::spv::PipelineOptions {
+            shader_stage: ir::ShaderStage::Compute,
+            entry_point: entry_point.into(),
+            constants: constants.clone(),
+        };
+        naga::back::spv::write_vec(
+            &module,
+            &naga::back::spv::Options::default(),
+            Some(&pipeline_options),
+        )
+    };
+    write_spv("unused", &none).unwrap();
+    write_spv("used", &overrides).unwrap();
+    let err = write_spv("used", &none).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            naga::back::spv::Error::Pass(naga::back::passes::PassError::Overrides(ref error))
+                if matches!(**error, PipelineConstantError::MissingValue(ref name) if name == "ov")
+        ),
+        "{err:?}"
+    );
 }
 
 #[test]
@@ -2195,11 +2220,11 @@ fn write_spv_with_entry_point_name_len(name_len: usize) -> Vec<u32> {
     let source = format!("@compute @workgroup_size(1) fn {name}() {{}}");
 
     let module = naga::front::wgsl::parse_str(&source).unwrap();
-    let info = naga::valid::Validator::new(Default::default(), Default::default())
+    naga::valid::Validator::new(Default::default(), Default::default())
         .validate(&module)
         .unwrap();
 
-    naga::back::spv::write_vec(&module, &info, &Default::default(), None).unwrap()
+    naga::back::spv::write_vec(&module, &Default::default(), None).unwrap()
 }
 
 /// Ensure we behave when entry-point name is at its limit.

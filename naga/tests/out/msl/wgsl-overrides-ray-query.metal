@@ -52,12 +52,12 @@ constant float o = 2.0;
     while(true) {
         if (metal::all(loop_bound == uint2(0u))) { break; }
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
-        bool _e31 = false;
+        bool _e13 = false;
         if (((naga_query_init_tracker_for_rq & 1) == 1) && !((naga_query_init_tracker_for_rq & 4) == 4)) {
-            _e31 = rq.next();
-            naga_query_init_tracker_for_rq = naga_query_init_tracker_for_rq | (_e31 ? 2: 6);
+            _e13 = rq.next();
+            naga_query_init_tracker_for_rq = naga_query_init_tracker_for_rq | (_e13 ? 2: 6);
         }
-        if (_e31) {
+        if (_e13) {
         } else {
             break;
         }

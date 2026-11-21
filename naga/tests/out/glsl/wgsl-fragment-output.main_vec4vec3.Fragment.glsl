@@ -11,14 +11,6 @@ struct FragmentOutputVec4Vec3_ {
     ivec3 vec3i;
     uvec3 vec3u;
 };
-struct FragmentOutputVec2Scalar {
-    vec2 vec2f;
-    ivec2 vec2i;
-    uvec2 vec2u;
-    float scalarf;
-    int scalari;
-    uint scalaru;
-};
 layout(location = 0) out vec4 _fs2p_location0;
 layout(location = 1) out ivec4 _fs2p_location1;
 layout(location = 2) out uvec4 _fs2p_location2;

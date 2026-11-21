@@ -323,20 +323,20 @@ fn write_output_spv(
 
     let options = params.to_options(shared_options, debug_info);
 
-    let (module, info) =
+    let (module, _) =
         naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
             .expect("override evaluation failed");
 
     if params.separate_entry_points {
         for ep in module.entry_points.iter() {
             let pipeline_options = spv::PipelineOptions {
+                constants: Default::default(),
                 entry_point: ep.name.clone(),
                 shader_stage: ep.stage,
             };
             let spv_binary = write_output_spv_inner(
                 input,
                 &module,
-                &info,
                 &options,
                 Some(&pipeline_options),
                 &format!("{}.spvasm", ep.name),
@@ -349,7 +349,7 @@ fn write_output_spv(
             );
         }
     } else {
-        let spv_binary = write_output_spv_inner(input, &module, &info, &options, None, "spvasm");
+        let spv_binary = write_output_spv_inner(input, &module, &options, None, "spvasm");
         let entry_points: Vec<(String, naga::ShaderStage)> = module
             .entry_points
             .iter()
@@ -362,7 +362,6 @@ fn write_output_spv(
 fn write_output_spv_inner(
     input: &Input,
     module: &naga::Module,
-    info: &naga::valid::ModuleInfo,
     options: &naga::back::spv::Options<'_>,
     pipeline_options: Option<&naga::back::spv::PipelineOptions>,
     extension: &str,
@@ -370,7 +369,7 @@ fn write_output_spv_inner(
     use naga::back::spv;
     use rspirv::binary::Disassemble;
     println!("Generating SPIR-V for {:?}", input.file_name);
-    let spv = spv::write_vec(module, info, options, pipeline_options).unwrap();
+    let spv = spv::write_vec(module, options, pipeline_options).unwrap();
     let dis = rspirv::dr::load_words(spv.clone())
         .expect("Produced invalid SPIR-V")
         .disassemble();
@@ -398,7 +397,7 @@ fn write_output_msl(
 
     println!("generating MSL");
 
-    let (module, info) =
+    let (module, _) =
         naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
             .expect("override evaluation failed");
 
@@ -406,7 +405,7 @@ fn write_output_msl(
     options.bounds_check_policies = shared_options.bounds_checks_policies;
     options.mesh_shader_primitive_indices_clamp = shared_options.mesh_output_validation;
     options.task_dispatch_limits = shared_options.task_limits;
-    let (string, tr_info) = msl::write_string(&module, &info, &options, pipeline_options)
+    let (string, tr_info) = msl::write_string(&module, &options, pipeline_options)
         .unwrap_or_else(|err| panic!("Metal write failed: {err}"));
 
     for (ep, result) in module.entry_points.iter().zip(tr_info.entry_point_names) {
@@ -435,13 +434,14 @@ fn write_output_glsl(
     println!("generating GLSL");
 
     let pipeline_options = glsl::PipelineOptions {
+        constants: Default::default(),
         shader_stage: stage,
         entry_point: ep_name.to_string(),
         multiview,
     };
 
     let mut buffer = String::new();
-    let (module, info) =
+    let (module, _) =
         naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
             .expect("override evaluation failed");
     let mut writer = glsl::Writer::new(
@@ -450,7 +450,7 @@ fn write_output_glsl(
         &pipeline_options,
         bounds_check_policies,
     );
-    writer.write(&module, &info).expect("GLSL write failed");
+    writer.write(&module).expect("GLSL write failed");
 
     let extension = format!("{ep_name}.{stage:?}.glsl");
     input.write_output_file("glsl", &extension, buffer, DIR_OUT);
@@ -469,7 +469,7 @@ fn write_output_hlsl(
 
     println!("generating HLSL");
 
-    let (module, info) =
+    let (module, _) =
         naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
             .expect("override evaluation failed");
 
@@ -481,7 +481,7 @@ fn write_output_hlsl(
     let pipeline_options = Default::default();
     let mut writer = hlsl::Writer::new(&mut buffer, &options, &pipeline_options);
     let reflection_info = writer
-        .write(&module, &info, frag_ep.as_ref())
+        .write(&module, frag_ep.as_ref())
         .expect("HLSL write failed");
 
     input.write_output_file("hlsl", "hlsl", buffer, DIR_OUT);
