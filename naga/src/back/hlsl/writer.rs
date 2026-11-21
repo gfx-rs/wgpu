@@ -175,6 +175,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             written_committed_intersection: false,
             written_candidate_intersection: false,
             continue_ctx: back::continue_forward::ContinueCtx::default(),
+            switch_ends_loop_body: false,
             temp_access_chain: Vec::new(),
             need_bake_expressions: Default::default(),
             immediate_raw_names: crate::FastHashMap::default(),
@@ -2095,6 +2096,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         level: back::Level,
         selector: Handle<crate::Expression>,
         cases: &[crate::SwitchCase],
+        ends_loop_body: bool,
     ) -> BackendResult {
         // Write all cases
         let indent_level_1 = level.next();
@@ -2220,6 +2222,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         use back::continue_forward::ExitControlFlow;
         let op = match self.continue_ctx.exit_switch() {
             ExitControlFlow::None => None,
+            // Continuing is what happens anyway, and DXC rejects some loops
+            // whose last statement is a conditional `continue`.
+            ExitControlFlow::Continue { .. } if ends_loop_body => None,
             ExitControlFlow::Continue { variable } => Some(("continue", variable)),
             ExitControlFlow::Break { variable } => Some(("break", variable)),
         };
@@ -2687,7 +2692,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     writeln!(self.out, "{l2}{gate_name} = false;")?;
                 }
 
-                for sta in body.iter() {
+                for (index, sta) in body.iter().enumerate() {
+                    self.switch_ends_loop_body =
+                        index + 1 == body.len() && matches!(*sta, Statement::Switch { .. });
                     self.write_stmt(module, sta, func_ctx, l2)?;
                 }
 
@@ -2858,7 +2865,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 selector,
                 ref cases,
             } => {
-                self.write_switch(module, func_ctx, level, selector, cases)?;
+                let ends_loop_body = mem::take(&mut self.switch_ends_loop_body);
+                self.write_switch(module, func_ctx, level, selector, cases, ends_loop_body)?;
             }
             Statement::RayQuery { query, ref fun } => {
                 // There are three possibilities for a ptr to be:

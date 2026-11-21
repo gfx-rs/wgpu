@@ -206,9 +206,6 @@ void main()
                 break;
             }
         }
-        if (should_continue) {
-            continue;
-        }
     }
     x_1 = int(1);
     int _e56 = x_1;
@@ -247,9 +244,6 @@ void main()
                                     break;
                                 }
                             }
-                            if (should_continue_2) {
-                                continue;
-                            }
                         }
                         break;
                     }
@@ -271,9 +265,6 @@ void main()
             should_continue_3 = true;
             break;
         } while(false);
-        if (should_continue_3) {
-            continue;
-        }
     }
     uint2 loop_bound_3 = uint2(4294967295u, 4294967295u);
     while(true) {
@@ -289,9 +280,6 @@ void main()
                 break;
             }
         } while(false);
-        if (should_continue_4) {
-            continue;
-        }
     }
     x_2 = int(1);
     int _e62 = x_2;
@@ -352,9 +340,6 @@ void main()
             default: {
                 break;
             }
-        }
-        if (should_continue_6) {
-            continue;
         }
     }
     return;
