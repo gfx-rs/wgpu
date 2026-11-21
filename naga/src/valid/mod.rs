@@ -185,9 +185,6 @@ bitflags::bitflags! {
         const SHADER_FLOAT16 = 1 << 26;
         /// Support for [`ImageClass::External`]
         const TEXTURE_EXTERNAL = 1 << 27;
-        /// Support for `quantizeToF16`, `pack2x16float`, and `unpack2x16float`, which store
-        /// `f16`-precision values in `f32`s.
-        const SHADER_FLOAT16_IN_FLOAT32 = 1 << 28;
         /// Support for fragment shader barycentric coordinates.
         const SHADER_BARYCENTRICS = 1 << 29;
         /// Support for task shaders, mesh shaders, and per-primitive fragment inputs
@@ -232,6 +229,8 @@ bitflags::bitflags! {
         /// Only useful together with [`Capabilities::RAY_TRACING_PIPELINE`], since
         /// hit objects exist only in ray tracing pipeline stages.
         const RAY_TRACING_INVOCATION_REORDER = 1 << 46;
+
+        // Free flag slot at 1 << 28
     }
 }
 
@@ -247,6 +246,7 @@ impl Capabilities {
             Self::DUAL_SOURCE_BLENDING => Some(Ext::DualSourceBlending),
             // NOTE: `SHADER_FLOAT16_IN_FLOAT32` _does not_ require the `f16` extension
             Self::SHADER_FLOAT16 => Some(Ext::F16),
+            Self::FLOAT64 => Some(Ext::WgpuF64),
             Self::SHADER_INT16 => Some(Ext::WgpuInt16),
             Self::CLIP_DISTANCES => Some(Ext::ClipDistances),
             Self::MESH_SHADER => Some(Ext::WgpuMeshShader),

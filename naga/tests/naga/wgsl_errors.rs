@@ -1149,12 +1149,13 @@ fn matrix_with_bad_type() {
 fn matrix_constructor_inferred() {
     check(
         r#"
+            enable wgpu_f64;
             const m: mat2x2<f64> = mat2x2<f32>(vec2(0), vec2(1));
         "#,
         r#"error: the type of `m` is expected to be `mat2x2<f64>`, but got `mat2x2<f32>`
-  ┌─ wgsl:2:19
+  ┌─ wgsl:3:19
   │
-2 │             const m: mat2x2<f64> = mat2x2<f32>(vec2(0), vec2(1));
+3 │             const m: mat2x2<f64> = mat2x2<f32>(vec2(0), vec2(1));
   │                   ^ definition of `m`
 
 "#,
@@ -1612,20 +1613,6 @@ fn float16_capability_and_enable() {
 "#,
         Err(naga::valid::ValidationError::Type {
             source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability { flag: "FLOAT16", .. }),
-            ..
-        })
-    }
-
-    // Functions that operate on `f16`-precision values stored in `f32`s.
-    check_validation! {
-        "fn foo() -> f32 { return quantizeToF16(1.0f); }",
-        "fn foo() -> u32 { return pack2x16float(vec2(1.0f, 2.0f)); }",
-        "fn foo() -> vec2<f32> { return unpack2x16float(0x7c007c00); }":
-        Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::Expression {
-                source: naga::valid::ExpressionError::MissingCapabilities(Capabilities::SHADER_FLOAT16_IN_FLOAT32),
-                ..
-            },
             ..
         })
     }
@@ -4316,6 +4303,37 @@ fn const_assert_must_be_bool() {
   │
 2 │             const_assert(5); // 5 is not bool
   │                          ^ must resolve to `bool`
+
+"###,
+    );
+}
+
+#[test]
+fn const_assert_must_be_bool_composite() {
+    check(
+        "
+            const_assert(vec2i());
+        ",
+        r###"error: must be a const-expression that resolves to a `bool`
+  ┌─ wgsl:2:26
+  │
+2 │             const_assert(vec2i());
+  │                          ^^^^^^^ must resolve to `bool`
+
+"###,
+    );
+
+    check(
+        "
+            fn foo() {
+                const_assert vec2(true, false);
+            }
+        ",
+        r###"error: must be a const-expression that resolves to a `bool`
+  ┌─ wgsl:3:30
+  │
+3 │                 const_assert vec2(true, false);
+  │                              ^^^^^^^^^^^^^^^^^ must resolve to `bool`
 
 "###,
     );

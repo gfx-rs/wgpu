@@ -510,8 +510,9 @@ impl crate::Adapter for super::Adapter {
         // Display-P3 and HDR (PQ/HLG) color spaces work regardless of the
         // physical display's gamut and are not gated on it here.
         let format_caps = |format: wgt::TextureFormat| {
-            let mut color_spaces =
-                wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::DISPLAY_P3;
+            let mut color_spaces = wgt::SurfaceColorSpaces::SRGB
+                | wgt::SurfaceColorSpaces::DISPLAY_P3
+                | wgt::SurfaceColorSpaces::PASS_THROUGH;
             if format == wgt::TextureFormat::Rgba16Float {
                 // `Rgba16Float` enables Metal's extended dynamic range, in both
                 // linear (scRGB) and encoded (extended nonlinear sRGB) form,
@@ -1730,6 +1731,7 @@ impl super::CapabilitiesQuery {
             },
             downlevel,
             cooperative_matrix_properties: self.cooperative_matrix_properties(),
+            ray_tracing_invocation_reorder_mode: wgt::RayTracingInvocationReorderMode::None,
         }
     }
 

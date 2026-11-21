@@ -188,6 +188,7 @@ pub const CAPABILITIES: crate::Capabilities = {
             shader_model: wgt::ShaderModel::Sm5,
         },
         cooperative_matrix_properties: Vec::new(),
+        ray_tracing_invocation_reorder_mode: wgt::RayTracingInvocationReorderMode::None,
     }
 };
 

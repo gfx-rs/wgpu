@@ -718,6 +718,9 @@ pub trait Surface: WasmNotSendSync {
     /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - The surface `self` must not currently be configured to use any other [`Device`].
+    /// - Must be externally synchronized with all other queue operations on
+    ///   `device`'s queue, including `configure` and `unconfigure` of other
+    ///   surfaces.
     unsafe fn configure(
         &self,
         device: &<Self::A as Api>::Device,
@@ -732,6 +735,9 @@ pub trait Surface: WasmNotSendSync {
     /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - The surface `self` must have been configured on `device`.
+    /// - Must be externally synchronized with all other queue operations on
+    ///   `device`'s queue, including `configure` and `unconfigure` of other
+    ///   surfaces.
     unsafe fn unconfigure(&self, device: &<Self::A as Api>::Device);
 
     /// Return the next texture to be presented by `self`, for the caller to draw on.
@@ -1385,7 +1391,8 @@ pub trait Queue: WasmNotSendSync {
     ///   ordering between rendering and display.
     /// - Must be externally synchronized with all other queue operations
     ///   ([`submit`][s], [`present`][Queue::present],
-    ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue.
+    ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue, and with
+    ///   [`Surface::configure`] and [`Surface::unconfigure`] on its device.
     /// - Every rect in `damage_rects` must be non-empty and lie within the
     ///   surface's configured extent.
     ///
@@ -1404,7 +1411,8 @@ pub trait Queue: WasmNotSendSync {
     ///
     /// - Must be externally synchronized with all other queue operations
     ///   ([`submit`][Queue::submit], [`present`][Queue::present],
-    ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue.
+    ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue, and with
+    ///   [`Surface::configure`] and [`Surface::unconfigure`] on its device.
     unsafe fn wait_for_idle(&self) -> Result<(), DeviceError>;
     unsafe fn get_timestamp_period(&self) -> f32;
 }
@@ -2126,6 +2134,16 @@ bitflags!(
 );
 
 impl FormatAspects {
+    /// Computes a [`FormatAspects`] mask from a [`wgt::TextureFormat`] and [`wgt::TextureAspect`].
+    ///
+    /// When called from `wgpu-core`, additional validation of the return value is typically
+    /// required:
+    ///
+    /// - This function returns an empty mask, if `aspect` does not identify any
+    ///   valid aspect(s) of `format`.
+    /// - This function returns a mask of all valid aspects, if `aspect` is
+    ///   [`wgt::TextureAspect::All`], but some texture operations do not
+    ///   support that.
     pub fn new(format: wgt::TextureFormat, aspect: wgt::TextureAspect) -> Self {
         let aspect_mask = match aspect {
             wgt::TextureAspect::All => Self::all(),
@@ -2268,6 +2286,14 @@ pub struct Capabilities {
     ///
     /// Empty if cooperative matrices are not supported.
     pub cooperative_matrix_properties: Vec<wgt::CooperativeMatrixProperties>,
+
+    /// Whether the implementation reports that it is likely to reorder ray tracing invocations.
+    ///
+    /// [`None`] if [`Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER`] is not supported.
+    ///
+    /// [`None`]: wgt::RayTracingInvocationReorderMode::None
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER`]: wgt::Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER
+    pub ray_tracing_invocation_reorder_mode: wgt::RayTracingInvocationReorderMode,
 }
 
 /// An adapter with all the information needed to reason about its capabilities.
