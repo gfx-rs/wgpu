@@ -16,9 +16,9 @@ struct type_6 {
 };
 constant metal::float2 VEC = metal::float2(1.0, 2.0);
 constant metal::float2x2 MATRIX = metal::float2x2(VEC, VEC);
-constant type_5 MATRICES = type_5 {{MATRIX, MATRIX}};
+constant type_5 MATRICES = type_5 {{metal::float2x2(VEC, VEC), metal::float2x2(VEC, VEC)}};
 constant Packed PACKED = Packed {metal::float3(1.0, 1.0, 1.0), 2.0};
-constant type_6 PACKED_ARRAY = type_6 {{PACKED, PACKED}};
+constant type_6 PACKED_ARRAY = type_6 {{Packed {metal::float3(1.0, 1.0, 1.0), 2.0}, Packed {metal::float3(1.0, 1.0, 1.0), 2.0}}};
 
 void main_1(
     thread metal::float4& color
