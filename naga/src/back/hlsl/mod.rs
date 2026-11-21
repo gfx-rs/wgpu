@@ -810,6 +810,8 @@ pub struct Writer<'a, W> {
     written_committed_intersection: bool,
     written_candidate_intersection: bool,
     continue_ctx: back::continue_forward::ContinueCtx,
+    /// Whether the statement being written is a `switch` that ends a loop body.
+    switch_ends_loop_body: bool,
 
     /// A reference to some part of a global variable, lowered to a series of
     /// byte offset calculations.
