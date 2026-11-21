@@ -1,7 +1,7 @@
 //! [`Backend`], [`Backends`], and backend-specific options.
 
 use alloc::string::{String, ToString};
-use core::{hash::Hash, str::FromStr};
+use core::{hash::Hash, num::NonZeroU32, str::FromStr};
 
 use macro_rules_attribute::derive;
 
@@ -232,6 +232,8 @@ pub struct BackendOptions {
     pub dx12: Dx12BackendOptions,
     /// Options for the noop backend, [`Backend::Noop`].
     pub noop: NoopBackendOptions,
+    /// Options for the Vulkan backend, [`Backend::Vulkan`].
+    pub vulkan: VulkanBackendOptions,
 }
 
 impl BackendOptions {
@@ -244,6 +246,7 @@ impl BackendOptions {
             gl: GlBackendOptions::from_env_or_default(),
             dx12: Dx12BackendOptions::from_env_or_default(),
             noop: NoopBackendOptions::from_env_or_default(),
+            vulkan: VulkanBackendOptions::from_env_or_default(),
         }
     }
 
@@ -256,6 +259,7 @@ impl BackendOptions {
             gl: self.gl.with_env(),
             dx12: self.dx12.with_env(),
             noop: self.noop.with_env(),
+            vulkan: self.vulkan.with_env(),
         }
     }
 }
@@ -684,6 +688,79 @@ impl NoopBackendOptions {
             "0" => Some(false),
             _ => None,
         }
+    }
+}
+
+/// Configuration for the Vulkan backend.
+///
+/// Part of [`BackendOptions`].
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VulkanBackendOptions {
+    /// Over how many resets of a command encoder to decide which of its command buffers to free.
+    ///
+    /// A command encoder keeps the command buffers it allocated for reuse after it is reset,
+    /// which wgpu does once the work recorded with it has finished. Every this many resets, the
+    /// command buffers that went unused at every one of those resets are freed and the
+    /// encoder's command pool is trimmed, returning their memory to the driver.
+    ///
+    /// - A smaller window returns memory sooner, but when the amount recorded varies between
+    ///   submissions, command buffers are freed and then allocated again, costing CPU time.
+    /// - A larger window avoids that churn, but each pooled command encoder keeps enough
+    ///   command buffers for its busiest recording in the window.
+    /// - `1` keeps only what the last recording used. This suits applications that submit
+    ///   rarely and then sit idle: encoders are only reset when submitted work finishes, so with
+    ///   a larger window an idle application keeps its recent peak until it submits again.
+    ///
+    /// The best value depends on the application's submission pattern, so it is worth tuning.
+    /// Defaults to [`Self::DEFAULT_COMMAND_POOL_TRIM_WINDOW`].
+    ///
+    /// Can also be set with the `WGPU_VULKAN_COMMAND_POOL_TRIM_WINDOW` environment variable.
+    pub command_pool_trim_window: NonZeroU32,
+}
+
+impl VulkanBackendOptions {
+    /// The default for [`Self::command_pool_trim_window`]: 16 resets.
+    pub const DEFAULT_COMMAND_POOL_TRIM_WINDOW: NonZeroU32 = NonZeroU32::new(16).unwrap();
+
+    /// This function is identical to [`Default::default()`] except that it is a `const fn`.
+    pub const fn default() -> Self {
+        <Self as crate::macros::ConstDefaultHelper>::DEFAULT
+    }
+
+    /// Choose Vulkan backend options from the environment, using the default for anything
+    /// not set.
+    ///
+    /// See [`Self::with_env()`] for the variables read.
+    #[must_use]
+    pub fn from_env_or_default() -> Self {
+        Self::default().with_env()
+    }
+
+    /// Takes the given options, modifies them based on the environment variables, and returns the
+    /// result.
+    ///
+    /// Reads `WGPU_VULKAN_COMMAND_POOL_TRIM_WINDOW`, a positive integer, into
+    /// [`Self::command_pool_trim_window`]. Other values are ignored.
+    #[must_use]
+    pub fn with_env(self) -> Self {
+        let command_pool_trim_window = crate::env::var("WGPU_VULKAN_COMMAND_POOL_TRIM_WINDOW")
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(self.command_pool_trim_window);
+        Self {
+            command_pool_trim_window,
+        }
+    }
+}
+
+impl crate::macros::ConstDefaultHelper for VulkanBackendOptions {
+    const DEFAULT: Self = Self {
+        command_pool_trim_window: Self::DEFAULT_COMMAND_POOL_TRIM_WINDOW,
+    };
+}
+
+impl Default for VulkanBackendOptions {
+    fn default() -> Self {
+        <Self as crate::macros::ConstDefaultHelper>::DEFAULT
     }
 }
 

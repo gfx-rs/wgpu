@@ -178,6 +178,7 @@ pub struct InstanceShared {
     extensions: Vec<&'static CStr>,
     flags: wgt::InstanceFlags,
     memory_budget_thresholds: wgt::MemoryBudgetThresholds,
+    backend_options: wgt::VulkanBackendOptions,
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<khr::get_physical_device_properties2::Instance>,
     entry: ash::Entry,
@@ -203,6 +204,7 @@ impl fmt::Debug for InstanceShared {
             extensions,
             flags,
             memory_budget_thresholds,
+            backend_options,
             debug_utils: _,
             get_physical_device_properties: _,
             entry: _,
@@ -215,6 +217,7 @@ impl fmt::Debug for InstanceShared {
             .field("extensions", extensions)
             .field("flags", flags)
             .field("memory_budget_thresholds", memory_budget_thresholds)
+            .field("backend_options", backend_options)
             .field("has_nv_optimus", has_nv_optimus)
             .field("android_sdk_version", android_sdk_version)
             .field("instance_api_version", instance_api_version)

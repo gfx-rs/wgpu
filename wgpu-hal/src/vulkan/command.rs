@@ -5,8 +5,6 @@ use core::{mem, ops::Range};
 use hashbrown::hash_map::Entry;
 
 const ALLOCATION_GRANULARITY: u32 = 1;
-/// Free command buffers only if they went unused at every reset in this window.
-const TRIM_WINDOW: u32 = 64;
 const DST_IMAGE_LAYOUT: vk::ImageLayout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
 
 impl super::Texture {
@@ -220,7 +218,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         // it doesn't matter which `unused` buffers are freed.
         self.min_unused = self.min_unused.min(unused);
         self.resets_since_trim += 1;
-        if self.resets_since_trim < TRIM_WINDOW {
+        let window = self
+            .device
+            .instance
+            .backend_options
+            .command_pool_trim_window;
+        if self.resets_since_trim < window.get() {
             return;
         }
         self.resets_since_trim = 0;
