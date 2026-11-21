@@ -78,18 +78,18 @@ struct main_Input {
 ) {
     threadgroup struct {
         type_5 vectors;
-        Padded padded;
         metal::uint2 pair;
         uint flag;
         type_3 scratch;
         metal::atomic_uint counter;
     } nagaWorkgroupMemory;
     threadgroup type_5& vectors = nagaWorkgroupMemory.vectors;
-    threadgroup Padded& padded = nagaWorkgroupMemory.padded;
     threadgroup metal::uint2& pair = nagaWorkgroupMemory.pair;
     threadgroup uint& flag = nagaWorkgroupMemory.flag;
     threadgroup type_3& scratch = nagaWorkgroupMemory.scratch;
     threadgroup metal::atomic_uint& counter = nagaWorkgroupMemory.counter;
+    threadgroup metal::uint4 padded_storage[1];
+    threadgroup Padded& padded = *reinterpret_cast<threadgroup Padded*>(padded_storage);
     if (i == 0u) {
         flag = {};
         pair = {};
@@ -211,10 +211,8 @@ struct padded_onlyInput {
 , device type_6& output [[buffer(0)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(1)]]
 ) {
-    threadgroup struct {
-        Padded padded;
-    } nagaWorkgroupMemory_1;
-    threadgroup Padded& padded = nagaWorkgroupMemory_1.padded;
+    threadgroup metal::uint4 padded_storage_1[1];
+    threadgroup Padded& padded = *reinterpret_cast<threadgroup Padded*>(padded_storage_1);
     if (__local_invocation_index == 0u) {
         padded = {};
     }

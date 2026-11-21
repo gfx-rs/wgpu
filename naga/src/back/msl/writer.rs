@@ -715,6 +715,24 @@ fn should_pack_struct_member(
     }
 }
 
+fn needs_untyped_workgroup_storage(
+    module: &crate::Module,
+    ty: Handle<crate::Type>,
+    matrices: bool,
+) -> bool {
+    match module.types[ty].inner {
+        crate::TypeInner::Matrix { .. } => matrices,
+        crate::TypeInner::Array { base, .. } => {
+            needs_untyped_workgroup_storage(module, base, matrices)
+        }
+        crate::TypeInner::Struct { ref members, span } => (0..members.len()).any(|index| {
+            should_pack_struct_member(members, span, index, module).is_some()
+                || needs_untyped_workgroup_storage(module, members[index].ty, matrices)
+        }),
+        _ => false,
+    }
+}
+
 impl crate::AddressSpace {
     /// Returns true if global variables in this address space are
     /// passed in function arguments. These arguments need to be
@@ -8442,7 +8460,7 @@ template <typename A>
             }
 
             if !is_wrapped {
-                self.write_workgroup_memory(module, &layouter, fun_info)?;
+                self.write_workgroup_memory(module, &layouter, fun_info, options.lang_version)?;
             }
 
             // Metal doesn't support private mutable variables outside of functions,
@@ -8691,6 +8709,7 @@ template <typename A>
         module: &crate::Module,
         layouter: &proc::Layouter,
         fun_info: &valid::FunctionInfo,
+        lang_version: (u8, u8),
     ) -> BackendResult {
         let mut vars: Vec<_> = module
             .global_variables
@@ -8706,22 +8725,59 @@ template <typename A>
         // older Apple GPUs. Sorting by alignment minimizes padding.
         vars.sort_by_key(|&(_, var)| core::cmp::Reverse(layouter[var.ty].alignment));
 
-        let memory_name = self.namer.call("nagaWorkgroupMemory");
-        writeln!(self.out, "{}threadgroup struct {{", back::INDENT)?;
-        for &(handle, var) in &vars {
-            let ty = TypeContext {
-                handle: var.ty,
-                gctx: module.to_ctx(),
-                names: &self.names,
-                access: crate::StorageAccess::empty(),
-                first_time: false,
-            };
-            let name = &self.names[&NameKey::GlobalVariable(handle)];
-            writeln!(self.out, "{}{ty} {name};", back::Level(2))?;
-        }
-        writeln!(self.out, "{}}} {memory_name};", back::INDENT)?;
+        // Typed threadgroup storage containing a packed vector crashes the
+        // A10X compiler, and before MSL 3.0 it can't contain a matrix.
+        let (untyped, typed): (Vec<_>, Vec<_>) = vars.into_iter().partition(|&(_, var)| {
+            needs_untyped_workgroup_storage(module, var.ty, lang_version < (3, 0))
+        });
 
-        for &(handle, _) in &vars {
+        if !typed.is_empty() {
+            let memory_name = self.namer.call("nagaWorkgroupMemory");
+            writeln!(self.out, "{}threadgroup struct {{", back::INDENT)?;
+            for &(handle, var) in &typed {
+                let ty = TypeContext {
+                    handle: var.ty,
+                    gctx: module.to_ctx(),
+                    names: &self.names,
+                    access: crate::StorageAccess::empty(),
+                    first_time: false,
+                };
+                let name = &self.names[&NameKey::GlobalVariable(handle)];
+                writeln!(self.out, "{}{ty} {name};", back::Level(2))?;
+            }
+            writeln!(self.out, "{}}} {memory_name};", back::INDENT)?;
+
+            for &(handle, _) in &typed {
+                let tyvar = TypedGlobalVariable {
+                    module,
+                    names: &self.names,
+                    handle,
+                    usage: fun_info[handle],
+                    reference: true,
+                };
+                write!(self.out, "{}", back::INDENT)?;
+                tyvar.try_fmt(&mut self.out)?;
+                let name = &self.names[&NameKey::GlobalVariable(handle)];
+                writeln!(self.out, " = {memory_name}.{name};")?;
+            }
+        }
+
+        for &(handle, var) in &untyped {
+            let layout = layouter[var.ty];
+            let (element, element_size) = if layout.alignment > proc::Alignment::SIXTEEN {
+                ("metal::ulong4", 32)
+            } else {
+                ("metal::uint4", 16)
+            };
+            let count = layout.size.div_ceil(element_size);
+            let name = &self.names[&NameKey::GlobalVariable(handle)];
+            let storage_name = self.namer.call(&format!("{name}_storage"));
+            writeln!(
+                self.out,
+                "{}threadgroup {element} {storage_name}[{count}];",
+                back::INDENT
+            )?;
+
             let tyvar = TypedGlobalVariable {
                 module,
                 names: &self.names,
@@ -8729,10 +8785,19 @@ template <typename A>
                 usage: fun_info[handle],
                 reference: true,
             };
+            let ty = TypeContext {
+                handle: var.ty,
+                gctx: module.to_ctx(),
+                names: &self.names,
+                access: crate::StorageAccess::empty(),
+                first_time: false,
+            };
             write!(self.out, "{}", back::INDENT)?;
             tyvar.try_fmt(&mut self.out)?;
-            let name = &self.names[&NameKey::GlobalVariable(handle)];
-            writeln!(self.out, " = {memory_name}.{name};")?;
+            writeln!(
+                self.out,
+                " = *reinterpret_cast<threadgroup {ty}*>({storage_name});"
+            )?;
         }
         Ok(())
     }

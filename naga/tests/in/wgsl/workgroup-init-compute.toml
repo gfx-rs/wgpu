@@ -1,2 +1,6 @@
-targets = "HLSL"
+targets = "HLSL | METAL"
 pipeline_constants = { width = 8.0, height = 2.0, count = 37.0 }
+
+[msl]
+lang_version = [2, 1]
+zero_initialize_workgroup_memory = true

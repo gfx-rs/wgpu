@@ -53,10 +53,8 @@ void _ms_main(
   metal::mesh<ms_mainVertexOutput, ms_mainPrimitiveOutput, 3, 1, metal::topology::triangle> meshOutput
 , uint __local_invocation_index [[thread_index_in_threadgroup]]
 ) {
-    threadgroup struct {
-        MeshOutput mesh_output;
-    } nagaWorkgroupMemory;
-    threadgroup MeshOutput& mesh_output = nagaWorkgroupMemory.mesh_output;
+    threadgroup metal::uint4 mesh_output_storage[5];
+    threadgroup MeshOutput& mesh_output = *reinterpret_cast<threadgroup MeshOutput*>(mesh_output_storage);
     _ms_main(__local_invocation_index, mesh_output);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     for(uint vertexIndex = __local_invocation_index; vertexIndex < metal::min(mesh_output.vertex_count, 3u); vertexIndex += 1) {

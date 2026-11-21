@@ -219,7 +219,7 @@ impl<W: core::fmt::Write> super::Writer<W> {
         writeln!(self.out, ") {{")?;
 
         // Function body
-        self.write_workgroup_memory(module, layouter, fun_info)?;
+        self.write_workgroup_memory(module, layouter, fun_info, options.lang_version)?;
         write!(self.out, "{indent}")?;
         let result_name = if ep.stage == crate::ShaderStage::Task {
             let name = self.namer.call("nagaGridSize");
