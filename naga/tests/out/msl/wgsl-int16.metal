@@ -255,8 +255,11 @@ struct main_Input {
 , device StorageCompatible const& input_arrays [[user(fake0)]]
 , device UniformCompatible& output [[user(fake0)]]
 , device StorageCompatible& output_arrays [[user(fake0)]]
-, threadgroup ushort& shared_val
 ) {
+    threadgroup struct {
+        ushort shared_val;
+    } nagaWorkgroupMemory;
+    threadgroup ushort& shared_val = nagaWorkgroupMemory.shared_val;
     short private_variable = static_cast<short>(1);
     if (__local_invocation_index == 0u) {
         shared_val = {};
