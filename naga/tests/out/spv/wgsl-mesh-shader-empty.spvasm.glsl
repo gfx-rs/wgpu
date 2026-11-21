@@ -28,7 +28,7 @@ struct _14
     uint _m3;
 };
 
-struct _42
+struct _41
 {
     uint _m0;
     uint _m1;
@@ -36,7 +36,7 @@ struct _42
 
 taskPayloadSharedEXT _4 _15;
 
-uvec3 _20()
+uvec3 _23()
 {
     if (gl_LocalInvocationIndex == 0u)
     {
@@ -48,14 +48,14 @@ uvec3 _20()
 
 void main()
 {
-    uvec3 _39 = _20();
+    uvec3 _38 = _23();
     barrier();
-    _42 _49;
-    umulExtended(_39.x, _39.y, _49._m1, _49._m0);
-    _42 _51;
-    umulExtended(_49._m0, _39.z, _51._m1, _51._m0);
-    uvec3 _64 = ((((((_51._m0 > 1024u) || (_39.x > 256u)) || (_39.y > 256u)) || (_39.z > 256u)) || (_49._m1 != 0u)) || (_51._m1 != 0u)) ? uvec3(0u) : _39;
-    EmitMeshTasksEXT(_64.x, _64.y, _64.z);
+    _41 _48;
+    umulExtended(_38.x, _38.y, _48._m1, _48._m0);
+    _41 _50;
+    umulExtended(_48._m0, _38.z, _50._m1, _50._m0);
+    uvec3 _63 = ((((((_50._m0 > 1024u) || (_38.x > 256u)) || (_38.y > 256u)) || (_38.z > 256u)) || (_48._m1 != 0u)) || (_50._m1 != 0u)) ? uvec3(0u) : _38;
+    EmitMeshTasksEXT(_63.x, _63.y, _63.z);
 }
 
 
@@ -90,7 +90,7 @@ struct _14
     uint _m3;
 };
 
-struct _42
+struct _41
 {
     uint _m0;
     uint _m1;
@@ -99,29 +99,38 @@ struct _42
 taskPayloadSharedEXT _4 _15;
 shared _14 _17;
 
-void _79()
+void _78()
 {
+    if (gl_LocalInvocationIndex < 3u)
+    {
+        _17._m0[gl_LocalInvocationIndex] = _7(vec4(0.0));
+    }
+    if (gl_LocalInvocationIndex < 1u)
+    {
+        _17._m1[gl_LocalInvocationIndex] = _9(uvec3(0u));
+    }
     if (gl_LocalInvocationIndex == 0u)
     {
-        _17 = _14(_7[](_7(vec4(0.0)), _7(vec4(0.0)), _7(vec4(0.0))), _9[](_9(uvec3(0u))), 0u, 0u);
+        _17._m2 = 0u;
+        _17._m3 = 0u;
     }
     barrier();
 }
 
 void main()
 {
-    _79();
+    _78();
     barrier();
-    uint _96 = min(_17._m2, 3u);
-    uint _99 = min(_17._m3, 1u);
-    SetMeshOutputsEXT(_96, _99);
-    for (uint _88 = gl_LocalInvocationIndex; _88 < _96; _88 += 64u)
+    uint _109 = min(_17._m2, 3u);
+    uint _112 = min(_17._m3, 1u);
+    SetMeshOutputsEXT(_109, _112);
+    for (uint _102 = gl_LocalInvocationIndex; _102 < _109; _102 += 64u)
     {
-        gl_MeshVerticesEXT[_88].gl_Position = _17._m0[_88]._m0;
+        gl_MeshVerticesEXT[_102].gl_Position = _17._m0[_102]._m0;
     }
-    for (uint _89 = gl_LocalInvocationIndex; _89 < _99; _89 += 64u)
+    for (uint _103 = gl_LocalInvocationIndex; _103 < _112; _103 += 64u)
     {
-        gl_PrimitiveTriangleIndicesEXT[_89] = _17._m1[_89]._m0;
+        gl_PrimitiveTriangleIndicesEXT[_103] = _17._m1[_103]._m0;
     }
 }
 

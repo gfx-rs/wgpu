@@ -1342,7 +1342,6 @@ impl Writer {
         let mut parameter_type_ids = Vec::with_capacity(ir_function.arguments.len());
 
         let mut local_invocation_index_var_id = None;
-        let mut local_invocation_index_id = None;
 
         for argument in ir_function.arguments.iter() {
             let class = spirv::StorageClass::Input;
@@ -1372,7 +1371,6 @@ impl Writer {
                         argument_type_id,
                     );
                     if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex) {
-                        local_invocation_index_id = Some(id);
                         local_invocation_index_var_id = Some(varying_id);
                     }
 
@@ -1400,7 +1398,6 @@ impl Writer {
                         constituent_ids.push(id);
                         if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex)
                         {
-                            local_invocation_index_id = Some(id);
                             local_invocation_index_var_id = Some(varying_id);
                         }
                     }
@@ -1547,8 +1544,8 @@ impl Writer {
                     .varying_ids
                     .push(self.global_variables[task_payload].var_id);
             }
-            // The mesh output copy and the workgroup memory polyfill both read
-            // `LocalInvocationIndex`, which an entry point may only declare once.
+            // The mesh output copy reads `LocalInvocationIndex`, which an entry
+            // point may only declare once.
             if iface.mesh_info.is_some() && local_invocation_index_var_id.is_none() {
                 let u32_type_id = self.get_u32_type_id();
                 let pointer_type_id =
@@ -1562,13 +1559,7 @@ impl Writer {
                     &[spirv::BuiltIn::LocalInvocationIndex as u32],
                 );
                 iface.varying_ids.push(var_id);
-
-                let id = self.id_gen.next();
-                prelude
-                    .body
-                    .push(Instruction::load(u32_type_id, id, var_id, None));
                 local_invocation_index_var_id = Some(var_id);
-                local_invocation_index_id = Some(id);
             }
             self.write_entry_point_mesh_shader_info(
                 iface,
@@ -1807,37 +1798,7 @@ impl Writer {
             .function
             .consume(prelude, Instruction::branch(next_id));
 
-        let workgroup_vars_init_exit_block_id =
-            match (context.writer.zero_initialize_workgroup_memory, interface) {
-                (
-                    super::ZeroInitializeWorkgroupMemoryMode::Polyfill,
-                    Some(
-                        ref mut interface @ FunctionInterface {
-                            stage:
-                                crate::ShaderStage::Compute
-                                | crate::ShaderStage::Mesh
-                                | crate::ShaderStage::Task,
-                            ..
-                        },
-                    ),
-                ) => context.writer.generate_workgroup_vars_init_block(
-                    next_id,
-                    ir_module,
-                    info,
-                    local_invocation_index_id,
-                    interface,
-                    context.function,
-                ),
-                _ => None,
-            };
-
-        let main_id = if let Some(exit_id) = workgroup_vars_init_exit_block_id {
-            exit_id
-        } else {
-            next_id
-        };
-
-        context.write_function_body(main_id, debug_info.as_ref())?;
+        context.write_function_body(next_id, debug_info.as_ref())?;
 
         // Consume the `BlockContext`, ending its borrows and letting the
         // `Writer` steal back its cached expression table and temp_list.
@@ -2956,105 +2917,6 @@ impl Writer {
             .push(Instruction::memory_barrier(mem_scope_id, semantics_id));
     }
 
-    fn generate_workgroup_vars_init_block(
-        &mut self,
-        entry_id: Word,
-        ir_module: &crate::Module,
-        info: &FunctionInfo,
-        local_invocation_index: Option<Word>,
-        interface: &mut FunctionInterface,
-        function: &mut Function,
-    ) -> Option<Word> {
-        let body = ir_module
-            .global_variables
-            .iter()
-            .filter(|&(handle, var)| {
-                let task_exception = (var.space == crate::AddressSpace::TaskPayload)
-                    && interface.stage == crate::ShaderStage::Task;
-                !info[handle].is_empty()
-                    && (var.space == crate::AddressSpace::WorkGroup || task_exception)
-            })
-            .map(|(handle, var)| {
-                // It's safe to use `var_id` here, not `access_id`, because only
-                // variables in the `Uniform` and `StorageBuffer` address spaces
-                // get wrapped, and we're initializing `WorkGroup` variables.
-                let var_id = self.global_variables[handle].var_id;
-                let var_type_id = self.get_handle_type_id(var.ty);
-                let init_word = self.get_constant_null(var_type_id);
-                Instruction::store(var_id, init_word, None)
-            })
-            .collect::<Vec<_>>();
-
-        if body.is_empty() {
-            return None;
-        }
-
-        let mut pre_if_block = Block::new(entry_id);
-
-        let local_invocation_index = if let Some(local_invocation_index) = local_invocation_index {
-            local_invocation_index
-        } else {
-            let varying_id = self.id_gen.next();
-            let class = spirv::StorageClass::Input;
-            let u32_ty_id = self.get_u32_type_id();
-            let pointer_type_id = self.get_pointer_type_id(u32_ty_id, class);
-
-            Instruction::variable(pointer_type_id, varying_id, class, None)
-                .to_words(&mut self.logical_layout.declarations);
-
-            self.decorate(
-                varying_id,
-                spirv::Decoration::BuiltIn,
-                &[spirv::BuiltIn::LocalInvocationIndex as u32],
-            );
-
-            interface.varying_ids.push(varying_id);
-            let id = self.id_gen.next();
-            pre_if_block
-                .body
-                .push(Instruction::load(u32_ty_id, id, varying_id, None));
-
-            id
-        };
-
-        let zero_id = self.get_constant_scalar(crate::Literal::U32(0));
-
-        let eq_id = self.id_gen.next();
-        pre_if_block.body.push(Instruction::binary(
-            spirv::Op::IEqual,
-            self.get_bool_type_id(),
-            eq_id,
-            local_invocation_index,
-            zero_id,
-        ));
-
-        let merge_id = self.id_gen.next();
-        pre_if_block.body.push(Instruction::selection_merge(
-            merge_id,
-            spirv::SelectionControl::NONE,
-        ));
-
-        let accept_id = self.id_gen.next();
-        function.consume(
-            pre_if_block,
-            Instruction::branch_conditional(eq_id, accept_id, merge_id),
-        );
-
-        let accept_block = Block {
-            label_id: accept_id,
-            body,
-        };
-        function.consume(accept_block, Instruction::branch(merge_id));
-
-        let mut post_if_block = Block::new(merge_id);
-
-        self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut post_if_block.body);
-
-        let next_id = self.id_gen.next();
-        function.consume(post_if_block, Instruction::branch(next_id));
-        Some(next_id)
-    }
-
     /// Generate an `OpVariable` for one value in an [`EntryPoint`]'s IO interface.
     ///
     /// The [`Binding`]s of the arguments and result of an [`EntryPoint`]'s
@@ -4063,7 +3925,14 @@ impl Writer {
         debug_info: &Option<DebugInfo>,
         words: &mut Vec<Word>,
     ) -> Result<(), Error> {
-        let (ir_module, info) = crate::back::passes::run(ir_module.into(), &self.passes.into())?;
+        let (ir_module, info) = crate::back::passes::run(
+            ir_module.into(),
+            &crate::back::passes::Passes {
+                workgroup_zero_init: self.zero_initialize_workgroup_memory
+                    == super::ZeroInitializeWorkgroupMemoryMode::Polyfill,
+                ..self.passes.into()
+            },
+        )?;
         let (ir_module, info) = (&*ir_module, &info);
         self.reset();
 
