@@ -1,14 +1,14 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 123
+; Bound: 149
 OpCapability Shader
 OpCapability ImageQuery
 OpExtension "SPV_KHR_storage_buffer_storage_class"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %102 "main" %114
-OpExecutionMode %102 LocalSize 1 1 1
+OpEntryPoint GLCompute %105 "main" %102
+OpExecutionMode %105 LocalSize 1 1 1
 %3 = OpString "policy-mix.wgsl"
 OpSource Unknown 0 %3 "// Tests that the index, buffer, and texture bounds checks policies are
 // implemented separately.
@@ -63,7 +63,10 @@ OpName %37 "i"
 OpName %38 "l"
 OpName %39 "mock_function"
 OpName %53 "in_function"
-OpName %102 "main"
+OpName %102 "local_invocation_index"
+OpName %105 "main"
+OpName %115 "zero_init_index"
+OpName %129 "loop_bound"
 OpDecorate %6 ArrayStride 16
 OpMemberDecorate %9 0 Offset 0
 OpDecorate %10 ArrayStride 16
@@ -82,7 +85,7 @@ OpDecorate %26 Block
 OpMemberDecorate %26 0 Offset 0
 OpDecorate %28 DescriptorSet 0
 OpDecorate %28 Binding 2
-OpDecorate %114 BuiltIn LocalInvocationIndex
+OpDecorate %102 BuiltIn LocalInvocationIndex
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %5 = OpTypeVector %4 4
@@ -140,16 +143,23 @@ OpDecorate %114 BuiltIn LocalInvocationIndex
 %89 = OpConstant  %8  39
 %95 = OpTypePointer Function %5
 %96 = OpConstant  %8  1
-%103 = OpTypeFunction %2
-%107 = OpConstant  %18  1
-%108 = OpConstant  %18  2
-%109 = OpConstantComposite  %19  %107 %108
-%110 = OpConstant  %18  3
-%111 = OpConstant  %18  4
-%113 = OpConstantNull  %14
-%115 = OpTypePointer Input %8
-%114 = OpVariable  %115  Input
-%120 = OpConstant  %8  264
+%103 = OpTypePointer Input %8
+%102 = OpVariable  %103  Input
+%106 = OpTypeFunction %2
+%110 = OpConstant  %18  1
+%111 = OpConstant  %18  2
+%112 = OpConstantComposite  %19  %110 %111
+%113 = OpConstant  %18  3
+%114 = OpConstant  %18  4
+%116 = OpTypePointer Function %8
+%117 = OpConstantNull  %8
+%123 = OpTypeVector %8 2
+%124 = OpTypePointer Function %123
+%125 = OpTypeVector %67 2
+%126 = OpConstantComposite  %123  %42 %42
+%127 = OpConstant  %8  4294967295
+%128 = OpConstantComposite  %123  %127 %127
+%147 = OpConstant  %8  264
 %39 = OpFunction  %5  None %40
 %36 = OpFunctionParameter  %19
 %37 = OpFunctionParameter  %18
@@ -205,27 +215,65 @@ OpLine %3 27 11
 %100 = OpFAdd  %5  %94 %99
 OpReturnValue %100
 OpFunctionEnd
-%102 = OpFunction  %2  None %103
+%105 = OpFunction  %2  None %106
 %101 = OpLabel
-%104 = OpAccessChain  %41  %22 %42
-%105 = OpAccessChain  %44  %25 %42
-%106 = OpLoad  %13  %28
-OpBranch %112
-%112 = OpLabel
-%116 = OpLoad  %8  %114
-%117 = OpIEqual  %67  %116 %42
-OpSelectionMerge %118 None
-OpBranchConditional %117 %119 %118
-%119 = OpLabel
-OpStore %30 %113
+%115 = OpVariable  %116  Function %117
+%129 = OpVariable  %124  Function %128
+%104 = OpLoad  %8  %102
+%107 = OpAccessChain  %41  %22 %42
+%108 = OpAccessChain  %44  %25 %42
+%109 = OpLoad  %13  %28
 OpBranch %118
 %118 = OpLabel
-OpControlBarrier %21 %21 %120
+OpLine %3 1 1
+OpStore %115 %104
+OpBranch %119
+%119 = OpLabel
+OpLine %3 1 1
+OpLoopMerge %120 %122 None
+OpBranch %130
+%130 = OpLabel
+%131 = OpLoad  %123  %129
+%132 = OpIEqual  %125  %126 %131
+%133 = OpAll  %67  %132
+OpSelectionMerge %134 None
+OpBranchConditional %133 %120 %134
+%134 = OpLabel
+%135 = OpCompositeExtract  %8  %131 1
+%136 = OpIEqual  %67  %135 %42
+%137 = OpSelect  %8  %136 %96 %42
+%138 = OpCompositeConstruct  %123  %137 %96
+%139 = OpISub  %123  %131 %138
+OpStore %129 %139
 OpBranch %121
 %121 = OpLabel
+OpLine %3 1 1
+%140 = OpLoad  %8  %115
+%141 = OpUGreaterThanEqual  %67  %140 %15
+OpLine %3 1 1
+OpSelectionMerge %142 None
+OpBranchConditional %141 %143 %142
+%143 = OpLabel
+OpBranch %120
+%142 = OpLabel
+OpLine %3 1 1
+OpLine %3 1 1
+%144 = OpExtInst  %8  %1 UMin %140 %82
+%145 = OpAccessChain  %81  %30 %144
+OpStore %145 %48
+OpLine %3 1 1
+%146 = OpIAdd  %8  %140 %96
+OpLine %3 1 1
+OpStore %115 %146
+OpBranch %122
+%122 = OpLabel
+OpBranch %119
+%120 = OpLabel
+OpLine %3 1 1
+OpControlBarrier %21 %21 %147
 OpLine %3 37 19
 OpLine %3 37 19
 OpLine %3 37 5
-%122 = OpFunctionCall  %5  %39 %109 %110 %111
+%148 = OpFunctionCall  %5  %39 %112 %113 %114
 OpReturn
 OpFunctionEnd

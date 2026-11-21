@@ -5,10 +5,7 @@ shared uint _7[1];
 
 void main()
 {
-    if (gl_LocalInvocationIndex == 0u)
-    {
-        _7 = uint[](0u);
-    }
+    _7[gl_LocalInvocationIndex] = 0u;
     barrier();
     _7[0u] = (((gl_GlobalInvocationID.x + gl_LocalInvocationID.x) + gl_LocalInvocationIndex) + gl_WorkGroupID.x) + gl_NumWorkGroups.x;
 }
