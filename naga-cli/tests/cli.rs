@@ -74,7 +74,7 @@ fn stdout_requires_output_kind() {
 }
 
 #[test]
-fn stdout_rejects_tool_hooks() {
+fn stdout_dxc_requires_entry_point() {
     let src = write_tmp("naga_cli_stdout_dxc", "in.wgsl", TRIANGLE_WGSL);
     let r = naga()
         .arg(&src)
@@ -82,9 +82,11 @@ fn stdout_rejects_tool_hooks() {
         .output()
         .unwrap();
     assert!(!r.status.success());
-    assert!(String::from_utf8_lossy(&r.stderr)
-        .to_lowercase()
-        .contains("stdout"));
+    assert!(
+        String::from_utf8_lossy(&r.stderr).contains("requires --entry-point"),
+        "{}",
+        String::from_utf8_lossy(&r.stderr)
+    );
 }
 
 #[test]
@@ -663,8 +665,8 @@ fn help_lists_all_options() {
         "--buffer-bounds-check-policy",
         "--image-load-bounds-check-policy",
         "--entry-point",
-        "--profile",
-        "--shader-model",
+        "--glsl-version",
+        "--hlsl-shader-model",
         "--spirv-version",
         "--shader-stage",
         "--input-kind",
@@ -1742,8 +1744,8 @@ fn entry_point_selects() {
 }
 
 #[test]
-fn profile_sets_glsl_version() {
-    // --profile es300 → #version 300 es; --profile core330 → #version 330 core
+fn glsl_version_sets_glsl_version() {
+    // --glsl-version es300 → #version 300 es; --profile (alias) core330 → #version 330 core
     let src = write_tmp("naga_cli_p7t2_prof", "tri.wgsl", TRIANGLE_WGSL);
     let dir = src.parent().unwrap();
 
@@ -1751,7 +1753,7 @@ fn profile_sets_glsl_version() {
     let r1 = naga()
         .arg("--entry-point")
         .arg("fs_main")
-        .arg("--profile")
+        .arg("--glsl-version")
         .arg("es300")
         .arg(&src)
         .arg(&out_es)
@@ -1944,7 +1946,7 @@ fn input_kind_overrides_extension() {
 
 #[test]
 fn block_ctx_dir_accepted() {
-    // --block-ctx-dir <dir> on a SPIR-V input → success and dumps block-ctx files into dir.
+    // --spv-in-block-ctx-dir <dir> on a SPIR-V input → success and dumps block-ctx files into dir.
     let spv_src = write_tmp("naga_cli_p7t2_bcd", "tri.wgsl", TRIANGLE_WGSL);
     let dir = spv_src.parent().unwrap();
     let spv = dir.join("tri.spv");
@@ -1961,14 +1963,14 @@ fn block_ctx_dir_accepted() {
     std::fs::create_dir_all(&bctx_dir).unwrap();
 
     let r = naga()
-        .arg("--block-ctx-dir")
+        .arg("--spv-in-block-ctx-dir")
         .arg(&bctx_dir)
         .arg(&spv)
         .output()
         .unwrap();
     assert!(
         r.status.success(),
-        "--block-ctx-dir should succeed: {}",
+        "--spv-in-block-ctx-dir should succeed: {}",
         String::from_utf8_lossy(&r.stderr)
     );
 
@@ -1980,7 +1982,7 @@ fn block_ctx_dir_accepted() {
         .collect();
     assert!(
         !dumps.is_empty(),
-        "--block-ctx-dir should write block_ctx.*.txt files into {:?}",
+        "--spv-in-block-ctx-dir should write block_ctx.*.txt files into {:?}",
         bctx_dir
     );
 }
@@ -2078,4 +2080,600 @@ fn json_reflection_reports_overrides_and_resources() {
             .any(|r| r["group"] == 0 && r["binding"] == 1),
         "expected resource at group=0,binding=1; got: {resources:?}"
     );
+}
+
+// ── Language-version flags: exhaustive value lists ───────────────────────────
+
+fn version_flag_run(args: &[&str], out_name: &str) -> (std::process::Output, std::path::PathBuf) {
+    let src = write_tmp("naga_cli_version_flags", "tri.wgsl", TRIANGLE_WGSL);
+    let out = src.parent().unwrap().join(out_name);
+    let r = naga().args(args).arg(&src).arg(&out).output().unwrap();
+    (r, out)
+}
+
+#[test]
+fn glsl_version_rejects_unsupported_versions() {
+    for bad in ["es330", "core999", "corefoo", "es"] {
+        let (r, _) = version_flag_run(
+            &["--entry-point", "fs_main", "--glsl-version", bad],
+            "x.frag",
+        );
+        if bad == "es" {
+            assert!(r.status.success(), "`es` alias should be accepted");
+            continue;
+        }
+        assert!(
+            !r.status.success(),
+            "--glsl-version {bad} should be rejected"
+        );
+        assert!(
+            String::from_utf8_lossy(&r.stderr).contains("invalid value"),
+            "{bad}: {}",
+            String::from_utf8_lossy(&r.stderr)
+        );
+    }
+}
+
+#[test]
+fn glsl_version_webgl() {
+    let (r, out) = version_flag_run(
+        &["--entry-point", "fs_main", "--glsl-version", "webgl"],
+        "webgl.frag",
+    );
+    assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+    let text = std::fs::read_to_string(out).unwrap();
+    assert!(text.contains("#version 300 es"), "{text}");
+}
+
+#[test]
+fn hlsl_shader_model_accepts_6_9_and_rejects_unknown() {
+    let (r, _) = version_flag_run(&["--hlsl-shader-model", "69"], "sm69.hlsl");
+    assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+    let (r, _) = version_flag_run(&["--hlsl-shader-model", "6.8"], "sm68.hlsl");
+    assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+    let (r, _) = version_flag_run(&["--hlsl-shader-model", "70"], "sm70.hlsl");
+    assert!(!r.status.success());
+    assert!(String::from_utf8_lossy(&r.stderr).contains("invalid value"));
+}
+
+#[test]
+fn metal_and_spirv_versions_validated_at_parse_time() {
+    let (r, _) = version_flag_run(&["--metal-version", "9.9"], "x.metal");
+    assert!(!r.status.success());
+    assert!(String::from_utf8_lossy(&r.stderr).contains("invalid value"));
+    let (r, _) = version_flag_run(&["--spirv-version", "2.0"], "x.spv");
+    assert!(!r.status.success());
+    assert!(String::from_utf8_lossy(&r.stderr).contains("invalid value"));
+    let (r, _) = version_flag_run(&["--spirv-version", "1.6"], "x.spv");
+    assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+}
+
+#[test]
+fn block_ctx_dir_hidden_from_help() {
+    let help = String::from_utf8(naga().arg("--help").output().unwrap().stdout).unwrap();
+    assert!(!help.contains("block-ctx-dir"), "{help}");
+}
+
+// ── Colors ───────────────────────────────────────────────────────────────────
+
+const INVALID_WGSL: &str = "fn f() { let x: i32 = ; }";
+
+#[test]
+fn color_always_colors_errors() {
+    let src = write_tmp("naga_cli_color", "bad.wgsl", INVALID_WGSL);
+    let r = naga()
+        .args(["--color", "always"])
+        .arg(&src)
+        .output()
+        .unwrap();
+    assert!(!r.status.success());
+    let stderr = String::from_utf8_lossy(&r.stderr);
+    assert!(stderr.contains("\x1b["), "expected ANSI escapes: {stderr}");
+    assert!(stderr.contains("Could not parse WGSL"), "{stderr}");
+}
+
+#[test]
+fn color_auto_and_never_do_not_color_pipes() {
+    let src = write_tmp("naga_cli_color", "bad.wgsl", INVALID_WGSL);
+    for args in [&[][..], &["--color", "never"][..], &["--color=never"][..]] {
+        let r = naga().args(args).arg(&src).output().unwrap();
+        assert!(!r.status.success());
+        let stderr = String::from_utf8_lossy(&r.stderr);
+        assert!(
+            !stderr.contains('\x1b'),
+            "{args:?}: unexpected ANSI escapes: {stderr}"
+        );
+        assert!(stderr.starts_with("error: "), "{stderr}");
+    }
+}
+
+#[test]
+fn color_always_colors_validation_errors_and_warnings() {
+    let src = write_tmp(
+        "naga_cli_color",
+        "invalid.wgsl",
+        "@fragment fn main() -> f32 { return 0.0; }",
+    );
+    let r = naga()
+        .args(["--color", "always"])
+        .arg(&src)
+        .output()
+        .unwrap();
+    assert!(String::from_utf8_lossy(&r.stderr).contains("\x1b["));
+
+    let spv = src.parent().unwrap().join("tri_color.spv");
+    let tri = write_tmp("naga_cli_color", "tri.wgsl", TRIANGLE_WGSL);
+    assert!(naga().arg(&tri).arg(&spv).status().unwrap().success());
+    let r = naga()
+        .args(["--color", "always", "-g"])
+        .arg(&spv)
+        .arg(src.parent().unwrap().join("tri_color.wgsl"))
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&r.stderr);
+    assert!(
+        stderr.contains("\x1b[") && stderr.contains("warning"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn color_is_allowed_with_config() {
+    let src = write_tmp("naga_cli_color", "tri.wgsl", TRIANGLE_WGSL);
+    let r = naga()
+        .args(["--color", "never", "--config-json", "{}"])
+        .arg(&src)
+        .output()
+        .unwrap();
+    assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+}
+
+#[test]
+fn help_has_no_ansi_when_piped() {
+    let out = naga().arg("--help").output().unwrap();
+    assert!(!String::from_utf8_lossy(&out.stdout).contains('\x1b'));
+    let out = naga()
+        .args(["--color", "always", "--help"])
+        .output()
+        .unwrap();
+    assert!(String::from_utf8_lossy(&out.stdout).contains("\x1b["));
+}
+
+// ── Tool paths and stdout hooks ──────────────────────────────────────────────
+
+#[test]
+fn tool_path_overrides_path_lookup() {
+    let src = write_tmp("naga_cli_tool_path", "tri.wgsl", TRIANGLE_WGSL);
+    let out = src.parent().unwrap().join("tri.spv");
+    let r = naga()
+        .args(["--spirv-val", "--spirv-val-path", "/nonexistent/spirv-val"])
+        .arg(&src)
+        .arg(&out)
+        .output()
+        .unwrap();
+    assert!(!r.status.success());
+    let stderr = String::from_utf8_lossy(&r.stderr);
+    assert!(stderr.contains("/nonexistent/spirv-val"), "{stderr}");
+}
+
+#[test]
+fn tool_path_requires_hook_flag() {
+    let src = write_tmp("naga_cli_tool_path", "tri.wgsl", TRIANGLE_WGSL);
+    let r = naga()
+        .args(["--dxc-path", "/usr/bin/dxc"])
+        .arg(&src)
+        .output()
+        .unwrap();
+    assert!(!r.status.success());
+    assert!(String::from_utf8_lossy(&r.stderr).contains("--dxc"));
+}
+
+#[test]
+fn tool_path_config_keys() {
+    if !tool_on_path("spirv-val") {
+        eprintln!("skipping tool_path_config_keys: spirv-val not on PATH");
+        return;
+    }
+    let tool = which::which("spirv-val").unwrap();
+    let src = write_tmp("naga_cli_tool_path", "tri.wgsl", TRIANGLE_WGSL);
+    let out = src.parent().unwrap().join("tri_cfg.spv");
+    let cfg = serde_json::json!({ "spirv_val": true, "spirv_val_path": tool }).to_string();
+    let r = naga()
+        .args(["--config-json", &cfg])
+        .arg(&src)
+        .arg(&out)
+        .output()
+        .unwrap();
+    assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+    let cfg =
+        serde_json::json!({ "spirv_val": true, "spirv_val_path": "/nonexistent/x" }).to_string();
+    let r = naga()
+        .args(["--config-json", &cfg])
+        .arg(&src)
+        .arg(&out)
+        .output()
+        .unwrap();
+    assert!(!r.status.success());
+}
+
+#[test]
+fn spirv_hooks_with_stdout_output() {
+    for (tool, flag) in [("spirv-val", "--spirv-val"), ("spirv-opt", "--spirv-opt")] {
+        if !tool_on_path(tool) {
+            eprintln!("skipping spirv_hooks_with_stdout_output for {tool}: not on PATH");
+            continue;
+        }
+        let src = write_tmp("naga_cli_stdout_hooks", "tri.wgsl", TRIANGLE_WGSL);
+        let r = naga()
+            .arg(&src)
+            .args(["-", "--output-kind", "spv", flag])
+            .output()
+            .unwrap();
+        assert!(
+            r.status.success(),
+            "{flag}: {}",
+            String::from_utf8_lossy(&r.stderr)
+        );
+        assert_eq!(&r.stdout[0..4], &[0x03, 0x02, 0x23, 0x07], "{flag}");
+    }
+}
+
+#[test]
+fn dxc_with_stdout_writes_dxil() {
+    if !tool_on_path("dxc") {
+        eprintln!("skipping dxc_with_stdout_writes_dxil: dxc not on PATH");
+        return;
+    }
+    let src = write_tmp("naga_cli_stdout_hooks", "tri.wgsl", TRIANGLE_WGSL);
+    let r = naga()
+        .arg(&src)
+        .args([
+            "-",
+            "--output-kind",
+            "hlsl",
+            "--dxc",
+            "--entry-point",
+            "fs_main",
+        ])
+        .args(["--hlsl-shader-model", "60"])
+        .output()
+        .unwrap();
+    assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+    assert_eq!(
+        &r.stdout[0..4],
+        b"DXBC",
+        "expected a DXIL container on stdout"
+    );
+}
+
+#[test]
+fn dxc_with_entry_point_compiles_only_that_entry() {
+    if !tool_on_path("dxc") {
+        eprintln!("skipping dxc_with_entry_point_compiles_only_that_entry: dxc not on PATH");
+        return;
+    }
+    let src = write_tmp("naga_cli_dxc_ep", "tri.wgsl", TRIANGLE_WGSL);
+    let dir = src.parent().unwrap();
+    let out = dir.join("only_fs.hlsl");
+    let r = naga()
+        .args([
+            "--dxc",
+            "--entry-point",
+            "fs_main",
+            "--hlsl-shader-model",
+            "60",
+        ])
+        .arg(&src)
+        .arg(&out)
+        .output()
+        .unwrap();
+    assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+    assert!(dir.join("only_fs.fs_main.dxil").exists());
+    assert!(!dir.join("only_fs.vs_main.dxil").exists());
+}
+
+// ── --json-out ───────────────────────────────────────────────────────────────
+
+#[test]
+fn json_out_writes_report_file_and_shader_to_stdout() {
+    let src = write_tmp("naga_cli_json_out", "tri.wgsl", TRIANGLE_WGSL);
+    let report = src.parent().unwrap().join("report.json");
+    let _ = std::fs::remove_file(&report);
+    let r = naga()
+        .arg(&src)
+        .args(["-", "--output-kind", "wgsl", "--json-out"])
+        .arg(&report)
+        .output()
+        .unwrap();
+    assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+    assert!(String::from_utf8_lossy(&r.stdout).contains("fn vs_main"));
+    let v: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&report).unwrap()).unwrap();
+    assert_eq!(v["success"], true);
+    assert!(v["reflection"]["entry_points"].is_array());
+}
+
+#[test]
+fn json_out_reports_failure() {
+    let src = write_tmp("naga_cli_json_out", "bad.wgsl", INVALID_WGSL);
+    let report = src.parent().unwrap().join("bad.json");
+    let r = naga()
+        .arg(&src)
+        .arg("--json-out")
+        .arg(&report)
+        .output()
+        .unwrap();
+    assert!(!r.status.success());
+    assert!(r.stdout.is_empty(), "JSON must not go to stdout");
+    let v: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&report).unwrap()).unwrap();
+    assert_eq!(v["success"], false);
+    assert_eq!(v["diagnostics"][0]["severity"], "error");
+}
+
+#[test]
+fn json_out_config_key() {
+    let src = write_tmp("naga_cli_json_out", "tri.wgsl", TRIANGLE_WGSL);
+    let report = src.parent().unwrap().join("cfg.json");
+    let cfg = serde_json::json!({ "json_out": report }).to_string();
+    let r = naga()
+        .args(["--config-json", &cfg])
+        .arg(&src)
+        .output()
+        .unwrap();
+    assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+    assert!(report.exists());
+}
+
+// ── Backend options ──────────────────────────────────────────────────────────
+
+fn translate(name: &str, wgsl: &str, out_name: &str, args: &[&str]) -> String {
+    let src = write_tmp("naga_cli_backend_opts", name, wgsl);
+    let out = src.parent().unwrap().join(out_name);
+    let r = naga().args(args).arg(&src).arg(&out).output().unwrap();
+    assert!(
+        r.status.success(),
+        "{args:?}: {}",
+        String::from_utf8_lossy(&r.stderr)
+    );
+    std::fs::read_to_string(out).unwrap()
+}
+
+#[test]
+fn entry_point_filters_hlsl_and_msl() {
+    let hlsl = translate(
+        "tri.wgsl",
+        TRIANGLE_WGSL,
+        "ep.hlsl",
+        &["--entry-point", "fs_main"],
+    );
+    assert!(
+        hlsl.contains("fs_main") && !hlsl.contains("vs_main"),
+        "{hlsl}"
+    );
+    let all = translate("tri.wgsl", TRIANGLE_WGSL, "all.hlsl", &[]);
+    assert!(all.contains("fs_main") && all.contains("vs_main"));
+    let msl = translate(
+        "tri.wgsl",
+        TRIANGLE_WGSL,
+        "ep.metal",
+        &["--entry-point", "fs_main"],
+    );
+    assert!(msl.contains("fs_main") && !msl.contains("vs_main"), "{msl}");
+}
+
+#[test]
+fn msl_force_point_size() {
+    let without = translate("tri.wgsl", TRIANGLE_WGSL, "nops.metal", &[]);
+    assert!(!without.contains("point_size"));
+    let with = translate(
+        "tri.wgsl",
+        TRIANGLE_WGSL,
+        "ps.metal",
+        &["--msl-force-point-size"],
+    );
+    assert!(with.contains("point_size"), "{with}");
+    let cfg = r#"{"msl_pipeline": {"allow_and_force_point_size": true}}"#;
+    let with_cfg = translate(
+        "tri.wgsl",
+        TRIANGLE_WGSL,
+        "pscfg.metal",
+        &["--config-json", cfg],
+    );
+    assert!(with_cfg.contains("point_size"), "{with_cfg}");
+}
+
+#[test]
+fn msl_pipeline_config_vertex_pulling() {
+    let wgsl = r#"
+@vertex fn vs_main(@location(0) p: vec4<f32>) -> @builtin(position) vec4<f32> { return p; }
+"#;
+    let cfg = r#"{"msl_pipeline": {
+        "vertex_pulling_transform": true,
+        "vertex_buffer_mappings": [{
+            "id": 0, "stride": 16, "step_mode": "ByVertex",
+            "attributes": [{"offset": 0, "shader_location": 0, "format": "float32x4"}]
+        }]
+    }}"#;
+    let pulled = translate("vp.wgsl", wgsl, "vp.metal", &["--config-json", cfg]);
+    let plain = translate("vp.wgsl", wgsl, "plain.metal", &[]);
+    assert_ne!(pulled, plain);
+    assert!(!pulled.contains("[[stage_in]]"), "{pulled}");
+}
+
+#[test]
+fn glsl_multiview() {
+    let wgsl = r#"
+@vertex fn main(@builtin(view_index) v: u32) -> @builtin(position) vec4<f32> {
+    return vec4<f32>(f32(v));
+}
+"#;
+    let out = translate(
+        "mv.wgsl",
+        wgsl,
+        "mv.vert",
+        &["--glsl-version", "webgl", "--glsl-multiview", "2"],
+    );
+    assert!(out.contains("num_views = 2"), "{out}");
+    let out = translate("mv.wgsl", wgsl, "mvnone.vert", &["--glsl-version", "webgl"]);
+    assert!(!out.contains("num_views"), "{out}");
+    let cfg = r#"{"glsl_multiview": 2,
+        "glsl_out": {"version": {"Embedded": {"version": 300, "is_webgl": true}}}}"#;
+    let out = translate("mv.wgsl", wgsl, "mvcfg.vert", &["--config-json", cfg]);
+    assert!(out.contains("num_views = 2"), "{out}");
+}
+
+#[test]
+fn wgsl_explicit_types() {
+    let wgsl = r#"
+@group(0) @binding(0) var<storage, read_write> o: u32;
+@compute @workgroup_size(1) fn main(@builtin(local_invocation_index) i: u32) { let x = i + 1u; o = x; }
+"#;
+    let out = translate("et.wgsl", wgsl, "et.out.wgsl", &["--wgsl-explicit-types"]);
+    assert!(out.contains("let x: u32"), "{out}");
+    let out = translate("et.wgsl", wgsl, "et2.wgsl", &[]);
+    assert!(!out.contains("let x: u32"), "{out}");
+    let out = translate(
+        "et.wgsl",
+        wgsl,
+        "et3.wgsl",
+        &["--config-json", r#"{"wgsl_explicit_types": true}"#],
+    );
+    assert!(out.contains("let x: u32"), "{out}");
+}
+
+/// A SPIR-V module declaring `Kernel`, a capability naga's SPIR-V frontend does not support.
+fn spv_with_unknown_capability() -> std::path::PathBuf {
+    let words: [u32; 10] = [
+        0x0723_0203,    // magic
+        0x0001_0000,    // version 1.0
+        0,              // generator
+        1,              // bound
+        0,              // schema
+        (2 << 16) | 17, // OpCapability
+        1,              // Shader
+        (2 << 16) | 17, // OpCapability
+        6,              // Kernel
+        (3 << 16) | 14, // OpMemoryModel (operands follow)
+    ];
+    let mut bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
+    bytes.extend_from_slice(&0u32.to_le_bytes()); // Logical
+    bytes.extend_from_slice(&1u32.to_le_bytes()); // GLSL450
+    let dir = std::env::temp_dir().join("naga_cli_spv_strict");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("kernel.spv");
+    std::fs::write(&path, bytes).unwrap();
+    path
+}
+
+#[test]
+fn spv_in_strict_capabilities() {
+    let spv = spv_with_unknown_capability();
+    let r = naga().arg(&spv).output().unwrap();
+    assert!(
+        r.status.success(),
+        "default should warn: {}",
+        String::from_utf8_lossy(&r.stderr)
+    );
+
+    let r = naga()
+        .arg("--spv-in-strict-capabilities")
+        .arg(&spv)
+        .output()
+        .unwrap();
+    assert!(!r.status.success());
+    assert!(String::from_utf8_lossy(&r.stderr).contains("unsupported capability"));
+
+    // A config `spv_in` without `strict_capabilities` keeps naga-cli's permissive default.
+    let r = naga()
+        .args([
+            "--config-json",
+            r#"{"spv_in": {"adjust_coordinate_space": true}}"#,
+        ])
+        .arg(&spv)
+        .output()
+        .unwrap();
+    assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+
+    let r = naga()
+        .args([
+            "--config-json",
+            r#"{"spv_in": {"strict_capabilities": true}}"#,
+        ])
+        .arg(&spv)
+        .output()
+        .unwrap();
+    assert!(!r.status.success());
+}
+
+const SUBGROUP_WGSL: &str = r#"
+@group(0) @binding(0) var<storage, read_write> buf: array<u32>;
+@compute @workgroup_size(64) fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    buf[id.x] = subgroupAdd(buf[id.x]);
+}
+"#;
+
+#[test]
+fn subgroup_config_keys_restrict_validator() {
+    let src = write_tmp("naga_cli_subgroup", "sg.wgsl", SUBGROUP_WGSL);
+    assert!(naga().arg(&src).status().unwrap().success());
+
+    let r = naga()
+        .args(["--config-json", r#"{"subgroup_stages": "FRAGMENT"}"#])
+        .arg(&src)
+        .output()
+        .unwrap();
+    assert!(
+        !r.status.success(),
+        "compute subgroup ops should be rejected"
+    );
+
+    let r = naga()
+        .args(["--config-json", r#"{"subgroup_operations": "BALLOT"}"#])
+        .arg(&src)
+        .output()
+        .unwrap();
+    assert!(
+        !r.status.success(),
+        "arithmetic subgroup ops should be rejected"
+    );
+}
+
+#[test]
+fn compaction_revalidation_keeps_subgroup_settings() {
+    let src = write_tmp("naga_cli_subgroup", "sg.wgsl", SUBGROUP_WGSL);
+    let out = src.parent().unwrap().join("sg.wgsl.out.wgsl");
+    let r = naga()
+        .arg("--compact")
+        .arg(&src)
+        .arg(&out)
+        .output()
+        .unwrap();
+    assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+}
+
+#[test]
+fn spv_out_capabilities_in_schema_and_config() {
+    let schema =
+        String::from_utf8(naga().arg("--print-config-schema").output().unwrap().stdout).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&schema).unwrap();
+    let found = v["$defs"]
+        .as_object()
+        .unwrap()
+        .values()
+        .any(|def| def["properties"]["capabilities"]["items"]["type"] == "string");
+    assert!(found, "spv_out.capabilities missing from schema");
+
+    let src = write_tmp("naga_cli_spv_caps", "tri.wgsl", TRIANGLE_WGSL);
+    let out = src.parent().unwrap().join("caps.spv");
+    let r = naga()
+        .args([
+            "--config-json",
+            r#"{"spv_out": {"capabilities": ["Shader"]}}"#,
+        ])
+        .arg(&src)
+        .arg(&out)
+        .output()
+        .unwrap();
+    assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
 }

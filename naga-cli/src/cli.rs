@@ -46,9 +46,9 @@ EXAMPLES
 
 OPTIONS: FLAGS vs CONFIG
   Options can be set as individual flags OR via a JSON config (--config <file> /
-  --config-json <string>), never both: passing ANY flag alongside --config is an error. In
-  config mode only the positional input/output file paths are accepted on the command line;
-  everything else lives in the JSON. Run `naga --print-config-schema` to see every config key
+  --config-json <string>), never both: passing any flag except --color alongside --config is
+  an error. In config mode only the positional input/output file paths are accepted on the
+  command line; everything else lives in the JSON. Run `naga --print-config-schema` to see every config key
   and its type — every flag has a corresponding config key, so config is a complete single
   source. Reading stdin / writing stdout via `-` works in config mode too: set the format with
   the `input_kind` / `output_kind` (and `shader_stage`) config keys, since the matching flags
@@ -57,26 +57,44 @@ OPTIONS: FLAGS vs CONFIG
 STRUCTURED OUTPUT
   --format json emits one JSON document on stdout with `diagnostics`
   (severity/message/location/labels/notes) and `reflection` (entry points, resources,
-  overrides) — intended for editor integrations and CI.
+  overrides) — intended for editor integrations and CI. --json-out <file> writes that document
+  to a file instead, so the shader can go to stdout.
 
-EXTERNAL TOOLS (must be on PATH)
+EXTERNAL TOOLS (found on PATH, or set with --spirv-val-path / --spirv-opt-path / --dxc-path)
   --spirv-val and --spirv-opt validate / optimize SPIR-V output; --dxc compiles each HLSL
-  entry point to `<hlsl-stem>.<entry-point>.dxil`.
+  entry point to `<hlsl-stem>.<entry-point>.dxil`. With stdout (`-`) output, SPIR-V hooks
+  run on a temporary file, and --dxc (which then requires --entry-point) writes the DXIL to
+  stdout instead of the HLSL.
 
 NOTES
   * Coordinate-space conversion is controlled by --keep-coordinate-space, not by spv_out.flags.
   * --task-limits and --validate-mesh-output fan out to all applicable backends; in a config,
     set the flat per-backend keys `task_dispatch_limits` / `mesh_shader_primitive_indices_clamp`.
-  * --print-config-schema omits `spv_out.capabilities` (its type has no JsonSchema impl), but
-    --config / --config-json still accept it.
+  * --entry-point also limits MSL and HLSL output to that entry point.
+  * SPIR-V input warns about unknown capabilities unless --spv-in-strict-capabilities is given
+    (also when `spv_in` is set in a config without `strict_capabilities`).
+  * The validator allows subgroup operations in all stages; restrict with the
+    `subgroup_stages` / `subgroup_operations` config keys.
   * In --format json every diagnostic is `error` or `warning`, and SPIR-V parse errors have no
     source location.
   * `--zero-initialize-workgroup-memory native` is honored only by the SPIR-V backend; the other
     backends treat it as `polyfill`.";
 
+const STYLES: clap::builder::Styles = {
+    use clap::builder::styling::{AnsiColor, Effects};
+    clap::builder::Styles::styled()
+        .header(AnsiColor::Green.on_default().effects(Effects::BOLD))
+        .usage(AnsiColor::Green.on_default().effects(Effects::BOLD))
+        .literal(AnsiColor::Cyan.on_default().effects(Effects::BOLD))
+        .placeholder(AnsiColor::Cyan.on_default())
+        .error(AnsiColor::Red.on_default().effects(Effects::BOLD))
+        .valid(AnsiColor::Cyan.on_default().effects(Effects::BOLD))
+        .invalid(AnsiColor::Yellow.on_default().effects(Effects::BOLD))
+};
+
 /// Translate shaders to different formats.
 #[derive(Parser, Debug, Clone)]
-#[command(version, about, long_about = LONG_ABOUT)]
+#[command(version, about, long_about = LONG_ABOUT, styles = STYLES)]
 #[command(group(ArgGroup::new("options").multiple(true).conflicts_with("config_input").args([
     "fake_missing_bindings",
     "force_loop_bounding",
@@ -101,28 +119,45 @@ pub struct Args {
     #[arg(long, group = "options")]
     pub image_load_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
-    /// Directory to dump the SPIR-V block context dump to.
-    #[arg(long, group = "options")]
-    pub block_ctx_dir: Option<String>,
+    /// Debugging aid for naga developers: with SPIR-V input, write each function's
+    /// block context to `<dir>/block_ctx.<Stage>-<name>.txt`.
+    #[arg(long, hide = true, alias = "block-ctx-dir", group = "options")]
+    pub spv_in_block_ctx_dir: Option<String>,
 
     /// The shader entrypoint. With `--compact`, anything unreachable from it is dropped.
     #[arg(long, group = "options")]
     pub entry_point: Option<String>,
 
-    /// GLSL profile to target, e.g. `es`, `core`, `es330`.
-    #[arg(long, value_parser = parse_glsl_profile, group = "options")]
-    pub profile: Option<GlslProfile>,
+    /// GLSL version to target (`core` = core330, `es` = es310, `webgl` = WebGL 2 / ES 3.00).
+    #[arg(long, value_enum, alias = "profile", group = "options")]
+    pub glsl_version: Option<GlslVersionArg>,
 
-    /// HLSL shader model, e.g. `50`, `51`, `60`..`67`.
-    #[arg(long, value_parser = parse_shader_model, group = "options")]
-    pub shader_model: Option<naga::back::hlsl::ShaderModel>,
+    /// HLSL shader model.
+    #[arg(long, value_enum, alias = "shader-model", group = "options")]
+    pub hlsl_shader_model: Option<HlslShaderModelArg>,
 
     /// HLSL: the pipeline renders to multisampled attachments (disables conservative depth).
     #[arg(long, group = "options")]
     pub hlsl_multisampled: bool,
 
-    /// SPIR-V version, e.g. `1.0`, `1.4`.
-    #[arg(long, value_parser = parse_spirv_version, group = "options")]
+    /// MSL: emit and force `point_size` (for vertex/mesh shaders drawing point primitives).
+    #[arg(long, group = "options")]
+    pub msl_force_point_size: bool,
+
+    /// GLSL: number of views to render to with multiview.
+    #[arg(long, group = "options")]
+    pub glsl_multiview: Option<core::num::NonZeroU32>,
+
+    /// WGSL output: always write explicit types instead of relying on inference.
+    #[arg(long, group = "options")]
+    pub wgsl_explicit_types: bool,
+
+    /// SPIR-V input: reject modules declaring capabilities naga does not know, instead of warning.
+    #[arg(long, group = "options")]
+    pub spv_in_strict_capabilities: bool,
+
+    /// SPIR-V version.
+    #[arg(long, value_parser = version_parser(SPIRV_VERSIONS), group = "options")]
     pub spirv_version: Option<(u8, u8)>,
 
     /// Shader stage; derived from the file extension if unspecified. Selects the input
@@ -140,8 +175,8 @@ pub struct Args {
     #[arg(long, value_enum, group = "options")]
     pub output_kind: Option<OutputKind>,
 
-    /// Metal language version, e.g. `1.0`, `1.1`, `1.2`.
-    #[arg(long, value_parser = parse_metal_version, group = "options")]
+    /// Metal Shading Language version.
+    #[arg(long, value_parser = version_parser(METAL_VERSIONS), group = "options")]
     pub metal_version: Option<(u8, u8)>,
 
     /// Disable coordinate-space conversions where the frontend/backend supports them.
@@ -208,21 +243,42 @@ pub struct Args {
     #[arg(long)]
     pub print_config_schema: bool,
 
-    /// After writing SPIR-V output, validate it with `spirv-val` (must be on PATH).
+    /// After writing SPIR-V output, validate it with `spirv-val`.
     #[arg(long, group = "options")]
     pub spirv_val: bool,
 
-    /// After writing SPIR-V output, optimize it in place with `spirv-opt -O` (must be on PATH).
+    /// After writing SPIR-V output, optimize it in place with `spirv-opt -O`.
     #[arg(long, group = "options")]
     pub spirv_opt: bool,
 
-    /// After writing HLSL output, compile each entry point to DXIL with `dxc` (must be on PATH).
+    /// After writing HLSL output, compile each entry point to DXIL with `dxc`.
     #[arg(long, group = "options")]
     pub dxc: bool,
+
+    /// Path to the `spirv-val` executable (default: search PATH).
+    #[arg(long, requires = "spirv_val", group = "options")]
+    pub spirv_val_path: Option<std::path::PathBuf>,
+
+    /// Path to the `spirv-opt` executable (default: search PATH).
+    #[arg(long, requires = "spirv_opt", group = "options")]
+    pub spirv_opt_path: Option<std::path::PathBuf>,
+
+    /// Path to the `dxc` executable (default: search PATH).
+    #[arg(long, requires = "dxc", group = "options")]
+    pub dxc_path: Option<std::path::PathBuf>,
 
     /// Output format for diagnostics and reflection: `text` (human, default) or `json`.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text, group = "options")]
     pub format: OutputFormat,
+
+    /// Write the `--format json` document to this file instead of stdout (implies
+    /// `--format json`), so the shader itself can be written to stdout.
+    #[arg(long, group = "options")]
+    pub json_out: Option<String>,
+
+    /// When to use colors in diagnostics and help. Allowed together with --config.
+    #[arg(long, value_enum, default_value_t = ColorArg::Auto)]
+    pub color: ColorArg,
 
     /// Input file (stdin if omitted), then output files. In bulk mode, all are inputs.
     pub files: Vec<String>,
@@ -245,6 +301,43 @@ pub enum OutputFormat {
     #[default]
     Text,
     Json,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ColorArg {
+    #[default]
+    Auto,
+    Always,
+    Never,
+}
+
+impl ColorArg {
+    /// Find `--color` before clap parses, so clap's own help and errors honor it.
+    pub fn from_raw_args(args: impl IntoIterator<Item = std::ffi::OsString>) -> Self {
+        let mut args = args.into_iter();
+        let mut value = None;
+        while let Some(arg) = args.next() {
+            let arg = arg.to_string_lossy().into_owned();
+            if arg == "--" {
+                break;
+            } else if arg == "--color" {
+                value = args.next().map(|v| v.to_string_lossy().into_owned());
+            } else if let Some(v) = arg.strip_prefix("--color=") {
+                value = Some(v.to_owned());
+            }
+        }
+        value
+            .and_then(|v| <Self as ValueEnum>::from_str(&v, true).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn to_clap(self) -> clap::ColorChoice {
+        match self {
+            Self::Auto => clap::ColorChoice::Auto,
+            Self::Always => clap::ColorChoice::Always,
+            Self::Never => clap::ColorChoice::Never,
+        }
+    }
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
@@ -386,57 +479,114 @@ pub struct Defines {
     pub pairs: Vec<(String, String)>,
 }
 
-/// Re-exported so `params.rs` can name the parsed GLSL version.
-pub use naga::back::glsl::Version as GlslProfile;
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GlslVersionArg {
+    Core140,
+    Core150,
+    #[value(alias = "core")]
+    Core330,
+    Core400,
+    Core410,
+    Core420,
+    Core430,
+    Core440,
+    Core450,
+    Core460,
+    Es300,
+    #[value(alias = "es")]
+    Es310,
+    Es320,
+    Webgl,
+}
 
-fn parse_glsl_profile(s: &str) -> Result<GlslProfile, String> {
-    use naga::back::glsl::Version;
-    if let Some(rest) = s.strip_prefix("core") {
-        Ok(Version::Desktop(rest.parse().unwrap_or(330)))
-    } else if let Some(rest) = s.strip_prefix("es") {
-        Ok(Version::new_gles(rest.parse().unwrap_or(310)))
-    } else {
-        Err(format!("Unknown profile: {s}"))
+impl GlslVersionArg {
+    pub fn to_version(self) -> naga::back::glsl::Version {
+        use naga::back::glsl::Version as V;
+        match self {
+            Self::Core140 => V::Desktop(140),
+            Self::Core150 => V::Desktop(150),
+            Self::Core330 => V::Desktop(330),
+            Self::Core400 => V::Desktop(400),
+            Self::Core410 => V::Desktop(410),
+            Self::Core420 => V::Desktop(420),
+            Self::Core430 => V::Desktop(430),
+            Self::Core440 => V::Desktop(440),
+            Self::Core450 => V::Desktop(450),
+            Self::Core460 => V::Desktop(460),
+            Self::Es300 => V::new_gles(300),
+            Self::Es310 => V::new_gles(310),
+            Self::Es320 => V::new_gles(320),
+            Self::Webgl => V::Embedded {
+                version: 300,
+                is_webgl: true,
+            },
+        }
     }
 }
 
-fn parse_shader_model(s: &str) -> Result<naga::back::hlsl::ShaderModel, String> {
-    use naga::back::hlsl::ShaderModel as M;
-    Ok(match s.to_lowercase().as_str() {
-        "50" => M::V5_0,
-        "51" => M::V5_1,
-        "60" => M::V6_0,
-        "61" => M::V6_1,
-        "62" => M::V6_2,
-        "63" => M::V6_3,
-        "64" => M::V6_4,
-        "65" => M::V6_5,
-        "66" => M::V6_6,
-        "67" => M::V6_7,
-        _ => return Err(format!("Invalid value for --shader-model: {s}")),
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HlslShaderModelArg {
+    #[value(name = "50", alias = "5.0")]
+    V5_0,
+    #[value(name = "51", alias = "5.1")]
+    V5_1,
+    #[value(name = "60", alias = "6.0")]
+    V6_0,
+    #[value(name = "61", alias = "6.1")]
+    V6_1,
+    #[value(name = "62", alias = "6.2")]
+    V6_2,
+    #[value(name = "63", alias = "6.3")]
+    V6_3,
+    #[value(name = "64", alias = "6.4")]
+    V6_4,
+    #[value(name = "65", alias = "6.5")]
+    V6_5,
+    #[value(name = "66", alias = "6.6")]
+    V6_6,
+    #[value(name = "67", alias = "6.7")]
+    V6_7,
+    #[value(name = "68", alias = "6.8")]
+    V6_8,
+    #[value(name = "69", alias = "6.9")]
+    V6_9,
+}
+
+impl HlslShaderModelArg {
+    pub fn to_model(self) -> naga::back::hlsl::ShaderModel {
+        use naga::back::hlsl::ShaderModel as M;
+        match self {
+            Self::V5_0 => M::V5_0,
+            Self::V5_1 => M::V5_1,
+            Self::V6_0 => M::V6_0,
+            Self::V6_1 => M::V6_1,
+            Self::V6_2 => M::V6_2,
+            Self::V6_3 => M::V6_3,
+            Self::V6_4 => M::V6_4,
+            Self::V6_5 => M::V6_5,
+            Self::V6_6 => M::V6_6,
+            Self::V6_7 => M::V6_7,
+            Self::V6_8 => M::V6_8,
+            Self::V6_9 => M::V6_9,
+        }
+    }
+}
+
+const SPIRV_VERSIONS: &[&str] = &["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6"];
+
+const METAL_VERSIONS: &[&str] = &[
+    "1.0", "1.1", "1.2", "2.0", "2.1", "2.2", "2.3", "2.4", "3.0", "3.1", "3.2", "4.0",
+];
+
+/// A parser for `MAJOR.MINOR` that only accepts (and lists in `--help`) the given versions.
+fn version_parser(
+    versions: &'static [&'static str],
+) -> impl clap::builder::TypedValueParser<Value = (u8, u8)> {
+    use clap::builder::TypedValueParser as _;
+    clap::builder::PossibleValuesParser::new(versions).map(|s| {
+        let (major, minor) = s.split_once('.').unwrap();
+        (major.parse().unwrap(), minor.parse().unwrap())
     })
-}
-
-fn parse_spirv_version(s: &str) -> Result<(u8, u8), String> {
-    let dot = s
-        .find('.')
-        .ok_or_else(|| "Missing dot separator".to_owned())?;
-    let major = s[..dot].parse::<u8>().map_err(|e| e.to_string())?;
-    let minor = s[dot + 1..].parse::<u8>().map_err(|e| e.to_string())?;
-    Ok((major, minor))
-}
-
-fn parse_metal_version(s: &str) -> Result<(u8, u8), String> {
-    let mut iter = s.split('.');
-    let next = |iter: &mut core::str::Split<char>| {
-        iter.next()
-            .ok_or_else(|| format!("Invalid value for --metal-version: {s}"))?
-            .parse::<u8>()
-            .map_err(|err| format!("Invalid value for --metal-version: '{s}': {err}"))
-    };
-    let major = next(&mut iter)?;
-    let minor = next(&mut iter)?;
-    Ok((major, minor))
 }
 
 fn parse_overrides(s: &str) -> Result<Overrides, String> {

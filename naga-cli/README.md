@@ -34,9 +34,10 @@ naga shader.wgsl - --output-kind hlsl      # print HLSL to stdout
 naga shader.wgsl - --output-kind spv > out.spv
 ```
 
-Stdout output cannot be combined with `--format json` or the external-tool hooks below (those
-need a real file); `--dxc` in particular always writes files, since `dxc` reads an HLSL file and
-emits DXIL to a file.
+Stdout output cannot be combined with `--format json` unless `--json-out <file>` sends the JSON
+document to a file. The SPIR-V tool hooks below work with stdout output (they run on a temporary
+file). `--dxc` with stdout output requires `--entry-point` and writes that entry point's DXIL to
+stdout instead of the HLSL.
 
 ```sh
 # Validate a WGSL shader (no output file → validation only).
@@ -104,18 +105,27 @@ naga shader.wgsl out.spv --compact
 naga shader.wgsl out.spv --index-bounds-check-policy restrict
 
 # Target a specific HLSL shader model.
-naga shader.wgsl out.hlsl --shader-model 60
+naga shader.wgsl out.hlsl --hlsl-shader-model 60
 
 # HLSL for a pipeline with multisampled attachments.
 naga shader.wgsl out.hlsl --hlsl-multisampled
 
 # Target a specific Metal version.
 naga shader.wgsl out.metal --metal-version 2.0
+
+# Target a GLSL version (core140..core460, es300/es310/es320, webgl).
+naga shader.wgsl out.frag --entry-point fs_main --glsl-version es310
+
+# Write WGSL with explicit types everywhere.
+naga shader.wgsl out.wgsl --wgsl-explicit-types
 ```
 
+Each language-version flag (`--glsl-version`, `--hlsl-shader-model`, `--metal-version`,
+`--spirv-version`) accepts only the versions naga supports; `--help` lists them.
+
 **Config file** — provides access to the full set of options via a JSON document.
-Flags and config are **mutually exclusive**: passing _any_ flag alongside `--config` is a hard
-error (clap enforces it at parse time). In config mode only the positional input/output file
+Flags and config are **mutually exclusive**: passing any flag other than `--color` alongside
+`--config` is a hard error (clap enforces it at parse time). In config mode only the positional input/output file
 paths are accepted on the command line — everything else goes in the JSON.
 
 **Every flag has a corresponding config key**, so config is a complete single source — including
@@ -160,12 +170,7 @@ To see every configurable key and its type, print the JSON Schema:
 naga --print-config-schema
 ```
 
-> **Note:** `--print-config-schema` omits one field that cannot be expressed in JSON Schema —
-> the SPIR-V capabilities set (`spv_out.capabilities`, type `FastHashSet<spirv::Capability>`,
-> the SPIR-V writer's capability allow-list — distinct from the top-level `capabilities`
-> validator/WGSL-frontend filter, which IS present in the schema) — but it is still accepted
-> by `--config` and `--config-json`. All other fields, including the top-level `defines` map,
-> are present in the schema.
+
 
 ---
 
@@ -217,6 +222,13 @@ file name, since the input is a single file/stream), zero or more `labels` (each
 and an optional `location`), and a `notes` array (may be empty for validation errors). SPIR-V
 parse errors have no source location.
 
+To write the shader to stdout and the JSON document to a file, use `--json-out` (it implies
+`--format json`):
+
+```sh
+naga shader.wgsl - --output-kind spv --json-out report.json > out.spv
+```
+
 **Reflection shape:** `entry_points` lists every shader stage with its `name`, `stage`, and
 `workgroup_size`; `resources` lists every global binding with its `name`, `group`, `binding`, and
 `address_space`; `overrides` lists pipeline-constant overrides.
@@ -225,9 +237,10 @@ parse errors have no source location.
 
 ## External tool hooks
 
-naga can hand off output files to external tools. The tools must be on `PATH`. These are also
-config keys (`spirv_val` / `spirv_opt` / `dxc`), so set them in `--config` rather than as flags
-when using a config file.
+naga can hand off output files to external tools. The tools are looked up on `PATH` unless
+`--spirv-val-path`, `--spirv-opt-path`, or `--dxc-path` names the executable. These are also
+config keys (`spirv_val` / `spirv_opt` / `dxc` and `spirv_val_path` / `spirv_opt_path` /
+`dxc_path`), so set them in `--config` rather than as flags when using a config file.
 
 ```sh
 # Validate SPIR-V output with spirv-val (Khronos SPIRV-Tools).
@@ -244,7 +257,15 @@ naga shader.wgsl out.hlsl --dxc
 When `--dxc` is used, naga compiles each entry point in the HLSL file separately and writes the
 DXIL binary to `<hlsl-stem>.<entry-point-name>.dxil`. For example, a shader with entry points
 `vs_main` and `fs_main` produced from `out.hlsl` will emit `out.vs_main.dxil` and
-`out.fs_main.dxil`.
+`out.fs_main.dxil`. With `--entry-point`, only that entry point is written and compiled.
+
+The hooks also work with stdout output. SPIR-V is round-tripped through a temporary file.
+`--dxc` requires `--entry-point` in that case and writes the DXIL to stdout:
+
+```sh
+naga shader.wgsl - --output-kind spv --spirv-val > out.spv
+naga shader.wgsl - --output-kind hlsl --dxc --entry-point fs_main > fs_main.dxil
+```
 
 ---
 

@@ -40,9 +40,9 @@ EXAMPLES
 
 OPTIONS: FLAGS vs CONFIG
   Options can be set as individual flags OR via a JSON config (--config <file> /
-  --config-json <string>), never both: passing ANY flag alongside --config is an error. In
-  config mode only the positional input/output file paths are accepted on the command line;
-  everything else lives in the JSON. Run `naga --print-config-schema` to see every config key
+  --config-json <string>), never both: passing any flag except --color alongside --config is
+  an error. In config mode only the positional input/output file paths are accepted on the
+  command line; everything else lives in the JSON. Run `naga --print-config-schema` to see every config key
   and its type — every flag has a corresponding config key, so config is a complete single
   source. Reading stdin / writing stdout via `-` works in config mode too: set the format with
   the `input_kind` / `output_kind` (and `shader_stage`) config keys, since the matching flags
@@ -51,18 +51,24 @@ OPTIONS: FLAGS vs CONFIG
 STRUCTURED OUTPUT
   --format json emits one JSON document on stdout with `diagnostics`
   (severity/message/location/labels/notes) and `reflection` (entry points, resources,
-  overrides) — intended for editor integrations and CI.
+  overrides) — intended for editor integrations and CI. --json-out <file> writes that document
+  to a file instead, so the shader can go to stdout.
 
-EXTERNAL TOOLS (must be on PATH)
+EXTERNAL TOOLS (found on PATH, or set with --spirv-val-path / --spirv-opt-path / --dxc-path)
   --spirv-val and --spirv-opt validate / optimize SPIR-V output; --dxc compiles each HLSL
-  entry point to `<hlsl-stem>.<entry-point>.dxil`.
+  entry point to `<hlsl-stem>.<entry-point>.dxil`. With stdout (`-`) output, SPIR-V hooks
+  run on a temporary file, and --dxc (which then requires --entry-point) writes the DXIL to
+  stdout instead of the HLSL.
 
 NOTES
   * Coordinate-space conversion is controlled by --keep-coordinate-space, not by spv_out.flags.
   * --task-limits and --validate-mesh-output fan out to all applicable backends; in a config,
     set the flat per-backend keys `task_dispatch_limits` / `mesh_shader_primitive_indices_clamp`.
-  * --print-config-schema omits `spv_out.capabilities` (its type has no JsonSchema impl), but
-    --config / --config-json still accept it.
+  * --entry-point also limits MSL and HLSL output to that entry point.
+  * SPIR-V input warns about unknown capabilities unless --spv-in-strict-capabilities is given
+    (also when `spv_in` is set in a config without `strict_capabilities`).
+  * The validator allows subgroup operations in all stages; restrict with the
+    `subgroup_stages` / `subgroup_operations` config keys.
   * In --format json every diagnostic is `error` or `warning`, and SPIR-V parse errors have no
     source location.
   * `--zero-initialize-workgroup-memory native` is honored only by the SPIR-V backend; the other
@@ -93,23 +99,38 @@ Options:
           
           [possible values: restrict, read-zero-skip-write, unchecked]
 
-      --block-ctx-dir <BLOCK_CTX_DIR>
-          Directory to dump the SPIR-V block context dump to
-
       --entry-point <ENTRY_POINT>
           The shader entrypoint. With `--compact`, anything unreachable from it is dropped
 
-      --profile <PROFILE>
-          GLSL profile to target, e.g. `es`, `core`, `es330`
+      --glsl-version <GLSL_VERSION>
+          GLSL version to target (`core` = core330, `es` = es310, `webgl` = WebGL 2 / ES 3.00)
+          
+          [possible values: core140, core150, core330, core400, core410, core420, core430, core440, core450, core460, es300, es310, es320, webgl]
 
-      --shader-model <SHADER_MODEL>
-          HLSL shader model, e.g. `50`, `51`, `60`..`67`
+      --hlsl-shader-model <HLSL_SHADER_MODEL>
+          HLSL shader model
+          
+          [possible values: 50, 51, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69]
 
       --hlsl-multisampled
           HLSL: the pipeline renders to multisampled attachments (disables conservative depth)
 
+      --msl-force-point-size
+          MSL: emit and force `point_size` (for vertex/mesh shaders drawing point primitives)
+
+      --glsl-multiview <GLSL_MULTIVIEW>
+          GLSL: number of views to render to with multiview
+
+      --wgsl-explicit-types
+          WGSL output: always write explicit types instead of relying on inference
+
+      --spv-in-strict-capabilities
+          SPIR-V input: reject modules declaring capabilities naga does not know, instead of warning
+
       --spirv-version <SPIRV_VERSION>
-          SPIR-V version, e.g. `1.0`, `1.4`
+          SPIR-V version
+          
+          [possible values: 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6]
 
       --shader-stage <SHADER_STAGE>
           Shader stage; derived from the file extension if unspecified. Selects the input stage for GLSL
@@ -137,7 +158,9 @@ Options:
           - comp:  GLSL compute shader
 
       --metal-version <METAL_VERSION>
-          Metal language version, e.g. `1.0`, `1.1`, `1.2`
+          Metal Shading Language version
+          
+          [possible values: 1.0, 1.1, 1.2, 2.0, 2.1, 2.2, 2.3, 2.4, 3.0, 3.1, 3.2, 4.0]
 
       --keep-coordinate-space
           Disable coordinate-space conversions where the frontend/backend supports them
@@ -213,19 +236,37 @@ Options:
           Print the JSON Schema for the config document and exit
 
       --spirv-val
-          After writing SPIR-V output, validate it with `spirv-val` (must be on PATH)
+          After writing SPIR-V output, validate it with `spirv-val`
 
       --spirv-opt
-          After writing SPIR-V output, optimize it in place with `spirv-opt -O` (must be on PATH)
+          After writing SPIR-V output, optimize it in place with `spirv-opt -O`
 
       --dxc
-          After writing HLSL output, compile each entry point to DXIL with `dxc` (must be on PATH)
+          After writing HLSL output, compile each entry point to DXIL with `dxc`
+
+      --spirv-val-path <SPIRV_VAL_PATH>
+          Path to the `spirv-val` executable (default: search PATH)
+
+      --spirv-opt-path <SPIRV_OPT_PATH>
+          Path to the `spirv-opt` executable (default: search PATH)
+
+      --dxc-path <DXC_PATH>
+          Path to the `dxc` executable (default: search PATH)
 
       --format <FORMAT>
           Output format for diagnostics and reflection: `text` (human, default) or `json`
           
           [default: text]
           [possible values: text, json]
+
+      --json-out <JSON_OUT>
+          Write the `--format json` document to this file instead of stdout (implies `--format json`), so the shader itself can be written to stdout
+
+      --color <COLOR>
+          When to use colors in diagnostics and help. Allowed together with --config
+          
+          [default: auto]
+          [possible values: auto, always, never]
 
   -h, --help
           Print help (see a summary with '-h')

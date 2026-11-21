@@ -1,19 +1,37 @@
-//! External tool hooks: spirv-val, spirv-opt, dxc (subprocesses on PATH).
+//! External tool hooks: spirv-val, spirv-opt, dxc (subprocesses).
 
 use anyhow::{anyhow, bail, Context as _};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Hooks {
     pub spirv_val: bool,
     pub spirv_opt: bool,
     pub dxc: bool,
+    pub spirv_val_path: Option<PathBuf>,
+    pub spirv_opt_path: Option<PathBuf>,
+    pub dxc_path: Option<PathBuf>,
 }
 
 impl Hooks {
     pub fn any(&self) -> bool {
         self.spirv_val || self.spirv_opt || self.dxc
+    }
+
+    /// Run the requested SPIR-V hooks on the SPIR-V file at `spv_path`.
+    pub fn run_spirv(&self, spv_path: &Path) -> anyhow::Result<()> {
+        if self.spirv_opt {
+            run_spirv_opt(&find_tool("spirv-opt", &self.spirv_opt_path)?, spv_path)?;
+        }
+        if self.spirv_val {
+            run_spirv_val(&find_tool("spirv-val", &self.spirv_val_path)?, spv_path)?;
+        }
+        Ok(())
+    }
+
+    pub fn dxc_tool(&self) -> anyhow::Result<PathBuf> {
+        find_tool("dxc", &self.dxc_path)
     }
 }
 
@@ -31,16 +49,21 @@ pub fn dxc_profile(stage: naga::ShaderStage, model: naga::back::hlsl::ShaderMode
     format!("{prefix}_{}", model.to_str())
 }
 
-/// Locate a tool on PATH or produce an actionable error.
-fn find_tool(name: &str) -> anyhow::Result<std::path::PathBuf> {
+/// Use the explicit tool path if given, else locate the tool on PATH.
+fn find_tool(name: &str, explicit: &Option<PathBuf>) -> anyhow::Result<PathBuf> {
+    if let Some(path) = explicit {
+        return Ok(path.clone());
+    }
     which::which(name).map_err(|_| {
-        anyhow!("`{name}` was not found on PATH; install it or remove the corresponding flag")
+        anyhow!(
+            "`{name}` was not found on PATH; install it, pass --{name}-path, or remove the \
+             corresponding flag"
+        )
     })
 }
 
-pub fn run_spirv_val(spv_path: &Path) -> anyhow::Result<()> {
-    let tool = find_tool("spirv-val")?;
-    let output = Command::new(&tool)
+fn run_spirv_val(tool: &Path, spv_path: &Path) -> anyhow::Result<()> {
+    let output = Command::new(tool)
         .arg(spv_path)
         .output()
         .with_context(|| format!("failed to run spirv-val ({})", tool.display()))?;
@@ -54,10 +77,9 @@ pub fn run_spirv_val(spv_path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn run_spirv_opt(spv_path: &Path) -> anyhow::Result<()> {
-    let tool = find_tool("spirv-opt")?;
+fn run_spirv_opt(tool: &Path, spv_path: &Path) -> anyhow::Result<()> {
     // Optimize in place: read from spv_path, write back to spv_path.
-    let output = Command::new(&tool)
+    let output = Command::new(tool)
         .arg(spv_path)
         .arg("-O")
         .arg("-o")
@@ -74,39 +96,32 @@ pub fn run_spirv_opt(spv_path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Compile one entry point of the HLSL file at `hlsl_path` to DXIL at `out`.
 pub fn run_dxc(
+    tool: &Path,
     hlsl_path: &Path,
-    entry_points: &[(String, naga::ShaderStage)],
+    name: &str,
+    stage: naga::ShaderStage,
     model: naga::back::hlsl::ShaderModel,
+    out: &Path,
 ) -> anyhow::Result<()> {
-    let tool = find_tool("dxc")?;
-    if entry_points.is_empty() {
+    let profile = dxc_profile(stage, model);
+    let output = Command::new(tool)
+        .arg(hlsl_path)
+        .arg("-T")
+        .arg(&profile)
+        .arg("-E")
+        .arg(name)
+        .arg("-Fo")
+        .arg(out)
+        .output()
+        .with_context(|| format!("failed to run dxc ({})", tool.display()))?;
+    if !output.status.success() {
         bail!(
-            "--dxc: no entry points to compile in {}",
-            hlsl_path.display()
+            "dxc failed for entry `{name}` ({profile}) in {}:\n{}",
+            hlsl_path.display(),
+            String::from_utf8_lossy(&output.stderr)
         );
-    }
-    for (name, stage) in entry_points {
-        let profile = dxc_profile(*stage, model);
-        // Output: <hlsl_path stem>.<entry>.dxil next to the HLSL file.
-        let out = hlsl_path.with_extension(format!("{name}.dxil"));
-        let output = Command::new(&tool)
-            .arg(hlsl_path)
-            .arg("-T")
-            .arg(&profile)
-            .arg("-E")
-            .arg(name)
-            .arg("-Fo")
-            .arg(&out)
-            .output()
-            .with_context(|| format!("failed to run dxc ({})", tool.display()))?;
-        if !output.status.success() {
-            bail!(
-                "dxc failed for entry `{name}` ({profile}) in {}:\n{}",
-                hlsl_path.display(),
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
     }
     Ok(())
 }

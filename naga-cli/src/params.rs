@@ -18,6 +18,12 @@ pub struct Parameters<'a> {
     pub glsl: naga::back::glsl::Options,
     pub hlsl: naga::back::hlsl::Options,
     pub hlsl_multisampled: bool,
+    pub msl_pipeline: crate::config::MslPipeline,
+    pub glsl_multiview: Option<core::num::NonZeroU32>,
+    pub wgsl_explicit_types: bool,
+    /// Subgroup stages/operations the validator accepts; `None` means all.
+    pub subgroup_stages: Option<naga::valid::ShaderStages>,
+    pub subgroup_operations: Option<naga::valid::SubgroupOperationSet>,
     pub input_kind: Option<InputKind>,
     pub output_kind: Option<crate::cli::OutputKind>,
     pub shader_stage: Option<ShaderStageArg>,
@@ -31,12 +37,33 @@ pub struct Parameters<'a> {
     pub spirv_val: bool,
     pub spirv_opt: bool,
     pub dxc: bool,
+    pub spirv_val_path: Option<std::path::PathBuf>,
+    pub spirv_opt_path: Option<std::path::PathBuf>,
+    pub dxc_path: Option<std::path::PathBuf>,
     /// Output format for diagnostics/reflection (text or json).
     pub format: crate::cli::OutputFormat,
+    /// Write the JSON document to this file instead of stdout.
+    pub json_out: Option<String>,
     /// Write the pre-compaction IR to this path (implies compaction).
     pub before_compaction: Option<String>,
     /// Bulk-validation mode: treat all positional files as inputs to validate.
     pub bulk_validate: bool,
+}
+
+impl Parameters<'_> {
+    pub fn validator(&self, capabilities: naga::valid::Capabilities) -> naga::valid::Validator {
+        let mut validator = naga::valid::Validator::new(self.validation_flags, capabilities);
+        validator
+            .subgroup_stages(
+                self.subgroup_stages
+                    .unwrap_or(naga::valid::ShaderStages::all()),
+            )
+            .subgroup_operations(
+                self.subgroup_operations
+                    .unwrap_or(naga::valid::SubgroupOperationSet::all()),
+            );
+        validator
+    }
 }
 
 pub fn build_parameters(args: &Args) -> anyhow::Result<Parameters<'static>> {
@@ -72,18 +99,21 @@ pub fn build_parameters(args: &Args) -> anyhow::Result<Parameters<'static>> {
 
     params.spv_in = naga::front::spv::Options {
         adjust_coordinate_space: !args.keep_coordinate_space,
-        strict_capabilities: false,
-        block_ctx_dump_prefix: args.block_ctx_dir.clone(),
+        strict_capabilities: args.spv_in_strict_capabilities,
+        block_ctx_dump_prefix: args.spv_in_block_ctx_dir.clone(),
     };
 
     params.entry_point.clone_from(&args.entry_point);
-    if let Some(version) = args.profile {
-        params.glsl.version = version;
+    if let Some(version) = args.glsl_version {
+        params.glsl.version = version.to_version();
     }
-    if let Some(ref model) = args.shader_model {
-        params.hlsl.shader_model = *model;
+    if let Some(model) = args.hlsl_shader_model {
+        params.hlsl.shader_model = model.to_model();
     }
     params.hlsl_multisampled = args.hlsl_multisampled;
+    params.msl_pipeline.allow_and_force_point_size = args.msl_force_point_size;
+    params.glsl_multiview = args.glsl_multiview;
+    params.wgsl_explicit_types = args.wgsl_explicit_types;
     if let Some(version) = args.metal_version {
         params.msl.lang_version = version;
     }
@@ -109,7 +139,11 @@ pub fn build_parameters(args: &Args) -> anyhow::Result<Parameters<'static>> {
     params.spirv_val = args.spirv_val;
     params.spirv_opt = args.spirv_opt;
     params.dxc = args.dxc;
+    params.spirv_val_path.clone_from(&args.spirv_val_path);
+    params.spirv_opt_path.clone_from(&args.spirv_opt_path);
+    params.dxc_path.clone_from(&args.dxc_path);
     params.format = args.format;
+    params.json_out.clone_from(&args.json_out);
     params.bulk_validate = args.bulk_validate;
     params.capabilities = args.capabilities;
 

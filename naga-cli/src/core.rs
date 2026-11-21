@@ -2,7 +2,7 @@
 
 use crate::cli::{Args, InputKind, OutputFormat};
 use crate::error::CliError;
-use crate::hooks::{run_dxc, run_spirv_opt, run_spirv_val, Hooks};
+use crate::hooks::{run_dxc, Hooks};
 use crate::output::{
     glsl_parse_errors_to_diagnostics, spv_error_to_diagnostic, validation_error_to_diagnostic,
     wgsl_parse_error_to_diagnostic, Diagnostic, JsonOutput, Reflection,
@@ -37,7 +37,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
         return Ok(true);
     }
 
-    let is_json = params.format == OutputFormat::Json;
+    let is_json = params.format == OutputFormat::Json || params.json_out.is_some();
 
     let mut files = args.files.iter();
 
@@ -97,7 +97,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
             diagnostics: json_diagnostics,
             reflection: None,
         };
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        emit_json(&out, params)?;
         return Ok(false);
     };
 
@@ -131,7 +131,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
                     notes: Vec::new(),
                 });
             } else {
-                eprintln!("warning: {msg}");
+                crate::error::warn(&msg);
             }
             spv_out_with_debug = None;
         }
@@ -147,36 +147,42 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
         spirv_val: params.spirv_val,
         spirv_opt: params.spirv_opt,
         dxc: params.dxc,
+        spirv_val_path: params.spirv_val_path.clone(),
+        spirv_opt_path: params.spirv_opt_path.clone(),
+        dxc_path: params.dxc_path.clone(),
     };
 
     // Constraints on stdout (`-`) output.
     let writes_stdout = output_paths.clone().any(|p| p == "-");
-    if writes_stdout && hooks.any() {
-        return Err(anyhow!(
-            "tool hooks (--dxc/--spirv-opt/--spirv-val) require a file output, not stdout (`-`)"
-        ));
-    }
-    if writes_stdout && is_json {
+    if writes_stdout && is_json && params.json_out.is_none() {
         return Err(anyhow!(
             "cannot write shader output to stdout (`-`) together with --format json \
-             (both use stdout)"
+             (both use stdout); pass --json-out <file> to write the JSON elsewhere"
         ));
     }
 
     if hooks.any() {
-        let exts: Vec<&str> = output_paths
+        let exts: Vec<String> = output_paths
             .clone()
-            .filter_map(|p| Path::new(p).extension().and_then(|e| e.to_str()))
+            .filter_map(|p| resolve_output_ext(p, params.output_kind).ok())
             .collect();
-        let has_spv = exts.contains(&"spv") || exts.contains(&"spirv");
+        let has_spv = exts.iter().any(|e| e == "spv" || e == "spirv");
         if hooks.spirv_val && !has_spv {
-            return Err(anyhow!("--spirv-val requires a SPIR-V (.spv) output file"));
+            return Err(anyhow!("--spirv-val requires a SPIR-V (.spv) output"));
         }
         if hooks.spirv_opt && !has_spv {
-            return Err(anyhow!("--spirv-opt requires a SPIR-V (.spv) output file"));
+            return Err(anyhow!("--spirv-opt requires a SPIR-V (.spv) output"));
         }
-        if hooks.dxc && !exts.contains(&"hlsl") {
-            return Err(anyhow!("--dxc requires an HLSL (.hlsl) output file"));
+        if hooks.dxc && !exts.iter().any(|e| e == "hlsl") {
+            return Err(anyhow!("--dxc requires an HLSL (.hlsl) output"));
+        }
+        let hlsl_to_stdout =
+            writes_stdout && params.output_kind.map(crate::cli::OutputKind::as_ext) == Some("hlsl");
+        if hooks.dxc && hlsl_to_stdout && params.entry_point.is_none() {
+            return Err(anyhow!(
+                "--dxc with stdout (`-`) output requires --entry-point, since only one DXIL \
+                 blob can be written to stdout"
+            ));
         }
     }
 
@@ -201,11 +207,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
         });
 
     // Validate the IR before compaction.
-    let info = match naga::valid::Validator::new(params.validation_flags, validation_caps)
-        .subgroup_stages(naga::valid::ShaderStages::all())
-        .subgroup_operations(naga::valid::SubgroupOperationSet::all())
-        .validate(&module)
-    {
+    let info = match params.validator(validation_caps).validate(&module) {
         Ok(info) => Some(info),
         Err(error) => {
             if is_json {
@@ -217,7 +219,11 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
                 // Validation failure is not fatal. Just report the error.
                 if let Some(input) = &input_text {
                     let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                    error.emit_to_stderr_with_path(input, filename.unwrap_or("input"));
+                    error.emit_to_writer_with_path(
+                        &mut crate::error::stderr(),
+                        input,
+                        filename.unwrap_or("input"),
+                    );
                 } else {
                     crate::error::print_err(&error);
                 }
@@ -254,9 +260,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
             naga::compact::compact(&mut module, KeepUnused::No);
 
             // Re-validate the IR after compaction.
-            match naga::valid::Validator::new(params.validation_flags, validation_caps)
-                .validate(&module)
-            {
+            match params.validator(validation_caps).validate(&module) {
                 Ok(info) => Some(info),
                 Err(error) => {
                     if is_json {
@@ -268,7 +272,11 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
                         eprintln!("Error validating compacted module:");
                         if let Some(input) = &input_text {
                             let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                            error.emit_to_stderr_with_path(input, filename.unwrap_or("input"));
+                            error.emit_to_writer_with_path(
+                                &mut crate::error::stderr(),
+                                input,
+                                filename.unwrap_or("input"),
+                            );
                         } else {
                             crate::error::print_err(&error);
                         }
@@ -301,7 +309,7 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
                 diagnostics: json_diagnostics,
                 reflection: json_reflection,
             };
-            println!("{}", serde_json::to_string_pretty(&out)?);
+            emit_json(&out, params)?;
             return Ok(success);
         } else if info.is_some() {
             println!("Validation successful");
@@ -353,11 +361,22 @@ pub fn run(args: &Args, params: &mut Parameters) -> anyhow::Result<bool> {
             diagnostics: json_diagnostics,
             reflection: json_reflection,
         };
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        emit_json(&out, params)?;
         return Ok(success);
     }
 
     Ok(true)
+}
+
+/// Write the JSON document to `--json-out`, or to stdout.
+fn emit_json(out: &JsonOutput, params: &Parameters) -> anyhow::Result<()> {
+    let text = serde_json::to_string_pretty(out)?;
+    match params.json_out {
+        Some(ref path) => fs::write(path, format!("{text}\n"))
+            .with_context(|| format!("Failed to write --json-out file: {path}"))?,
+        None => println!("{text}"),
+    }
+    Ok(())
 }
 
 fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow::Result<Parsed> {
@@ -398,11 +417,10 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
                     language: naga::back::spv::SourceLanguage::WGSL,
                 },
                 Err(ref e) => {
-                    let message = anyhow!(
-                        "Could not parse WGSL:\n{}",
-                        e.emit_to_string_with_path(&input, &input_path.display().to_string())
-                    );
-                    return Err(message);
+                    let path = input_path.display().to_string();
+                    let rendered =
+                        crate::error::render(|w| e.emit_to_writer_with_path(w, &input, &path));
+                    return Err(anyhow!("Could not parse WGSL:\n{rendered}"));
                 }
             }
         }
@@ -441,10 +459,10 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
                         .file_name()
                         .and_then(std::ffi::OsStr::to_str)
                         .unwrap_or("glsl");
-                    anyhow!(
-                        "Could not parse GLSL:\n{}",
-                        error.emit_to_string_with_path(&input, filename)
-                    )
+                    let rendered = crate::error::render(|w| {
+                        error.emit_to_writer_with_path(w, &input, filename)
+                    });
+                    anyhow!("Could not parse GLSL:\n{rendered}")
                 })?;
             Parsed {
                 module,
@@ -703,7 +721,13 @@ fn write_output(
                 &params.overrides,
             )?;
 
-            let pipeline_options = msl::PipelineOptions::default();
+            let pipeline_options = msl::PipelineOptions {
+                entry_point: entry_point.map(|(stage, name)| (stage, name.to_owned())),
+                allow_and_force_point_size: params.msl_pipeline.allow_and_force_point_size,
+                vertex_pulling_transform: params.msl_pipeline.vertex_pulling_transform,
+                vertex_buffer_mappings: params.msl_pipeline.vertex_buffer_mappings.clone(),
+                ..Default::default()
+            };
             let (msl, _) = msl::write_string(&module, &info, &options, &pipeline_options)?;
             write_out(output_path, to_stdout, msl.as_bytes())?;
         }
@@ -736,12 +760,19 @@ fn write_output(
                     v
                 });
 
-            write_out(output_path, to_stdout, bytes.as_slice())?;
-            if hooks.spirv_opt {
-                run_spirv_opt(Path::new(output_path))?;
-            }
-            if hooks.spirv_val {
-                run_spirv_val(Path::new(output_path))?;
+            if hooks.spirv_opt || hooks.spirv_val {
+                if to_stdout {
+                    // The tools work on files, so round-trip stdout output through a tempfile.
+                    let tmp = tempfile::Builder::new().suffix(".spv").tempfile()?;
+                    fs::write(tmp.path(), &bytes)?;
+                    hooks.run_spirv(tmp.path())?;
+                    write_out(output_path, true, &fs::read(tmp.path())?)?;
+                } else {
+                    write_out(output_path, false, &bytes)?;
+                    hooks.run_spirv(Path::new(output_path))?;
+                }
+            } else {
+                write_out(output_path, to_stdout, bytes.as_slice())?;
             }
         }
         stage @ ("vert" | "frag" | "comp") => {
@@ -771,7 +802,7 @@ fn write_output(
                                 notes: Vec::new(),
                             });
                         } else {
-                            eprintln!("warning: {msg}");
+                            crate::error::warn(&msg);
                         }
                     }
                     (stage, name.to_string())
@@ -782,7 +813,7 @@ fn write_output(
             let pipeline_options = glsl::PipelineOptions {
                 entry_point: ep_name,
                 shader_stage: ep_stage,
-                multiview: None,
+                multiview: params.glsl_multiview,
             };
 
             let info = info.as_ref().ok_or(CliError(
@@ -832,24 +863,54 @@ fn write_output(
 
             let mut buffer = String::new();
             let pipeline_options = hlsl::PipelineOptions {
+                entry_point: entry_point.map(|(stage, name)| (stage, name.to_owned())),
                 multisampled: params.hlsl_multisampled,
-                ..Default::default()
             };
             let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl, &pipeline_options);
             let reflection = writer.write(&module, &info, None)?;
             // Drop the writer borrow on `buffer` before we consume it.
             drop(writer);
-            write_out(output_path, to_stdout, buffer.as_bytes())?;
-            if hooks.dxc {
-                let entries: Vec<(String, naga::ShaderStage)> = reflection
-                    .entry_point_names
-                    .iter()
-                    .zip(module.entry_points.iter())
-                    .filter_map(|(name_res, ep)| {
-                        name_res.as_ref().ok().map(|n| (n.clone(), ep.stage))
-                    })
-                    .collect();
-                run_dxc(Path::new(output_path), &entries, params.hlsl.shader_model)?;
+            if !hooks.dxc {
+                write_out(output_path, to_stdout, buffer.as_bytes())?;
+                return Ok(());
+            }
+
+            // `entry_point_names` lines up with the entry points the writer emitted: all of
+            // them, or only the one selected by `--entry-point`.
+            let written = module.entry_points.iter().filter(|ep| {
+                entry_point.is_none_or(|(stage, name)| ep.stage == stage && ep.name == name)
+            });
+            let entries: Vec<(String, naga::ShaderStage)> = reflection
+                .entry_point_names
+                .iter()
+                .zip(written)
+                .filter_map(|(name_res, ep)| name_res.as_ref().ok().map(|n| (n.clone(), ep.stage)))
+                .collect();
+            if entries.is_empty() {
+                return Err(anyhow!(
+                    "--dxc: no entry points to compile in {output_path}"
+                ));
+            }
+            let tool = hooks.dxc_tool()?;
+            let model = params.hlsl.shader_model;
+            if to_stdout {
+                // Only one entry point is written (checked by the caller); its DXIL goes to
+                // stdout instead of the HLSL.
+                let dir = tempfile::tempdir()?;
+                let hlsl_path = dir.path().join("shader.hlsl");
+                let dxil_path = dir.path().join("shader.dxil");
+                fs::write(&hlsl_path, buffer.as_bytes())?;
+                let (name, stage) = &entries[0];
+                run_dxc(&tool, &hlsl_path, name, *stage, model, &dxil_path)?;
+                write_out(output_path, true, &fs::read(&dxil_path)?)?;
+            } else {
+                write_out(output_path, false, buffer.as_bytes())?;
+                let hlsl_path = Path::new(output_path);
+                for (name, stage) in &entries {
+                    // Output: <hlsl_path stem>.<entry>.dxil next to the HLSL file.
+                    let out = hlsl_path.with_extension(format!("{name}.dxil"));
+                    run_dxc(&tool, hlsl_path, name, *stage, model, &out)?;
+                }
             }
         }
         "wgsl" => {
@@ -861,12 +922,16 @@ fn write_output(
                     "Generating wgsl output requires validation to \
                      succeed, and it failed in a previous step",
                 ))?,
-                wgsl::WriterFlags::empty(),
+                if params.wgsl_explicit_types {
+                    wgsl::WriterFlags::EXPLICIT_TYPES
+                } else {
+                    wgsl::WriterFlags::empty()
+                },
             )?;
             write_out(output_path, to_stdout, wgsl.as_bytes())?;
         }
         other => {
-            eprintln!("Unknown output extension: {other}");
+            crate::error::warn(&format!("Unknown output extension: {other}"));
         }
     }
 
@@ -893,17 +958,18 @@ fn bulk_validate(files: &[String], params: &Parameters) -> anyhow::Result<()> {
             }
         };
 
-        let mut validator =
-            naga::valid::Validator::new(params.validation_flags, params.capabilities);
-        validator.subgroup_stages(naga::valid::ShaderStages::all());
-        validator.subgroup_operations(naga::valid::SubgroupOperationSet::all());
+        let mut validator = params.validator(params.capabilities);
 
         if let Err(error) = validator.validate(&module) {
             invalid.push(input_path.clone());
             eprintln!("Error validating {input_path}:");
             if let Some(input) = &input_text {
                 let filename = path.file_name().and_then(std::ffi::OsStr::to_str);
-                error.emit_to_stderr_with_path(input, filename.unwrap_or("input"));
+                error.emit_to_writer_with_path(
+                    &mut crate::error::stderr(),
+                    input,
+                    filename.unwrap_or("input"),
+                );
             } else {
                 crate::error::print_err(&error);
             }

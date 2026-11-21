@@ -76,9 +76,17 @@
       "default": null
     },
     "dxc": {
-      "description": "After writing HLSL output, compile each entry point to DXIL with `dxc` (must be on PATH).",
+      "description": "After writing HLSL output, compile each entry point to DXIL with `dxc`.",
       "type": [
         "boolean",
+        "null"
+      ],
+      "default": null
+    },
+    "dxc_path": {
+      "description": "Path to the `dxc` executable (default: search PATH).",
+      "type": [
+        "string",
         "null"
       ],
       "default": null
@@ -110,6 +118,16 @@
         "null"
       ],
       "default": null
+    },
+    "glsl_multiview": {
+      "description": "GLSL: number of views to render to with multiview.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "default": null,
+      "minimum": 1
     },
     "glsl_out": {
       "description": "Options for the GLSL backend.",
@@ -155,6 +173,14 @@
       ],
       "default": null
     },
+    "json_out": {
+      "description": "Write the JSON document to this file instead of stdout (implies `format: \"json\"`).",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
     "keep_coordinate_space": {
       "description": "If `true`, suppress coordinate-space conversions in frontends/backends.",
       "type": [
@@ -168,6 +194,18 @@
       "anyOf": [
         {
           "$ref": "#/$defs/Options3"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "msl_pipeline": {
+      "description": "Per-pipeline MSL options.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MslPipeline"
         },
         {
           "type": "null"
@@ -212,17 +250,33 @@
       "default": null
     },
     "spirv_opt": {
-      "description": "After writing SPIR-V output, optimize it in place with `spirv-opt` (must be on PATH).",
+      "description": "After writing SPIR-V output, optimize it in place with `spirv-opt`.",
       "type": [
         "boolean",
         "null"
       ],
       "default": null
     },
+    "spirv_opt_path": {
+      "description": "Path to the `spirv-opt` executable (default: search PATH).",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
     "spirv_val": {
-      "description": "After writing SPIR-V output, validate it with `spirv-val` (must be on PATH).",
+      "description": "After writing SPIR-V output, validate it with `spirv-val`.",
       "type": [
         "boolean",
+        "null"
+      ],
+      "default": null
+    },
+    "spirv_val_path": {
+      "description": "Path to the `spirv-val` executable (default: search PATH).",
+      "type": [
+        "string",
         "null"
       ],
       "default": null
@@ -251,6 +305,22 @@
       ],
       "default": null
     },
+    "subgroup_operations": {
+      "description": "Subgroup operations the validator allows, as bitflag names (e.g. `\"BASIC | VOTE\"`).\nDefaults to all operations.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "subgroup_stages": {
+      "description": "Shader stages in which the validator allows subgroup operations, as bitflag names\n(e.g. `\"COMPUTE | FRAGMENT\"`). Defaults to all stages.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
     "validate": {
       "description": "Bitmask of [`naga::valid::ValidationFlags`]. `0` disables validation.",
       "type": [
@@ -261,6 +331,14 @@
       "default": null,
       "maximum": 255,
       "minimum": 0
+    },
+    "wgsl_explicit_types": {
+      "description": "WGSL output: always write explicit types instead of relying on inference.",
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "default": null
     }
   },
   "additionalProperties": false,
@@ -273,6 +351,33 @@
         "ClampToEdge",
         "ClampToZero",
         "ClampToBorder"
+      ]
+    },
+    "AttributeMapping": {
+      "description": "A mapping of vertex buffers and their attributes to shader\nlocations.",
+      "type": "object",
+      "properties": {
+        "format": {
+          "description": "Format code to help us unpack the attribute into the type\nused by the shader. Codes correspond to a 0-based index of\n<https://gpuweb.github.io/gpuweb/#enumdef-gpuvertexformat>.\nThe conversion process is described by\n<https://gpuweb.github.io/gpuweb/#vertex-processing>.",
+          "$ref": "#/$defs/VertexFormat"
+        },
+        "offset": {
+          "description": "Offset in bytes from start of vertex buffer structure",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "shader_location": {
+          "description": "Shader location associated with this attribute",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "shader_location",
+        "offset",
+        "format"
       ]
     },
     "BindExternalTextureTarget": {
@@ -684,6 +789,31 @@
         "wgsl"
       ]
     },
+    "MslPipeline": {
+      "description": "The per-pipeline MSL options naga-cli can set. Mirrors the corresponding fields of\n`naga::back::msl::PipelineOptions`; its `entry_point` comes from `entry_point`.",
+      "type": "object",
+      "properties": {
+        "allow_and_force_point_size": {
+          "description": "Allow `BuiltIn::PointSize` and inject it if it doesn't exist.",
+          "type": "boolean",
+          "default": false
+        },
+        "vertex_buffer_mappings": {
+          "description": "Vertex buffer layouts used by the vertex pulling transform.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/VertexBufferMapping"
+          }
+        },
+        "vertex_pulling_transform": {
+          "description": "Receive vertex buffers as arguments and fetch attributes manually (\"vertex pulling\").",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
     "OffsetsBindTarget": {
       "description": "BindTarget for dynamic storage buffer offsets",
       "type": "object",
@@ -753,6 +883,17 @@
             "buffer": "Unchecked",
             "image_load": "Unchecked",
             "index": "Unchecked"
+          }
+        },
+        "capabilities": {
+          "description": "If given, the set of capabilities modules are allowed to use. Code that\nrequires capabilities beyond these is rejected with an error.\n\nIf this is `None`, all capabilities are permitted.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "default": null,
+          "items": {
+            "type": "string"
           }
         },
         "emit_int_div_checks": {
@@ -1298,6 +1439,285 @@
           "required": [
             "Embedded"
           ]
+        }
+      ]
+    },
+    "VertexBufferMapping": {
+      "description": "A description of a vertex buffer with all the information we\nneed to address the attributes within it.",
+      "type": "object",
+      "properties": {
+        "attributes": {
+          "description": "Vec of the attributes within the structure",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AttributeMapping"
+          }
+        },
+        "id": {
+          "description": "Shader location associated with this buffer",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "step_mode": {
+          "description": "Vertex buffer step mode",
+          "$ref": "#/$defs/VertexBufferStepMode"
+        },
+        "stride": {
+          "description": "Size of the structure in bytes",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "stride",
+        "step_mode",
+        "attributes"
+      ]
+    },
+    "VertexBufferStepMode": {
+      "description": "Defines how to advance the data in vertex buffers.",
+      "type": "string",
+      "enum": [
+        "Constant",
+        "ByVertex",
+        "ByInstance"
+      ]
+    },
+    "VertexFormat": {
+      "description": "Corresponds to [WebGPU `GPUVertexFormat`](\nhttps://gpuweb.github.io/gpuweb/#enumdef-gpuvertexformat).",
+      "oneOf": [
+        {
+          "description": "One unsigned byte (u8). `u32` in shaders.",
+          "type": "string",
+          "const": "uint8"
+        },
+        {
+          "description": "Two unsigned bytes (u8). `vec2<u32>` in shaders.",
+          "type": "string",
+          "const": "uint8x2"
+        },
+        {
+          "description": "Four unsigned bytes (u8). `vec4<u32>` in shaders.",
+          "type": "string",
+          "const": "uint8x4"
+        },
+        {
+          "description": "One signed byte (i8). `i32` in shaders.",
+          "type": "string",
+          "const": "sint8"
+        },
+        {
+          "description": "Two signed bytes (i8). `vec2<i32>` in shaders.",
+          "type": "string",
+          "const": "sint8x2"
+        },
+        {
+          "description": "Four signed bytes (i8). `vec4<i32>` in shaders.",
+          "type": "string",
+          "const": "sint8x4"
+        },
+        {
+          "description": "One unsigned byte (u8). [0, 255] converted to float [0, 1] `f32` in shaders.",
+          "type": "string",
+          "const": "unorm8"
+        },
+        {
+          "description": "Two unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec2<f32>` in shaders.",
+          "type": "string",
+          "const": "unorm8x2"
+        },
+        {
+          "description": "Four unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec4<f32>` in shaders.",
+          "type": "string",
+          "const": "unorm8x4"
+        },
+        {
+          "description": "One signed byte (i8). [&minus;127, 127] converted to float [&minus;1, 1] `f32` in shaders.",
+          "type": "string",
+          "const": "snorm8"
+        },
+        {
+          "description": "Two signed bytes (i8). [&minus;127, 127] converted to float [&minus;1, 1] `vec2<f32>` in shaders.",
+          "type": "string",
+          "const": "snorm8x2"
+        },
+        {
+          "description": "Four signed bytes (i8). [&minus;127, 127] converted to float [&minus;1, 1] `vec4<f32>` in shaders.",
+          "type": "string",
+          "const": "snorm8x4"
+        },
+        {
+          "description": "One unsigned short (u16). `u32` in shaders.",
+          "type": "string",
+          "const": "uint16"
+        },
+        {
+          "description": "Two unsigned shorts (u16). `vec2<u32>` in shaders.",
+          "type": "string",
+          "const": "uint16x2"
+        },
+        {
+          "description": "Four unsigned shorts (u16). `vec4<u32>` in shaders.",
+          "type": "string",
+          "const": "uint16x4"
+        },
+        {
+          "description": "One signed short (i16). `i32` in shaders.",
+          "type": "string",
+          "const": "sint16"
+        },
+        {
+          "description": "Two signed shorts (i16). `vec2<i32>` in shaders.",
+          "type": "string",
+          "const": "sint16x2"
+        },
+        {
+          "description": "Four signed shorts (i16). `vec4<i32>` in shaders.",
+          "type": "string",
+          "const": "sint16x4"
+        },
+        {
+          "description": "One unsigned short (u16). [0, 65535] converted to float [0, 1] `f32` in shaders.",
+          "type": "string",
+          "const": "unorm16"
+        },
+        {
+          "description": "Two unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec2<f32>` in shaders.",
+          "type": "string",
+          "const": "unorm16x2"
+        },
+        {
+          "description": "Four unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec4<f32>` in shaders.",
+          "type": "string",
+          "const": "unorm16x4"
+        },
+        {
+          "description": "One signed short (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `f32` in shaders.",
+          "type": "string",
+          "const": "snorm16"
+        },
+        {
+          "description": "Two signed shorts (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `vec2<f32>` in shaders.",
+          "type": "string",
+          "const": "snorm16x2"
+        },
+        {
+          "description": "Four signed shorts (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `vec4<f32>` in shaders.",
+          "type": "string",
+          "const": "snorm16x4"
+        },
+        {
+          "description": "One half-precision float (no Rust equiv). `f32` in shaders.",
+          "type": "string",
+          "const": "float16"
+        },
+        {
+          "description": "Two half-precision floats (no Rust equiv). `vec2<f32>` in shaders.",
+          "type": "string",
+          "const": "float16x2"
+        },
+        {
+          "description": "Four half-precision floats (no Rust equiv). `vec4<f32>` in shaders.",
+          "type": "string",
+          "const": "float16x4"
+        },
+        {
+          "description": "One single-precision float (f32). `f32` in shaders.",
+          "type": "string",
+          "const": "float32"
+        },
+        {
+          "description": "Two single-precision floats (f32). `vec2<f32>` in shaders.",
+          "type": "string",
+          "const": "float32x2"
+        },
+        {
+          "description": "Three single-precision floats (f32). `vec3<f32>` in shaders.",
+          "type": "string",
+          "const": "float32x3"
+        },
+        {
+          "description": "Four single-precision floats (f32). `vec4<f32>` in shaders.",
+          "type": "string",
+          "const": "float32x4"
+        },
+        {
+          "description": "One unsigned int (u32). `u32` in shaders.",
+          "type": "string",
+          "const": "uint32"
+        },
+        {
+          "description": "Two unsigned ints (u32). `vec2<u32>` in shaders.",
+          "type": "string",
+          "const": "uint32x2"
+        },
+        {
+          "description": "Three unsigned ints (u32). `vec3<u32>` in shaders.",
+          "type": "string",
+          "const": "uint32x3"
+        },
+        {
+          "description": "Four unsigned ints (u32). `vec4<u32>` in shaders.",
+          "type": "string",
+          "const": "uint32x4"
+        },
+        {
+          "description": "One signed int (i32). `i32` in shaders.",
+          "type": "string",
+          "const": "sint32"
+        },
+        {
+          "description": "Two signed ints (i32). `vec2<i32>` in shaders.",
+          "type": "string",
+          "const": "sint32x2"
+        },
+        {
+          "description": "Three signed ints (i32). `vec3<i32>` in shaders.",
+          "type": "string",
+          "const": "sint32x3"
+        },
+        {
+          "description": "Four signed ints (i32). `vec4<i32>` in shaders.",
+          "type": "string",
+          "const": "sint32x4"
+        },
+        {
+          "description": "One double-precision float (f64). `f32` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].\n\n[`Features::VERTEX_ATTRIBUTE_64BIT`]: ../wgpu/struct.Features.html#associatedconstant.VERTEX_ATTRIBUTE_64BIT",
+          "type": "string",
+          "const": "float64"
+        },
+        {
+          "description": "Two double-precision floats (f64). `vec2<f32>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].\n\n[`Features::VERTEX_ATTRIBUTE_64BIT`]: ../wgpu/struct.Features.html#associatedconstant.VERTEX_ATTRIBUTE_64BIT",
+          "type": "string",
+          "const": "float64x2"
+        },
+        {
+          "description": "Three double-precision floats (f64). `vec3<f32>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].\n\n[`Features::VERTEX_ATTRIBUTE_64BIT`]: ../wgpu/struct.Features.html#associatedconstant.VERTEX_ATTRIBUTE_64BIT",
+          "type": "string",
+          "const": "float64x3"
+        },
+        {
+          "description": "Four double-precision floats (f64). `vec4<f32>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].\n\n[`Features::VERTEX_ATTRIBUTE_64BIT`]: ../wgpu/struct.Features.html#associatedconstant.VERTEX_ATTRIBUTE_64BIT",
+          "type": "string",
+          "const": "float64x4"
+        },
+        {
+          "description": "Three unsigned 10-bit integers and one 2-bit integer, packed into a 32-bit integer (u32). [0, 1023] and [0, 3] converted to float [0, 1] `vec4<f32>` in shaders.",
+          "type": "string",
+          "const": "unorm10-10-10-2"
+        },
+        {
+          "description": "Four unsigned 8-bit integers (u8) in BGRA. [0, 255] converted to float [0, 1] `vec4<f32>` RGBA in shaders.",
+          "type": "string",
+          "const": "unorm8x4-bgra"
+        },
+        {
+          "description": "Three signed 10-bit integers and one 2-bit integer, packed into a 32-bit integer (u32). [&minus;511, 511] and [&minus;1, 1] converted to float [&minus;1, 1] `vec4<f32>` in shaders.",
+          "type": "string",
+          "const": "snorm10-10-10-2"
         }
       ]
     },
