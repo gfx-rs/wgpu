@@ -1711,6 +1711,25 @@ fn unused() {
         &overrides,
     )
     .unwrap();
+
+    // `resolve_overrides` only needs the overrides of the chosen entry point.
+    let resolve = |entry_point, constants| {
+        naga::back::pipeline_constants::resolve_overrides(
+            &module,
+            (ir::ShaderStage::Compute, entry_point),
+            constants,
+        )
+    };
+    let none = HashMap::new();
+    resolve("unused", &none).unwrap();
+    let err = resolve("used", &none).unwrap_err();
+    assert!(matches!(err, PipelineConstantError::MissingValue(name) if name == "ov"));
+    let resolved = resolve("used", &overrides).unwrap();
+    assert_eq!(
+        resolved.global_variables.len(),
+        module.global_variables.len()
+    );
+    assert_eq!(resolved.entry_points.len(), module.entry_points.len());
 }
 
 #[test]
