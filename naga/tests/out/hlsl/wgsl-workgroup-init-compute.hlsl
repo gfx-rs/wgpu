@@ -6,18 +6,6 @@ float2 __get_col_of_mat2x2_f32(__mat2x2_f32 mat, uint idx) {
     default: { return (float2)0; }
     }
 }
-void __set_col_of_mat2x2_f32(__mat2x2_f32 mat, uint idx, float2 value) {
-    switch(idx) {
-    case 0: { mat._0 = value; break; }
-    case 1: { mat._1 = value; break; }
-    }
-}
-void __set_el_of_mat2x2_f32(__mat2x2_f32 mat, uint idx, uint vec_idx, float value) {
-    switch(idx) {
-    case 0: { mat._0[vec_idx] = value; break; }
-    case 1: { mat._1[vec_idx] = value; break; }
-    }
-}
 
 struct Inner {
     float4 values[5][3];
@@ -48,28 +36,6 @@ RWByteAddressBuffer output : register(u0);
 
 float3x2 GetMatmatrix_OnInner(Inner obj) {
     return float3x2(obj.matrix__0, obj.matrix__1, obj.matrix__2);
-}
-
-void SetMatmatrix_OnInner(Inner obj, float3x2 mat) {
-    obj.matrix__0 = mat[0];
-    obj.matrix__1 = mat[1];
-    obj.matrix__2 = mat[2];
-}
-
-void SetMatVecmatrix_OnInner(Inner obj, float2 vec, uint mat_idx) {
-    switch(mat_idx) {
-    case 0: { obj.matrix__0 = vec; break; }
-    case 1: { obj.matrix__1 = vec; break; }
-    case 2: { obj.matrix__2 = vec; break; }
-    }
-}
-
-void SetMatScalarmatrix_OnInner(Inner obj, float scalar, uint mat_idx, uint vec_idx) {
-    switch(mat_idx) {
-    case 0: { obj.matrix__0[vec_idx] = scalar; break; }
-    case 1: { obj.matrix__1[vec_idx] = scalar; break; }
-    case 2: { obj.matrix__2[vec_idx] = scalar; break; }
-    }
 }
 
 [numthreads(8, 2, 1)]
