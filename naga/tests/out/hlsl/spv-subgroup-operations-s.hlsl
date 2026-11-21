@@ -7,34 +7,6 @@ struct ComputeInput_main {
     uint local_invocation_index : SV_GroupIndex;
 };
 
-void function()
-{
-    uint _e5 = global_2;
-    uint _e6 = global_3;
-    const uint4 _e9 = WaveActiveBallot(((_e6 & 1u) == 1u));
-    const uint4 _e10 = WaveActiveBallot(true);
-    const bool _e12 = WaveActiveAllTrue((_e6 != 0u));
-    const bool _e14 = WaveActiveAnyTrue((_e6 == 0u));
-    const uint _e15 = WaveActiveSum(_e6);
-    const uint _e16 = WaveActiveProduct(_e6);
-    const uint _e17 = WaveActiveMin(_e6);
-    const uint _e18 = WaveActiveMax(_e6);
-    const uint _e19 = WaveActiveBitAnd(_e6);
-    const uint _e20 = WaveActiveBitOr(_e6);
-    const uint _e21 = WaveActiveBitXor(_e6);
-    const uint _e22 = WavePrefixSum(_e6);
-    const uint _e23 = WavePrefixProduct(_e6);
-    const uint _e24 = _e6 + WavePrefixSum(_e6);
-    const uint _e25 = _e6 * WavePrefixProduct(_e6);
-    const uint _e26 = WaveReadLaneFirst(_e6);
-    const uint _e27 = WaveReadLaneAt(_e6, 4u);
-    const uint _e30 = WaveReadLaneAt(_e6, ((_e5 - 1u) - _e6));
-    const uint _e31 = WaveReadLaneAt(_e6, WaveGetLaneIndex() + 1u);
-    const uint _e32 = WaveReadLaneAt(_e6, WaveGetLaneIndex() - 1u);
-    const uint _e34 = WaveReadLaneAt(_e6, WaveGetLaneIndex() ^ (_e5 - 1u));
-    return;
-}
-
 [numthreads(1, 1, 1)]
 void main(ComputeInput_main computeinput_main)
 {
@@ -46,5 +18,27 @@ void main(ComputeInput_main computeinput_main)
     global_1 = param_1;
     global_2 = param_2;
     global_3 = param_3;
-    function();
+    uint _e13 = global_2;
+    uint _e14 = global_3;
+    const uint4 _e17 = WaveActiveBallot(((_e14 & 1u) == 1u));
+    const uint4 _e18 = WaveActiveBallot(true);
+    const bool _e20 = WaveActiveAllTrue((_e14 != 0u));
+    const bool _e22 = WaveActiveAnyTrue((_e14 == 0u));
+    const uint _e23 = WaveActiveSum(_e14);
+    const uint _e24 = WaveActiveProduct(_e14);
+    const uint _e25 = WaveActiveMin(_e14);
+    const uint _e26 = WaveActiveMax(_e14);
+    const uint _e27 = WaveActiveBitAnd(_e14);
+    const uint _e28 = WaveActiveBitOr(_e14);
+    const uint _e29 = WaveActiveBitXor(_e14);
+    const uint _e30 = WavePrefixSum(_e14);
+    const uint _e31 = WavePrefixProduct(_e14);
+    const uint _e32 = _e14 + WavePrefixSum(_e14);
+    const uint _e33 = _e14 * WavePrefixProduct(_e14);
+    const uint _e34 = WaveReadLaneFirst(_e14);
+    const uint _e35 = WaveReadLaneAt(_e14, 4u);
+    const uint _e38 = WaveReadLaneAt(_e14, ((_e13 - 1u) - _e14));
+    const uint _e39 = WaveReadLaneAt(_e14, WaveGetLaneIndex() + 1u);
+    const uint _e40 = WaveReadLaneAt(_e14, WaveGetLaneIndex() - 1u);
+    const uint _e42 = WaveReadLaneAt(_e14, WaveGetLaneIndex() ^ (_e13 - 1u));
 }

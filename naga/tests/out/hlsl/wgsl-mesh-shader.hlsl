@@ -68,25 +68,20 @@ struct FragmentInput_fs_main {
     float4 position_3 : SV_Position;
 };
 
-bool helper_reader(in TaskPayload taskPayload)
-{
-    bool _e2 = taskPayload.visible;
-    return _e2;
-}
-
-void helper_writer(bool value)
-{
-    taskPayload.visible = value;
-    return;
-}
-
 uint3 _ts_main(uint local_invocation_index : SV_GroupIndex)
 {
+    bool value = (bool)0;
+    bool local = (bool)0;
+
     workgroupData = 1.0;
     taskPayload.colorMask = float4(1.0, 1.0, 0.0, 1.0);
-    helper_writer(true);
-    const bool _e12 = helper_reader(taskPayload);
-    taskPayload.visible = _e12;
+    value = true;
+    bool _e8 = value;
+    taskPayload.visible = _e8;
+    bool _e15 = taskPayload.visible;
+    local = _e15;
+    bool _e17 = local;
+    taskPayload.visible = _e17;
     return uint3(1u, 1u, 1u);
 }
 [numthreads(1, 1, 1)]
@@ -149,20 +144,24 @@ void ts_divergent(uint3 thread_id : SV_GroupThreadID, uint local_invocation_inde
 
 void _ms_main(in TaskPayload taskPayload, uint local_invocation_index_2 : SV_GroupIndex)
 {
+    bool local_1 = (bool)0;
+
     mesh_output.vertex_count = 3u;
     mesh_output.primitive_count = 1u;
     workgroupData = 2.0;
     mesh_output.vertices_[0].position = float4(0.0, 1.0, 0.0, 1.0);
-    float4 _e23 = taskPayload.colorMask;
-    mesh_output.vertices_[0].color = (float4(0.0, 1.0, 0.0, 1.0) * _e23);
+    float4 _e19 = taskPayload.colorMask;
+    mesh_output.vertices_[0].color = (float4(0.0, 1.0, 0.0, 1.0) * _e19);
     mesh_output.vertices_[1].position = float4(-1.0, -1.0, 0.0, 1.0);
-    float4 _e45 = taskPayload.colorMask;
-    mesh_output.vertices_[1].color = (float4(0.0, 0.0, 1.0, 1.0) * _e45);
+    float4 _e41 = taskPayload.colorMask;
+    mesh_output.vertices_[1].color = (float4(0.0, 0.0, 1.0, 1.0) * _e41);
     mesh_output.vertices_[2].position = float4(1.0, -1.0, 0.0, 1.0);
-    float4 _e67 = taskPayload.colorMask;
-    mesh_output.vertices_[2].color = (float4(1.0, 0.0, 0.0, 1.0) * _e67);
+    float4 _e63 = taskPayload.colorMask;
+    mesh_output.vertices_[2].color = (float4(1.0, 0.0, 0.0, 1.0) * _e63);
     mesh_output.primitives_[0].indices_ = uint3(0u, 1u, 2u);
-    const bool _e86 = helper_reader(taskPayload);
+    bool _e84 = taskPayload.visible;
+    local_1 = _e84;
+    bool _e86 = local_1;
     mesh_output.primitives_[0].cull = !(_e86);
     mesh_output.primitives_[0].colorMask = float4(1.0, 0.0, 1.0, 1.0);
     return;
