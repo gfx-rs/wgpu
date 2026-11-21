@@ -31,7 +31,7 @@ struct MeshOutput {
 
 struct ms_mainVertexOutput {
     metal::float4 position [[position]];
-    float clip_distances [2] [[clip_distance]];
+    float clip_distances [[clip_distance]] [2];
 };
 struct ms_mainPrimitiveOutput {
 };

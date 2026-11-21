@@ -120,10 +120,10 @@ impl<W: core::fmt::Write> super::Writer<W> {
                 let resolved =
                     options.resolve_local_binding(&binding, back::msl::LocationMode::MeshOutput)?;
                 write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
+                resolved.try_fmt(&mut self.out)?;
                 if let Some(array_len) = array_len {
                     write!(self.out, " [{array_len}]")?;
                 }
-                resolved.try_fmt(&mut self.out)?;
                 writeln!(self.out, ";")?;
                 *member_names.last_mut().unwrap() = Some(name.clone());
                 existing_names.push(name);
