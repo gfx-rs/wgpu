@@ -1,0 +1,6 @@
+error: type `array<u32, len>` is not constructible
+  ┌─ wgsl:6:13
+  │
+6 │     let x = array<u32, len>();
+  │             ^^^^^^^^^^^^^^^ type is not constructible
+

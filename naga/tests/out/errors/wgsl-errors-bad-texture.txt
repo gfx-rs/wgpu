@@ -1,0 +1,6 @@
+error: expected an image, but found `a` which is not an image
+  ┌─ wgsl:6:26
+  │
+6 │     return textureSample(a, sampler1, vec2<f32>(0.0));
+  │                          ^ not an image
+

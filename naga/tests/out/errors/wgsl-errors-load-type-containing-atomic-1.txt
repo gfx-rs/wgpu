@@ -1,0 +1,6 @@
+error: direct access to atomic variable is not allowed
+  ┌─ wgsl:7:13
+  │
+7 │     let x = s;
+  │             ^ atomic variables cannot be accessed directly; use atomic built-in functions
+

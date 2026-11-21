@@ -1,0 +1,6 @@
+error: << operation overflowed
+  ┌─ wgsl:3:16
+  │
+3 │ const N: u32 = 0xFFFFFFFFu << 1;
+  │                ^^^^^^^^^^^^^^^^ see msg
+

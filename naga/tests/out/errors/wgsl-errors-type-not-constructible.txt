@@ -1,0 +1,6 @@
+error: type `atomic<i32>` is not constructible
+  ┌─ wgsl:2:9
+  │
+2 │     _ = atomic<i32>(0);
+  │         ^^^^^^^^^^^ type is not constructible
+

@@ -1,0 +1,6 @@
+error: unknown builtin: `unknown_built_in`
+  ┌─ wgsl:1:15
+  │
+1 │ fn x(@builtin(unknown_built_in) y: u32) {}
+  │               ^^^^^^^^^^^^^^^^ unknown builtin
+

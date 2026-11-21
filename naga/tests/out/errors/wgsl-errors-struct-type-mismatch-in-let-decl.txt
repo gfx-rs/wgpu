@@ -1,0 +1,6 @@
+error: the type of `x` is expected to be `Bar`, but got `Foo`
+  ┌─ wgsl:4:9
+  │
+4 │     let x: Bar = Foo(1);
+  │         ^ definition of `x`
+

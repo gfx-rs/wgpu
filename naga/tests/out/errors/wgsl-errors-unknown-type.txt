@@ -1,0 +1,6 @@
+error: no definition in scope for identifier: `Vec`
+  ┌─ wgsl:1:10
+  │
+1 │ const a: Vec = 10;
+  │          ^^^ unknown identifier
+

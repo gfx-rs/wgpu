@@ -1,0 +1,6 @@
+error: the type of `a` is expected to be `vec2<f32>`, but got `vec2<i32>`
+  ┌─ wgsl:1:14
+  │
+1 │ var<private> a: vec2<f32> = vec2<i32>(1i, 2i);
+  │              ^ definition of `a`
+

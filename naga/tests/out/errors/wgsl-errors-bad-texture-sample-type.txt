@@ -1,0 +1,6 @@
+error: texture sample type must be one of f32, i32 or u32, but found bool
+  ┌─ wgsl:2:48
+  │
+2 │ @group(0) @binding(1) var texture : texture_2d<bool>;
+  │                                                ^^^^ must be one of f32, i32 or u32
+

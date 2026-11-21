@@ -140,12 +140,17 @@ the [wgsl errors](#naga-wgsl-error-tests) tests.
 
 ## `naga` WGSL Error Tests
 
-- Located in: `naga/tests/naga/wgsl_errors`
-- Run with `cargo nextest run --test naga wgsl_errors`
+- Located in: `naga/tests/naga/wgsl_errors`, `naga/tests/in/wgsl-errors`, and `naga/tests/out/errors`
+- Run with `cargo nextest run --test naga wgsl_errors` and `cargo nextest run --test naga convert_snapshots_wgsl_errors`
 
 These are tests for the error messages that the `wgsl` frontend
 produces. Additionally you can check that a given validation error
 is produced by the validator from a given `wgsl` snippet.
+
+To test a parse error message, add a shader to `naga/tests/in/wgsl-errors`.
+The snapshot test fails if the shader parses successfully, and writes the
+rendered error to `naga/tests/out/errors`. Tests that generate many shaders
+in a loop, or that check validation errors, stay in `wgsl_errors.rs`.
 
 ## `player` Tests
 

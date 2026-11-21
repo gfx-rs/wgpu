@@ -1,0 +1,10 @@
+error: invalid left-hand side of assignment
+  ┌─ wgsl:4:17
+  │
+4 │             let a = S(10);
+  │                 ^ this is an immutable binding
+5 │             a.a = 20;
+  │             ^^^ cannot assign to this expression
+  │
+  = note: consider declaring `a` with `var` instead of `let`
+

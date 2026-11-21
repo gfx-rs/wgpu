@@ -1,0 +1,6 @@
+error: Constructor expects 4 components, found 3
+  ┌─ wgsl:4:9
+  │
+4 │     _ = vec4(1, 2, 3);
+  │         ^^^^^^^^^^^^^ see msg
+

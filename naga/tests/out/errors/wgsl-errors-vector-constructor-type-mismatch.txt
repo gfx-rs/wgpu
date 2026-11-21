@@ -1,0 +1,9 @@
+error: wrong type passed as argument #1 to `vec2<f32>`
+  ┌─ wgsl:2:12
+  │
+2 │     return vec2f(a);
+  │            ^^^^^ ^ argument #1 has type `u32`
+  │
+  = note: `vec2<f32>` accepts the following types for argument #1:
+  = note: allowed type: f32
+

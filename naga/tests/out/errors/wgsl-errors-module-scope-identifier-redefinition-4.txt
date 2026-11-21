@@ -1,0 +1,9 @@
+error: redefinition of `foo`
+  ┌─ wgsl:3:4
+  │
+3 │ fn foo() {}
+  │    ^^^ previous definition of `foo`
+4 │                 fn bar() {}
+5 │                 fn foo() {}
+  │                    ^^^ redefinition of `foo`
+

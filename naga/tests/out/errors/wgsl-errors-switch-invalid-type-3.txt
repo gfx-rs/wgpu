@@ -1,0 +1,6 @@
+error: invalid `switch` case selector value
+  ┌─ wgsl:3:14
+  │
+3 │         case 1.0: {}
+  │              ^^^ `switch` case selector must be a scalar integer const expression
+

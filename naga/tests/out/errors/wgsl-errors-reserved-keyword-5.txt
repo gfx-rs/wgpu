@@ -1,0 +1,6 @@
+error: name `break` is a reserved keyword
+  ┌─ wgsl:3:4
+  │
+3 │ fn break() {}
+  │    ^^^^^ definition of `break`
+

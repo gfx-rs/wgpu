@@ -1,0 +1,6 @@
+error: matrix scalar type must be floating-point, but found `i32`
+  ┌─ wgsl:2:20
+  │
+2 │     let m = mat2x2<i32>();
+  │                    ^^^ must be floating-point (e.g. `f32`)
+

@@ -1,0 +1,6 @@
+error: type `x` is not constructible
+  ┌─ wgsl:7:9
+  │
+7 │     let x: array<u32, len> = arr;
+  │         ^ type is not constructible
+

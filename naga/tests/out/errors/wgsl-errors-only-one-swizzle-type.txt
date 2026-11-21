@@ -1,0 +1,6 @@
+error: invalid field accessor `xg`
+  ┌─ wgsl:3:28
+  │
+3 │ const err = vec2(0.0, 0.0).xg;
+  │                            ^^ invalid accessor
+

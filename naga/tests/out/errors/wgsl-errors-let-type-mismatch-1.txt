@@ -1,0 +1,6 @@
+error: the type of `x` is expected to be `i32`, but got `{AbstractFloat}`
+  ┌─ wgsl:1:7
+  │
+1 │ const x: i32 = 1.0;
+  │       ^ definition of `x`
+

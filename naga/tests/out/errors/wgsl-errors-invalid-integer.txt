@@ -1,0 +1,6 @@
+error: expected identifier, found "["
+  ┌─ wgsl:1:8
+  │
+1 │ fn foo([location(1.)] x: i32) {}
+  │        ^ expected identifier
+

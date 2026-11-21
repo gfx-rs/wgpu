@@ -1,0 +1,6 @@
+error: name `case` is a reserved keyword
+  ┌─ wgsl:3:5
+  │
+3 │ var case: bool = true;
+  │     ^^^^ definition of `case`
+

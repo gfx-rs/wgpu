@@ -1,0 +1,9 @@
+error: invalid left-hand side of assignment
+  ┌─ wgsl:3:5
+  │
+3 │     v.xy = vec2(1);
+  │     ^^^^ cannot assign to this expression
+  │
+  = note: WGSL does not support assignments to swizzles
+  = note: consider assigning each component individually
+

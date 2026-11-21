@@ -1,0 +1,6 @@
+error: String literals are only supported in debugPrintf
+  ┌─ wgsl:5:18
+  │
+5 │     let _value = "not a debugPrintf format";
+  │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid string literal
+

@@ -1,0 +1,6 @@
+error: ray query operation is done on a pointer to a non-ray-query
+   ┌─ wgsl:10:35
+   │
+10 │     hitObjectRecordFromQuery(&ho, &ho);
+   │                                   ^^^ ray query pointer is invalid
+

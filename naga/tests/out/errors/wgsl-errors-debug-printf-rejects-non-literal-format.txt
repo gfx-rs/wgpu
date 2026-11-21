@@ -1,0 +1,6 @@
+error: debugPrintf's first argument must be a string literal
+  ┌─ wgsl:5:17
+  │
+5 │     debugPrintf(1i);
+  │                 ^^ expected a string literal
+

@@ -1,0 +1,20 @@
+error: wrong type passed as argument #2 to `distance`
+  ┌─ wgsl:2:20
+  │
+2 │             return distance(vec2<f32>(), 0i);
+  │                    ^^^^^^^^              ^^ argument #2 has type `i32`
+  │
+  = note: `distance` accepts the following types for argument #2:
+  = note: allowed type: f32
+  = note: allowed type: f16
+  = note: allowed type: f64
+  = note: allowed type: vec2<f32>
+  = note: allowed type: vec2<f16>
+  = note: allowed type: vec2<f64>
+  = note: allowed type: vec3<f32>
+  = note: allowed type: vec3<f16>
+  = note: allowed type: vec3<f64>
+  = note: allowed type: vec4<f32>
+  = note: allowed type: vec4<f16>
+  = note: allowed type: vec4<f64>
+

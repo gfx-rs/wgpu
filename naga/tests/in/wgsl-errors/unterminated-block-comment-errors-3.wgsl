@@ -1,0 +1,1 @@
+const N: u32 = 1u; /* Trailing unterminated

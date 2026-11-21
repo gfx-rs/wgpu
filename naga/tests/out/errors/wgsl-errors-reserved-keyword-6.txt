@@ -1,0 +1,6 @@
+error: name `override` is a reserved keyword
+  ┌─ wgsl:3:8
+  │
+3 │ struct override {}
+  │        ^^^^^^^^ definition of `override`
+

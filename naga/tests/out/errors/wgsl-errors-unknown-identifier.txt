@@ -1,0 +1,6 @@
+error: no definition in scope for identifier: `schmoo`
+  ┌─ wgsl:2:16
+  │
+2 │     return x * schmoo;
+  │                ^^^^^^ unknown identifier
+

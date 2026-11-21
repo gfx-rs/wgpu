@@ -1,0 +1,6 @@
+error: unknown conservative depth: `abc`
+  ┌─ wgsl:1:19
+  │
+1 │ @early_depth_test(abc) fn main() {}
+  │                   ^^^ unknown conservative depth
+

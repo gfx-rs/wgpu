@@ -1,0 +1,10 @@
+error: function annotated with @must_use but does not return any value
+  ┌─ wgsl:1:2
+  │
+1 │ @must_use
+  │  ^^^^^^^^
+2 │ fn use_me(a: i32) {
+  │    ^^^^^^^^^^^^^^
+  │
+  = note: declare a return type or remove the attribute
+

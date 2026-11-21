@@ -1,0 +1,2 @@
+error: Hit object with initialize
+

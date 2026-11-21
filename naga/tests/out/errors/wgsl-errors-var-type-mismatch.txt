@@ -1,0 +1,6 @@
+error: the type of `x` is expected to be `f32`, but got `u32`
+  ┌─ wgsl:2:9
+  │
+2 │     var x: f32 = 1u;
+  │         ^ definition of `x`
+

@@ -1,0 +1,6 @@
+error: the concrete type `u32` cannot represent the abstract value `-1` accurately
+  ┌─ wgsl:3:22
+  │
+3 │ const N: u32 = 1u << -1;
+  │                      ^^ see msg
+

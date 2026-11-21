@@ -1,0 +1,6 @@
+error: unknown address space: `bad`
+  ┌─ wgsl:1:27
+  │
+1 │ @group(0) @binding(0) var<bad> texture: texture_2d<f32>;
+  │                           ^^^ unknown address space
+
