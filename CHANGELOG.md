@@ -321,7 +321,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix ambiguous `metal::select` calls in the Metal backend's division/remainder zero guards for 64-bit integers: the guards now emit `L`/`uL` suffixed literals (e.g. `metal::select(rhs, 1uL, rhs == 0uL)`) so MSL generated for `i64`/`u64` `/` and `%` compiles. By @Statesman-forge in [#10278](https://github.com/gfx-rs/wgpu/pull/10278).
 - In the MSL backend, `subgroupBallot` now keeps lanes 32-63, which were lost on GPUs with 64-wide SIMD groups (AMD GPUs on macOS). By @ErkoRisthein in [#10797](https://github.com/gfx-rs/wgpu/pull/10797).
 - Report a WGSL error instead of panicking when the condition of a `const_assert` is a composite value, such as `const_assert(vec2i());`. By @MilosLord in [#10897](https://github.com/gfx-rs/wgpu/pull/10897).
-- Allow constant expressions that convert `f64`, `i64` or `u64` values to other scalar types, such as `const a = i32(1li);`. These conversions were already accepted at runtime. By @inner-daemons in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
+- Allow constant expressions that convert `f64`, `i64` or `u64` values to other scalar types, such as `const a = i32(1li);`. These conversions were already accepted at runtime. By @inner-daemons in [#11047](https://github.com/gfx-rs/wgpu/pull/11047).
 
 #### Validation
 
