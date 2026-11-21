@@ -1480,6 +1480,7 @@ impl crate::Device for super::Device {
             rpass_debug_marker_active: false,
             end_of_pass_timer_query: None,
             framebuffers: Default::default(),
+            framebuffer_uses: 0,
             temp_texture_views: Default::default(),
             counters: Arc::clone(&self.counters),
             current_pipeline_is_multiview: false,
