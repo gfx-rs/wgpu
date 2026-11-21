@@ -86,12 +86,29 @@ mat3x2 _105(_25 _107)
 
 void main()
 {
-    float _131 = 1.0;
-    bool _133 = true;
+    float _136 = 1.0;
+    bool _138 = true;
+    uint _140 = 0u;
+    uvec2 _154 = uvec2(4294967295u);
+    _140 = gl_LocalInvocationIndex;
+    for (;;)
+    {
+        if (all(equal(uvec2(0u), _154)))
+        {
+            break;
+        }
+        _154 -= uvec2(uint(_154.y == 0u), 1u);
+        if (_140 >= 10u)
+        {
+            break;
+        }
+        _30[_140] = 0.0;
+        _140++;
+        continue;
+    }
     if (gl_LocalInvocationIndex == 0u)
     {
-        _30 = float[](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
-        _32 = 0u;
+        atomicExchange(_32, 0u);
     }
     barrier();
     _61();
