@@ -16,11 +16,11 @@ kernel void compute1_(
 , uint local_invocation_index [[thread_index_in_threadgroup]]
 , threadgroup uint& wg_var
 ) {
-    if (local_invocation_index == 0u) {
-        wg_var = {};
+    const Input input = { local_invocation_id, local_invocation_index };
+    if (input.local_invocation_index == 0u) {
+        wg_var = 0u;
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    const Input input = { local_invocation_id, local_invocation_index };
     wg_var = input.local_invocation_index * 2u;
     uint _e6 = wg_var;
     wg_var = _e6 + input.local_invocation_id[0];

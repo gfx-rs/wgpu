@@ -106,12 +106,24 @@ void wgpu_4435_(
     return;
 }
 
+struct main_Input {
+};
 kernel void main_(
-  uint __local_invocation_index [[thread_index_in_threadgroup]]
+  uint local_invocation_index [[thread_index_in_threadgroup]]
 , threadgroup type_3& a
 ) {
-    if (__local_invocation_index == 0u) {
-        a = {};
+    uint zero_init_index = {};
+    zero_init_index = local_invocation_index;
+    uint2 loop_bound = uint2(4294967295u);
+    while(true) {
+        if (metal::all(loop_bound == uint2(0u))) { break; }
+        loop_bound -= uint2(loop_bound.y == 0u, 1u);
+        uint _e4 = zero_init_index;
+        if (_e4 >= 64u) {
+            break;
+        }
+        a.inner[_e4] = 0u;
+        zero_init_index = _e4 + 1u;
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     runtime_values();

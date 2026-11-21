@@ -36,12 +36,14 @@ _atomic_compare_exchange_result_Uint_4_ naga_atomic_compare_exchange_weak_explic
 }
 constant int o = 2;
 
+struct fInput {
+};
 kernel void f(
-  uint __local_invocation_index [[thread_index_in_threadgroup]]
+  uint local_invocation_index [[thread_index_in_threadgroup]]
 , threadgroup metal::atomic_uint& a
 ) {
-    if (__local_invocation_index == 0u) {
-        metal::atomic_store_explicit(&a, 0, metal::memory_order_relaxed);
+    if (local_invocation_index == 0u) {
+        metal::atomic_store_explicit(&a, 0u, metal::memory_order_relaxed);
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     _atomic_compare_exchange_result_Uint_4_ _e3 = naga_atomic_compare_exchange_weak_explicit(&a, 2u, 1u);

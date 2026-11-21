@@ -76,7 +76,7 @@ struct cs_mainInput {
 };
 kernel void cs_main(
   metal::uint3 id [[thread_position_in_threadgroup]]
-, uint __local_invocation_index [[thread_index_in_threadgroup]]
+, uint local_invocation_index [[thread_index_in_threadgroup]]
 , device metal::atomic_uint& storage_atomic_scalar [[user(fake0)]]
 , device type_4& storage_atomic_arr [[user(fake0)]]
 , device Struct& storage_struct [[user(fake0)]]
@@ -84,15 +84,11 @@ kernel void cs_main(
 , threadgroup type_4& workgroup_atomic_arr
 , threadgroup Struct& workgroup_struct
 ) {
-    if (__local_invocation_index == 0u) {
-        metal::atomic_store_explicit(&workgroup_atomic_scalar, 0, metal::memory_order_relaxed);
-        for (int __i0 = 0; __i0 < 2; __i0++) {
-            metal::atomic_store_explicit(&workgroup_atomic_arr.inner[__i0], 0, metal::memory_order_relaxed);
-        }
-        metal::atomic_store_explicit(&workgroup_struct.atomic_scalar, 0, metal::memory_order_relaxed);
-        for (int __i0 = 0; __i0 < 2; __i0++) {
-            metal::atomic_store_explicit(&workgroup_struct.atomic_arr.inner[__i0], 0, metal::memory_order_relaxed);
-        }
+    metal::atomic_store_explicit(&workgroup_atomic_arr.inner[local_invocation_index], 0, metal::memory_order_relaxed);
+    metal::atomic_store_explicit(&workgroup_struct.atomic_arr.inner[local_invocation_index], 0, metal::memory_order_relaxed);
+    if (local_invocation_index == 0u) {
+        metal::atomic_store_explicit(&workgroup_atomic_scalar, 0u, metal::memory_order_relaxed);
+        metal::atomic_store_explicit(&workgroup_struct.atomic_scalar, 0u, metal::memory_order_relaxed);
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::atomic_store_explicit(&storage_atomic_scalar, 1u, metal::memory_order_relaxed);

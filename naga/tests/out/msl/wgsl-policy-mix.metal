@@ -52,16 +52,28 @@ metal::float4 mock_function(
     return ((((_e18 + _e22) + _e25) + metal::float4(_e29)) + metal::float4(_e34)) + _e38;
 }
 
+struct main_Input {
+};
 kernel void main_(
-  uint __local_invocation_index [[thread_index_in_threadgroup]]
+  uint local_invocation_index [[thread_index_in_threadgroup]]
 , device InStorage const& in_storage [[user(fake0)]]
 , constant InUniform& in_uniform [[user(fake0)]]
 , metal::texture2d_array<float, metal::access::sample> image_2d_array [[user(fake0)]]
 , threadgroup type_5& in_workgroup
 ) {
     type_6 in_private = {};
-    if (__local_invocation_index == 0u) {
-        in_workgroup = {};
+    uint zero_init_index = {};
+    zero_init_index = local_invocation_index;
+    uint2 loop_bound = uint2(4294967295u);
+    while(true) {
+        if (metal::all(loop_bound == uint2(0u))) { break; }
+        loop_bound -= uint2(loop_bound.y == 0u, 1u);
+        uint _e10 = zero_init_index;
+        if (_e10 >= 30u) {
+            break;
+        }
+        in_workgroup.inner[metal::min(unsigned(_e10), 29u)] = 0.0;
+        zero_init_index = _e10 + 1u;
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::float4 _e5 = mock_function(metal::int2(1, 2), 3, 4, in_storage, in_uniform, image_2d_array, in_workgroup, in_private);
