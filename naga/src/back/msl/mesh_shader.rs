@@ -29,7 +29,8 @@ pub(super) struct NestedFunctionInfo<'a> {
     pub(super) mod_info: &'a crate::valid::ModuleInfo,
     pub(super) fun_info: &'a crate::valid::FunctionInfo,
     pub(super) args: Vec<EntryPointArgument>,
-    pub(super) local_invocation_index: Option<&'a NameKey>,
+    /// The name of the local invocation index argument, if the entry point has one.
+    pub(super) local_invocation_index: Option<&'a str>,
     pub(super) nested_name: &'a str,
     pub(super) outer_name: &'a str,
     pub(super) out_mesh_info: Option<MeshOutputInfo>,
@@ -199,11 +200,9 @@ impl<W: core::fmt::Write> super::Writer<W> {
             writeln!(self.out, "  {NAMESPACE}::mesh_grid_properties {grid_name}")?;
             task_grid_name = Some(grid_name);
         }
-        let local_invocation_index = if let Some(key) = local_invocation_index_key {
-            self.names[key].clone()
-        } else {
-            "__local_invocation_index".to_string()
-        };
+        let local_invocation_index = local_invocation_index_key
+            .unwrap_or("__local_invocation_index")
+            .to_string();
 
         for arg in &args {
             write!(self.out, ", {} {}{}", arg.ty_name, arg.name, arg.binding)?;
