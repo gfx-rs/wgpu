@@ -1,4 +1,5 @@
-targets = "METAL"
+# WGSL is omitted because the WGSL backend writes override-sized arrays without their element type.
+targets = "SPIRV | GLSL | HLSL | METAL"
 
 [msl]
 fake_missing_bindings = false
