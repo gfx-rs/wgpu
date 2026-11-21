@@ -3,6 +3,7 @@
 wgpu is a GPU API written in pure rust. Changes of any significance need to apply across the stack.
 
 - `naga` is our shader translator. It is responsible for consuming and translating untrusted shaders to trusted shader code.
+- `naga-cli` is the `naga` command-line tool. When you add a `naga` option, also expose it in `naga-cli`. The config schema snapshot test in `naga-cli/tests/cli.rs` fails when a new option field appears.
 - `wgpu-types` are the common types used on both Native and WASM.
 - `naga-types` holds the shader-language types, such as target versions and binding maps, that `naga` and `wgpu-core` both use.
 - `wgpu-naga-bridge` converts between `naga` and `wgpu-types`. It maps wgpu features and downlevel flags to naga validation capabilities.

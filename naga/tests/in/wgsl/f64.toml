@@ -3,7 +3,7 @@ targets = "SPIRV | GLSL | HLSL | WGSL"
 
 [glsl]
 version.Desktop = 420
-zero_initialize_workgroup_memory = true
+zero_initialize_workgroup_memory = "Polyfill"
 
 [spv]
 version = [1, 0]

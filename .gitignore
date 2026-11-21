@@ -52,3 +52,6 @@ wgpu/src/backend/webgpu/webgpu_sys/wasm_bindgen_clone_tmp
 # Wasm test generated files
 /tests/wasm/dist
 /tests/wasm/runner/node_modules
+
+# git worktrees for parallel agent work
+.claude/worktrees/

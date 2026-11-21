@@ -11,6 +11,7 @@ mod namer;
 mod overloads;
 mod terminator;
 mod type_methods;
+pub use type_methods::ScalarExt;
 mod typifier;
 
 pub use constant_evaluator::{
@@ -72,60 +73,6 @@ pub fn any_statement(
     }
 
     false
-}
-
-impl From<super::StorageFormat> for super::Scalar {
-    fn from(format: super::StorageFormat) -> Self {
-        use super::{ScalarKind as Sk, StorageFormat as Sf};
-        let kind = match format {
-            Sf::R8Unorm => Sk::Float,
-            Sf::R8Snorm => Sk::Float,
-            Sf::R8Uint => Sk::Uint,
-            Sf::R8Sint => Sk::Sint,
-            Sf::R16Uint => Sk::Uint,
-            Sf::R16Sint => Sk::Sint,
-            Sf::R16Float => Sk::Float,
-            Sf::Rg8Unorm => Sk::Float,
-            Sf::Rg8Snorm => Sk::Float,
-            Sf::Rg8Uint => Sk::Uint,
-            Sf::Rg8Sint => Sk::Sint,
-            Sf::R32Uint => Sk::Uint,
-            Sf::R32Sint => Sk::Sint,
-            Sf::R32Float => Sk::Float,
-            Sf::Rg16Uint => Sk::Uint,
-            Sf::Rg16Sint => Sk::Sint,
-            Sf::Rg16Float => Sk::Float,
-            Sf::Rgba8Unorm => Sk::Float,
-            Sf::Rgba8Snorm => Sk::Float,
-            Sf::Rgba8Uint => Sk::Uint,
-            Sf::Rgba8Sint => Sk::Sint,
-            Sf::Bgra8Unorm => Sk::Float,
-            Sf::Rgb10a2Uint => Sk::Uint,
-            Sf::Rgb10a2Unorm => Sk::Float,
-            Sf::Rg11b10Ufloat => Sk::Float,
-            Sf::R64Uint => Sk::Uint,
-            Sf::Rg32Uint => Sk::Uint,
-            Sf::Rg32Sint => Sk::Sint,
-            Sf::Rg32Float => Sk::Float,
-            Sf::Rgba16Uint => Sk::Uint,
-            Sf::Rgba16Sint => Sk::Sint,
-            Sf::Rgba16Float => Sk::Float,
-            Sf::Rgba32Uint => Sk::Uint,
-            Sf::Rgba32Sint => Sk::Sint,
-            Sf::Rgba32Float => Sk::Float,
-            Sf::R16Unorm => Sk::Float,
-            Sf::R16Snorm => Sk::Float,
-            Sf::Rg16Unorm => Sk::Float,
-            Sf::Rg16Snorm => Sk::Float,
-            Sf::Rgba16Unorm => Sk::Float,
-            Sf::Rgba16Snorm => Sk::Float,
-        };
-        let width = match format {
-            Sf::R64Uint => 8,
-            _ => 4,
-        };
-        super::Scalar { kind, width }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -260,27 +207,6 @@ impl TryFrom<crate::Literal> for bool {
         match value {
             crate::Literal::Bool(value) => Ok(value),
             _ => Err(ConstValueError::InvalidType),
-        }
-    }
-}
-
-impl super::AddressSpace {
-    pub fn access(self) -> crate::StorageAccess {
-        use crate::StorageAccess as Sa;
-        match self {
-            crate::AddressSpace::Function
-            | crate::AddressSpace::Private
-            | crate::AddressSpace::WorkGroup => Sa::LOAD | Sa::STORE,
-            crate::AddressSpace::Uniform => Sa::LOAD,
-            crate::AddressSpace::Storage { access } => access,
-            crate::AddressSpace::Handle => Sa::LOAD,
-            crate::AddressSpace::Immediate => Sa::LOAD,
-            // TaskPayload isn't always writable, but this is checked for elsewhere,
-            // when not using multiple payloads and matching the entry payload is checked.
-            crate::AddressSpace::TaskPayload => Sa::LOAD | Sa::STORE,
-            crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload => {
-                Sa::LOAD | Sa::STORE
-            }
         }
     }
 }
@@ -477,28 +403,6 @@ impl super::SwizzleComponent {
             2 => Self::Z,
             _ => Self::W,
         }
-    }
-}
-
-impl super::ImageClass {
-    pub const fn is_multisampled(self) -> bool {
-        match self {
-            crate::ImageClass::Sampled { multi, .. } | crate::ImageClass::Depth { multi } => multi,
-            crate::ImageClass::Storage { .. } => false,
-            crate::ImageClass::External => false,
-        }
-    }
-
-    pub const fn is_mipmapped(self) -> bool {
-        match self {
-            crate::ImageClass::Sampled { multi, .. } | crate::ImageClass::Depth { multi } => !multi,
-            crate::ImageClass::Storage { .. } => false,
-            crate::ImageClass::External => false,
-        }
-    }
-
-    pub const fn is_depth(self) -> bool {
-        matches!(self, crate::ImageClass::Depth { .. })
     }
 }
 
@@ -1076,56 +980,6 @@ impl crate::Module {
 pub struct RayTracingUses {
     pub pipelines: bool,
     pub queries: bool,
-}
-
-impl crate::MeshOutputTopology {
-    pub const fn to_builtin(self) -> crate::BuiltIn {
-        match self {
-            Self::Points => crate::BuiltIn::PointIndex,
-            Self::Lines => crate::BuiltIn::LineIndices,
-            Self::Triangles => crate::BuiltIn::TriangleIndices,
-        }
-    }
-}
-
-impl crate::AddressSpace {
-    pub const fn is_workgroup_like(self) -> bool {
-        matches!(self, Self::WorkGroup | Self::TaskPayload)
-    }
-}
-
-impl TryFrom<crate::ScalarKind> for nt::glsl::GlslScalarKind {
-    type Error = ();
-
-    fn try_from(value: crate::ScalarKind) -> Result<Self, Self::Error> {
-        Ok(match value {
-            crate::ScalarKind::Sint => nt::glsl::GlslScalarKind::Sint,
-            crate::ScalarKind::Uint => nt::glsl::GlslScalarKind::Uint,
-            crate::ScalarKind::Float => nt::glsl::GlslScalarKind::Float,
-            _ => return Err(()),
-        })
-    }
-}
-
-impl From<crate::VectorSize> for nt::glsl::GlslVectorSize {
-    fn from(val: crate::VectorSize) -> Self {
-        match val {
-            crate::VectorSize::Bi => nt::glsl::GlslVectorSize::Bi,
-            crate::VectorSize::Tri => nt::glsl::GlslVectorSize::Tri,
-            crate::VectorSize::Quad => nt::glsl::GlslVectorSize::Quad,
-        }
-    }
-}
-
-impl TryFrom<crate::Scalar> for nt::glsl::GlslScalar {
-    type Error = ();
-
-    fn try_from(value: crate::Scalar) -> Result<Self, Self::Error> {
-        Ok(nt::glsl::GlslScalar {
-            kind: value.kind.try_into()?,
-            width: value.width,
-        })
-    }
 }
 
 impl TryFrom<&crate::TypeInner> for nt::glsl::GlslUniformType {

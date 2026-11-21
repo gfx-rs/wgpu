@@ -1,3 +1,4 @@
+use crate::back::msl::writer::ScalarMslExt;
 use crate::proc::{concrete_int_scalars, vector_size_str, vector_sizes, KeywordSet};
 use crate::racy_lock::RacyLock;
 use alloc::{format, string::String, vec::Vec};

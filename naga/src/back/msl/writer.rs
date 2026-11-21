@@ -584,8 +584,12 @@ pub struct Writer<W> {
     needs_object_memory_barriers: bool,
 }
 
-impl crate::Scalar {
-    pub(super) fn to_msl_name(self) -> &'static str {
+pub(super) trait ScalarMslExt {
+    fn to_msl_name(self) -> &'static str;
+}
+
+impl ScalarMslExt for crate::Scalar {
+    fn to_msl_name(self) -> &'static str {
         use crate::ScalarKind as Sk;
         match self {
             Self {
@@ -715,11 +719,17 @@ fn should_pack_struct_member(
     }
 }
 
-impl crate::AddressSpace {
+trait AddressSpaceMslExt {
+    fn needs_pass_through(&self) -> bool;
+    fn needs_access_qualifier(&self) -> bool;
+    fn to_msl_name(self) -> Option<&'static str>;
+}
+
+impl AddressSpaceMslExt for crate::AddressSpace {
     /// Returns true if global variables in this address space are
     /// passed in function arguments. These arguments need to be
     /// passed through any functions called from the entry point.
-    const fn needs_pass_through(&self) -> bool {
+    fn needs_pass_through(&self) -> bool {
         match *self {
             Self::Uniform
             | Self::Storage { .. }
@@ -734,7 +744,7 @@ impl crate::AddressSpace {
     }
 
     /// Returns true if the address space may need a "const" qualifier.
-    const fn needs_access_qualifier(&self) -> bool {
+    fn needs_access_qualifier(&self) -> bool {
         match *self {
             //Note: we are ignoring the storage access here, and instead
             // rely on the actual use of a global by functions. This means we
@@ -752,7 +762,7 @@ impl crate::AddressSpace {
         }
     }
 
-    const fn to_msl_name(self) -> Option<&'static str> {
+    fn to_msl_name(self) -> Option<&'static str> {
         match self {
             Self::Handle => None,
             Self::Uniform | Self::Immediate => Some("constant"),
@@ -7386,9 +7396,11 @@ template <typename A>
                     module,
                     mod_info,
                     pipeline_options,
-                    force_loop_bounding: options.force_loop_bounding,
+                    force_loop_bounding: options.common.force_loop_bounding,
                     emit_int_div_checks: options.emit_int_div_checks,
-                    ray_query_initialization_tracking: options.ray_query_initialization_tracking,
+                    ray_query_initialization_tracking: options
+                        .common
+                        .ray_query_initialization_tracking,
                 },
                 result_struct: None,
             };
@@ -7485,7 +7497,7 @@ template <typename A>
 
             // skip this entry point if any global bindings are missing,
             // or their types are incompatible.
-            if !options.fake_missing_bindings {
+            if !options.common.fake_missing_bindings {
                 for (var_handle, var) in module.global_variables.iter() {
                     if fun_info[var_handle].is_empty() {
                         continue;
@@ -8632,9 +8644,11 @@ template <typename A>
                     module,
                     mod_info,
                     pipeline_options,
-                    force_loop_bounding: options.force_loop_bounding,
+                    force_loop_bounding: options.common.force_loop_bounding,
                     emit_int_div_checks: options.emit_int_div_checks,
-                    ray_query_initialization_tracking: options.ray_query_initialization_tracking,
+                    ray_query_initialization_tracking: options
+                        .common
+                        .ray_query_initialization_tracking,
                 },
                 result_struct: if ep.stage == crate::ShaderStage::Task {
                     None
@@ -8804,6 +8818,7 @@ mod workgroup_mem_init {
         ) -> bool {
             let is_task = ep.stage == crate::ShaderStage::Task;
             options.zero_initialize_workgroup_memory
+                != back::ZeroInitializeWorkgroupMemoryMode::None
                 && ep.stage.compute_like()
                 && module.global_variables.iter().any(|(handle, var)| {
                     let is_right_address_space = var.space == crate::AddressSpace::WorkGroup

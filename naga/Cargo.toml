@@ -35,12 +35,15 @@ msl-out = []
 ## If you want to enable MSL output it regardless of the target platform, use `naga/msl-out`.
 msl-out-if-target-apple = []
 
+clap = ["dep:clap"]
+schemars = ["dep:schemars", "naga-types/schemars"]
 serialize = [
     "dep:serde",
     "bitflags/serde",
     "half/serde",
     "hashbrown/serde",
     "naga-types/serialize",
+    "spirv?/serialize",
 ]
 deserialize = [
     "dep:serde",
@@ -48,6 +51,7 @@ deserialize = [
     "half/serde",
     "hashbrown/serde",
     "naga-types/deserialize",
+    "spirv?/deserialize",
 ]
 arbitrary = [
     "dep:arbitrary",
@@ -100,10 +104,12 @@ num-traits.workspace = true
 once_cell = { workspace = true, features = ["alloc", "race"] }
 spirv = { workspace = true, optional = true }
 thiserror.workspace = true
+schemars = { workspace = true, optional = true }
 serde = { workspace = true, features = ["alloc", "derive"], optional = true }
 petgraph = { workspace = true, optional = true }
 pp-rs = { workspace = true, optional = true }
 unicode-ident = { workspace = true, optional = true }
+clap = { workspace = true, optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true
@@ -125,6 +131,7 @@ rspirv.workspace = true
 # and then refuses to build instead of ignoring it.
 spirv.workspace = true
 serde = { workspace = true, features = ["default", "derive"] }
+serde_json = { workspace = true }
 strum = { workspace = true }
 walkdir.workspace = true
 

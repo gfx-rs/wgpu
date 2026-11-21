@@ -125,9 +125,13 @@ impl crate::AtomicFunction {
     }
 }
 
-impl crate::AddressSpace {
+trait AddressSpaceGlslExt {
+    fn initializable(&self) -> bool;
+}
+
+impl AddressSpaceGlslExt for crate::AddressSpace {
     /// Whether a variable with this address space can be initialized
-    const fn initializable(&self) -> bool {
+    fn initializable(&self) -> bool {
         match *self {
             crate::AddressSpace::Function | crate::AddressSpace::Private => true,
             crate::AddressSpace::WorkGroup
@@ -172,11 +176,22 @@ bitflags::bitflags! {
     }
 }
 
+#[cfg(feature = "schemars")]
+impl schemars::JsonSchema for WriterFlags {
+    fn schema_name() -> alloc::borrow::Cow<'static, str> {
+        "GlslWriterFlags".into()
+    }
+    fn json_schema(g: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        u32::json_schema(g)
+    }
+}
+
 /// Configuration used in the [`Writer`].
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "deserialize", serde(default))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct Options {
     /// The GLSL version to be used.
     pub version: Version,
@@ -189,7 +204,7 @@ pub struct Options {
     )]
     pub binding_map: BindingMap,
     /// Should workgroup variables be zero initialized (by polyfilling)?
-    pub zero_initialize_workgroup_memory: bool,
+    pub zero_initialize_workgroup_memory: super::ZeroInitializeWorkgroupMemoryMode,
 }
 
 impl Default for Options {
@@ -198,7 +213,7 @@ impl Default for Options {
             version: Version::new_gles(310),
             writer_flags: WriterFlags::ADJUST_COORDINATE_SPACE,
             binding_map: BindingMap::default(),
-            zero_initialize_workgroup_memory: true,
+            zero_initialize_workgroup_memory: super::ZeroInitializeWorkgroupMemoryMode::Polyfill,
         }
     }
 }

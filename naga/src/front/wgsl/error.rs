@@ -106,6 +106,20 @@ impl ParseError {
         }
     }
 
+    /// Emits a summary of the error to the given writer.
+    #[cfg(feature = "stderr")]
+    pub fn emit_to_writer_with_path(
+        &self,
+        writer: &mut impl crate::error::ErrorWrite,
+        source: &str,
+        path: &str,
+    ) {
+        let files = SimpleFile::new(path, replace_control_chars(source));
+        let config = term::Config::default();
+        crate::error::emit_to_writer(writer, &config, &files, &self.diagnostic())
+            .expect("cannot write error");
+    }
+
     /// Emits a summary of the error to a string.
     pub fn emit_to_string(&self, source: &str) -> String {
         self.emit_to_string_with_path(source, "wgsl")

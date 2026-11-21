@@ -14,7 +14,7 @@ binding_array = "ReadZeroSkipWrite"
 fake_missing_bindings = true
 lang_version = [3, 0]
 spirv_cross_compatibility = false
-zero_initialize_workgroup_memory = true
+zero_initialize_workgroup_memory = "Polyfill"
 
 [msl.per_entry_point_map.main]
 resources = [

@@ -15,17 +15,20 @@ rustdoc-args = ["--cfg", "docsrs"]
 workspace = true
 
 [features]
-serialize = ["dep:serde", "indexmap/serde"]
-deserialize = ["dep:serde", "indexmap/serde"]
-arbitrary = ["dep:arbitrary", "std", "indexmap/arbitrary"]
+serialize = ["dep:serde", "bitflags/serde", "indexmap/serde"]
+deserialize = ["dep:serde", "bitflags/serde", "indexmap/serde"]
+arbitrary = ["dep:arbitrary", "std", "bitflags/arbitrary", "indexmap/arbitrary"]
+schemars = ["dep:schemars"]
 std = []
 
 [dependencies]
 arbitrary = { workspace = true, features = ["derive"], optional = true }
+bitflags.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 hashbrown.workspace = true
 indexmap.workspace = true
 rustc-hash.workspace = true
+schemars = { workspace = true, optional = true }
 serde = { workspace = true, features = ["alloc", "derive"], optional = true }
 
 [dev-dependencies]

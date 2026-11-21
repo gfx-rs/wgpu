@@ -1,0 +1,1883 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JsonOutput",
+  "description": "The `--format json` document.",
+  "type": "object",
+  "properties": {
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Diagnostic"
+      }
+    },
+    "reflection": {
+      "description": "Reflection of the validated module, before pipeline overrides are applied.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ModuleReflection"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "success": {
+      "type": "boolean"
+    },
+    "version": {
+      "description": "See [`JSON_OUTPUT_VERSION`]. The format is not yet stable.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "version",
+    "success",
+    "diagnostics"
+  ],
+  "$defs": {
+    "AddressSpace": {
+      "description": "Addressing space of variables.",
+      "oneOf": [
+        {
+          "description": "Function locals.",
+          "type": "string",
+          "const": "Function"
+        },
+        {
+          "description": "Private data, per invocation, mutable.",
+          "type": "string",
+          "const": "Private"
+        },
+        {
+          "description": "Workgroup shared data, mutable.",
+          "type": "string",
+          "const": "WorkGroup"
+        },
+        {
+          "description": "Uniform buffer data.",
+          "type": "string",
+          "const": "Uniform"
+        },
+        {
+          "description": "Storage buffer data, potentially mutable.",
+          "type": "object",
+          "properties": {
+            "Storage": {
+              "type": "object",
+              "properties": {
+                "access": {
+                  "$ref": "#/$defs/StorageAccess"
+                }
+              },
+              "required": [
+                "access"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Storage"
+          ]
+        },
+        {
+          "description": "Opaque handles, such as samplers and images.",
+          "type": "string",
+          "const": "Handle"
+        },
+        {
+          "description": "Immediate data.\n\nA `naga::Module` may contain at most one `naga::GlobalVariable` in\nthis address space. Its contents are provided not by a buffer\nbut by `SetImmediates` pass commands, allowing the CPU to\nestablish different values for each draw/dispatch.\n\n`Immediate` variables may not contain `f16` values, even if\nthe `SHADER_FLOAT16` capability is enabled.\n\nBackends generally place tight limits on the size of\n`Immediate` variables.",
+          "type": "string",
+          "const": "Immediate"
+        },
+        {
+          "description": "Task shader to mesh shader payload",
+          "type": "string",
+          "const": "TaskPayload"
+        },
+        {
+          "description": "Ray tracing payload, for inputting in TraceRays",
+          "type": "string",
+          "const": "RayPayload"
+        },
+        {
+          "description": "Ray tracing payload, for entrypoints invoked by a TraceRays call\n\nEach entrypoint may reference only one variable in this scope, as\nonly one may be passed as a payload.",
+          "type": "string",
+          "const": "IncomingRayPayload"
+        }
+      ]
+    },
+    "ArraySize": {
+      "description": "The element count of an array.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "constant": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "constant"
+          ]
+        },
+        {
+          "description": "The count is given by an override.",
+          "type": "object",
+          "properties": {
+            "override": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "override"
+          ]
+        },
+        {
+          "description": "The count is determined by the bound buffer at runtime.",
+          "type": "string",
+          "const": "dynamic"
+        }
+      ]
+    },
+    "BuiltIn": {
+      "description": "Built-in inputs and outputs.",
+      "oneOf": [
+        {
+          "description": "Read in fragment shaders, written in mesh shaders, read in any and closest hit shaders.",
+          "type": "string",
+          "const": "PrimitiveIndex"
+        },
+        {
+          "description": "Written in vertex/mesh shaders, read in fragment shaders",
+          "type": "object",
+          "properties": {
+            "Position": {
+              "type": "object",
+              "properties": {
+                "invariant": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "invariant"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Position"
+          ]
+        },
+        {
+          "description": "Read in task, mesh, vertex, and fragment shaders",
+          "type": "string",
+          "const": "ViewIndex"
+        },
+        {
+          "description": "Read in vertex shaders",
+          "type": "string",
+          "const": "BaseInstance"
+        },
+        {
+          "description": "Read in vertex shaders",
+          "type": "string",
+          "const": "BaseVertex"
+        },
+        {
+          "description": "Written in vertex & mesh shaders",
+          "type": "string",
+          "const": "ClipDistances"
+        },
+        {
+          "description": "Written in vertex & mesh shaders",
+          "type": "string",
+          "const": "CullDistance"
+        },
+        {
+          "description": "Read in vertex, any- and closest-hit shaders",
+          "type": "string",
+          "const": "InstanceIndex"
+        },
+        {
+          "description": "Written in vertex & mesh shaders",
+          "type": "string",
+          "const": "PointSize"
+        },
+        {
+          "description": "Read in vertex shaders",
+          "type": "string",
+          "const": "VertexIndex"
+        },
+        {
+          "description": "Read in vertex & task shaders, or mesh shaders in pipelines without task shaders",
+          "type": "string",
+          "const": "DrawIndex"
+        },
+        {
+          "description": "Written in fragment shaders",
+          "type": "string",
+          "const": "FragDepth"
+        },
+        {
+          "description": "Read in fragment shaders",
+          "type": "string",
+          "const": "PointCoord"
+        },
+        {
+          "description": "Read in fragment shaders",
+          "type": "string",
+          "const": "FrontFacing"
+        },
+        {
+          "description": "Read in fragment shaders",
+          "type": "object",
+          "properties": {
+            "Barycentric": {
+              "type": "object",
+              "properties": {
+                "perspective": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "perspective"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Barycentric"
+          ]
+        },
+        {
+          "description": "Read in fragment shaders",
+          "type": "string",
+          "const": "SampleIndex"
+        },
+        {
+          "description": "Read or written in fragment shaders",
+          "type": "string",
+          "const": "SampleMask"
+        },
+        {
+          "description": "Read in compute, task, and mesh shaders",
+          "type": "string",
+          "const": "GlobalInvocationId"
+        },
+        {
+          "description": "Read in compute, task, and mesh shaders",
+          "type": "string",
+          "const": "LocalInvocationId"
+        },
+        {
+          "description": "Read in compute, task, and mesh shaders",
+          "type": "string",
+          "const": "LocalInvocationIndex"
+        },
+        {
+          "description": "Read in compute, task, and mesh shaders",
+          "type": "string",
+          "const": "WorkGroupId"
+        },
+        {
+          "description": "Read in compute, task, and mesh shaders",
+          "type": "string",
+          "const": "WorkGroupSize"
+        },
+        {
+          "description": "Read in compute, task, and mesh shaders",
+          "type": "string",
+          "const": "NumWorkGroups"
+        },
+        {
+          "description": "Read in compute, task, and mesh shaders",
+          "type": "string",
+          "const": "NumSubgroups"
+        },
+        {
+          "description": "Read in compute, task, and mesh shaders",
+          "type": "string",
+          "const": "SubgroupId"
+        },
+        {
+          "description": "Read in compute, fragment, task, and mesh shaders",
+          "type": "string",
+          "const": "SubgroupSize"
+        },
+        {
+          "description": "Read in compute, fragment, task, and mesh shaders",
+          "type": "string",
+          "const": "SubgroupInvocationId"
+        },
+        {
+          "description": "Written in task shaders",
+          "type": "string",
+          "const": "MeshTaskSize"
+        },
+        {
+          "description": "Written in mesh shaders",
+          "type": "string",
+          "const": "CullPrimitive"
+        },
+        {
+          "description": "Written in mesh shaders",
+          "type": "string",
+          "const": "PointIndex"
+        },
+        {
+          "description": "Written in mesh shaders",
+          "type": "string",
+          "const": "LineIndices"
+        },
+        {
+          "description": "Written in mesh shaders",
+          "type": "string",
+          "const": "TriangleIndices"
+        },
+        {
+          "description": "Written to a workgroup variable in mesh shaders",
+          "type": "string",
+          "const": "VertexCount"
+        },
+        {
+          "description": "Written to a workgroup variable in mesh shaders",
+          "type": "string",
+          "const": "Vertices"
+        },
+        {
+          "description": "Written to a workgroup variable in mesh shaders",
+          "type": "string",
+          "const": "PrimitiveCount"
+        },
+        {
+          "description": "Written to a workgroup variable in mesh shaders",
+          "type": "string",
+          "const": "Primitives"
+        },
+        {
+          "description": "Read in all ray tracing pipeline shaders, the id within the number of\nrays that this current ray is.",
+          "type": "string",
+          "const": "RayInvocationId"
+        },
+        {
+          "description": "Read in all ray tracing pipeline shaders, the number of rays created.",
+          "type": "string",
+          "const": "NumRayInvocations"
+        },
+        {
+          "description": "Read in closest hit and any hit shaders, the custom data in the tlas\ninstance",
+          "type": "string",
+          "const": "InstanceCustomData"
+        },
+        {
+          "description": "Read in closest hit and any hit shaders, the index of the geometry in\nthe blas.",
+          "type": "string",
+          "const": "GeometryIndex"
+        },
+        {
+          "description": "Read in closest hit, any hit, and miss shaders, the origin of the ray.",
+          "type": "string",
+          "const": "WorldRayOrigin"
+        },
+        {
+          "description": "Read in closest hit, any hit, and miss shaders, the direction of the\nray.",
+          "type": "string",
+          "const": "WorldRayDirection"
+        },
+        {
+          "description": "Read in closest hit and any hit shaders, the direction of the ray in\nobject space.",
+          "type": "string",
+          "const": "ObjectRayOrigin"
+        },
+        {
+          "description": "Read in closest hit and any hit shaders, the direction of the ray in\nobject space.",
+          "type": "string",
+          "const": "ObjectRayDirection"
+        },
+        {
+          "description": "Read in closest hit, any hit, and miss shaders, the t min provided by\nin the ray desc.",
+          "type": "string",
+          "const": "RayTmin"
+        },
+        {
+          "description": "Read in closest hit, any hit, and miss shaders, the final bounds at which\na hit is accepted (the closest committed hit if there is one otherwise, t\nmax provided in the ray desc).",
+          "type": "string",
+          "const": "RayTCurrentMax"
+        },
+        {
+          "description": "Read in closest hit and any hit shaders, the matrix for converting from\nobject space to world space",
+          "type": "string",
+          "const": "ObjectToWorld"
+        },
+        {
+          "description": "Read in closest hit and any hit shaders, the matrix for converting from\nworld space to object space",
+          "type": "string",
+          "const": "WorldToObject"
+        },
+        {
+          "description": "Read in closest hit and any hit shaders, the type of hit as provided by\nthe intersection function if any, otherwise this is 254 (0xFE) for a\nfront facing triangle and 255 (0xFF) for a back facing triangle",
+          "type": "string",
+          "const": "HitKind"
+        },
+        {
+          "description": "Read in closest hit and any hit shaders, the second and third barycentric\ncoordinates of the hit point on the triangle. The first can be computed as\n`1.0 - x - y`. Only meaningful if the hit was a triangle.",
+          "type": "string",
+          "const": "HitBarycentrics"
+        }
+      ]
+    },
+    "Diagnostic": {
+      "type": "object",
+      "properties": {
+        "labels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Label"
+          }
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Location"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        }
+      },
+      "required": [
+        "severity",
+        "message",
+        "labels",
+        "notes"
+      ]
+    },
+    "EntryPoint": {
+      "description": "Reflection information for one entry point.",
+      "type": "object",
+      "properties": {
+        "dualSourceBlending": {
+          "type": "boolean"
+        },
+        "immediateUsage": {
+          "description": "The immediate data this entry point uses.",
+          "$ref": "#/$defs/ImmediateUsage"
+        },
+        "inputs": {
+          "description": "Stage inputs, with structs flattened.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Varying"
+          }
+        },
+        "meshInfo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MeshInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "outputs": {
+          "description": "Stage outputs, with structs flattened. For mesh shaders, this also holds the\nper-vertex and per-primitive outputs.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Varying"
+          }
+        },
+        "rayTracingPayload": {
+          "description": "The type of the ray tracing payload, for ray tracing stages.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
+        },
+        "resources": {
+          "description": "The resources this entry point statically uses.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          }
+        },
+        "samplingPairs": {
+          "description": "(texture, sampler) pairs this entry point samples with.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              {
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              }
+            ]
+          }
+        },
+        "stage": {
+          "$ref": "#/$defs/ShaderStage"
+        },
+        "taskPayloadSize": {
+          "description": "Size of the task payload, for task and mesh shaders that use one.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "workgroupSize": {
+          "description": "The workgroup size, for compute-like stages. `[0, 0, 0]` for other stages.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "maxItems": 3,
+          "minItems": 3
+        },
+        "workgroupSizeFromOverrides": {
+          "description": "For each dimension, whether the workgroup size is given by an override\nexpression. Such dimensions hold a placeholder in [`Self::workgroup_size`] until\noverrides are applied.",
+          "type": "array",
+          "items": {
+            "type": "boolean"
+          },
+          "maxItems": 3,
+          "minItems": 3
+        },
+        "workgroupStorageSize": {
+          "description": "Bytes of `workgroup` memory used, with each variable rounded up to 16 bytes.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "name",
+        "stage",
+        "inputs",
+        "outputs",
+        "resources",
+        "samplingPairs",
+        "workgroupSize",
+        "workgroupSizeFromOverrides",
+        "workgroupStorageSize",
+        "dualSourceBlending",
+        "immediateUsage"
+      ]
+    },
+    "ImageClass": {
+      "description": "Sub-class of the image type.",
+      "oneOf": [
+        {
+          "description": "Regular sampled image.",
+          "type": "object",
+          "properties": {
+            "Sampled": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "description": "Kind of values to sample.",
+                  "$ref": "#/$defs/ScalarKind"
+                },
+                "multi": {
+                  "description": "Multi-sampled image.\n\nA multi-sampled image holds several samples per texel. Multi-sampled\nimages cannot have mipmaps.",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "kind",
+                "multi"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Sampled"
+          ]
+        },
+        {
+          "description": "Depth comparison image.",
+          "type": "object",
+          "properties": {
+            "Depth": {
+              "type": "object",
+              "properties": {
+                "multi": {
+                  "description": "Multi-sampled depth image.",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "multi"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Depth"
+          ]
+        },
+        {
+          "description": "External texture.",
+          "type": "string",
+          "const": "External"
+        },
+        {
+          "description": "Storage image.",
+          "type": "object",
+          "properties": {
+            "Storage": {
+              "type": "object",
+              "properties": {
+                "access": {
+                  "$ref": "#/$defs/StorageAccess"
+                },
+                "format": {
+                  "$ref": "#/$defs/StorageFormat"
+                }
+              },
+              "required": [
+                "format",
+                "access"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Storage"
+          ]
+        }
+      ]
+    },
+    "ImageDimension": {
+      "description": "The number of dimensions an image has.",
+      "oneOf": [
+        {
+          "description": "1D image",
+          "type": "string",
+          "const": "D1"
+        },
+        {
+          "description": "2D image",
+          "type": "string",
+          "const": "D2"
+        },
+        {
+          "description": "3D image",
+          "type": "string",
+          "const": "D3"
+        },
+        {
+          "description": "Cube map",
+          "type": "string",
+          "const": "Cube"
+        }
+      ]
+    },
+    "ImmediateSlots": {
+      "description": "A bitmask, tracking which 4-byte slots have been written via `set_immediates`.\nBit N corresponds to bytes [N*4 .. N*4+4).",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "ImmediateUsage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "Valid": {
+              "type": "object",
+              "properties": {
+                "size": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "slots": {
+                  "$ref": "#/$defs/ImmediateSlots"
+                }
+              },
+              "required": [
+                "slots",
+                "size"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Valid"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "Invalid": {
+              "type": "object",
+              "properties": {
+                "size": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "size"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Invalid"
+          ]
+        }
+      ]
+    },
+    "Interpolation": {
+      "description": "The interpolation qualifier of a binding or struct field.",
+      "oneOf": [
+        {
+          "description": "The value will be interpolated in a perspective-correct fashion.\nAlso known as \"smooth\" in glsl.",
+          "type": "string",
+          "const": "Perspective"
+        },
+        {
+          "description": "Indicates that linear, non-perspective, correct\ninterpolation must be used.\nAlso known as \"no_perspective\" in glsl.",
+          "type": "string",
+          "const": "Linear"
+        },
+        {
+          "description": "Indicates that no interpolation will be performed.",
+          "type": "string",
+          "const": "Flat"
+        },
+        {
+          "description": "Indicates the fragment input binding holds an array of per-vertex values.\nThis is typically used with barycentrics.",
+          "type": "string",
+          "const": "PerVertex"
+        }
+      ]
+    },
+    "Label": {
+      "type": "object",
+      "properties": {
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Location"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ]
+    },
+    "Location": {
+      "description": "A source position, mirroring `naga::SourceLocation` (which lacks `Serialize`).",
+      "type": "object",
+      "properties": {
+        "byteOffset": {
+          "description": "0-based byte offset into the source.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "column": {
+          "description": "1-based column, in UTF-8 bytes.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "length": {
+          "description": "Length in UTF-8 bytes.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "line": {
+          "description": "1-based line number.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "line",
+        "column",
+        "byteOffset",
+        "length"
+      ]
+    },
+    "MeshInfo": {
+      "description": "Information specific to mesh shader entry points.",
+      "type": "object",
+      "properties": {
+        "maxPrimitives": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "maxVertices": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "topology": {
+          "$ref": "#/$defs/MeshOutputTopology"
+        }
+      },
+      "required": [
+        "maxVertices",
+        "maxPrimitives",
+        "topology"
+      ]
+    },
+    "MeshOutputTopology": {
+      "description": "The output topology for a mesh shader. Note that mesh shaders don't allow things like triangle-strips.",
+      "oneOf": [
+        {
+          "description": "Outputs individual vertices to be rendered as points.",
+          "type": "string",
+          "const": "Points"
+        },
+        {
+          "description": "Outputs groups of 2 vertices to be renderedas lines .",
+          "type": "string",
+          "const": "Lines"
+        },
+        {
+          "description": "Outputs groups of 3 vertices to be rendered as triangles.",
+          "type": "string",
+          "const": "Triangles"
+        }
+      ]
+    },
+    "ModuleReflection": {
+      "description": "Reflection information for a whole module.",
+      "type": "object",
+      "properties": {
+        "entryPoints": {
+          "description": "Every entry point.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EntryPoint"
+          }
+        },
+        "overrides": {
+          "description": "Every pipeline-overridable constant.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Override"
+          }
+        },
+        "resources": {
+          "description": "Every global variable with a `@group`/`@binding` attribute.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Resource"
+          }
+        },
+        "types": {
+          "description": "Every type in the module, in the order of the module's type arena.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Type"
+          }
+        }
+      },
+      "required": [
+        "types",
+        "resources",
+        "overrides",
+        "entryPoints"
+      ]
+    },
+    "NumericType": {
+      "description": "The type of a user-defined or built-in stage input or output.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "scalar": {
+              "$ref": "#/$defs/Scalar"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "scalar"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "vector": {
+              "type": "object",
+              "properties": {
+                "scalar": {
+                  "$ref": "#/$defs/Scalar"
+                },
+                "size": {
+                  "$ref": "#/$defs/VectorSize"
+                }
+              },
+              "required": [
+                "size",
+                "scalar"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "vector"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "matrix": {
+              "type": "object",
+              "properties": {
+                "columns": {
+                  "$ref": "#/$defs/VectorSize"
+                },
+                "rows": {
+                  "$ref": "#/$defs/VectorSize"
+                },
+                "scalar": {
+                  "$ref": "#/$defs/Scalar"
+                }
+              },
+              "required": [
+                "columns",
+                "rows",
+                "scalar"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "matrix"
+          ]
+        }
+      ]
+    },
+    "Override": {
+      "description": "A pipeline-overridable constant.",
+      "type": "object",
+      "properties": {
+        "hasDefault": {
+          "description": "Whether the override has an initializer. Overrides without one must be given a\nvalue when creating a pipeline.",
+          "type": "boolean"
+        },
+        "id": {
+          "description": "The numeric `@id`, if any.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ty": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "ty",
+        "hasDefault"
+      ]
+    },
+    "Resource": {
+      "description": "A bound resource: a global variable with `@group` and `@binding`.",
+      "type": "object",
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/ResourceBinding"
+        },
+        "bindingArraySize": {
+          "description": "The element count, if this is a binding array.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArraySize"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "description": "What kind of resource this is. For binding arrays, this describes the element.",
+          "$ref": "#/$defs/ResourceKind"
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "space": {
+          "$ref": "#/$defs/AddressSpace"
+        },
+        "ty": {
+          "description": "The declared type of the variable.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "binding",
+        "space",
+        "ty",
+        "kind"
+      ]
+    },
+    "ResourceBinding": {
+      "description": "Pipeline binding information for global resources.",
+      "type": "object",
+      "properties": {
+        "binding": {
+          "description": "Binding number within the group.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "group": {
+          "description": "The bind group index.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "group",
+        "binding"
+      ]
+    },
+    "ResourceKind": {
+      "description": "The kind of a [`Resource`].",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "buffer": {
+              "type": "object",
+              "properties": {
+                "minBindingSize": {
+                  "description": "The minimum size of a buffer binding for this resource, in bytes.",
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "minBindingSize"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "buffer"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "texture": {
+              "type": "object",
+              "properties": {
+                "arrayed": {
+                  "type": "boolean"
+                },
+                "class": {
+                  "$ref": "#/$defs/ImageClass"
+                },
+                "dim": {
+                  "$ref": "#/$defs/ImageDimension"
+                }
+              },
+              "required": [
+                "dim",
+                "arrayed",
+                "class"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "texture"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "sampler": {
+              "type": "object",
+              "properties": {
+                "comparison": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "comparison"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "sampler"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "accelerationStructure": {
+              "type": "object",
+              "properties": {
+                "vertexReturn": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "vertexReturn"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "accelerationStructure"
+          ]
+        }
+      ]
+    },
+    "Sampling": {
+      "description": "The sampling qualifiers of a binding or struct field.",
+      "oneOf": [
+        {
+          "description": "Interpolate the value at the center of the pixel.",
+          "type": "string",
+          "const": "Center"
+        },
+        {
+          "description": "Interpolate the value at a point that lies within all samples covered by\nthe fragment within the current primitive. In multisampling, use a\nsingle value for all samples in the primitive.",
+          "type": "string",
+          "const": "Centroid"
+        },
+        {
+          "description": "Interpolate the value at each sample location. In multisampling, invoke\nthe fragment shader once per sample.",
+          "type": "string",
+          "const": "Sample"
+        },
+        {
+          "description": "Use the value provided by the first vertex of the current primitive.",
+          "type": "string",
+          "const": "First"
+        },
+        {
+          "description": "Use the value provided by the first or last vertex of the current primitive. The exact\nchoice is implementation-dependent.",
+          "type": "string",
+          "const": "Either"
+        }
+      ]
+    },
+    "Scalar": {
+      "description": "Characteristics of a scalar type.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "How the value's bits are to be interpreted.",
+          "$ref": "#/$defs/ScalarKind"
+        },
+        "width": {
+          "description": "This size of the value in bytes.",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "kind",
+        "width"
+      ]
+    },
+    "ScalarKind": {
+      "description": "Primitive type for a scalar.",
+      "oneOf": [
+        {
+          "description": "Signed integer type.",
+          "type": "string",
+          "const": "Sint"
+        },
+        {
+          "description": "Unsigned integer type.",
+          "type": "string",
+          "const": "Uint"
+        },
+        {
+          "description": "Floating point type.",
+          "type": "string",
+          "const": "Float"
+        },
+        {
+          "description": "Boolean type.",
+          "type": "string",
+          "const": "Bool"
+        },
+        {
+          "description": "WGSL abstract integer type.\n\nThese are forbidden by validation, and should never reach backends.",
+          "type": "string",
+          "const": "AbstractInt"
+        },
+        {
+          "description": "Abstract floating-point type.\n\nThese are forbidden by validation, and should never reach backends.",
+          "type": "string",
+          "const": "AbstractFloat"
+        }
+      ]
+    },
+    "Severity": {
+      "type": "string",
+      "enum": [
+        "error",
+        "warning"
+      ]
+    },
+    "ShaderStage": {
+      "description": "Stage of the programmable pipeline.",
+      "oneOf": [
+        {
+          "description": "A vertex shader, in a render pipeline.",
+          "type": "string",
+          "const": "Vertex"
+        },
+        {
+          "description": "A task shader, in a mesh render pipeline.",
+          "type": "string",
+          "const": "Task"
+        },
+        {
+          "description": "A mesh shader, in a mesh render pipeline.",
+          "type": "string",
+          "const": "Mesh"
+        },
+        {
+          "description": "A fragment shader, in a render pipeline.",
+          "type": "string",
+          "const": "Fragment"
+        },
+        {
+          "description": "Compute pipeline shader.",
+          "type": "string",
+          "const": "Compute"
+        },
+        {
+          "description": "A ray generation shader, in a ray tracing pipeline.",
+          "type": "string",
+          "const": "RayGeneration"
+        },
+        {
+          "description": "A miss shader, in a ray tracing pipeline.",
+          "type": "string",
+          "const": "Miss"
+        },
+        {
+          "description": "A any hit shader, in a ray tracing pipeline.",
+          "type": "string",
+          "const": "AnyHit"
+        },
+        {
+          "description": "A closest hit shader, in a ray tracing pipeline.",
+          "type": "string",
+          "const": "ClosestHit"
+        }
+      ]
+    },
+    "StorageAccess": {
+      "type": "string"
+    },
+    "StorageFormat": {
+      "description": "Image storage format.",
+      "type": "string",
+      "enum": [
+        "R8Unorm",
+        "R8Snorm",
+        "R8Uint",
+        "R8Sint",
+        "R16Uint",
+        "R16Sint",
+        "R16Float",
+        "Rg8Unorm",
+        "Rg8Snorm",
+        "Rg8Uint",
+        "Rg8Sint",
+        "R32Uint",
+        "R32Sint",
+        "R32Float",
+        "Rg16Uint",
+        "Rg16Sint",
+        "Rg16Float",
+        "Rgba8Unorm",
+        "Rgba8Snorm",
+        "Rgba8Uint",
+        "Rgba8Sint",
+        "Bgra8Unorm",
+        "Rgb10a2Uint",
+        "Rgb10a2Unorm",
+        "Rg11b10Ufloat",
+        "R64Uint",
+        "Rg32Uint",
+        "Rg32Sint",
+        "Rg32Float",
+        "Rgba16Uint",
+        "Rgba16Sint",
+        "Rgba16Float",
+        "Rgba32Uint",
+        "Rgba32Sint",
+        "Rgba32Float",
+        "R16Unorm",
+        "R16Snorm",
+        "Rg16Unorm",
+        "Rg16Snorm",
+        "Rgba16Unorm",
+        "Rgba16Snorm"
+      ]
+    },
+    "StructMember": {
+      "description": "A member of a struct type.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "offset": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "ty": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "ty",
+        "offset"
+      ]
+    },
+    "Type": {
+      "description": "A type in the module.",
+      "type": "object",
+      "properties": {
+        "align": {
+          "description": "Alignment in bytes.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "inner": {
+          "$ref": "#/$defs/TypeInner"
+        },
+        "name": {
+          "description": "The name of the type, if it is a named struct or alias.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "size": {
+          "description": "Size in bytes. For runtime-sized arrays, and structs ending in one, this\nassumes a single element.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "size",
+        "align",
+        "inner"
+      ]
+    },
+    "TypeInner": {
+      "description": "The shape of a [`Type`].",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "scalar": {
+              "$ref": "#/$defs/Scalar"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "scalar"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "vector": {
+              "type": "object",
+              "properties": {
+                "scalar": {
+                  "$ref": "#/$defs/Scalar"
+                },
+                "size": {
+                  "$ref": "#/$defs/VectorSize"
+                }
+              },
+              "required": [
+                "size",
+                "scalar"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "vector"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "matrix": {
+              "type": "object",
+              "properties": {
+                "columns": {
+                  "$ref": "#/$defs/VectorSize"
+                },
+                "rows": {
+                  "$ref": "#/$defs/VectorSize"
+                },
+                "scalar": {
+                  "$ref": "#/$defs/Scalar"
+                }
+              },
+              "required": [
+                "columns",
+                "rows",
+                "scalar"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "matrix"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atomic": {
+              "$ref": "#/$defs/Scalar"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "atomic"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "pointer": {
+              "type": "object",
+              "properties": {
+                "base": {
+                  "type": "integer",
+                  "format": "uint",
+                  "minimum": 0
+                },
+                "space": {
+                  "$ref": "#/$defs/AddressSpace"
+                }
+              },
+              "required": [
+                "base",
+                "space"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "pointer"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "array": {
+              "type": "object",
+              "properties": {
+                "base": {
+                  "type": "integer",
+                  "format": "uint",
+                  "minimum": 0
+                },
+                "size": {
+                  "$ref": "#/$defs/ArraySize"
+                },
+                "stride": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "base",
+                "size",
+                "stride"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "array"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "struct": {
+              "type": "object",
+              "properties": {
+                "members": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/StructMember"
+                  }
+                },
+                "span": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "members",
+                "span"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "struct"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "image": {
+              "type": "object",
+              "properties": {
+                "arrayed": {
+                  "type": "boolean"
+                },
+                "class": {
+                  "$ref": "#/$defs/ImageClass"
+                },
+                "dim": {
+                  "$ref": "#/$defs/ImageDimension"
+                }
+              },
+              "required": [
+                "dim",
+                "arrayed",
+                "class"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "image"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "sampler": {
+              "type": "object",
+              "properties": {
+                "comparison": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "comparison"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "sampler"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "accelerationStructure": {
+              "type": "object",
+              "properties": {
+                "vertexReturn": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "vertexReturn"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "accelerationStructure"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "rayQuery": {
+              "type": "object",
+              "properties": {
+                "vertexReturn": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "vertexReturn"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "rayQuery"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "bindingArray": {
+              "type": "object",
+              "properties": {
+                "base": {
+                  "type": "integer",
+                  "format": "uint",
+                  "minimum": 0
+                },
+                "size": {
+                  "$ref": "#/$defs/ArraySize"
+                }
+              },
+              "required": [
+                "base",
+                "size"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "bindingArray"
+          ]
+        },
+        {
+          "description": "A type that reflection does not describe in detail.",
+          "type": "string",
+          "const": "other"
+        }
+      ]
+    },
+    "Varying": {
+      "description": "A stage input or output, after flattening any structs.",
+      "oneOf": [
+        {
+          "description": "A value with a `@location` attribute.",
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "object",
+              "properties": {
+                "blendSrc": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "interpolation": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Interpolation"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "location": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "perPrimitive": {
+                  "type": "boolean"
+                },
+                "sampling": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Sampling"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "ty": {
+                  "$ref": "#/$defs/NumericType"
+                }
+              },
+              "required": [
+                "location",
+                "ty",
+                "perPrimitive"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "location"
+          ]
+        },
+        {
+          "description": "A value with a `@builtin` attribute.",
+          "type": "object",
+          "properties": {
+            "builtIn": {
+              "type": "object",
+              "properties": {
+                "arraySize": {
+                  "description": "The element count, for array-typed built-ins such as `clip_distances`.",
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "builtIn": {
+                  "$ref": "#/$defs/BuiltIn"
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "ty": {
+                  "description": "The type, if it is numeric. `None` for arrays such as `clip_distances`.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/NumericType"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "builtIn"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "builtIn"
+          ]
+        }
+      ]
+    },
+    "VectorSize": {
+      "description": "Number of components in a vector.",
+      "oneOf": [
+        {
+          "description": "2D vector",
+          "type": "string",
+          "const": "Bi"
+        },
+        {
+          "description": "3D vector",
+          "type": "string",
+          "const": "Tri"
+        },
+        {
+          "description": "4D vector",
+          "type": "string",
+          "const": "Quad"
+        }
+      ]
+    }
+  }
+}

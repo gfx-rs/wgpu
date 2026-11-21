@@ -7,11 +7,11 @@ image_load = "ReadZeroSkipWrite"
 fake_missing_bindings = true
 lang_version = [1, 2]
 spirv_cross_compatibility = false
-zero_initialize_workgroup_memory = true
+zero_initialize_workgroup_memory = "Polyfill"
 
 [glsl]
 version.Desktop = 430
-zero_initialize_workgroup_memory = true
+zero_initialize_workgroup_memory = "Polyfill"
 
 [spv]
 debug = true
