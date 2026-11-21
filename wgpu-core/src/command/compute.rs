@@ -813,6 +813,7 @@ pub(super) fn encode_compute_pass(
                     None, // compute passes do not attempt to coalesce query resets
                     query_set,
                     query_index,
+                    1,
                 )
                 .map_pass_err(scope)?;
             }
@@ -827,6 +828,7 @@ pub(super) fn encode_compute_pass(
                     &mut state.pass.base.tracker.query_sets,
                     device,
                     query_index,
+                    1,
                     None,
                     &mut state.active_query,
                     state.pass.base.snatch_guard,
@@ -838,6 +840,7 @@ pub(super) fn encode_compute_pass(
                 end_pipeline_statistics_query(
                     state.pass.base.raw_encoder,
                     &mut state.active_query,
+                    1,
                     state.pass.base.snatch_guard,
                     state.pass.base.query_set_writes,
                 )

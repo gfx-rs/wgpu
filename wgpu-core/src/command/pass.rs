@@ -294,6 +294,7 @@ pub(crate) fn write_timestamp<E>(
     pending_query_resets: Option<&mut QueryResetMap>,
     query_set: Arc<QuerySet>,
     query_index: u32,
+    view_count: u32,
 ) -> Result<(), E>
 where
     E: From<MissingFeatures> + From<QueryUseError> + From<DeviceError>,
@@ -315,6 +316,7 @@ where
     query_set.validate_and_write_timestamp(
         state.base.raw_encoder,
         query_index,
+        view_count,
         pending_query_resets,
         state.base.snatch_guard,
         state.base.query_set_writes,

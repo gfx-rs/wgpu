@@ -1,12 +1,12 @@
 #version 310 es
-#extension GL_EXT_multiview : require
+#extension GL_OVR_multiview2 : require
 
 precision highp float;
 precision highp int;
 
 
 void main() {
-    uint view_index = uint(gl_ViewIndex);
+    uint view_index = gl_ViewID_OVR;
     return;
 }
 

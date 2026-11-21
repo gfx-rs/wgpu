@@ -383,16 +383,13 @@ impl super::CommandEncoder {
 
     fn write_pass_end_timestamp_if_requested(&mut self) {
         if let Some((query_set_raw, index)) = self.end_of_pass_timer_query.take() {
-            use crate::CommandEncoder as _;
             unsafe {
-                self.write_timestamp(
-                    &crate::dx12::QuerySet {
-                        raw: query_set_raw,
-                        raw_ty: Direct3D12::D3D12_QUERY_TYPE_TIMESTAMP,
-                    },
+                self.list.as_ref().unwrap().EndQuery(
+                    &query_set_raw,
+                    Direct3D12::D3D12_QUERY_TYPE_TIMESTAMP,
                     index,
-                );
-            }
+                )
+            };
         }
     }
 
@@ -564,6 +561,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         Ok(())
     }
     unsafe fn discard_encoding(&mut self) {
+        self.pass.multiview_view_count = 1;
         if let Some(list) = self.list.take() {
             if unsafe { list.Close() }.is_ok() {
                 self.free_lists.push(list);
@@ -964,21 +962,21 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
     }
     unsafe fn end_query(&mut self, set: &super::QuerySet, index: u32) {
-        unsafe {
-            self.list
-                .as_ref()
-                .unwrap()
-                .EndQuery(&set.raw, set.raw_ty, index)
-        };
+        let list = self.list.as_ref().unwrap();
+        unsafe { list.EndQuery(&set.raw, set.raw_ty, index) };
+        // The query counts all views, so the other slots of a multiview query hold zero.
+        for extra in index + 1..index + self.pass.multiview_view_count {
+            unsafe {
+                list.BeginQuery(&set.raw, set.raw_ty, extra);
+                list.EndQuery(&set.raw, set.raw_ty, extra);
+            }
+        }
     }
     unsafe fn write_timestamp(&mut self, set: &super::QuerySet, index: u32) {
-        unsafe {
-            self.list.as_ref().unwrap().EndQuery(
-                &set.raw,
-                Direct3D12::D3D12_QUERY_TYPE_TIMESTAMP,
-                index,
-            )
-        };
+        let list = self.list.as_ref().unwrap();
+        for slot in index..index + self.pass.multiview_view_count {
+            unsafe { list.EndQuery(&set.raw, Direct3D12::D3D12_QUERY_TYPE_TIMESTAMP, slot) };
+        }
     }
     unsafe fn read_acceleration_structure_compact_size(
         &mut self,
@@ -1187,6 +1185,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     .SetViewInstanceMask(multiview_mask.get());
             }
         }
+        self.pass.multiview_view_count = desc.multiview_mask.map_or(1, |mv| mv.get().count_ones());
 
         let raw_vp = Direct3D12::D3D12_VIEWPORT {
             TopLeftX: 0.0,

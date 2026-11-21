@@ -56,10 +56,21 @@ pub(crate) fn record_query_write(
     query_set: &Arc<QuerySet>,
     slot_index: u32,
 ) {
-    query_set_writes
+    record_query_writes(query_set_writes, query_set, slot_index, 1);
+}
+
+fn record_query_writes(
+    query_set_writes: &mut QuerySetWrites,
+    query_set: &Arc<QuerySet>,
+    first_slot: u32,
+    slot_count: u32,
+) {
+    let slots = query_set_writes
         .entry(query_set.tracker_index())
-        .or_insert_with(|| BitVec::from_elem(query_set.desc.count as usize, false))
-        .set(slot_index as usize, true);
+        .or_insert_with(|| BitVec::from_elem(query_set.desc.count as usize, false));
+    for slot in first_slot..first_slot + slot_count {
+        slots.set(slot as usize, true);
+    }
 }
 
 #[derive(Debug)]
@@ -185,6 +196,12 @@ pub enum QueryUseError {
         query_index: u32,
         query_set_size: u32,
     },
+    #[error("Query {query_index} uses {view_count} slots because the render pass has {view_count} multiview views, which overruns a query set of size {query_set_size}")]
+    MultiviewOutOfBounds {
+        query_index: u32,
+        view_count: u32,
+        query_set_size: u32,
+    },
     #[error("Query {query_index} has already been used within the same renderpass. Queries must only be used once per renderpass")]
     UsedTwiceInsideRenderpass { query_index: u32 },
     #[error("Query {new_query_index} was started while query {active_query_index} was already active. No more than one statistic or occlusion query may be active at once")]
@@ -211,6 +228,7 @@ impl WebGpuError for QueryUseError {
             Self::Device(e) => e.webgpu_error_type(),
             Self::DestroyedResource(e) => e.webgpu_error_type(),
             Self::OutOfBounds { .. }
+            | Self::MultiviewOutOfBounds { .. }
             | Self::UsedTwiceInsideRenderpass { .. }
             | Self::AlreadyStarted { .. }
             | Self::AlreadyStopped
@@ -257,10 +275,14 @@ impl WebGpuError for ResolveError {
 }
 
 impl QuerySet {
+    /// Validates a query that uses the `view_count` slots starting at `query_index`.
+    ///
+    /// Queries inside a multiview render pass use one slot per view.
     pub(crate) fn validate_query(
         self: &Arc<Self>,
         query_type: SimplifiedQueryType,
         query_index: u32,
+        view_count: u32,
         reset_state: Option<&mut QueryResetMap>,
     ) -> Result<(), QueryUseError> {
         // NOTE: Further code assumes the index is good, so do this first.
@@ -270,13 +292,21 @@ impl QuerySet {
                 query_set_size: self.desc.count,
             });
         }
+        if u64::from(query_index) + u64::from(view_count) > u64::from(self.desc.count) {
+            return Err(QueryUseError::MultiviewOutOfBounds {
+                query_index,
+                view_count,
+                query_set_size: self.desc.count,
+            });
+        }
 
         // We need to defer our resets because we are in a renderpass,
         // add the usage to the reset map.
         if let Some(reset) = reset_state {
-            let used = reset.use_query_set(self, query_index);
-            if used {
-                return Err(QueryUseError::UsedTwiceInsideRenderpass { query_index });
+            for slot in query_index..query_index + view_count {
+                if reset.use_query_set(self, slot) {
+                    return Err(QueryUseError::UsedTwiceInsideRenderpass { query_index: slot });
+                }
             }
         }
 
@@ -295,23 +325,31 @@ impl QuerySet {
         self: &Arc<Self>,
         raw_encoder: &mut dyn hal::DynCommandEncoder,
         query_index: u32,
+        view_count: u32,
         reset_state: Option<&mut QueryResetMap>,
         snatch_guard: &SnatchGuard<'_>,
         query_set_writes: &mut QuerySetWrites,
     ) -> Result<(), QueryUseError> {
         let needs_reset = reset_state.is_none();
-        self.validate_query(SimplifiedQueryType::Timestamp, query_index, reset_state)?;
+        self.validate_query(
+            SimplifiedQueryType::Timestamp,
+            query_index,
+            view_count,
+            reset_state,
+        )?;
 
         unsafe {
             // If we don't have a reset state tracker which can defer resets, we must reset now.
             if needs_reset {
-                raw_encoder
-                    .reset_queries(self.try_raw(snatch_guard)?, query_index..(query_index + 1));
+                raw_encoder.reset_queries(
+                    self.try_raw(snatch_guard)?,
+                    query_index..(query_index + view_count),
+                );
             }
             raw_encoder.write_timestamp(self.try_raw(snatch_guard)?, query_index);
         }
 
-        record_query_write(query_set_writes, self, query_index);
+        record_query_writes(query_set_writes, self, query_index, view_count);
         Ok(())
     }
 }
@@ -321,68 +359,16 @@ pub(super) fn validate_and_begin_occlusion_query(
     raw_encoder: &mut dyn hal::DynCommandEncoder,
     tracker: &mut QuerySetTracker,
     query_index: u32,
+    view_count: u32,
     reset_state: Option<&mut QueryResetMap>,
     active_query: &mut Option<(Arc<QuerySet>, u32)>,
     snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), QueryUseError> {
-    let needs_reset = reset_state.is_none();
-    query_set.validate_query(SimplifiedQueryType::Occlusion, query_index, reset_state)?;
-
-    tracker.insert_single(query_set.clone());
-
-    if let Some((_old, old_idx)) = active_query.take() {
-        return Err(QueryUseError::AlreadyStarted {
-            active_query_index: old_idx,
-            new_query_index: query_index,
-        });
-    }
-    let (query_set, _) = &active_query.insert((query_set, query_index));
-
-    unsafe {
-        // If we don't have a reset state tracker which can defer resets, we must reset now.
-        if needs_reset {
-            raw_encoder.reset_queries(
-                query_set.try_raw(snatch_guard)?,
-                query_index..(query_index + 1),
-            );
-        }
-        raw_encoder.begin_query(query_set.try_raw(snatch_guard)?, query_index);
-    }
-
-    Ok(())
-}
-
-pub(super) fn end_occlusion_query(
-    raw_encoder: &mut dyn hal::DynCommandEncoder,
-    active_query: &mut Option<(Arc<QuerySet>, u32)>,
-    snatch_guard: &SnatchGuard<'_>,
-    query_set_writes: &mut QuerySetWrites,
-) -> Result<(), QueryUseError> {
-    if let Some((query_set, query_index)) = active_query.take() {
-        unsafe { raw_encoder.end_query(query_set.try_raw(snatch_guard)?, query_index) };
-        record_query_write(query_set_writes, &query_set, query_index);
-        Ok(())
-    } else {
-        Err(QueryUseError::AlreadyStopped)
-    }
-}
-
-pub(super) fn validate_and_begin_pipeline_statistics_query(
-    query_set: Arc<QuerySet>,
-    raw_encoder: &mut dyn hal::DynCommandEncoder,
-    tracker: &mut QuerySetTracker,
-    device: &Arc<Device>,
-    query_index: u32,
-    reset_state: Option<&mut QueryResetMap>,
-    active_query: &mut Option<(Arc<QuerySet>, u32)>,
-    snatch_guard: &SnatchGuard<'_>,
-) -> Result<(), QueryUseError> {
-    query_set.same_device(device)?;
-
     let needs_reset = reset_state.is_none();
     query_set.validate_query(
-        SimplifiedQueryType::PipelineStatistics,
+        SimplifiedQueryType::Occlusion,
         query_index,
+        view_count,
         reset_state,
     )?;
 
@@ -401,7 +387,68 @@ pub(super) fn validate_and_begin_pipeline_statistics_query(
         if needs_reset {
             raw_encoder.reset_queries(
                 query_set.try_raw(snatch_guard)?,
-                query_index..(query_index + 1),
+                query_index..(query_index + view_count),
+            );
+        }
+        raw_encoder.begin_query(query_set.try_raw(snatch_guard)?, query_index);
+    }
+
+    Ok(())
+}
+
+pub(super) fn end_occlusion_query(
+    raw_encoder: &mut dyn hal::DynCommandEncoder,
+    active_query: &mut Option<(Arc<QuerySet>, u32)>,
+    view_count: u32,
+    snatch_guard: &SnatchGuard<'_>,
+    query_set_writes: &mut QuerySetWrites,
+) -> Result<(), QueryUseError> {
+    if let Some((query_set, query_index)) = active_query.take() {
+        unsafe { raw_encoder.end_query(query_set.try_raw(snatch_guard)?, query_index) };
+        record_query_writes(query_set_writes, &query_set, query_index, view_count);
+        Ok(())
+    } else {
+        Err(QueryUseError::AlreadyStopped)
+    }
+}
+
+pub(super) fn validate_and_begin_pipeline_statistics_query(
+    query_set: Arc<QuerySet>,
+    raw_encoder: &mut dyn hal::DynCommandEncoder,
+    tracker: &mut QuerySetTracker,
+    device: &Arc<Device>,
+    query_index: u32,
+    view_count: u32,
+    reset_state: Option<&mut QueryResetMap>,
+    active_query: &mut Option<(Arc<QuerySet>, u32)>,
+    snatch_guard: &SnatchGuard<'_>,
+) -> Result<(), QueryUseError> {
+    query_set.same_device(device)?;
+
+    let needs_reset = reset_state.is_none();
+    query_set.validate_query(
+        SimplifiedQueryType::PipelineStatistics,
+        query_index,
+        view_count,
+        reset_state,
+    )?;
+
+    tracker.insert_single(query_set.clone());
+
+    if let Some((_old, old_idx)) = active_query.take() {
+        return Err(QueryUseError::AlreadyStarted {
+            active_query_index: old_idx,
+            new_query_index: query_index,
+        });
+    }
+    let (query_set, _) = &active_query.insert((query_set, query_index));
+
+    unsafe {
+        // If we don't have a reset state tracker which can defer resets, we must reset now.
+        if needs_reset {
+            raw_encoder.reset_queries(
+                query_set.try_raw(snatch_guard)?,
+                query_index..(query_index + view_count),
             );
         }
         raw_encoder.begin_query(query_set.try_raw(snatch_guard)?, query_index);
@@ -413,12 +460,13 @@ pub(super) fn validate_and_begin_pipeline_statistics_query(
 pub(super) fn end_pipeline_statistics_query(
     raw_encoder: &mut dyn hal::DynCommandEncoder,
     active_query: &mut Option<(Arc<QuerySet>, u32)>,
+    view_count: u32,
     snatch_guard: &SnatchGuard<'_>,
     query_set_writes: &mut QuerySetWrites,
 ) -> Result<(), QueryUseError> {
     if let Some((query_set, query_index)) = active_query.take() {
         unsafe { raw_encoder.end_query(query_set.try_raw(snatch_guard)?, query_index) };
-        record_query_write(query_set_writes, &query_set, query_index);
+        record_query_writes(query_set_writes, &query_set, query_index, view_count);
         Ok(())
     } else {
         Err(QueryUseError::AlreadyStopped)
@@ -507,6 +555,7 @@ pub(super) fn write_timestamp(
     query_set.validate_and_write_timestamp(
         state.raw_encoder,
         query_index,
+        1,
         None,
         state.snatch_guard,
         state.query_set_writes,
