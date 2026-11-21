@@ -27,6 +27,14 @@ SamplerComparisonState nagaComparisonSamplerHeap[2048]: register(s0, space1);
 StructuredBuffer<uint> nagaGroup0SamplerIndexArray : register(t0, space255);
 static const SamplerState samp = nagaSamplerHeap[nagaGroup0SamplerIndexArray[0]];
 
+float4 ZeroValuefloat4() {
+    return (float4)0;
+}
+
+uint2 ZeroValueuint2() {
+    return (uint2)0;
+}
+
 float4 nagaTextureSampleBaseClampToEdge(
     Texture2D<float4> plane0,
     Texture2D<float4> plane1,
@@ -133,42 +141,86 @@ uint2 NagaExternalDimensions2D(Texture2D<float4> plane0, Texture2D<float4> plane
     }
 }
 
-float4 test(Texture2D<float4> t_plane0_, Texture2D<float4> t_plane1_, Texture2D<float4> t_plane2_, NagaExternalTextureParams t_params)
+float4 fragment_main() : SV_Target0
 {
     float4 a = (float4)0;
     float4 b = (float4)0;
     float4 c = (float4)0;
     uint2 d = (uint2)0;
+    float4 local = (float4)0;
 
-    float4 _e4 = nagaTextureSampleBaseClampToEdge(t_plane0_, t_plane1_, t_plane2_, t_params, samp, (0.0).xx);
+    a = ZeroValuefloat4();
+    b = ZeroValuefloat4();
+    c = ZeroValuefloat4();
+    d = ZeroValueuint2();
+    float4 _e4 = nagaTextureSampleBaseClampToEdge(tex_plane0_, tex_plane1_, tex_plane2_, tex_params, samp, (0.0).xx);
     a = _e4;
-    float4 _e8 = nagaTextureLoadExternal(t_plane0_, t_plane1_, t_plane2_, t_params, (int(0)).xx);
-    b = _e8;
-    float4 _e12 = nagaTextureLoadExternal(t_plane0_, t_plane1_, t_plane2_, t_params, (0u).xx);
-    c = _e12;
-    d = NagaExternalDimensions2D(t_plane0_, t_plane1_, t_plane2_, t_params);
+    float4 _e7 = nagaTextureLoadExternal(tex_plane0_, tex_plane1_, tex_plane2_, tex_params, (int(0)).xx);
+    b = _e7;
+    float4 _e10 = nagaTextureLoadExternal(tex_plane0_, tex_plane1_, tex_plane2_, tex_params, (0u).xx);
+    c = _e10;
+    d = NagaExternalDimensions2D(tex_plane0_, tex_plane1_, tex_plane2_, tex_params);
     float4 _e16 = a;
     float4 _e17 = b;
     float4 _e19 = c;
     uint2 _e21 = d;
-    return (((_e16 + _e17) + _e19) + float2(_e21).xyxy);
-}
-
-float4 fragment_main() : SV_Target0
-{
-    const float4 _e1 = test(tex_plane0_, tex_plane1_, tex_plane2_, tex_params);
-    return _e1;
+    local = (((_e16 + _e17) + _e19) + float2(_e21).xyxy);
+    float4 _e26 = local;
+    return _e26;
 }
 
 float4 vertex_main() : SV_Position
 {
-    const float4 _e1 = test(tex_plane0_, tex_plane1_, tex_plane2_, tex_params);
-    return _e1;
+    float4 a_1 = (float4)0;
+    float4 b_1 = (float4)0;
+    float4 c_1 = (float4)0;
+    uint2 d_1 = (uint2)0;
+    float4 local_1 = (float4)0;
+
+    a_1 = ZeroValuefloat4();
+    b_1 = ZeroValuefloat4();
+    c_1 = ZeroValuefloat4();
+    d_1 = ZeroValueuint2();
+    float4 _e4 = nagaTextureSampleBaseClampToEdge(tex_plane0_, tex_plane1_, tex_plane2_, tex_params, samp, (0.0).xx);
+    a_1 = _e4;
+    float4 _e7 = nagaTextureLoadExternal(tex_plane0_, tex_plane1_, tex_plane2_, tex_params, (int(0)).xx);
+    b_1 = _e7;
+    float4 _e10 = nagaTextureLoadExternal(tex_plane0_, tex_plane1_, tex_plane2_, tex_params, (0u).xx);
+    c_1 = _e10;
+    d_1 = NagaExternalDimensions2D(tex_plane0_, tex_plane1_, tex_plane2_, tex_params);
+    float4 _e16 = a_1;
+    float4 _e17 = b_1;
+    float4 _e19 = c_1;
+    uint2 _e21 = d_1;
+    local_1 = (((_e16 + _e17) + _e19) + float2(_e21).xyxy);
+    float4 _e26 = local_1;
+    return _e26;
 }
 
 [numthreads(1, 1, 1)]
 void compute_main()
 {
-    const float4 _e1 = test(tex_plane0_, tex_plane1_, tex_plane2_, tex_params);
+    float4 a_2 = (float4)0;
+    float4 b_2 = (float4)0;
+    float4 c_2 = (float4)0;
+    uint2 d_2 = (uint2)0;
+    float4 local_2 = (float4)0;
+
+    a_2 = ZeroValuefloat4();
+    b_2 = ZeroValuefloat4();
+    c_2 = ZeroValuefloat4();
+    d_2 = ZeroValueuint2();
+    float4 _e4 = nagaTextureSampleBaseClampToEdge(tex_plane0_, tex_plane1_, tex_plane2_, tex_params, samp, (0.0).xx);
+    a_2 = _e4;
+    float4 _e8 = nagaTextureLoadExternal(tex_plane0_, tex_plane1_, tex_plane2_, tex_params, (int(0)).xx);
+    b_2 = _e8;
+    float4 _e12 = nagaTextureLoadExternal(tex_plane0_, tex_plane1_, tex_plane2_, tex_params, (0u).xx);
+    c_2 = _e12;
+    d_2 = NagaExternalDimensions2D(tex_plane0_, tex_plane1_, tex_plane2_, tex_params);
+    float4 _e16 = a_2;
+    float4 _e17 = b_2;
+    float4 _e19 = c_2;
+    uint2 _e21 = d_2;
+    local_2 = (((_e16 + _e17) + _e19) + float2(_e21).xyxy);
     return;
 }

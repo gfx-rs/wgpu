@@ -75,7 +75,7 @@ use alloc::{
 };
 use core::fmt::{Error as FmtError, Write};
 
-use crate::{arena::Handle, back::TaskDispatchLimits, ir, proc::index, valid::ModuleInfo};
+use crate::{arena::Handle, back::TaskDispatchLimits, ir, proc::index};
 
 mod hoist;
 mod keywords;
@@ -204,7 +204,11 @@ enum ResolvedInterpolation {
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
+    Pass(#[from] crate::back::passes::PassError),
+    #[error(transparent)]
     Format(#[from] FmtError),
+    #[error("function `{0}` has pointer parameters or arguments that must be inlined by `naga::inline::process`")]
+    NeedsInline(String),
     #[error("bind target {0:?} is empty")]
     UnimplementedBindTarget(BindTarget),
     #[error("composing of {0:?} is not implemented yet")]
@@ -442,6 +446,12 @@ pub struct PipelineOptions {
         serde(deserialize_with = "deserialize_binding_array_length_map")
     )]
     pub binding_array_length_map: crate::FastHashMap<crate::ResourceBinding, u32>,
+    /// Values for the pipeline-overridable constants of the entry point.
+    ///
+    /// The writer applies them, so the module doesn't need to go through
+    /// [`process_overrides`](crate::back::pipeline_constants::process_overrides) first.
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub constants: crate::back::PipelineConstants,
 }
 
 #[cfg(feature = "deserialize")]
@@ -837,12 +847,11 @@ pub struct TranslationInfo {
 
 pub fn write_string(
     module: &crate::Module,
-    info: &ModuleInfo,
     options: &Options,
     pipeline_options: &PipelineOptions,
 ) -> Result<(String, TranslationInfo), Error> {
     let mut w = Writer::new(String::new());
-    let info = w.write(module, info, options, pipeline_options)?;
+    let info = w.write(module, options, pipeline_options)?;
     Ok((w.finish(), info))
 }
 

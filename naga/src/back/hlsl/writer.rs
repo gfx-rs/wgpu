@@ -175,9 +175,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             written_committed_intersection: false,
             written_candidate_intersection: false,
             continue_ctx: back::continue_forward::ContinueCtx::default(),
+            switch_ends_loop_body: false,
             temp_access_chain: Vec::new(),
             need_bake_expressions: Default::default(),
-            function_task_payload_var: Default::default(),
             immediate_raw_names: crate::FastHashMap::default(),
         }
     }
@@ -199,7 +199,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.written_candidate_intersection = false;
         self.continue_ctx.clear();
         self.need_bake_expressions.clear();
-        self.function_task_payload_var.clear();
         self.immediate_raw_names.clear();
     }
 
@@ -336,10 +335,28 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     pub fn write(
         &mut self,
         module: &Module,
-        module_info: &valid::ModuleInfo,
         fragment_entry_point: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<super::ReflectionInfo, Error> {
+        let passes = back::passes::Passes {
+            entry_point: self
+                .pipeline_options
+                .entry_point
+                .as_ref()
+                .map(|&(stage, ref name)| (stage, name.as_str())),
+            constants: Some(&self.pipeline_options.constants),
+            inline: crate::inline::InlineStrategy::All,
+        };
+        let prepared = back::passes::run(module, &passes)?;
+        let (module, module_info) = (&prepared.module, &prepared.info);
+
         self.reset(module);
+
+        // Every call is inlined, so only entry points are written.
+        if let Some((_, function)) = module.functions.iter().next() {
+            return Err(Error::NeedsInline(
+                function.name.clone().unwrap_or_default(),
+            ));
+        }
 
         if module.uses_mesh_shaders() && self.options.shader_model < ShaderModel::V6_5 {
             return Err(Error::ShaderModelTooLow(
@@ -469,52 +486,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             let ep_name = self.names[&NameKey::EntryPoint(index as u16)].clone();
             let ep_io = self.write_ep_interface(module, ep, &ep_name, fragment_entry_point)?;
             self.entry_point_io.insert(index, ep_io);
-        }
-
-        // Write all regular functions
-        for (handle, function) in module.functions.iter() {
-            let info = &module_info[handle];
-
-            // Check if all of the globals are accessible
-            if !self.options.fake_missing_bindings {
-                if let Some((var_handle, _)) =
-                    module
-                        .global_variables
-                        .iter()
-                        .find(|&(var_handle, var)| match var.binding {
-                            Some(ref binding) if !info[var_handle].is_empty() => {
-                                self.options.resolve_resource_binding(binding).is_err()
-                                    && self
-                                        .options
-                                        .resolve_external_texture_resource_binding(binding)
-                                        .is_err()
-                            }
-                            _ => false,
-                        })
-                {
-                    log::debug!(
-                        "Skipping function {:?} (name {:?}) because global {:?} is inaccessible",
-                        handle,
-                        function.name,
-                        var_handle
-                    );
-                    continue;
-                }
-            }
-
-            let ctx = back::FunctionCtx {
-                ty: back::FunctionType::Function(handle),
-                info,
-                expressions: &function.expressions,
-                named_expressions: &function.named_expressions,
-            };
-            let name = self.names[&NameKey::Function(handle)].clone();
-
-            self.write_wrapped_functions(module, &ctx)?;
-
-            self.write_function(module, name.as_str(), function, &ctx, info, String::new())?;
-
-            writeln!(self.out)?;
         }
 
         let mut translated_ep_names = Vec::with_capacity(ep_range.len());
@@ -1694,7 +1665,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.update_expressions_to_bake(module, func, info);
         let ep = match func_ctx.ty {
             back::FunctionType::EntryPoint(idx) => Some(&module.entry_points[idx as usize]),
-            back::FunctionType::Function(_) => None,
+            back::FunctionType::Function(_) => unreachable!("HLSL inlines every function"),
         };
 
         let nested = matches!(
@@ -1714,20 +1685,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             .filter(|_| !ep.is_some_and(|ep| only_writes_discarded_depth(module, ep)));
 
         if let Some(result) = result {
-            // Write typedef if return type is an array
-            let array_return_type = match module.types[result.ty].inner {
-                TypeInner::Array { base, size, .. } => {
-                    let array_return_type = self.namer.call(&format!("ret_{name}"));
-                    write!(self.out, "typedef ")?;
-                    self.write_type(module, result.ty)?;
-                    write!(self.out, " {array_return_type}")?;
-                    self.write_array_size(module, base, size)?;
-                    writeln!(self.out, ";")?;
-                    Some(array_return_type)
-                }
-                _ => None,
-            };
-
             // Write modifier
             if let Some(
                 ref binding @ crate::Binding::BuiltIn(crate::BuiltIn::Position { invariant: true }),
@@ -1738,13 +1695,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
             // Write return type
             match func_ctx.ty {
-                back::FunctionType::Function(_) => {
-                    if let Some(array_return_type) = array_return_type {
-                        write!(self.out, "{array_return_type}")?;
-                    } else {
-                        self.write_type(module, result.ty)?;
-                    }
-                }
+                back::FunctionType::Function(_) => unreachable!("HLSL inlines every function"),
                 back::FunctionType::EntryPoint(index) => {
                     if let Some(ref ep_output) =
                         self.entry_point_io.get(&(index as usize)).unwrap().output
@@ -1789,28 +1740,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         let mut nested_task_payload_name: Option<String> = None;
         // Write function arguments for non entry point functions
         match func_ctx.ty {
-            back::FunctionType::Function(handle) => {
-                for (index, arg) in func.arguments.iter().enumerate() {
-                    write!(self.out, "{}", separator())?;
-                    self.write_function_argument(module, handle, arg, index)?;
-                }
-                // If this reads a task payload variable the variable needs to be passed as an `in` argument
-                for (var_handle, var) in module.global_variables.iter() {
-                    let uses = info[var_handle];
-                    if uses.contains(valid::GlobalUse::READ)
-                        && !uses.contains(valid::GlobalUse::WRITE)
-                        && var.space == crate::AddressSpace::TaskPayload
-                    {
-                        self.function_task_payload_var.insert(handle, var_handle);
-                        write!(self.out, "{}in ", separator())?;
-
-                        self.write_type(module, var.ty)?;
-                        let name = &self.names[&NameKey::GlobalVariable(var_handle)];
-                        write!(self.out, " {name}")?;
-                        break;
-                    }
-                }
-            }
+            back::FunctionType::Function(_) => unreachable!("HLSL inlines every function"),
             back::FunctionType::EntryPoint(ep_index) => {
                 let ep = &module.entry_points[ep_index as usize];
                 if let Some(ref ep_input) =
@@ -1976,70 +1906,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         self.named_expressions.clear();
 
-        Ok(())
-    }
-
-    fn write_function_argument(
-        &mut self,
-        module: &Module,
-        handle: Handle<crate::Function>,
-        arg: &crate::FunctionArgument,
-        index: usize,
-    ) -> BackendResult {
-        // External texture arguments must be expanded into separate
-        // arguments for each plane and the params buffer.
-        if module.types[arg.ty].inner.is_external_image() {
-            return self.write_function_external_texture_argument(module, handle, index);
-        }
-
-        // Write argument type
-        let arg_ty = match module.types[arg.ty].inner {
-            // pointers in function arguments are expected and resolve to `inout`
-            TypeInner::Pointer { base, .. } => {
-                //TODO: can we narrow this down to just `in` when possible?
-                write!(self.out, "inout ")?;
-                base
-            }
-            _ => arg.ty,
-        };
-        self.write_type(module, arg_ty)?;
-
-        let argument_name = &self.names[&NameKey::FunctionArgument(handle, index as u32)];
-
-        // Write argument name. Space is important.
-        write!(self.out, " {argument_name}")?;
-        if let TypeInner::Array { base, size, .. } = module.types[arg_ty].inner {
-            self.write_array_size(module, base, size)?;
-        }
-
-        Ok(())
-    }
-
-    fn write_function_external_texture_argument(
-        &mut self,
-        module: &Module,
-        handle: Handle<crate::Function>,
-        index: usize,
-    ) -> BackendResult {
-        let plane_names = [0, 1, 2].map(|i| {
-            &self.names[&NameKey::ExternalTextureFunctionArgument(
-                handle,
-                index as u32,
-                ExternalTextureNameKey::Plane(i),
-            )]
-        });
-        let params_name = &self.names[&NameKey::ExternalTextureFunctionArgument(
-            handle,
-            index as u32,
-            ExternalTextureNameKey::Params,
-        )];
-        let params_ty_name =
-            &self.names[&NameKey::Type(module.special_types.external_texture_params.unwrap())];
-        write!(
-            self.out,
-            "Texture2D<float4> {}, Texture2D<float4> {}, Texture2D<float4> {}, {params_ty_name} {params_name}",
-            plane_names[0], plane_names[1], plane_names[2],
-        )?;
         Ok(())
     }
 
@@ -2230,6 +2096,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         level: back::Level,
         selector: Handle<crate::Expression>,
         cases: &[crate::SwitchCase],
+        ends_loop_body: bool,
     ) -> BackendResult {
         // Write all cases
         let indent_level_1 = level.next();
@@ -2355,6 +2222,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         use back::continue_forward::ExitControlFlow;
         let op = match self.continue_ctx.exit_switch() {
             ExitControlFlow::None => None,
+            // Continuing is what happens anyway, and DXC rejects some loops
+            // whose last statement is a conditional `continue`.
+            ExitControlFlow::Continue { .. } if ends_loop_body => None,
             ExitControlFlow::Continue { variable } => Some(("continue", variable)),
             ExitControlFlow::Break { variable } => Some(("break", variable)),
         };
@@ -2490,7 +2360,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                     // for entry point returns, we may need to reshuffle the outputs into a different struct
                     let ep_output = match func_ctx.ty {
-                        back::FunctionType::Function(_) => None,
+                        back::FunctionType::Function(_) => {
+                            unreachable!("HLSL inlines every function")
+                        }
                         back::FunctionType::EntryPoint(index) => self
                             .entry_point_io
                             .get(&(index as usize))
@@ -2820,7 +2692,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     writeln!(self.out, "{l2}{gate_name} = false;")?;
                 }
 
-                for sta in body.iter() {
+                for (index, sta) in body.iter().enumerate() {
+                    self.switch_ends_loop_body =
+                        index + 1 == body.len() && matches!(*sta, Statement::Switch { .. });
                     self.write_stmt(module, sta, func_ctx, l2)?;
                 }
 
@@ -2868,55 +2742,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_expr(module, value, func_ctx)?;
                 writeln!(self.out, ";")?;
             }
-            Statement::Call {
-                function,
-                ref arguments,
-                result,
-            } => {
-                write!(self.out, "{level}")?;
-
-                if let Some(expr) = result {
-                    write!(self.out, "const ")?;
-                    let name = Baked(expr).to_string();
-                    let expr_ty = &func_ctx.info[expr].ty;
-                    let ty_inner = match *expr_ty {
-                        proc::TypeResolution::Handle(handle) => {
-                            self.write_type(module, handle)?;
-                            &module.types[handle].inner
-                        }
-                        proc::TypeResolution::Value(ref value) => {
-                            self.write_value_type(module, value)?;
-                            value
-                        }
-                    };
-                    write!(self.out, " {name}")?;
-                    if let TypeInner::Array { base, size, .. } = *ty_inner {
-                        self.write_array_size(module, base, size)?;
-                    }
-                    write!(self.out, " = ")?;
-                    self.named_expressions.insert(expr, name);
-                }
-                let func_name = &self.names[&NameKey::Function(function)];
-                write!(self.out, "{func_name}(")?;
-                let mut any_args_written = false;
-                let mut separator = || {
-                    if any_args_written {
-                        ", "
-                    } else {
-                        any_args_written = true;
-                        ""
-                    }
-                };
-                for argument in arguments {
-                    write!(self.out, "{}", separator())?;
-                    self.write_expr(module, *argument, func_ctx)?;
-                }
-                if let Some(&var) = self.function_task_payload_var.get(&function) {
-                    let name = &self.names[&NameKey::GlobalVariable(var)];
-                    // Pass it through directly, whether its an in variable to this function or the global variable
-                    write!(self.out, "{}{name}", separator())?;
-                }
-                writeln!(self.out, ");")?;
+            Statement::Call { function, .. } => {
+                return Err(Error::NeedsInline(
+                    module.functions[function].name.clone().unwrap_or_default(),
+                ));
             }
             Statement::Atomic {
                 pointer,
@@ -3036,7 +2865,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 selector,
                 ref cases,
             } => {
-                self.write_switch(module, func_ctx, level, selector, cases)?;
+                let ends_loop_body = mem::take(&mut self.switch_ends_loop_body);
+                self.write_switch(module, func_ctx, level, selector, cases, ends_loop_body)?;
             }
             Statement::RayQuery { query, ref fun } => {
                 // There are three possibilities for a ptr to be:
@@ -5306,7 +5136,7 @@ fn returns_nothing(module: &Module, func_ctx: &back::FunctionCtx<'_>) -> bool {
         back::FunctionType::EntryPoint(index) => {
             only_writes_discarded_depth(module, &module.entry_points[index as usize])
         }
-        back::FunctionType::Function(_) => false,
+        back::FunctionType::Function(_) => unreachable!("HLSL inlines every function"),
     }
 }
 

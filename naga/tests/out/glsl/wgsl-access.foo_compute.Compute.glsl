@@ -5,20 +5,6 @@ precision highp int;
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-struct GlobalConst {
-    uint a;
-    uvec3 b;
-    int c;
-};
-struct AlignedWrapper {
-    int value;
-};
-struct Baz {
-    mat3x2 m;
-};
-struct MatCx2InArray {
-    mat4x2 am[2];
-};
 struct AssignToMember {
     uint x;
 };
@@ -33,22 +19,13 @@ struct Outer {
     uint thing;
 };
 
-float read_from_private(inout float foo_1) {
-    float _e1 = foo_1;
-    return _e1;
-}
-
-float test_arr_as_arg(float a[5][10]) {
-    return a[4][9];
-}
-
 void assign_through_ptr_fn(inout uint p) {
     p = 42u;
     return;
 }
 
-void assign_array_through_ptr_fn(inout vec4 foo_2[2]) {
-    foo_2 = vec4[2](vec4(1.0), vec4(2.0));
+void assign_array_through_ptr_fn(inout vec4 foo[2]) {
+    foo = vec4[2](vec4(1.0), vec4(2.0));
     return;
 }
 
@@ -91,9 +68,9 @@ void assign_to_ptr_components() {
 }
 
 bool index_ptr(bool value) {
-    bool a_1[1] = bool[1](false);
-    a_1 = bool[1](value);
-    bool _e4 = a_1[0];
+    bool a[1] = bool[1](false);
+    a = bool[1](value);
+    bool _e4 = a[0];
     return _e4;
 }
 

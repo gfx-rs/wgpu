@@ -169,6 +169,8 @@ pub enum Error {
     MissingCapabilities(&'static str, Vec<Capability>),
     #[error("unimplemented {0}")]
     FeatureNotImplemented(&'static str),
+    #[error("function `{0}` has pointer parameters or arguments that must be inlined by `naga::inline::process`")]
+    NeedsInline(String),
     #[error("module is not validated properly: {0}")]
     Validation(&'static str),
     #[error("overrides should not be present at this stage")]
@@ -179,6 +181,8 @@ pub enum Error {
     SpirvVersionTooLow(u8, u8),
     #[error("mapping of {0:?} is missing")]
     MissingBinding(crate::ResourceBinding),
+    #[error(transparent)]
+    Pass(#[from] crate::back::passes::PassError),
 }
 
 #[derive(Default)]
@@ -1170,24 +1174,23 @@ pub struct PipelineOptions {
     ///
     /// If no entry point that matches is found while creating a [`Writer`], a error will be thrown.
     pub entry_point: String,
+    /// Values for the pipeline-overridable constants of the entry point.
+    ///
+    /// The writer applies them, so the module doesn't need to go through
+    /// [`process_overrides`](crate::back::pipeline_constants::process_overrides) first.
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub constants: crate::back::PipelineConstants,
 }
 
 pub fn write_vec(
     module: &crate::Module,
-    info: &crate::valid::ModuleInfo,
     options: &Options,
     pipeline_options: Option<&PipelineOptions>,
 ) -> Result<Vec<u32>, Error> {
     let mut words: Vec<u32> = Vec::new();
     let mut w = Writer::new(options)?;
 
-    w.write(
-        module,
-        info,
-        pipeline_options,
-        &options.debug_info,
-        &mut words,
-    )?;
+    w.write(module, pipeline_options, &options.debug_info, &mut words)?;
     Ok(words)
 }
 

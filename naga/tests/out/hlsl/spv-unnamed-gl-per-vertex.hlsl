@@ -23,17 +23,11 @@ ret_ZeroValuearray1_float_ ZeroValuearray1_float_() {
 static type_4 global = Constructtype_4(float4(0.0, 0.0, 0.0, 1.0), 1.0, ZeroValuearray1_float_(), ZeroValuearray1_float_());
 static int global_1 = (int)0;
 
-void function()
-{
-    int _e9 = global_1;
-    global.member = float4(((_e9 == int(0)) ? -4.0 : 1.0), ((_e9 == int(2)) ? 4.0 : -1.0), 0.0, 1.0);
-    return;
-}
-
 float4 main(uint param : SV_VertexID) : SV_Position
 {
     global_1 = int(param);
-    function();
+    int _e18 = global_1;
+    global.member = float4(((_e18 == int(0)) ? -4.0 : 1.0), ((_e18 == int(2)) ? 4.0 : -1.0), 0.0, 1.0);
     float _e6 = global.member.y;
     global.member.y = -(_e6);
     float4 _e8 = global.member;

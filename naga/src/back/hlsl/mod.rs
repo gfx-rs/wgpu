@@ -670,18 +670,28 @@ pub struct PipelineOptions {
 
     /// Whether the pipeline renders to multisampled attachments.
     pub multisampled: bool,
+    /// Values for the pipeline-overridable constants of the entry point.
+    ///
+    /// The writer applies them, so the module doesn't need to go through
+    /// [`process_overrides`](crate::back::pipeline_constants::process_overrides) first.
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub constants: back::PipelineConstants,
 }
 
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
     IoError(#[from] FmtError),
+    #[error(transparent)]
+    Pass(#[from] back::passes::PassError),
     #[error("A scalar with an unsupported width was requested: {0:?}")]
     UnsupportedScalar(crate::Scalar),
     #[error("{0}")]
     Unimplemented(String), // TODO: Error used only during development
     #[error("{0}")]
     Custom(String),
+    #[error("function `{0}` has pointer parameters or arguments that must be inlined by `naga::inline::process`")]
+    NeedsInline(String),
     #[error("overrides should not be present at this stage")]
     Override,
     #[error(transparent)]
@@ -778,6 +788,8 @@ pub struct Writer<'a, W> {
     written_committed_intersection: bool,
     written_candidate_intersection: bool,
     continue_ctx: back::continue_forward::ContinueCtx,
+    /// Whether the statement being written is a `switch` that ends a loop body.
+    switch_ends_loop_body: bool,
 
     /// A reference to some part of a global variable, lowered to a series of
     /// byte offset calculations.
@@ -798,9 +810,6 @@ pub struct Writer<'a, W> {
     /// [`AccessIndex`]: crate::Expression::AccessIndex
     temp_access_chain: Vec<storage::SubAccess>,
     need_bake_expressions: back::NeedBakeExpressions,
-
-    function_task_payload_var:
-        crate::FastHashMap<Handle<crate::Function>, Handle<crate::GlobalVariable>>,
 
     /// The name of the raw `uint4` array that backs each [`Immediate`] global.
     ///

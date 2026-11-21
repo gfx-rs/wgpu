@@ -217,6 +217,12 @@ pub struct PipelineOptions {
     pub entry_point: String,
     /// How many views to render to, if doing multiview rendering.
     pub multiview: Option<core::num::NonZeroU32>,
+    /// Values for the pipeline-overridable constants of the entry point.
+    ///
+    /// The writer applies them, so the module doesn't need to go through
+    /// [`process_overrides`](crate::back::pipeline_constants::process_overrides) first.
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub constants: back::PipelineConstants,
 }
 
 #[derive(Debug)]
@@ -411,6 +417,8 @@ type BackendResult<T = ()> = Result<T, Error>;
 /// A GLSL compilation error.
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error(transparent)]
+    Pass(#[from] back::passes::PassError),
     /// A error occurred while writing to the output.
     #[error("Format error")]
     FmtError(#[from] FmtError),
@@ -440,6 +448,8 @@ pub enum Error {
     ImageMultipleSamplers,
     #[error("{0}")]
     Custom(String),
+    #[error("function `{0}` has pointer parameters or arguments that must be inlined by `naga::inline::process`")]
+    NeedsInline(String),
     #[error("overrides should not be present at this stage")]
     Override,
     /// [`crate::Sampling::First`] is unsupported.

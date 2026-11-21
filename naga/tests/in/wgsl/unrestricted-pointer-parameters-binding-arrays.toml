@@ -1,0 +1,21 @@
+capabilities = """
+  TEXTURE_AND_SAMPLER_BINDING_ARRAY
+  | TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+"""
+targets = "WGSL | HLSL | METAL | SPIRV"
+
+[msl]
+fake_missing_bindings = true
+lang_version = [3, 0]
+spirv_cross_compatibility = false
+
+[hlsl]
+fake_missing_bindings = true
+
+[[hlsl.binding_map]]
+bind_target = { binding_array_size = 4, register = 0, space = 0 }
+resource_binding = { group = 0, binding = 0 }
+
+[[hlsl.binding_map]]
+bind_target = { binding_array_size = 4, register = 0, space = 1 }
+resource_binding = { group = 0, binding = 1 }

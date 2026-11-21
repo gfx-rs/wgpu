@@ -178,13 +178,19 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Added `Queue` getter on `Device`. By @sagudev in [#10895](https://github.com/gfx-rs/wgpu/pull/10895).
 - Add `Queue::present_with_damage`, which takes the regions that changed since the last present as a hint for the compositor. Implemented for Vulkan (`VK_KHR_incremental_present`) and EGL (`EGL_KHR_swap_buffers_with_damage` / `EGL_EXT_swap_buffers_with_damage`); ignored elsewhere. Adds `wgpu::Rect`, moved from `wgpu_core::command::Rect`. By @sauliusvl in [#10152](https://github.com/gfx-rs/wgpu/pull/10152).
 
+- Support the WGSL `unrestricted_pointer_parameters` language extension: functions may take pointers in the `storage`, `uniform`, `workgroup`, `immediate` and `task_payload` address spaces. Where a backend cannot express such a call, or a pointer argument to part of a variable like `&a[i]`, the call is inlined. By @Inner-Daemons in [#10355](https://github.com/gfx-rs/wgpu/pull/10355).
+- Functions may take `binding_array`s of textures and samplers as parameters. Calls to them are inlined. By @Inner-Daemons in [#10355](https://github.com/gfx-rs/wgpu/pull/10355).
+
 #### Naga
 
+- Added `naga::inline`, which replaces the calls a given backend cannot express with the body of the called function. By @Inner-Daemons in [#10355](https://github.com/gfx-rs/wgpu/pull/10355).
+- The HLSL backend now inlines every function call, and writes only entry points. By @Inner-Daemons in [#10355](https://github.com/gfx-rs/wgpu/pull/10355).
 - Add `@builtin(hit_barycentrics)`, a `vec2<f32>` readable in `@any_hit` and `@closest_hit` ray tracing pipeline shaders, holding two of the barycentric coordinates of the hit point on the triangle (the third is `1.0 - x - y`). Currently only supported with the SPIR-V backend. By @JMS55 in [#10193](https://github.com/gfx-rs/wgpu/pull/10193).
 - Add the `wgpu_ray_tracing_invocation_reorder` WGSL enable-extension and the matching `Capabilities::RAY_TRACING_INVOCATION_REORDER`, exposing hit objects and shader invocation reordering. It provides the `hit_object` type, which records the result of a ray traversal without running any hit or miss shader, various `hitObject*` built-in functions, and `reorderThread`, which reorders invocations of a `@ray_generation` shader to improve coherence. Currently only supported with the SPIR-V backend. Enable it with `Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER`, which also requires `Features::EXPERIMENTAL_RAY_TRACING_PIPELINES` and is supported on Vulkan with [VK_EXT_ray_tracing_invocation_reorder](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_ray_tracing_invocation_reorder.html). `reorderThread` may be a no-op. Check whether `Adapter::ray_tracing_invocation_reorder_mode` reports `RayTracingInvocationReorderMode::Reorder` to see if invocations will be reordered. By @JMS55 in [#10311](https://github.com/gfx-rs/wgpu/pull/10311) and [#10871](https://github.com/gfx-rs/wgpu/pull/10871).
 - Support WGSL `bitcast` between `vec2<f16>` and 32-bit scalars, between `vec4<f16>` and `vec2` of 32-bit scalars, between `f16` and `i16`/`u16` (with `wgpu_int16`), and the corresponding SPIR-V `OpBitcast`s. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
 - Support SPIR-V's `OpGroupNonUniformBallotFindLSB`/`MSB` and GLSL's `subgroupBallotFindLSB`/`MSB` with the new `Statement::SubgroupBallotFindBit`. HLSL, MSL, and WGSL output use a polyfill. The GLSL frontend now also accepts `gl_SubgroupSize` and `gl_SubgroupInvocationID`. By @nazar-pc in [#9966](https://github.com/gfx-rs/wgpu/pull/9966).
 - Parse `NonSemantic.DebugPrintf` instructions in SPIR-V shaders. By @evilpie in [#10561](https://github.com/gfx-rs/wgpu/pull/10561).
+- Backends now put the expressions of the functions that their passes change back in order, and remove the unused ones, so passes may append expressions freely. `naga::compact::compact` also accepts functions whose expression arenas contain forward references (an expression referring to a later one), and renumbers the function's expressions so that every expression precedes its users. Modules without forward references are compacted exactly as before. By @Inner-Daemons in [#11061](https://github.com/gfx-rs/wgpu/pull/11061).
 
 #### Hal
 
@@ -254,10 +260,14 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 #### naga
 
+- The SPIR-V, HLSL, GLSL and MSL backends inline the calls they cannot express themselves, and return a new `NeedsInline` error if a call is left that they cannot write. The SPIR-V writer previously emitted invalid SPIR-V for pointer arguments to part of a variable. `FunctionError::InvalidArgumentPointerSpace` was removed. By @Inner-Daemons in [#10355](https://github.com/gfx-rs/wgpu/pull/10355).
 - `naga::valid::ValidationError` is now always returned boxed, to avoid `clippy::large_result_err` warning. By @beicause in [#9612](https://github.com/gfx-rs/wgpu/pull/9612)
 - Added `naga::valid::Capabilities::LINEAR_INTERPOLATION`, which is now required in order to use `@interpolate(linear)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - The GLSL backend's `MissingFeatures` error now names the GLSL version that lacks the features, e.g. `GLSL 300 es doesn't support the required feature(s): NOPERSPECTIVE_QUALIFIER`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - Bit reinterpretation is now represented in the Naga IR by the new `naga::ir::Expression::Bitcast`, which names its result type. `naga::ir::Expression::As` now only converts, and its `kind` and `convert` fields are replaced by `target: Scalar`. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
+- The GLSL backend's `Writer` API now matches the other backends: `Writer::new(out, options, pipeline_options, policies)` no longer takes the module and cannot fail, and `Writer::write(module, info)` takes the module and returns all errors. By @inner-daemons in [#11045](https://github.com/gfx-rs/wgpu/pull/11045).
+- Added `naga::back::pipeline_constants::resolve_overrides`, which applies the overrides that one entry point uses to a copy of a module without compacting it. `wgpu-core` uses it to check a pipeline stage, and no longer compacts the module itself. By @inner-daemons in [#11060](https://github.com/gfx-rs/wgpu/pull/11060).
+- The SPIR-V, HLSL, MSL and GLSL backends no longer take a `ModuleInfo`. Each backend now prepares the module it is given itself: it keeps only the entry point being written, removes what that entry point doesn't use, applies pipeline-overridable constants from the new `constants` field of its `PipelineOptions`, and validates the result. The module must still be validated before it is given to a backend, and `naga::back::pipeline_constants::process_overrides` no longer needs to be called first. By @inner-daemons in [#11059](https://github.com/gfx-rs/wgpu/pull/11059).
 
 #### Hal
 

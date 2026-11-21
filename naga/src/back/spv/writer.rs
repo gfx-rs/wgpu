@@ -3375,6 +3375,13 @@ impl Writer {
                             )),
                         };
                         self.require_any("`primitive_index` built-in", enabled_by)?;
+                        // The module may have no mesh shader of its own.
+                        if self
+                            .capabilities_used
+                            .contains(&spirv::Capability::MeshShadingEXT)
+                        {
+                            self.use_extension("SPV_EXT_mesh_shader");
+                        }
 
                         if stage == crate::ShaderStage::Mesh {
                             others.push(Decoration::PerPrimitiveEXT);
@@ -4056,12 +4063,24 @@ impl Writer {
     pub fn write(
         &mut self,
         ir_module: &crate::Module,
-        info: &ModuleInfo,
         pipeline_options: Option<&PipelineOptions>,
         debug_info: &Option<DebugInfo>,
         words: &mut Vec<Word>,
     ) -> Result<(), Error> {
         self.reset();
+
+        let passes = crate::back::passes::Passes {
+            entry_point: pipeline_options.map(|po| (po.shader_stage, po.entry_point.as_str())),
+            constants: pipeline_options.map(|po| &po.constants),
+            inline: crate::inline::InlineStrategy::OnlyNeeded(crate::inline::InlineTarget::Spirv),
+        };
+        let prepared = crate::back::passes::run(ir_module, &passes)?;
+        let (ir_module, info) = (&prepared.module, &prepared.info);
+        if let Some(name) =
+            crate::inline::find_needs_inline(ir_module, crate::inline::InlineTarget::Spirv)
+        {
+            return Err(Error::NeedsInline(name));
+        }
 
         // Try to find the entry point and corresponding index
         let ep_index = match pipeline_options {

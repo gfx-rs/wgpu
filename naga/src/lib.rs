@@ -37,16 +37,15 @@ use naga::back::glsl;
 let mut glsl_source = String::new();
 glsl::Writer::new(
     &mut glsl_source,
-    &module,
-    &module_info,
     &glsl::Options::default(),
     &glsl::PipelineOptions {
         entry_point: "main_fs".into(),
         shader_stage: naga::ShaderStage::Fragment,
         multiview: None,
+        constants: Default::default(),
     },
     naga::proc::BoundsCheckPolicies::default(),
-)?.write()?;
+).write(&module)?;
 
 assert_eq!(glsl_source, "\
 #version 310 es
@@ -116,6 +115,7 @@ pub mod compact;
 pub mod diagnostic_filter;
 pub mod error;
 pub mod front;
+pub mod inline;
 pub mod ir;
 pub mod keywords;
 mod non_max_u32;

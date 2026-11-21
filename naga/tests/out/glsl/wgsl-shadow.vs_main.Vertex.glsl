@@ -16,11 +16,6 @@ struct VertexOutput {
     vec3 world_normal;
     vec4 world_position;
 };
-struct Light {
-    mat4x4 proj;
-    vec4 pos;
-    vec4 color;
-};
 const vec3 c_ambient = vec3(0.05, 0.05, 0.05);
 const uint c_max_lights = 10u;
 
