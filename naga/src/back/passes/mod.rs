@@ -25,6 +25,7 @@ the entry points don't use.
 )]
 
 mod emit;
+pub mod workgroup_zero_init;
 
 use alloc::{borrow::Cow, boxed::Box};
 
@@ -39,6 +40,8 @@ use crate::{
 pub enum PassError {
     #[error(transparent)]
     Reorder(#[from] ReorderError),
+    #[error(transparent)]
+    WorkgroupZeroInit(#[from] workgroup_zero_init::WorkgroupZeroInitError),
     #[error("module failed revalidation after backend passes")]
     Validation(#[from] Box<WithSpan<ValidationError>>),
 }
@@ -64,12 +67,17 @@ pub struct PassOptions {
 pub(crate) struct Passes {
     /// See [`PassOptions::compact`].
     pub compact: bool,
+    /// Run [`workgroup_zero_init`].
+    pub workgroup_zero_init: bool,
 }
 
 impl From<PassOptions> for Passes {
     fn from(options: PassOptions) -> Self {
         let PassOptions { compact } = options;
-        Self { compact }
+        Self {
+            compact,
+            workgroup_zero_init: false,
+        }
     }
 }
 
@@ -78,16 +86,22 @@ impl From<PassOptions> for Passes {
 /// Return the module the backend should write, which is `module` itself if no
 /// pass changed anything, and its [`ModuleInfo`].
 pub(crate) fn run<'a>(
-    module: Cow<'a, Module>,
+    mut module: Cow<'a, Module>,
     passes: &Passes,
 ) -> Result<(Cow<'a, Module>, ModuleInfo), PassError> {
-    let Passes { compact } = *passes;
+    let Passes {
+        compact,
+        workgroup_zero_init,
+    } = *passes;
     // Each pass calls `Cow::to_mut` only if it will change the module, which
     // copies a borrowed module and is free for an owned one, reports whether
     // it changed it, and adds what it left for compaction to remove to
     // `dropped`.
-    let changed = false;
+    let mut changed = false;
     let dropped = Dropped::default();
+    if workgroup_zero_init {
+        changed |= workgroup_zero_init::run(&mut module)?;
+    }
     finish(module, changed, compact, &dropped)
 }
 
