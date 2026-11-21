@@ -720,20 +720,10 @@ impl super::Device {
             } else {
                 &context.layout.naga_options
             };
-            let mut writer = glsl::Writer::new(
-                &mut output,
-                &module,
-                &info,
-                naga_options,
-                &pipeline_options,
-                policies,
-            )
-            .map_err(|e| {
-                let msg = format!("{e}");
-                crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
-            })?;
+            let mut writer =
+                glsl::Writer::new(&mut output, naga_options, &pipeline_options, policies);
 
-            let reflection_info = writer.write().map_err(|e| {
+            let reflection_info = writer.write(&module, &info).map_err(|e| {
                 let msg = format!("{e}");
                 crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
             })?;

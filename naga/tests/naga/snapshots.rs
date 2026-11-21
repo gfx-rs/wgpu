@@ -446,14 +446,11 @@ fn write_output_glsl(
             .expect("override evaluation failed");
     let mut writer = glsl::Writer::new(
         &mut buffer,
-        &module,
-        &info,
         options,
         &pipeline_options,
         bounds_check_policies,
-    )
-    .expect("GLSL init failed");
-    writer.write().expect("GLSL write failed");
+    );
+    writer.write(&module, &info).expect("GLSL write failed");
 
     let extension = format!("{ep_name}.{stage:?}.glsl");
     input.write_output_file("glsl", &extension, buffer, DIR_OUT);

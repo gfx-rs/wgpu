@@ -486,16 +486,13 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
                         multiview: None,
                     };
 
-                    if let Ok(mut writer) = naga::back::glsl::Writer::new(
+                    let _ = naga::back::glsl::Writer::new(
                         &mut string,
-                        module,
-                        info,
                         &options,
                         &pipeline_options,
                         naga::proc::BoundsCheckPolicies::default(),
-                    ) {
-                        let _ = writer.write();
-                    }
+                    )
+                    .write(module, info);
 
                     string.clear();
                 }
