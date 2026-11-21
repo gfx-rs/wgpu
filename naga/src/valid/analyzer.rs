@@ -302,6 +302,12 @@ pub struct FunctionInfo {
     /// See [`DiagnosticFilterNode`] for details on how the tree is represented and used in
     /// validation.
     diagnostic_filter_leaf: Option<Handle<DiagnosticFilterNode>>,
+
+    /// Number of statements and expressions this function would contain if
+    /// every call it makes, directly or indirectly, were inlined.
+    ///
+    /// See [`MAX_INLINED_FUNCTION_SIZE`](super::MAX_INLINED_FUNCTION_SIZE).
+    pub inlined_size: u64,
 }
 
 impl FunctionInfo {
@@ -903,6 +909,9 @@ impl FunctionInfo {
 
         let mut combined_uniformity = FunctionUniformity::new();
         for statement in statements {
+            // Calls count too: inlining replaces them with argument and result
+            // glue, and counting them keeps chains of empty callees from summing to zero.
+            self.inlined_size = self.inlined_size.saturating_add(1);
             let uniformity = match *statement {
                 S::Emit(ref range) => {
                     let mut requirements = UniformityRequirements::empty();
@@ -1110,6 +1119,7 @@ impl FunctionInfo {
                         let _ = self.add_ref(argument);
                     }
                     let info = &other_functions[function.index()];
+                    self.inlined_size = self.inlined_size.saturating_add(info.inlined_size);
                     //Note: the result is validated by the Validator, not here
                     self.process_call(info, arguments, expression_arena)?
                 }
@@ -1325,6 +1335,7 @@ impl ModuleInfo {
             sampling: crate::FastHashSet::default(),
             dual_source_blending: false,
             diagnostic_filter_leaf: fun.diagnostic_filter_leaf,
+            inlined_size: fun.expressions.len() as u64,
         };
         let resolve_context =
             ResolveContext::with_locals(module, &fun.local_variables, &fun.arguments);
@@ -1357,6 +1368,13 @@ impl ModuleInfo {
         )?;
         info.uniformity = uniformity.result;
         info.may_kill = uniformity.exit.contains(ExitFlags::MAY_KILL);
+
+        if info.inlined_size > super::MAX_INLINED_FUNCTION_SIZE {
+            return Err(FunctionError::InlinedSizeLimitExceeded {
+                limit: super::MAX_INLINED_FUNCTION_SIZE,
+            }
+            .with_span());
+        }
 
         // If there are any globals referenced directly by a named expression,
         // ensure they are marked as used even if they are not referenced
@@ -1460,6 +1478,7 @@ fn uniform_control_flow() {
         sampling: crate::FastHashSet::default(),
         dual_source_blending: false,
         diagnostic_filter_leaf: None,
+        inlined_size: 0,
     };
     let resolve_context = ResolveContext {
         constants: &Arena::new(),
