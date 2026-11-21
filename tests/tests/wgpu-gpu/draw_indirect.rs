@@ -1528,9 +1528,7 @@ static MULTI_DRAW_INDIRECT_OVER_ICB_WORKGROUP: GpuTestConfiguration = GpuTestCon
     .parameters(
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
-            .limits(wgpu::Limits::downlevel_defaults())
-            // https://github.com/gfx-rs/wgpu/issues/9187
-            .expect_fail(FailureCase::kosmic_krisp().panic("assertion failed: result_buffer")),
+            .limits(wgpu::Limits::downlevel_defaults()),
     )
     .run_async(run_multi_draw_indirect_over_icb_workgroup);
 
@@ -1572,9 +1570,7 @@ static MULTI_DRAW_INDIRECT_ICB_MEMORY: GpuTestConfiguration = GpuTestConfigurati
     .parameters(
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
-            .limits(wgpu::Limits::downlevel_defaults())
-            // https://github.com/gfx-rs/wgpu/issues/9187
-            .expect_fail(FailureCase::kosmic_krisp().panic("assertion failed: result_buffer")),
+            .limits(wgpu::Limits::downlevel_defaults()),
     )
     .run_async(run_multi_draw_indirect_icb_memory);
 
@@ -1594,9 +1590,7 @@ static MULTI_DRAW_INDIRECT_MIXED_SEQUENCE: GpuTestConfiguration = GpuTestConfigu
     .parameters(
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
-            .limits(wgpu::Limits::downlevel_defaults())
-            // https://github.com/gfx-rs/wgpu/issues/9187
-            .expect_fail(FailureCase::kosmic_krisp().panic("assertion failed: result_buffer")),
+            .limits(wgpu::Limits::downlevel_defaults()),
     )
     .run_async(run_multi_draw_indirect_mixed_sequence);
 
@@ -1605,9 +1599,7 @@ static MULTI_DRAW_INDIRECT_WITH_BIND_GROUPS: GpuTestConfiguration = GpuTestConfi
     .parameters(
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
-            .limits(wgpu::Limits::downlevel_defaults())
-            // https://github.com/gfx-rs/wgpu/issues/9187
-            .expect_fail(FailureCase::kosmic_krisp().panic("assertion failed: result_buffer")),
+            .limits(wgpu::Limits::downlevel_defaults()),
     )
     .run_async(run_multi_draw_indirect_with_bind_groups);
 
@@ -1616,9 +1608,7 @@ static MULTI_DRAW_INDIRECT_FRAGMENT_UNIFORM: GpuTestConfiguration = GpuTestConfi
     .parameters(
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
-            .limits(wgpu::Limits::downlevel_defaults())
-            // https://github.com/gfx-rs/wgpu/issues/9187
-            .expect_fail(FailureCase::kosmic_krisp().panic("assertion failed: result_buffer")),
+            .limits(wgpu::Limits::downlevel_defaults()),
     )
     .run_async(run_multi_draw_indirect_fragment_uniform);
 
@@ -1627,9 +1617,7 @@ static MULTI_DRAW_INDIRECT_SAMPLED_TEXTURE: GpuTestConfiguration = GpuTestConfig
     .parameters(
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
-            .limits(wgpu::Limits::downlevel_defaults())
-            // https://github.com/gfx-rs/wgpu/issues/9187
-            .expect_fail(FailureCase::kosmic_krisp().panic("assertion failed: result_buffer")),
+            .limits(wgpu::Limits::downlevel_defaults()),
     )
     .run_async(run_multi_draw_indirect_sampled_texture);
 
@@ -1638,9 +1626,7 @@ static MULTI_DRAW_INDEXED_INDIRECT_U16: GpuTestConfiguration = GpuTestConfigurat
     .parameters(
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
-            .limits(wgpu::Limits::downlevel_defaults())
-            // https://github.com/gfx-rs/wgpu/issues/9187
-            .expect_fail(FailureCase::kosmic_krisp().panic("assertion failed: result_buffer")),
+            .limits(wgpu::Limits::downlevel_defaults()),
     )
     .run_async(|ctx| run_multi_draw_indexed_indirect_u16(ctx, 0));
 
@@ -1653,9 +1639,7 @@ static MULTI_DRAW_INDEXED_INDIRECT_U16_OFFSET: GpuTestConfiguration = GpuTestCon
             // The GL backend drops the index buffer's binding offset for
             // indirect indexed draws: `glDrawElementsIndirect` has no
             // byte-offset parameter, and only direct draws apply it.
-            .expect_fail(FailureCase::backend(wgpu::Backends::GL))
-            // https://github.com/gfx-rs/wgpu/issues/9187
-            .expect_fail(FailureCase::kosmic_krisp().panic("assertion failed: result_buffer")),
+            .expect_fail(FailureCase::backend(wgpu::Backends::GL)),
     )
     .run_async(|ctx| run_multi_draw_indexed_indirect_u16(ctx, 2));
 
@@ -1665,9 +1649,7 @@ static MULTI_DRAW_INDEXED_INDIRECT_POSITIVE_BASE_VERTEX: GpuTestConfiguration =
         .parameters(
             TestParameters::default()
                 .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
-                .limits(wgpu::Limits::downlevel_defaults())
-                // https://github.com/gfx-rs/wgpu/issues/9187
-                .expect_fail(FailureCase::kosmic_krisp().panic("assertion failed: result_buffer")),
+                .limits(wgpu::Limits::downlevel_defaults()),
         )
         .run_async(|ctx| run_multi_draw_indexed_indirect_base_vertex(ctx, 4));
 
@@ -1677,9 +1659,7 @@ static MULTI_DRAW_INDEXED_INDIRECT_NEGATIVE_BASE_VERTEX: GpuTestConfiguration =
         .parameters(
             TestParameters::default()
                 .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
-                .limits(wgpu::Limits::downlevel_defaults())
-                // https://github.com/gfx-rs/wgpu/issues/9187
-                .expect_fail(FailureCase::kosmic_krisp().panic("assertion failed: result_buffer")),
+                .limits(wgpu::Limits::downlevel_defaults()),
         )
         .run_async(|ctx| run_multi_draw_indexed_indirect_base_vertex(ctx, -4));
 
@@ -1902,9 +1882,7 @@ static MULTI_DRAW_INDIRECT_GPU_GENERATED_ARGS: GpuTestConfiguration = GpuTestCon
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
-            // https://github.com/gfx-rs/wgpu/issues/9187
-            .expect_fail(FailureCase::kosmic_krisp().panic("assertion `left == right` failed")),
+            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION),
     )
     .run_async(|ctx| run_gpu_generated_multi_draw_test(ctx, false));
 
@@ -1914,9 +1892,7 @@ static MULTI_DRAW_INDEXED_INDIRECT_GPU_GENERATED_ARGS: GpuTestConfiguration =
         .parameters(
             TestParameters::default()
                 .test_features_limits()
-                .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
-                // https://github.com/gfx-rs/wgpu/issues/9187
-                .expect_fail(FailureCase::kosmic_krisp().panic("assertion `left == right` failed")),
+                .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION),
         )
         .run_async(|ctx| run_gpu_generated_multi_draw_test(ctx, true));
 
@@ -1927,7 +1903,7 @@ macro_rules! make_test {
     ($name:ident, $test_data:expr, $features:expr) => {
         make_test!($name, $test_data, false, $features);
     };
-    ($name:ident, $test_data:expr, $expect_noop:expr, $features:expr $(, $failure:expr)?) => {
+    ($name:ident, $test_data:expr, $expect_noop:expr, $features:expr) => {
         #[apply(gpu_test!)]
         static $name: GpuTestConfiguration = GpuTestConfiguration::new()
             .parameters({
@@ -1935,7 +1911,6 @@ macro_rules! make_test {
                     .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
                     .features($features)
                     .limits(wgpu::Limits::downlevel_defaults());
-                $(let params = params.expect_fail($failure);)?
 
                 if $expect_noop {
                     params.enable_noop()
@@ -1976,14 +1951,7 @@ fn get_draw_test_data(first_vertex: u32, vertex_count: u32) -> TestData {
     }
 }
 
-// https://github.com/gfx-rs/wgpu/issues/9187
-make_test!(
-    DRAW,
-    get_draw_test_data(0, 6),
-    false,
-    wgpu::Features::empty(),
-    FailureCase::kosmic_krisp().panic("assertion failed: succeeded")
-);
+make_test!(DRAW, get_draw_test_data(0, 6));
 make_failing_test!(DRAW_OOB_START, get_draw_test_data(1, 6));
 make_failing_test!(DRAW_OOB_COUNT, get_draw_test_data(0, 7));
 
@@ -2106,14 +2074,7 @@ fn get_indexed_draw_test_data(first_index: u32, index_count: u32) -> TestData {
     }
 }
 
-// https://github.com/gfx-rs/wgpu/issues/9187
-make_test!(
-    INDEXED_DRAW,
-    get_indexed_draw_test_data(0, 6),
-    false,
-    wgpu::Features::empty(),
-    FailureCase::kosmic_krisp().panic("assertion failed: succeeded")
-);
+make_test!(INDEXED_DRAW, get_indexed_draw_test_data(0, 6));
 make_failing_test!(INDEXED_DRAW_OOB_START, get_indexed_draw_test_data(1, 6));
 make_failing_test!(INDEXED_DRAW_OOB_COUNT, get_indexed_draw_test_data(0, 7));
 
@@ -2154,13 +2115,9 @@ fn get_instanced_indexed_draw_test_data(
     }
 }
 
-// https://github.com/gfx-rs/wgpu/issues/9187
 make_test!(
     INSTANCED_INDEXED_DRAW,
-    get_instanced_indexed_draw_test_data(0, 6, 0, 4),
-    false,
-    wgpu::Features::empty(),
-    FailureCase::kosmic_krisp().panic("assertion failed: succeeded")
+    get_instanced_indexed_draw_test_data(0, 6, 0, 4)
 );
 make_failing_test!(
     INSTANCED_INDEXED_DRAW_OOB_START,
@@ -2406,9 +2363,7 @@ static MULTI_DRAW_INDEXED_INDIRECT: GpuTestConfiguration = GpuTestConfiguration:
     .parameters(
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
-            .limits(wgpu::Limits::downlevel_defaults())
-            // https://github.com/gfx-rs/wgpu/issues/9187
-            .expect_fail(FailureCase::kosmic_krisp().panic("assertion failed: succeeded")),
+            .limits(wgpu::Limits::downlevel_defaults()),
     )
     .run_async(|ctx| run_test_inner(ctx, get_indexed_draw_test_data(0, 6), false, true));
 
@@ -2417,8 +2372,6 @@ static MULTI_DRAW_INDIRECT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
-            .limits(wgpu::Limits::downlevel_defaults())
-            // https://github.com/gfx-rs/wgpu/issues/9187
-            .expect_fail(FailureCase::kosmic_krisp().panic("assertion failed: succeeded")),
+            .limits(wgpu::Limits::downlevel_defaults()),
     )
     .run_async(|ctx| run_test_inner(ctx, get_draw_test_data(0, 6), false, true));
