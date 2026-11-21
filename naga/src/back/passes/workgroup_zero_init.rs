@@ -617,3 +617,82 @@ impl WorkgroupInit<'_> {
         self.block.push(statement, Span::UNDEFINED);
     }
 }
+
+#[cfg(all(test, feature = "wgsl-in"))]
+mod tests {
+    use super::{run, WorkgroupZeroInitError};
+    use crate::back::passes::{run_pass_on_wgsl, PassError};
+    use crate::{Barrier, Statement};
+
+    fn body(source: &str) -> crate::Block {
+        let module = run_pass_on_wgsl(source, run).unwrap().unwrap();
+        module.entry_points[0].function.body.clone()
+    }
+
+    fn has_barrier(body: &crate::Block) -> bool {
+        body.iter()
+            .any(|s| matches!(*s, Statement::ControlBarrier(b) if b.contains(Barrier::WORK_GROUP)))
+    }
+
+    /// An array with more elements than invocations is zeroed by a loop.
+    #[test]
+    fn large_array_uses_loop() {
+        let body = body(
+            "
+            var<workgroup> a: array<u32, 100>;
+            @compute @workgroup_size(64)
+            fn main() { a[0] = 1u; }
+            ",
+        );
+        assert!(body.iter().any(|s| matches!(*s, Statement::Loop { .. })));
+        assert!(has_barrier(&body));
+    }
+
+    /// An array with no more elements than invocations needs no loop.
+    #[test]
+    fn small_array_uses_if() {
+        let body = body(
+            "
+            var<workgroup> a: array<atomic<u32>, 4>;
+            @compute @workgroup_size(64)
+            fn main() { atomicAdd(&a[0], 1u); }
+            ",
+        );
+        assert!(!body.iter().any(|s| matches!(*s, Statement::Loop { .. })));
+        assert!(body.iter().any(|s| matches!(*s, Statement::If { .. })));
+        assert!(has_barrier(&body));
+    }
+
+    /// Workgroup variables that the entry point doesn't use aren't zeroed, and
+    /// the module isn't copied.
+    #[test]
+    fn unused_variable_is_not_zeroed() {
+        let module = run_pass_on_wgsl(
+            "
+            var<workgroup> a: array<u32, 100>;
+            @compute @workgroup_size(64)
+            fn main() {}
+            ",
+            run,
+        )
+        .unwrap();
+        assert!(module.is_none());
+    }
+
+    #[test]
+    fn workgroup_size_overflow() {
+        let error = run_pass_on_wgsl(
+            "
+            var<workgroup> a: u32;
+            @compute @workgroup_size(16384, 16384, 16384)
+            fn main() { a = 1u; }
+            ",
+            run,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            PassError::WorkgroupZeroInit(WorkgroupZeroInitError::WorkgroupSizeOverflow)
+        ));
+    }
+}
