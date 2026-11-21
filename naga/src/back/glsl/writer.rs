@@ -40,7 +40,13 @@ impl<'a, W: Write> Writer<'a, W> {
         &mut self,
         module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
     ) -> Result<ReflectionInfo, Error> {
-        let (module, info) = back::passes::run(module.into(), &self.options.passes.into())?;
+        let (module, info) = back::passes::run(
+            module.into(),
+            &back::passes::Passes {
+                workgroup_zero_init: self.options.zero_initialize_workgroup_memory,
+                ..self.options.passes.into()
+            },
+        )?;
         let (module, info) = (&*module, &info);
         ModuleWriter::new(
             &mut self.out,
@@ -1396,12 +1402,6 @@ impl<'a, W: Write> ModuleWriter<'a, W> {
         // Close the parentheses and open braces to start the function body
         writeln!(self.out, ") {{")?;
 
-        if self.options.zero_initialize_workgroup_memory
-            && ctx.ty.is_compute_like_entry_point(self.module)
-        {
-            self.write_workgroup_variables_initialization(&ctx)?;
-        }
-
         // Compose the function arguments from globals, in case of an entry point.
         if let back::FunctionType::EntryPoint(ep_index) = ctx.ty {
             let stage = self.module.entry_points[ep_index as usize].stage;
@@ -1484,38 +1484,6 @@ impl<'a, W: Write> ModuleWriter<'a, W> {
 
         // Close braces and add a newline
         writeln!(self.out, "}}")?;
-
-        Ok(())
-    }
-
-    fn write_workgroup_variables_initialization(
-        &mut self,
-        ctx: &back::FunctionCtx,
-    ) -> BackendResult {
-        let mut vars = self
-            .module
-            .global_variables
-            .iter()
-            .filter(|&(handle, var)| {
-                !ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
-            })
-            .peekable();
-
-        if vars.peek().is_some() {
-            let level = back::Level(1);
-
-            writeln!(self.out, "{level}if (gl_LocalInvocationID == uvec3(0u)) {{")?;
-
-            for (handle, var) in vars {
-                let name = &self.names[&NameKey::GlobalVariable(handle)];
-                write!(self.out, "{}{} = ", level.next(), name)?;
-                self.write_zero_init_value(var.ty)?;
-                writeln!(self.out, ";")?;
-            }
-
-            writeln!(self.out, "{level}}}")?;
-            self.write_control_barrier(crate::Barrier::WORK_GROUP, level)?;
-        }
 
         Ok(())
     }

@@ -104,8 +104,16 @@ void wgpu_4435_() {
 }
 
 void main() {
-    if (gl_LocalInvocationID == uvec3(0u)) {
-        a = uint[64](0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
+    uint local_invocation_index = gl_LocalInvocationIndex;
+    uint zero_init_index = 0u;
+    zero_init_index = local_invocation_index;
+    while(true) {
+        uint _e4 = zero_init_index;
+        if ((_e4 >= 64u)) {
+            break;
+        }
+        a[_e4] = 0u;
+        zero_init_index = (_e4 + 1u);
     }
     memoryBarrierShared();
     barrier();

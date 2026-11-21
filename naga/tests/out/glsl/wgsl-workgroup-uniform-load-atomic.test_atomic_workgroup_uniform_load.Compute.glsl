@@ -17,18 +17,22 @@ shared AtomicStruct wg_struct;
 
 
 void main() {
-    if (gl_LocalInvocationID == uvec3(0u)) {
-        wg_scalar = 0u;
-        wg_signed = 0;
-        wg_struct = AtomicStruct(0u, int[2](0, 0));
-    }
-    memoryBarrierShared();
-    barrier();
     uvec3 workgroup_id = gl_WorkGroupID;
     uvec3 local_id = gl_LocalInvocationID;
+    uint local_invocation_index = gl_LocalInvocationIndex;
     bool local = false;
     bool local_1 = false;
     bool local_2 = false;
+    if ((local_invocation_index < 2u)) {
+        atomicExchange(wg_struct.atomic_arr[local_invocation_index], 0);
+    }
+    if ((local_invocation_index == 0u)) {
+        atomicExchange(wg_scalar, 0u);
+        atomicExchange(wg_signed, 0);
+        atomicExchange(wg_struct.atomic_scalar, 0u);
+    }
+    memoryBarrierShared();
+    barrier();
     uint active_tile_index = (workgroup_id.x + (workgroup_id.y * 32768u));
     uint _e11 = atomicOr(wg_scalar, uint((active_tile_index >= 64u)));
     int _e14 = atomicAdd(wg_signed, 1);
