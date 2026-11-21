@@ -43,7 +43,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 &self.pipeline_options.entry_point,
             )),
             constants: Some(&self.pipeline_options.constants),
-            workgroup_zero_init: false,
+            workgroup_zero_init: self.options.zero_initialize_workgroup_memory,
         };
         let prepared = back::passes::run(module, &passes)?;
         let mut reflection = ModuleWriter::new(
@@ -1415,12 +1415,6 @@ impl<'a, W: Write> ModuleWriter<'a, W> {
         // Close the parentheses and open braces to start the function body
         writeln!(self.out, ") {{")?;
 
-        if self.options.zero_initialize_workgroup_memory
-            && ctx.ty.is_compute_like_entry_point(self.module)
-        {
-            self.write_workgroup_variables_initialization(&ctx)?;
-        }
-
         // Compose the function arguments from globals, in case of an entry point.
         if let back::FunctionType::EntryPoint(ep_index) = ctx.ty {
             let stage = self.module.entry_points[ep_index as usize].stage;
@@ -1503,38 +1497,6 @@ impl<'a, W: Write> ModuleWriter<'a, W> {
 
         // Close braces and add a newline
         writeln!(self.out, "}}")?;
-
-        Ok(())
-    }
-
-    fn write_workgroup_variables_initialization(
-        &mut self,
-        ctx: &back::FunctionCtx,
-    ) -> BackendResult {
-        let mut vars = self
-            .module
-            .global_variables
-            .iter()
-            .filter(|&(handle, var)| {
-                !ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
-            })
-            .peekable();
-
-        if vars.peek().is_some() {
-            let level = back::Level(1);
-
-            writeln!(self.out, "{level}if (gl_LocalInvocationID == uvec3(0u)) {{")?;
-
-            for (handle, var) in vars {
-                let name = &self.names[&NameKey::GlobalVariable(handle)];
-                write!(self.out, "{}{} = ", level.next(), name)?;
-                self.write_zero_init_value(var.ty)?;
-                writeln!(self.out, ";")?;
-            }
-
-            writeln!(self.out, "{level}}}")?;
-            self.write_control_barrier(crate::Barrier::WORK_GROUP, level)?;
-        }
 
         Ok(())
     }
