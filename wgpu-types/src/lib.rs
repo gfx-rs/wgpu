@@ -3,8 +3,8 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![allow(
-    // We don't use syntax sugar where it's not necessary.
     clippy::match_like_matches_macro,
+    reason = "we don't use syntax sugar where it's not necessary"
 )]
 #![warn(
     clippy::ptr_as_ptr,
@@ -457,7 +457,7 @@ pub struct Color {
     pub a: f64,
 }
 
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "the color constants are self-explanatory")]
 impl Color {
     pub const TRANSPARENT: Self = Self {
         r: 0.0,

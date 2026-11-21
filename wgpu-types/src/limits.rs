@@ -1095,16 +1095,9 @@ impl Limits {
 
 /// Represents the sets of additional limits on an adapter,
 /// which take place when running on downlevel backends.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DownlevelLimits {}
-
-#[allow(clippy::derivable_impls)]
-impl Default for DownlevelLimits {
-    fn default() -> Self {
-        DownlevelLimits {}
-    }
-}
 
 /// Lists various ways the underlying platform does not conform to the WebGPU standard.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
