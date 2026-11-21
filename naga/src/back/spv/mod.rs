@@ -361,7 +361,7 @@ impl LocalImageType {
             flags
         };
 
-        let dim = spirv::Dim::from(dim);
+        let dim = instructions::map_image_dim(dim);
 
         match class {
             crate::ImageClass::Sampled { kind, multi } => LocalImageType {
@@ -383,7 +383,7 @@ impl LocalImageType {
                 sampled_type: format.into(),
                 dim,
                 flags: make_flags(false, ImageTypeFlags::empty()),
-                image_format: format.into(),
+                image_format: instructions::map_storage_format(format),
             },
             crate::ImageClass::External => unimplemented!(),
         }

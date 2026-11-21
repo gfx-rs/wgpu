@@ -98,10 +98,12 @@ pub(super) fn contains_builtin(
     }
 }
 
-impl crate::AddressSpace {
-    pub(super) const fn to_spirv_semantics_and_scope(
-        self,
-    ) -> (spirv::MemorySemantics, spirv::Scope) {
+pub(super) trait AddressSpaceSpvExt {
+    fn to_spirv_semantics_and_scope(self) -> (spirv::MemorySemantics, spirv::Scope);
+}
+
+impl AddressSpaceSpvExt for crate::AddressSpace {
+    fn to_spirv_semantics_and_scope(self) -> (spirv::MemorySemantics, spirv::Scope) {
         match self {
             Self::Storage { .. } => (spirv::MemorySemantics::empty(), spirv::Scope::Device),
             Self::WorkGroup => (spirv::MemorySemantics::empty(), spirv::Scope::Workgroup),

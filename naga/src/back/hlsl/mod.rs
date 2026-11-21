@@ -310,8 +310,12 @@ pub const fn shader_stage_to_hlsl_str(st: nt::ShaderStage) -> &'static str {
     }
 }
 
-impl crate::ImageDimension {
-    const fn to_hlsl_str(self) -> &'static str {
+trait ImageDimensionHlslExt {
+    fn to_hlsl_str(self) -> &'static str;
+}
+
+impl ImageDimensionHlslExt for crate::ImageDimension {
+    fn to_hlsl_str(self) -> &'static str {
         match self {
             Self::D1 => "1D",
             Self::D2 => "2D",

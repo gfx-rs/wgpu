@@ -12,6 +12,7 @@ use super::{
     BlockContext, Dimension, Error, IdGenerator, Instruction, LocalType, LookupType, NumericType,
     ResultMember, WrappedFunction, Writer, WriterFlags,
 };
+use crate::back::spv::helpers::AddressSpaceSpvExt;
 use crate::{
     arena::Handle, back::spv::helpers::is_uniform_matcx2_struct_member_access,
     proc::index::GuardedIndex, Statement,

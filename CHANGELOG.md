@@ -258,6 +258,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Added `naga::valid::Capabilities::LINEAR_INTERPOLATION`, which is now required in order to use `@interpolate(linear)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - The GLSL backend's `MissingFeatures` error now names the GLSL version that lacks the features, e.g. `GLSL 300 es doesn't support the required feature(s): NOPERSPECTIVE_QUALIFIER`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - Bit reinterpretation is now represented in the Naga IR by the new `naga::ir::Expression::Bitcast`, which names its result type. `naga::ir::Expression::As` now only converts, and its `kind` and `convert` fields are replaced by `target: Scalar`. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
+- `AddressSpace`, `BuiltIn`, `Scalar`, `ScalarKind`, `VectorSize`, `Interpolation`, `Sampling`, `ImageDimension`, `ImageClass`, `StorageFormat`, `StorageAccess`, `MeshOutputTopology`, `ImmediateUsage`, and `ImmediateSlots` are now defined in `naga-types` and re-exported from `naga`. `Scalar::to_inner_scalar`/`to_inner_vector`/`to_inner_atomic` moved to the `naga::proc::ScalarExt` trait, and `ImmediateUsage::from_type`/`ImmediateSlots::from_type` to `naga::valid::ImmediateUsageExt`/`ImmediateSlotsExt`. By @inner-daemons in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
 
 #### Hal
 

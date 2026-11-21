@@ -4,11 +4,17 @@ extern crate alloc;
 #[cfg(any(feature = "std", test))]
 extern crate std;
 
+mod immediates;
+mod ir;
+
 pub mod glsl;
 pub mod hlsl;
 pub mod msl;
 pub mod spv;
 pub mod wgsl;
+
+pub use immediates::{ImmediateSlots, ImmediateSlotsOverflowError, ImmediateUsage};
+pub use ir::*;
 
 /// Stage of the programmable pipeline.
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]

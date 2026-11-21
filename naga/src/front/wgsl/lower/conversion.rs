@@ -432,14 +432,20 @@ impl crate::TypeInner {
     }
 }
 
-impl crate::Scalar {
+pub(crate) trait ScalarConversionExt {
+    fn automatic_conversion_combine(self, other: Self) -> Option<crate::Scalar>;
+    fn automatically_converts_to(self, goal: Self) -> bool;
+    fn concretize(self) -> Self;
+}
+
+impl ScalarConversionExt for crate::Scalar {
     /// Find the common type of `self` and `other` under WGSL's
     /// automatic conversions.
     ///
     /// If there are any scalars to which WGSL's automatic conversions
     /// will convert both `self` and `other`, return the best such
     /// scalar. Otherwise, return `None`.
-    pub const fn automatic_conversion_combine(self, other: Self) -> Option<crate::Scalar> {
+    fn automatic_conversion_combine(self, other: Self) -> Option<crate::Scalar> {
         use crate::ScalarKind as Sk;
 
         match (self.kind, other.kind) {
@@ -487,11 +493,11 @@ impl crate::Scalar {
     }
 
     /// Return `true` if automatic conversions will covert `self` to `goal`.
-    pub fn automatically_converts_to(self, goal: Self) -> bool {
+    fn automatically_converts_to(self, goal: Self) -> bool {
         self.automatic_conversion_combine(goal) == Some(goal)
     }
 
-    pub(in crate::front::wgsl) const fn concretize(self) -> Self {
+    fn concretize(self) -> Self {
         use crate::ScalarKind as Sk;
         match self.kind {
             Sk::Sint | Sk::Uint | Sk::Float | Sk::Bool => self,

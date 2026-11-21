@@ -2107,7 +2107,9 @@ impl Writer {
                     crate::ImageClass::Sampled { .. } => true,
                     crate::ImageClass::Depth { .. } => true,
                     crate::ImageClass::Storage { format, .. } => {
-                        self.request_image_format_capabilities(format.into())?;
+                        self.request_image_format_capabilities(
+                            super::instructions::map_storage_format(format),
+                        )?;
                         false
                     }
                     crate::ImageClass::External => unimplemented!(),

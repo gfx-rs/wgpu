@@ -1566,7 +1566,7 @@ impl Interface {
             ep.immediate_usage = used_immediates
                 .next()
                 .map(|handle| {
-                    naga::valid::ImmediateUsage::from_type(
+                    <naga::valid::ImmediateUsage as naga::valid::ImmediateUsageExt>::from_type(
                         &module.types[module.global_variables[handle].ty].inner,
                         &module.types,
                         module.to_ctx(),

@@ -1495,63 +1495,63 @@ impl super::Instruction {
     }
 }
 
-impl From<crate::StorageFormat> for spirv::ImageFormat {
-    fn from(format: crate::StorageFormat) -> Self {
+pub(super) const fn map_storage_format(format: crate::StorageFormat) -> spirv::ImageFormat {
+    {
         use crate::StorageFormat as Sf;
         match format {
-            Sf::R8Unorm => Self::R8,
-            Sf::R8Snorm => Self::R8Snorm,
-            Sf::R8Uint => Self::R8ui,
-            Sf::R8Sint => Self::R8i,
-            Sf::R16Uint => Self::R16ui,
-            Sf::R16Sint => Self::R16i,
-            Sf::R16Float => Self::R16f,
-            Sf::Rg8Unorm => Self::Rg8,
-            Sf::Rg8Snorm => Self::Rg8Snorm,
-            Sf::Rg8Uint => Self::Rg8ui,
-            Sf::Rg8Sint => Self::Rg8i,
-            Sf::R32Uint => Self::R32ui,
-            Sf::R32Sint => Self::R32i,
-            Sf::R32Float => Self::R32f,
-            Sf::Rg16Uint => Self::Rg16ui,
-            Sf::Rg16Sint => Self::Rg16i,
-            Sf::Rg16Float => Self::Rg16f,
-            Sf::Rgba8Unorm => Self::Rgba8,
-            Sf::Rgba8Snorm => Self::Rgba8Snorm,
-            Sf::Rgba8Uint => Self::Rgba8ui,
-            Sf::Rgba8Sint => Self::Rgba8i,
-            Sf::Bgra8Unorm => Self::Unknown,
-            Sf::Rgb10a2Uint => Self::Rgb10a2ui,
-            Sf::Rgb10a2Unorm => Self::Rgb10A2,
-            Sf::Rg11b10Ufloat => Self::R11fG11fB10f,
-            Sf::R64Uint => Self::R64ui,
-            Sf::Rg32Uint => Self::Rg32ui,
-            Sf::Rg32Sint => Self::Rg32i,
-            Sf::Rg32Float => Self::Rg32f,
-            Sf::Rgba16Uint => Self::Rgba16ui,
-            Sf::Rgba16Sint => Self::Rgba16i,
-            Sf::Rgba16Float => Self::Rgba16f,
-            Sf::Rgba32Uint => Self::Rgba32ui,
-            Sf::Rgba32Sint => Self::Rgba32i,
-            Sf::Rgba32Float => Self::Rgba32f,
-            Sf::R16Unorm => Self::R16,
-            Sf::R16Snorm => Self::R16Snorm,
-            Sf::Rg16Unorm => Self::Rg16,
-            Sf::Rg16Snorm => Self::Rg16Snorm,
-            Sf::Rgba16Unorm => Self::Rgba16,
-            Sf::Rgba16Snorm => Self::Rgba16Snorm,
+            Sf::R8Unorm => spirv::ImageFormat::R8,
+            Sf::R8Snorm => spirv::ImageFormat::R8Snorm,
+            Sf::R8Uint => spirv::ImageFormat::R8ui,
+            Sf::R8Sint => spirv::ImageFormat::R8i,
+            Sf::R16Uint => spirv::ImageFormat::R16ui,
+            Sf::R16Sint => spirv::ImageFormat::R16i,
+            Sf::R16Float => spirv::ImageFormat::R16f,
+            Sf::Rg8Unorm => spirv::ImageFormat::Rg8,
+            Sf::Rg8Snorm => spirv::ImageFormat::Rg8Snorm,
+            Sf::Rg8Uint => spirv::ImageFormat::Rg8ui,
+            Sf::Rg8Sint => spirv::ImageFormat::Rg8i,
+            Sf::R32Uint => spirv::ImageFormat::R32ui,
+            Sf::R32Sint => spirv::ImageFormat::R32i,
+            Sf::R32Float => spirv::ImageFormat::R32f,
+            Sf::Rg16Uint => spirv::ImageFormat::Rg16ui,
+            Sf::Rg16Sint => spirv::ImageFormat::Rg16i,
+            Sf::Rg16Float => spirv::ImageFormat::Rg16f,
+            Sf::Rgba8Unorm => spirv::ImageFormat::Rgba8,
+            Sf::Rgba8Snorm => spirv::ImageFormat::Rgba8Snorm,
+            Sf::Rgba8Uint => spirv::ImageFormat::Rgba8ui,
+            Sf::Rgba8Sint => spirv::ImageFormat::Rgba8i,
+            Sf::Bgra8Unorm => spirv::ImageFormat::Unknown,
+            Sf::Rgb10a2Uint => spirv::ImageFormat::Rgb10a2ui,
+            Sf::Rgb10a2Unorm => spirv::ImageFormat::Rgb10A2,
+            Sf::Rg11b10Ufloat => spirv::ImageFormat::R11fG11fB10f,
+            Sf::R64Uint => spirv::ImageFormat::R64ui,
+            Sf::Rg32Uint => spirv::ImageFormat::Rg32ui,
+            Sf::Rg32Sint => spirv::ImageFormat::Rg32i,
+            Sf::Rg32Float => spirv::ImageFormat::Rg32f,
+            Sf::Rgba16Uint => spirv::ImageFormat::Rgba16ui,
+            Sf::Rgba16Sint => spirv::ImageFormat::Rgba16i,
+            Sf::Rgba16Float => spirv::ImageFormat::Rgba16f,
+            Sf::Rgba32Uint => spirv::ImageFormat::Rgba32ui,
+            Sf::Rgba32Sint => spirv::ImageFormat::Rgba32i,
+            Sf::Rgba32Float => spirv::ImageFormat::Rgba32f,
+            Sf::R16Unorm => spirv::ImageFormat::R16,
+            Sf::R16Snorm => spirv::ImageFormat::R16Snorm,
+            Sf::Rg16Unorm => spirv::ImageFormat::Rg16,
+            Sf::Rg16Snorm => spirv::ImageFormat::Rg16Snorm,
+            Sf::Rgba16Unorm => spirv::ImageFormat::Rgba16,
+            Sf::Rgba16Snorm => spirv::ImageFormat::Rgba16Snorm,
         }
     }
 }
 
-impl From<crate::ImageDimension> for spirv::Dim {
-    fn from(dim: crate::ImageDimension) -> Self {
+pub(super) const fn map_image_dim(dim: crate::ImageDimension) -> spirv::Dim {
+    {
         use crate::ImageDimension as Id;
         match dim {
-            Id::D1 => Self::Dim1D,
-            Id::D2 => Self::Dim2D,
-            Id::D3 => Self::Dim3D,
-            Id::Cube => Self::DimCube,
+            Id::D1 => spirv::Dim::Dim1D,
+            Id::D2 => spirv::Dim::Dim2D,
+            Id::D3 => spirv::Dim::Dim3D,
+            Id::Cube => spirv::Dim::DimCube,
         }
     }
 }
