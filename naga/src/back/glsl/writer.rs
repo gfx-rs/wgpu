@@ -43,8 +43,14 @@ impl<'a, W: Write> Writer<'a, W> {
                 &self.pipeline_options.entry_point,
             )),
             constants: Some(&self.pipeline_options.constants),
+            inline: crate::inline::InlineStrategy::OnlyNeeded(crate::inline::InlineTarget::Glsl),
         };
         let prepared = back::passes::run(module, &passes)?;
+        if let Some(name) =
+            crate::inline::find_needs_inline(&prepared.module, crate::inline::InlineTarget::Glsl)
+        {
+            return Err(Error::NeedsInline(name));
+        }
         let mut reflection = ModuleWriter::new(
             &mut self.out,
             &prepared.module,

@@ -55,6 +55,8 @@ pub(crate) struct Passes<'a> {
     pub entry_point: Option<(ShaderStage, &'a str)>,
     /// Values for the pipeline-overridable constants.
     pub constants: Option<&'a PipelineConstants>,
+    /// Which calls to inline. This runs before the other passes.
+    pub inline: crate::inline::InlineStrategy,
 }
 
 /// A module prepared for a backend by [`run`].
@@ -125,7 +127,10 @@ pub(crate) fn run(module: &Module, passes: &Passes) -> Result<Prepared, PassErro
 
     // Passes add the functions they leave with unused or out-of-order
     // expressions to `dirty`.
-    let dirty = Dirty::default();
+    let mut dirty = Dirty::default();
+    let inlined = crate::inline::inline_in_place(&mut module, passes.inline);
+    dirty.functions.extend(inlined.functions);
+    dirty.entry_points.extend(inlined.entry_points);
     reorder(&mut module, &dirty);
 
     let info = Validator::new(ValidationFlags::all(), Capabilities::all())

@@ -169,6 +169,8 @@ pub enum Error {
     MissingCapabilities(&'static str, Vec<Capability>),
     #[error("unimplemented {0}")]
     FeatureNotImplemented(&'static str),
+    #[error("function `{0}` has pointer parameters or arguments that must be inlined by `naga::inline::process`")]
+    NeedsInline(String),
     #[error("module is not validated properly: {0}")]
     Validation(&'static str),
     #[error("overrides should not be present at this stage")]

@@ -11,6 +11,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
         BINDING_ARRAY_SAMPLED_TEXTURES,
         PARTIAL_BINDING_ARRAY_SAMPLED_TEXTURES,
         PARTIAL_BINDING_ARRAY_FOLLOWED_BY_STORAGE_BUFFER,
+        BINDING_ARRAY_SAMPLED_TEXTURES_FUNCTION_ARGUMENT,
     ]);
 }
 
@@ -34,7 +35,7 @@ static BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestConfigurati
                     .validation_error("could not be compiled into pipeline"),
             ),
     )
-    .run_async(|ctx| async move { binding_array_sampled_textures(ctx, false).await });
+    .run_async(|ctx| async move { binding_array_sampled_textures(ctx, false, false).await });
 
 #[apply(gpu_test!)]
 static PARTIAL_BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -57,14 +58,41 @@ static PARTIAL_BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestCon
                     .validation_error("could not be compiled into pipeline"),
             ),
     )
-    .run_async(|ctx| async move { binding_array_sampled_textures(ctx, false).await });
+    .run_async(|ctx| async move { binding_array_sampled_textures(ctx, false, false).await });
+
+#[apply(gpu_test!)]
+static BINDING_ARRAY_SAMPLED_TEXTURES_FUNCTION_ARGUMENT: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
+                .features(
+                    Features::TEXTURE_BINDING_ARRAY
+                        | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+                )
+                .limits(Limits {
+                    max_binding_array_elements_per_shader_stage: 16,
+                    ..Limits::default()
+                })
+                // https://github.com/gfx-rs/wgpu/issues/9184
+                .expect_fail(
+                    wgpu_test::FailureCase::molten_vk()
+                        .validation_error("Shader library compile failed")
+                        .validation_error("could not be compiled into pipeline"),
+                ),
+        )
+        .run_async(|ctx| async move { binding_array_sampled_textures(ctx, false, true).await });
 
 /// Test to see how texture bindings array work and additionally making sure
 /// that non-uniform indexing is working correctly.
 ///
 /// If non-uniform indexing is not working correctly, AMD will produce the wrong
 /// output due to non-native support for non-uniform indexing within a WARP.
-async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bool) {
+async fn binding_array_sampled_textures(
+    ctx: TestingContext,
+    partially_bound: bool,
+    function_argument: bool,
+) {
     let shader = r#"
         enable wgpu_binding_array;
         @group(0) @binding(0)
@@ -89,6 +117,18 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
             return textureLoad(textures[index], vec2u(0), 0);
         }
     "#;
+    let shader = if function_argument {
+        shader.replace(
+            "return textureLoad(textures[index], vec2u(0), 0);",
+            "return load(textures, index);",
+        ) + r#"
+        fn load(t: binding_array<texture_2d<f32>>, index: u32) -> vec4f {
+            return textureLoad(t[index], vec2u(0), 0);
+        }
+        "#
+    } else {
+        shader.to_owned()
+    };
 
     let module = ctx
         .device

@@ -345,11 +345,18 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 .as_ref()
                 .map(|&(stage, ref name)| (stage, name.as_str())),
             constants: Some(&self.pipeline_options.constants),
+            inline: crate::inline::InlineStrategy::OnlyNeeded(crate::inline::InlineTarget::Hlsl),
         };
         let prepared = back::passes::run(module, &passes)?;
         let (module, module_info) = (&prepared.module, &prepared.info);
 
         self.reset(module);
+
+        if let Some(name) =
+            crate::inline::find_needs_inline(module, crate::inline::InlineTarget::Hlsl)
+        {
+            return Err(Error::NeedsInline(name));
+        }
 
         if module.uses_mesh_shaders() && self.options.shader_model < ShaderModel::V6_5 {
             return Err(Error::ShaderModelTooLow(

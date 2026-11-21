@@ -4072,9 +4072,15 @@ impl Writer {
         let passes = crate::back::passes::Passes {
             entry_point: pipeline_options.map(|po| (po.shader_stage, po.entry_point.as_str())),
             constants: pipeline_options.map(|po| &po.constants),
+            inline: crate::inline::InlineStrategy::OnlyNeeded(crate::inline::InlineTarget::Spirv),
         };
         let prepared = crate::back::passes::run(ir_module, &passes)?;
         let (ir_module, info) = (&prepared.module, &prepared.info);
+        if let Some(name) =
+            crate::inline::find_needs_inline(ir_module, crate::inline::InlineTarget::Spirv)
+        {
+            return Err(Error::NeedsInline(name));
+        }
 
         // Try to find the entry point and corresponding index
         let ep_index = match pipeline_options {

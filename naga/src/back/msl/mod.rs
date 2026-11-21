@@ -207,6 +207,8 @@ pub enum Error {
     Pass(#[from] crate::back::passes::PassError),
     #[error(transparent)]
     Format(#[from] FmtError),
+    #[error("function `{0}` has pointer parameters or arguments that must be inlined by `naga::inline::process`")]
+    NeedsInline(String),
     #[error("bind target {0:?} is empty")]
     UnimplementedBindTarget(BindTarget),
     #[error("composing of {0:?} is not implemented yet")]
