@@ -4710,6 +4710,65 @@ fn const_eval_value_errors() {
     assert!(variant("f32(abs(-9223372036854775807 - 1))").is_ok());
 }
 
+/// Constant evaluation of conversions from `f64`, `i64` and `u64`.
+///
+/// <https://github.com/gfx-rs/wgpu/issues/10931>
+#[test]
+fn const_eval_cast_from_64_bit() {
+    no_validation_error(
+        "
+        enable wgpu_int16;
+        enable wgpu_f64;
+
+        const_assert i16(-1li) == i16(-1);
+        const_assert i16(0x10002lu) == i16(2);
+        const_assert i16(-1.5lf) == i16(-1);
+        const_assert i16(1e10lf) == i16(32767);
+        const_assert u16(0x10002li) == u16(2);
+        const_assert u16(1.5lf) == u16(1);
+        const_assert u16(-1.0lf) == u16(0);
+
+        const_assert i32(1li) == 1i;
+        const_assert i32(0x100000002li) == 2i;
+        const_assert i32(0x1ffffffffli) == -1i;
+        const_assert i32(-1.5lf) == -1i;
+        const_assert i32(1e20lf) == 2147483647i;
+        const_assert i32(-1e20lf) == -2147483647i - 1i;
+        const_assert u32(-1li) == 0xffffffffu;
+        const_assert u32(0x100000002lu) == 2u;
+        const_assert u32(1.5lf) == 1u;
+        const_assert u32(-1.0lf) == 0u;
+        const_assert u32(1e20lf) == 0xffffffffu;
+
+        const_assert f32(1.0lf) == 1.0f;
+        const_assert f32(-0.5lf) == -0.5f;
+        const_assert f32(1li) == 1.0f;
+        const_assert f32(-3li) == -3.0f;
+        const_assert f32(1lu) == 1.0f;
+
+        const_assert f64(1lu) == 1.0lf;
+        const_assert f64(-2li) == -2.0lf;
+        const_assert f64(0x8000000000000000lu) == 9223372036854775808.0lf;
+
+        const_assert bool(2li);
+        const_assert !bool(0li);
+        const_assert bool(2lu);
+        const_assert !bool(0lu);
+        const_assert bool(0.5lf);
+        const_assert !bool(0.0lf);
+
+        const_assert all(vec2<i32>(vec2(-1li, 3li)) == vec2(-1i, 3i));
+        const_assert all(vec2<f32>(vec2(0.5lf, 2.0lf)) == vec2(0.5f, 2.0f));
+        ",
+        Capabilities::SHADER_INT16 | Capabilities::SHADER_INT64 | Capabilities::FLOAT64,
+    );
+
+    check_error_matches(
+        "enable wgpu_f64; const a = f32(1e300lf);",
+        "Float literal is infinite",
+    );
+}
+
 /// Constant evaluation of `extractBits`.
 ///
 /// <https://www.w3.org/TR/WGSL/#extractBits-signed-builtin>
