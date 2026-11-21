@@ -288,6 +288,135 @@ impl BuiltIn {
     }
 }
 
+impl Varying {
+    fn from_reflection(varying: &naga::reflect::Varying) -> Self {
+        match *varying {
+            naga::reflect::Varying::Location {
+                location,
+                ty,
+                interpolation,
+                sampling,
+                per_primitive,
+                ..
+            } => Self::UserDefined {
+                location,
+                iv: InterfaceVar {
+                    ty: NumericType::from_reflection(ty),
+                    interpolation,
+                    sampling,
+                    per_primitive,
+                },
+            },
+            naga::reflect::Varying::BuiltIn {
+                built_in,
+                array_size,
+                ..
+            } => Self::BuiltIn(BuiltIn::from_naga(built_in, array_size)),
+        }
+    }
+}
+
+impl BuiltIn {
+    fn from_naga(built_in: naga::BuiltIn, array_size: Option<u32>) -> Self {
+        match built_in {
+            naga::BuiltIn::Position { invariant } => Self::Position { invariant },
+            naga::BuiltIn::ViewIndex => Self::ViewIndex,
+            naga::BuiltIn::BaseInstance => Self::BaseInstance,
+            naga::BuiltIn::BaseVertex => Self::BaseVertex,
+            naga::BuiltIn::ClipDistances => Self::ClipDistances {
+                array_size: array_size.expect("`clip_distances` is always a sized array"),
+            },
+            naga::BuiltIn::CullDistance => Self::CullDistance,
+            naga::BuiltIn::InstanceIndex => Self::InstanceIndex,
+            naga::BuiltIn::PointSize => Self::PointSize,
+            naga::BuiltIn::VertexIndex => Self::VertexIndex,
+            naga::BuiltIn::DrawIndex => Self::DrawIndex,
+            naga::BuiltIn::FragDepth => Self::FragDepth,
+            naga::BuiltIn::PointCoord => Self::PointCoord,
+            naga::BuiltIn::FrontFacing => Self::FrontFacing,
+            naga::BuiltIn::PrimitiveIndex => Self::PrimitiveIndex,
+            naga::BuiltIn::Barycentric { perspective } => Self::Barycentric { perspective },
+            naga::BuiltIn::SampleIndex => Self::SampleIndex,
+            naga::BuiltIn::SampleMask => Self::SampleMask,
+            naga::BuiltIn::GlobalInvocationId => Self::GlobalInvocationId,
+            naga::BuiltIn::LocalInvocationId => Self::LocalInvocationId,
+            naga::BuiltIn::LocalInvocationIndex => Self::LocalInvocationIndex,
+            naga::BuiltIn::WorkGroupId => Self::WorkGroupId,
+            naga::BuiltIn::WorkGroupSize => Self::WorkGroupSize,
+            naga::BuiltIn::NumWorkGroups => Self::NumWorkGroups,
+            naga::BuiltIn::NumSubgroups => Self::NumSubgroups,
+            naga::BuiltIn::SubgroupId => Self::SubgroupId,
+            naga::BuiltIn::SubgroupSize => Self::SubgroupSize,
+            naga::BuiltIn::SubgroupInvocationId => Self::SubgroupInvocationId,
+            naga::BuiltIn::MeshTaskSize => Self::MeshTaskSize,
+            naga::BuiltIn::CullPrimitive => Self::CullPrimitive,
+            naga::BuiltIn::PointIndex => Self::PointIndex,
+            naga::BuiltIn::LineIndices => Self::LineIndices,
+            naga::BuiltIn::TriangleIndices => Self::TriangleIndices,
+            naga::BuiltIn::VertexCount => Self::VertexCount,
+            naga::BuiltIn::Vertices => Self::Vertices,
+            naga::BuiltIn::PrimitiveCount => Self::PrimitiveCount,
+            naga::BuiltIn::Primitives => Self::Primitives,
+            naga::BuiltIn::RayInvocationId => Self::RayInvocationId,
+            naga::BuiltIn::NumRayInvocations => Self::NumRayInvocations,
+            naga::BuiltIn::InstanceCustomData => Self::InstanceCustomData,
+            naga::BuiltIn::GeometryIndex => Self::GeometryIndex,
+            naga::BuiltIn::WorldRayOrigin => Self::WorldRayOrigin,
+            naga::BuiltIn::WorldRayDirection => Self::WorldRayDirection,
+            naga::BuiltIn::ObjectRayOrigin => Self::ObjectRayOrigin,
+            naga::BuiltIn::ObjectRayDirection => Self::ObjectRayDirection,
+            naga::BuiltIn::RayTmin => Self::RayTmin,
+            naga::BuiltIn::RayTCurrentMax => Self::RayTCurrentMax,
+            naga::BuiltIn::ObjectToWorld => Self::ObjectToWorld,
+            naga::BuiltIn::WorldToObject => Self::WorldToObject,
+            naga::BuiltIn::HitKind => Self::HitKind,
+            naga::BuiltIn::HitBarycentrics => Self::HitBarycentrics,
+        }
+    }
+}
+
+impl NumericType {
+    fn from_reflection(ty: naga::reflect::NumericType) -> Self {
+        match ty {
+            naga::reflect::NumericType::Scalar(scalar) => NumericType {
+                dim: NumericDimension::Scalar,
+                scalar,
+            },
+            naga::reflect::NumericType::Vector { size, scalar } => NumericType {
+                dim: NumericDimension::Vector(size),
+                scalar,
+            },
+            naga::reflect::NumericType::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => NumericType {
+                dim: NumericDimension::Matrix(columns, rows),
+                scalar,
+            },
+        }
+    }
+
+    fn from_reflection_type(ty: &naga::reflect::TypeInner) -> Option<Self> {
+        Some(Self::from_reflection(match *ty {
+            naga::reflect::TypeInner::Scalar(scalar) => naga::reflect::NumericType::Scalar(scalar),
+            naga::reflect::TypeInner::Vector { size, scalar } => {
+                naga::reflect::NumericType::Vector { size, scalar }
+            }
+            naga::reflect::TypeInner::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => naga::reflect::NumericType::Matrix {
+                columns,
+                rows,
+                scalar,
+            },
+            _ => return None,
+        }))
+    }
+}
+
 #[derive(Debug)]
 struct EntryPointMeshInfo {
     max_vertices: u32,
@@ -411,54 +540,37 @@ pub struct RayTracingPayloadMember {
 }
 
 impl RayTracingPayloadType {
-    pub fn from_naga(ty: &naga::TypeInner, module: &naga::Module) -> Option<Self> {
-        Some(match ty {
-            naga::TypeInner::Scalar(scalar) => Self::Numeric(NumericType {
-                dim: NumericDimension::Scalar,
-                scalar: *scalar,
-            }),
-            naga::TypeInner::Vector { size, scalar } => Self::Numeric(NumericType {
-                dim: NumericDimension::Vector(*size),
-                scalar: *scalar,
-            }),
-            naga::TypeInner::Matrix {
-                columns,
-                rows,
-                scalar,
-            } => Self::Numeric(NumericType {
-                dim: NumericDimension::Matrix(*columns, *rows),
-                scalar: *scalar,
-            }),
-            naga::TypeInner::Struct { members, span } => {
+    fn from_reflection(
+        ty: naga::reflect::TypeIndex,
+        types: &[naga::reflect::Type],
+    ) -> Option<Self> {
+        use naga::reflect::{ArraySize, TypeInner};
+        Some(match types[ty].inner {
+            TypeInner::Scalar(_) | TypeInner::Vector { .. } | TypeInner::Matrix { .. } => {
+                Self::Numeric(NumericType::from_reflection_type(&types[ty].inner)?)
+            }
+            TypeInner::Struct { ref members, span } => {
                 let mut struct_members = Vec::with_capacity(members.len());
-
                 for member in members {
-                    let ty = &module.types[member.ty].inner;
-
                     struct_members.push(RayTracingPayloadMember {
                         offset: member.offset,
-                        ty: Box::new(Self::from_naga(ty, module)?),
+                        ty: Box::new(Self::from_reflection(member.ty, types)?),
                     });
                 }
-
                 Self::Struct {
                     members: struct_members,
-                    span: *span,
+                    span,
                 }
             }
-            naga::TypeInner::Array {
+            TypeInner::Array {
                 base,
-                size: naga::ArraySize::Constant(size),
+                size: ArraySize::Constant(size),
                 stride,
-            } => {
-                let ty = &module.types[*base].inner;
-
-                Self::Array {
-                    inner: Box::new(Self::from_naga(ty, module)?),
-                    size: *size,
-                    stride: *stride,
-                }
-            }
+            } => Self::Array {
+                inner: Box::new(Self::from_reflection(base, types)?),
+                size,
+                stride,
+            },
             _ => return None,
         })
     }
@@ -1315,275 +1427,92 @@ pub struct StageIo {
 }
 
 impl Interface {
-    /// Build some entry point's list of inputs or outputs.
-    ///
-    /// Given `ty` and `binding` that describe an entry point's argument or
-    /// return value, figure out which builtins or locations are involved and
-    /// add them to `list`, which is either [`EntryPoint::inputs`] or
-    /// [`EntryPoint::outputs`].
-    ///
-    /// - If `ty` is a struct type, visit its members to find
-    ///   individual bindings, and add them to `list`.
-    ///
-    /// - Otherwise, `binding` must be `Some(b)` where `b` describes a
-    ///   binding's builtin or location, and `ty` gives its type. Add
-    ///   this binding to `list`.
-    fn populate(
-        list: &mut Vec<Varying>,
-        binding: Option<&naga::Binding>,
-        ty: naga::Handle<naga::Type>,
-        arena: &naga::UniqueArena<naga::Type>,
-    ) {
-        let numeric_ty = match arena[ty].inner {
-            naga::TypeInner::Scalar(scalar) => NumericType {
-                dim: NumericDimension::Scalar,
-                scalar,
-            },
-            naga::TypeInner::Vector { size, scalar } => NumericType {
-                dim: NumericDimension::Vector(size),
-                scalar,
-            },
-            naga::TypeInner::Matrix {
-                columns,
-                rows,
-                scalar,
-            } => NumericType {
-                dim: NumericDimension::Matrix(columns, rows),
-                scalar,
-            },
-            naga::TypeInner::Struct { ref members, .. } => {
-                for member in members {
-                    Self::populate(list, member.binding.as_ref(), member.ty, arena);
-                }
-                return;
-            }
-            naga::TypeInner::Array { base, size, stride }
-                if matches!(
-                    binding,
-                    Some(naga::Binding::BuiltIn(naga::BuiltIn::ClipDistances)),
-                ) =>
-            {
-                // NOTE: We should already have validated these in `naga`.
-                debug_assert_eq!(
-                    &arena[base].inner,
-                    &naga::TypeInner::Scalar(naga::Scalar::F32)
-                );
-                debug_assert_eq!(stride, 4);
-
-                let naga::ArraySize::Constant(array_size) = size else {
-                    // NOTE: Based on the
-                    // [spec](https://gpuweb.github.io/gpuweb/wgsl/#fixed-footprint-types):
-                    //
-                    // > The only valid use of a fixed-size array with an element count that is an
-                    // > override-expression that is not a const-expression is as a memory view in
-                    // > the workgroup address space.
-                    unreachable!("non-constant array size for `clip_distances`")
-                };
-                let array_size = array_size.get();
-
-                list.push(Varying::BuiltIn(BuiltIn::ClipDistances { array_size }));
-                return;
-            }
-            ref other => {
-                log::error!("Unexpected varying type: {other:?}");
-                return;
-            }
-        };
-
-        let varying = match binding {
-            Some(&naga::Binding::Location {
-                location,
-                interpolation,
-                sampling,
-                per_primitive,
-                blend_src: _,
-            }) => Varying::UserDefined {
-                location,
-                iv: InterfaceVar {
-                    ty: numeric_ty,
-                    interpolation,
-                    sampling,
-                    per_primitive,
-                },
-            },
-            Some(&naga::Binding::BuiltIn(built_in)) => Varying::BuiltIn(match built_in {
-                naga::BuiltIn::Position { invariant } => BuiltIn::Position { invariant },
-                naga::BuiltIn::ViewIndex => BuiltIn::ViewIndex,
-                naga::BuiltIn::BaseInstance => BuiltIn::BaseInstance,
-                naga::BuiltIn::BaseVertex => BuiltIn::BaseVertex,
-                naga::BuiltIn::ClipDistances => unreachable!(),
-                naga::BuiltIn::CullDistance => BuiltIn::CullDistance,
-                naga::BuiltIn::InstanceIndex => BuiltIn::InstanceIndex,
-                naga::BuiltIn::PointSize => BuiltIn::PointSize,
-                naga::BuiltIn::VertexIndex => BuiltIn::VertexIndex,
-                naga::BuiltIn::DrawIndex => BuiltIn::DrawIndex,
-                naga::BuiltIn::FragDepth => BuiltIn::FragDepth,
-                naga::BuiltIn::PointCoord => BuiltIn::PointCoord,
-                naga::BuiltIn::FrontFacing => BuiltIn::FrontFacing,
-                naga::BuiltIn::PrimitiveIndex => BuiltIn::PrimitiveIndex,
-                naga::BuiltIn::Barycentric { perspective } => BuiltIn::Barycentric { perspective },
-                naga::BuiltIn::SampleIndex => BuiltIn::SampleIndex,
-                naga::BuiltIn::SampleMask => BuiltIn::SampleMask,
-                naga::BuiltIn::GlobalInvocationId => BuiltIn::GlobalInvocationId,
-                naga::BuiltIn::LocalInvocationId => BuiltIn::LocalInvocationId,
-                naga::BuiltIn::LocalInvocationIndex => BuiltIn::LocalInvocationIndex,
-                naga::BuiltIn::WorkGroupId => BuiltIn::WorkGroupId,
-                naga::BuiltIn::WorkGroupSize => BuiltIn::WorkGroupSize,
-                naga::BuiltIn::NumWorkGroups => BuiltIn::NumWorkGroups,
-                naga::BuiltIn::NumSubgroups => BuiltIn::NumSubgroups,
-                naga::BuiltIn::SubgroupId => BuiltIn::SubgroupId,
-                naga::BuiltIn::SubgroupSize => BuiltIn::SubgroupSize,
-                naga::BuiltIn::SubgroupInvocationId => BuiltIn::SubgroupInvocationId,
-                naga::BuiltIn::MeshTaskSize => BuiltIn::MeshTaskSize,
-                naga::BuiltIn::CullPrimitive => BuiltIn::CullPrimitive,
-                naga::BuiltIn::PointIndex => BuiltIn::PointIndex,
-                naga::BuiltIn::LineIndices => BuiltIn::LineIndices,
-                naga::BuiltIn::TriangleIndices => BuiltIn::TriangleIndices,
-                naga::BuiltIn::VertexCount => BuiltIn::VertexCount,
-                naga::BuiltIn::Vertices => BuiltIn::Vertices,
-                naga::BuiltIn::PrimitiveCount => BuiltIn::PrimitiveCount,
-                naga::BuiltIn::Primitives => BuiltIn::Primitives,
-                naga::BuiltIn::RayInvocationId => BuiltIn::RayInvocationId,
-                naga::BuiltIn::NumRayInvocations => BuiltIn::NumRayInvocations,
-                naga::BuiltIn::InstanceCustomData => BuiltIn::InstanceCustomData,
-                naga::BuiltIn::GeometryIndex => BuiltIn::GeometryIndex,
-                naga::BuiltIn::WorldRayOrigin => BuiltIn::WorldRayOrigin,
-                naga::BuiltIn::WorldRayDirection => BuiltIn::WorldRayDirection,
-                naga::BuiltIn::ObjectRayOrigin => BuiltIn::ObjectRayOrigin,
-                naga::BuiltIn::ObjectRayDirection => BuiltIn::ObjectRayDirection,
-                naga::BuiltIn::RayTmin => BuiltIn::RayTmin,
-                naga::BuiltIn::RayTCurrentMax => BuiltIn::RayTCurrentMax,
-                naga::BuiltIn::ObjectToWorld => BuiltIn::ObjectToWorld,
-                naga::BuiltIn::WorldToObject => BuiltIn::WorldToObject,
-                naga::BuiltIn::HitKind => BuiltIn::HitKind,
-                naga::BuiltIn::HitBarycentrics => BuiltIn::HitBarycentrics,
-            }),
-            None => {
-                log::error!("Missing binding for a varying");
-                return;
-            }
-        };
-        list.push(varying);
-    }
-
     /// Construct an [`Interface`] value describing `module`.
     ///
     /// The `info` argument must be the results from validating `module`, and
     /// `limits` must be the limits for the device that we will use to create
     /// this shader module.
     pub fn new(module: &naga::Module, info: &naga::valid::ModuleInfo, limits: wgt::Limits) -> Self {
+        let reflection = naga::reflect::reflect(module, info)
+            .expect("validation has already computed the layout of every type");
+        Self::from_reflection(&reflection, limits)
+    }
+
+    /// Construct an [`Interface`] value from a module's reflection information.
+    pub fn from_reflection(
+        reflection: &naga::reflect::ModuleReflection,
+        limits: wgt::Limits,
+    ) -> Self {
         let mut resources = naga::Arena::new();
-        let mut resource_mapping = FastHashMap::default();
-        for (var_handle, var) in module.global_variables.iter() {
-            let Some(bind) = var.binding else { continue };
-
-            let naga_ty = &module.types[var.ty].inner;
-
-            let inner_ty = match *naga_ty {
-                naga::TypeInner::BindingArray { base, .. } => &module.types[base].inner,
-                ref ty => ty,
-            };
-
-            let ty = match *inner_ty {
-                naga::TypeInner::Image {
-                    dim,
-                    arrayed,
-                    class,
-                } => ResourceType::Texture {
-                    dim,
-                    arrayed,
-                    class,
-                },
-                naga::TypeInner::Sampler { comparison } => ResourceType::Sampler { comparison },
-                naga::TypeInner::AccelerationStructure { vertex_return } => {
-                    ResourceType::AccelerationStructure { vertex_return }
-                }
-                ref other => ResourceType::Buffer {
-                    minimum_binding_size: wgt::BufferSize::new(other.size(module.to_ctx()) as u64)
-                        .unwrap(),
-                },
-            };
-            let handle = resources.append(
-                Resource {
-                    name: var.name.clone(),
-                    bind,
-                    ty,
-                    class: var.space,
-                },
-                Default::default(),
-            );
-            resource_mapping.insert(var_handle, handle);
-        }
+        let resource_handles: Vec<naga::Handle<Resource>> = reflection
+            .resources
+            .iter()
+            .map(|resource| {
+                let ty = match resource.kind {
+                    naga::reflect::ResourceKind::Texture {
+                        dim,
+                        arrayed,
+                        class,
+                    } => ResourceType::Texture {
+                        dim,
+                        arrayed,
+                        class,
+                    },
+                    naga::reflect::ResourceKind::Sampler { comparison } => {
+                        ResourceType::Sampler { comparison }
+                    }
+                    naga::reflect::ResourceKind::AccelerationStructure { vertex_return } => {
+                        ResourceType::AccelerationStructure { vertex_return }
+                    }
+                    naga::reflect::ResourceKind::Buffer { min_binding_size } => {
+                        ResourceType::Buffer {
+                            minimum_binding_size: min_binding_size.into(),
+                        }
+                    }
+                };
+                resources.append(
+                    Resource {
+                        name: resource.name.clone(),
+                        bind: resource.binding,
+                        ty,
+                        class: resource.space,
+                    },
+                    Default::default(),
+                )
+            })
+            .collect();
 
         let mut entry_points = FastHashMap::default();
-        entry_points.reserve(module.entry_points.len());
-        for (index, entry_point) in module.entry_points.iter().enumerate() {
-            let func_info = info.get_entry_point(index);
-            let mut ep = EntryPoint::default();
-            for arg in entry_point.function.arguments.iter() {
-                Self::populate(&mut ep.inputs, arg.binding.as_ref(), arg.ty, &module.types);
-            }
-            if let Some(ref result) = entry_point.function.result {
-                Self::populate(
-                    &mut ep.outputs,
-                    result.binding.as_ref(),
-                    result.ty,
-                    &module.types,
-                );
-            }
-
-            let mut workgroup_storage_size = 0u64;
-            for (var_handle, var) in module.global_variables.iter() {
-                let usage = func_info[var_handle];
-                if !usage.is_empty() {
-                    if var.binding.is_some() {
-                        ep.resources.push(resource_mapping[&var_handle]);
-                    }
-                    if var.space == naga::AddressSpace::WorkGroup {
-                        let size = module.types[var.ty].inner.size(module.to_ctx());
-                        workgroup_storage_size = workgroup_storage_size
-                            .saturating_add(u64::from(size).next_multiple_of(16));
-                    }
-                }
-            }
-            ep.workgroup_storage_size = workgroup_storage_size;
-
-            for key in func_info.sampling_set.iter() {
-                ep.sampling_pairs
-                    .insert((resource_mapping[&key.image], resource_mapping[&key.sampler]));
-            }
-            ep.dual_source_blending = func_info.dual_source_blending;
-            ep.workgroup_size = entry_point.workgroup_size;
-
-            // Find the used immediates. Naga should have validated that
-            // at most one immediate is used by the entry point.
-            let mut used_immediates = module
-                .global_variables
-                .iter()
-                .filter(|&(_, var)| var.space == naga::AddressSpace::Immediate)
-                .map(|(handle, _)| handle)
-                .filter(|&handle| !func_info[handle].is_empty());
-            ep.immediate_usage = used_immediates
-                .next()
-                .map(|handle| {
-                    <naga::valid::ImmediateUsage as naga::valid::ImmediateUsageExt>::from_type(
-                        &module.types[module.global_variables[handle].ty].inner,
-                        &module.types,
-                        module.to_ctx(),
-                    )
-                })
-                .unwrap_or_default();
-            assert!(used_immediates.next().is_none());
-
-            if let Some(task_payload) = entry_point.task_payload {
-                ep.task_payload_size = Some(
-                    module.types[module.global_variables[task_payload].ty]
-                        .inner
-                        .size(module.to_ctx()),
-                );
-            }
-            if let Some(ref mesh_info) = entry_point.mesh_info {
-                ep.mesh_info = Some(EntryPointMeshInfo {
+        entry_points.reserve(reflection.entry_points.len());
+        for entry_point in reflection.entry_points.iter() {
+            let ep = EntryPoint {
+                inputs: entry_point
+                    .inputs
+                    .iter()
+                    .map(Varying::from_reflection)
+                    .collect(),
+                outputs: entry_point
+                    .outputs
+                    .iter()
+                    .map(Varying::from_reflection)
+                    .collect(),
+                resources: entry_point
+                    .resources
+                    .iter()
+                    .map(|&index| resource_handles[index])
+                    .collect(),
+                sampling_pairs: entry_point
+                    .sampling_pairs
+                    .iter()
+                    .map(|&(texture, sampler)| {
+                        (resource_handles[texture], resource_handles[sampler])
+                    })
+                    .collect(),
+                workgroup_size: entry_point.workgroup_size,
+                workgroup_storage_size: entry_point.workgroup_storage_size,
+                dual_source_blending: entry_point.dual_source_blending,
+                task_payload_size: entry_point.task_payload_size,
+                mesh_info: entry_point.mesh_info.map(|mesh_info| EntryPointMeshInfo {
                     max_vertices: mesh_info.max_vertices,
                     max_primitives: mesh_info.max_primitives,
                     primitive_topology: match mesh_info.topology {
@@ -1591,48 +1520,13 @@ impl Interface {
                         naga::MeshOutputTopology::Lines => wgt::PrimitiveTopology::LineList,
                         naga::MeshOutputTopology::Points => wgt::PrimitiveTopology::PointList,
                     },
-                });
-                Self::populate(
-                    &mut ep.outputs,
-                    None,
-                    mesh_info.vertex_output_type,
-                    &module.types,
-                );
-                Self::populate(
-                    &mut ep.outputs,
-                    None,
-                    mesh_info.primitive_output_type,
-                    &module.types,
-                );
-            }
-
-            // Set the payload if there is an incoming payload set and it is a shader that should have one.
-            if matches!(
-                entry_point.stage,
-                naga::ShaderStage::ClosestHit | naga::ShaderStage::AnyHit | naga::ShaderStage::Miss
-            ) {
-                let ray_payload = entry_point
-                    .incoming_ray_payload
-                    .expect("these stages must have an incoming payload");
-                let ty = module.global_variables[ray_payload].ty;
-
-                ep.ray_tracing_payload = Some(
-                    RayTracingPayloadType::from_naga(&module.types[ty].inner, module)
-                        .expect("naga should already validate invalid payloads out!"),
-                );
-            }
-            // Or if a payload global variable is used and it is a ray gen shader which doesn't have incoming
-            // payloads. This may not have a payload if it dispatches no trace rays which should be fine
-            else if matches!(entry_point.stage, naga::ShaderStage::RayGeneration) {
-                for (handle, gv) in module.global_variables.iter() {
-                    if !func_info[handle].is_empty() && gv.space == naga::AddressSpace::RayPayload {
-                        ep.ray_tracing_payload = Some(
-                            RayTracingPayloadType::from_naga(&module.types[gv.ty].inner, module)
-                                .expect("naga should already validate invalid payloads out!"),
-                        );
-                    }
-                }
-            }
+                }),
+                immediate_usage: entry_point.immediate_usage,
+                ray_tracing_payload: entry_point.ray_tracing_payload.map(|ty| {
+                    RayTracingPayloadType::from_reflection(ty, &reflection.types)
+                        .expect("naga should already validate invalid payloads out!")
+                }),
+            };
 
             entry_points.insert(
                 EntryPointKey(entry_point.stage, entry_point.name.clone()),
