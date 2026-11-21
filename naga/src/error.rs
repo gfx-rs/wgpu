@@ -76,13 +76,6 @@ cfg_if::cfg_if! {
 pub(crate) use _ErrorWrite as ErrorWrite;
 
 #[cfg(feature = "stderr")]
-#[cfg_attr(
-    not(any(feature = "spv-in", feature = "glsl-in")),
-    expect(
-        dead_code,
-        reason = "only need `emit_to_writer` with an appropriate front-end."
-    )
-)]
 pub(crate) fn emit_to_writer<'files, F: codespan_reporting::files::Files<'files> + ?Sized>(
     writer: &mut impl ErrorWrite,
     config: &codespan_reporting::term::Config,
