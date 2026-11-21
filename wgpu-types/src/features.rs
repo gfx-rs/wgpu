@@ -1510,6 +1510,7 @@ features! {
         /// - Vulkan (mainly on Desktop GPUs)
         /// - Metal
         /// - GL (Desktop or `GL_EXT_clip_cull_distance`)
+        /// - WebGL2 (with `WEBGL_clip_cull_distance`)
         /// - WebGPU
         ///
         /// This is a web and native feature.

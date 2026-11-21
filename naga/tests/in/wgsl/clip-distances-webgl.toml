@@ -1,0 +1,5 @@
+capabilities = "CLIP_DISTANCES"
+targets = "GLSL"
+
+[glsl]
+version.Embedded = { is_webgl = true, version = 300 }
