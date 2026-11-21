@@ -171,6 +171,8 @@ pub enum FunctionError {
     InvalidImageAtomicFunction(crate::AtomicFunction),
     #[error("Image atomic value is invalid")]
     InvalidImageAtomicValue(Handle<crate::Expression>),
+    #[error("Function would exceed {limit} statements and expressions if all calls were inlined")]
+    InlinedSizeLimitExceeded { limit: u64 },
     #[error("Call to {function:?} is invalid")]
     InvalidCall {
         function: Handle<crate::Function>,

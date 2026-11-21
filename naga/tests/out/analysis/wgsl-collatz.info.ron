@@ -275,6 +275,7 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            inlined_size: 46,
         ),
     ],
     entry_points: [
@@ -430,6 +431,7 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            inlined_size: 62,
         ),
     ],
     const_expression_types: [],

@@ -7097,3 +7097,37 @@ fn main() {
 ",
     );
 }
+
+/// Each function calls the previous one twice, so the inlined size of the
+/// last function grows exponentially with `levels`.
+fn exponential_call_chain(levels: usize) -> String {
+    let mut source = String::from("fn level0(p: ptr<function, f32>) { *p += 1.0; }\n");
+    for i in 1..levels {
+        let prev = i - 1;
+        source +=
+            &format!("fn level{i}(p: ptr<function, f32>) {{ level{prev}(p); level{prev}(p); }}\n");
+    }
+    let last = levels - 1;
+    source +=
+        &format!("@compute @workgroup_size(1) fn main() {{ var x = 0.0; level{last}(&x); }}\n");
+    source
+}
+
+#[test]
+fn inlined_size_limit() {
+    no_validation_error(&exponential_call_chain(20), Capabilities::default());
+
+    let error = validation_error(&exponential_call_chain(64), Capabilities::default());
+    assert!(
+        matches!(
+            error,
+            Err(naga::valid::ValidationError::Function {
+                source: naga::valid::FunctionError::InlinedSizeLimitExceeded {
+                    limit: naga::valid::MAX_INLINED_FUNCTION_SIZE,
+                },
+                ..
+            })
+        ),
+        "{error:?}"
+    );
+}
