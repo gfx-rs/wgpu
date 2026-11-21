@@ -27,9 +27,9 @@ struct TrailingPad {
     char _pad2[4];
 };
 typedef float type_7[1];
-constant PackedVec3_ PACKED_VEC3_ = PackedVec3_ {1.0, {}, metal::float3(2.0), 3.0};
-constant Matrix MATRIX = Matrix {1, {}, metal::int4(3), metal::float3x2(metal::float2(1.0, 2.0), metal::float2(3.0, 4.0), metal::float2(5.0, 6.0))};
-constant TrailingPad TRAILING_PAD = TrailingPad {metal::float2x2(metal::float2(1.0, 2.0), metal::float2(3.0, 4.0)), 5.0};
+constant PackedVec3_ PACKED_VEC3_ = PackedVec3_ {1.0, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, metal::float3(2.0), 3.0};
+constant Matrix MATRIX = Matrix {1, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, metal::int4(3), metal::float3x2(metal::float2(1.0, 2.0), metal::float2(3.0, 4.0), metal::float2(5.0, 6.0)), {0, 0, 0, 0, 0, 0, 0, 0}};
+constant TrailingPad TRAILING_PAD = TrailingPad {metal::float2x2(metal::float2(1.0, 2.0), metal::float2(3.0, 4.0)), 5.0, {0, 0, 0, 0}};
 
 float packed_vec3_(
     PackedVec3_ s

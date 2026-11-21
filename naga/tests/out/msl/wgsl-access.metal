@@ -287,7 +287,7 @@ vertex foo_vertOutput foo_vert(
 , constant MatCx2InArray& nested_mat_cx2_ [[buffer(3)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
-    GlobalConst msl_padding_global_const = GlobalConst {0u, {}, metal::uint3(0u, 0u, 0u), 0};
+    GlobalConst msl_padding_global_const = GlobalConst {0u, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, metal::uint3(0u, 0u, 0u), 0};
     float foo = 0.0;
     type_20 c2_ = {};
     float baz_1 = foo;

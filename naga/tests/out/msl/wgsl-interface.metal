@@ -39,7 +39,7 @@ vertex vertex_Output vertex_(
 ) {
     const auto color = varyings.color;
     uint tmp = (vertex_index + instance_index) + color;
-    const auto _tmp = VertexOutput {metal::float4(1.0), static_cast<float>(tmp)};
+    const auto _tmp = VertexOutput {metal::float4(1.0), static_cast<float>(tmp), {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
     return vertex_Output { _tmp.position, _tmp._varying, 1.0 };
 }
 

@@ -24,7 +24,7 @@ vertex vert_mainOutput vert_main(
 ) {
     const auto pos = varyings.pos;
     const auto uv = varyings.uv;
-    const auto _tmp = VertexOutput {uv, {}, metal::float4(c_scale * pos, 0.0, 1.0)};
+    const auto _tmp = VertexOutput {uv, {0, 0, 0, 0, 0, 0, 0, 0}, metal::float4(c_scale * pos, 0.0, 1.0)};
     return vert_mainOutput { _tmp.uv, _tmp.position };
 }
 

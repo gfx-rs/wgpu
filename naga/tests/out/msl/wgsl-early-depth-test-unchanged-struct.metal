@@ -21,7 +21,7 @@ struct color_and_depthOutput {
 fragment color_and_depthOutput color_and_depth(
   metal::float4 pos [[position]]
 ) {
-    const auto _tmp = ColorAndDepth {metal::float4(0.4, 0.3, 0.2, 0.1), pos.z};
+    const auto _tmp = ColorAndDepth {metal::float4(0.4, 0.3, 0.2, 0.1), pos.z, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
     return color_and_depthOutput { _tmp.color };
 }
 
@@ -44,6 +44,6 @@ struct unrestrictedOutput {
 fragment unrestrictedOutput unrestricted(
   metal::float4 pos_2 [[position]]
 ) {
-    const auto _tmp_1 = ColorAndDepth {metal::float4(0.1, 0.2, 0.3, 0.4), pos_2.z * 2.0};
+    const auto _tmp_1 = ColorAndDepth {metal::float4(0.1, 0.2, 0.3, 0.4), pos_2.z * 2.0, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
     return unrestrictedOutput { _tmp_1.color, _tmp_1.depth };
 }

@@ -578,9 +578,10 @@ pub struct Writer<W> {
     pub(super) namer: proc::Namer,
     pub(super) wrapped_functions: FastHashSet<WrappedFunction>,
     emit_int_div_checks: bool,
-    /// Set of (struct type, struct field index) denoting which fields require
-    /// padding inserted **before** them (i.e. between fields at index - 1 and index)
-    struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
+    /// Map from (struct type, struct field index) to the size in bytes of the
+    /// padding inserted **before** that field (i.e. between fields at index - 1
+    /// and index). An index equal to the member count denotes trailing padding.
+    struct_member_pads: FastHashMap<(Handle<crate::Type>, u32), u32>,
     needs_object_memory_barriers: bool,
 }
 
@@ -1032,7 +1033,7 @@ impl<W: Write> Writer<W> {
             namer: proc::Namer::default(),
             wrapped_functions: FastHashSet::default(),
             emit_int_div_checks: true,
-            struct_member_pads: FastHashSet::default(),
+            struct_member_pads: FastHashMap::default(),
             needs_object_memory_barriers: false,
         }
     }
@@ -2092,6 +2093,22 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Write an initializer for a `char _padN[size]` struct member.
+    ///
+    /// Metal rejects `{}` or omitted padding in a `constant` initializer that
+    /// also calls a constructor, such as a matrix constructor (#4348).
+    fn put_padding_zeros(&mut self, size: u32) -> BackendResult {
+        write!(self.out, "{{")?;
+        for i in 0..size {
+            if i != 0 {
+                write!(self.out, ", ")?;
+            }
+            write!(self.out, "0")?;
+        }
+        write!(self.out, "}}")?;
+        Ok(())
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn put_possibly_const_expression<C, I, E>(
         &mut self,
@@ -2171,11 +2188,16 @@ impl<W: Write> Writer<W> {
                             if index != 0 {
                                 write!(self.out, ", ")?;
                             }
-                            // insert padding initialization, if needed
-                            if self.struct_member_pads.contains(&(ty, index as u32)) {
-                                write!(self.out, "{{}}, ")?;
+                            if let Some(&pad) = self.struct_member_pads.get(&(ty, index as u32)) {
+                                self.put_padding_zeros(pad)?;
+                                write!(self.out, ", ")?;
                             }
                             put_expression(self, ctx, component)?;
+                        }
+                        let trailing_pad = (ty, components.len() as u32);
+                        if let Some(&pad) = self.struct_member_pads.get(&trailing_pad) {
+                            write!(self.out, ", ")?;
+                            self.put_padding_zeros(pad)?;
                         }
                         write!(self.out, "}}")?;
                     }
@@ -5069,8 +5091,8 @@ impl<W: Write> Writer<W> {
                     let mut last_offset = 0;
                     for (index, member) in members.iter().enumerate() {
                         if member.offset > last_offset {
-                            self.struct_member_pads.insert((handle, index as u32));
                             let pad = member.offset - last_offset;
+                            self.struct_member_pads.insert((handle, index as u32), pad);
                             writeln!(self.out, "{}char _pad{}[{}];", back::INDENT, index, pad)?;
                         }
                         let ty_inner = &module.types[member.ty].inner;
@@ -5119,6 +5141,8 @@ impl<W: Write> Writer<W> {
                     }
                     if last_offset < span {
                         let pad = span - last_offset;
+                        self.struct_member_pads
+                            .insert((handle, members.len() as u32), pad);
                         writeln!(
                             self.out,
                             "{}char _pad{}[{}];",
@@ -8553,7 +8577,7 @@ template <typename A>
                             // insert padding initialization, if needed
                             if self
                                 .struct_member_pads
-                                .contains(&(arg.ty, member_index as u32))
+                                .contains_key(&(arg.ty, member_index as u32))
                             {
                                 write!(self.out, "{{}}, ")?;
                             }
