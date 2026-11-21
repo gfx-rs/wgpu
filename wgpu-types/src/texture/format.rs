@@ -944,10 +944,13 @@ impl TextureFormat {
         let storage = basic | TextureUsages::STORAGE_BINDING;
         let binding = TextureUsages::TEXTURE_BINDING;
         let all_flags = attachment | storage | binding;
+        // Not all backends can sample `R64Uint`.
+        let storage_64 =
+            TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING;
         let atomic_64 = if device_features.contains(Features::TEXTURE_ATOMIC) {
-            storage | binding | TextureUsages::STORAGE_ATOMIC
+            storage_64 | TextureUsages::STORAGE_ATOMIC
         } else {
-            storage | binding
+            storage_64
         };
         let atomic = attachment | atomic_64;
         let (rg11b10f_f, rg11b10f_u) =
