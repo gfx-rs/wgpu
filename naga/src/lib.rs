@@ -37,8 +37,6 @@ use naga::back::glsl;
 let mut glsl_source = String::new();
 glsl::Writer::new(
     &mut glsl_source,
-    &module,
-    &module_info,
     &glsl::Options::default(),
     &glsl::PipelineOptions {
         entry_point: "main_fs".into(),
@@ -46,7 +44,7 @@ glsl::Writer::new(
         multiview: None,
     },
     naga::proc::BoundsCheckPolicies::default(),
-)?.write()?;
+).write(&module, &module_info)?;
 
 assert_eq!(glsl_source, "\
 #version 310 es
