@@ -44,6 +44,6 @@ kernel void f(
         metal::atomic_store_explicit(&a, 0, metal::memory_order_relaxed);
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    _atomic_compare_exchange_result_Uint_4_ _e5 = naga_atomic_compare_exchange_weak_explicit(&a, 2u, 1u);
+    _atomic_compare_exchange_result_Uint_4_ _e3 = naga_atomic_compare_exchange_weak_explicit(&a, 2u, 1u);
     return;
 }

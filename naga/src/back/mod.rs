@@ -24,6 +24,7 @@ pub mod spv;
 #[cfg(wgsl_out)]
 pub mod wgsl;
 
+pub mod passes;
 pub mod pipeline_constants;
 
 #[cfg(any(hlsl_out, glsl_out))]

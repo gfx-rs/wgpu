@@ -670,12 +670,20 @@ pub struct PipelineOptions {
 
     /// Whether the pipeline renders to multisampled attachments.
     pub multisampled: bool,
+    /// Values for the pipeline-overridable constants of the entry point.
+    ///
+    /// The writer applies them, so the module doesn't need to go through
+    /// [`process_overrides`](crate::back::pipeline_constants::process_overrides) first.
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub constants: back::PipelineConstants,
 }
 
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
     IoError(#[from] FmtError),
+    #[error(transparent)]
+    Pass(#[from] back::passes::PassError),
     #[error("A scalar with an unsupported width was requested: {0:?}")]
     UnsupportedScalar(crate::Scalar),
     #[error("{0}")]

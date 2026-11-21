@@ -9,13 +9,6 @@ struct ImmediateDataVert {
     float position_clip;
     mat3x3 matrix;
 };
-struct ImmediateDataFrag {
-    float multiplier;
-    vec4 tint;
-};
-struct FragmentIn {
-    vec4 color;
-};
 uniform ImmediateDataVert _immediates_binding_vs;
 
 layout(location = 0) in vec2 _p2vs_location0;

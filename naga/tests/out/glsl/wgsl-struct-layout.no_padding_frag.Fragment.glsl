@@ -7,11 +7,6 @@ struct NoPadding {
     vec3 v3_;
     float f3_;
 };
-struct NeedsPadding {
-    float f3_forces_padding;
-    vec3 v3_needs_padding;
-    float f3_;
-};
 layout(location = 0) smooth in vec3 _vs2fs_location0;
 layout(location = 1) smooth in float _vs2fs_location1;
 layout(location = 0) out vec4 _fs2p_location0;

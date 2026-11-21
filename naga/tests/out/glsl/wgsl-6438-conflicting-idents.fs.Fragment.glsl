@@ -3,10 +3,6 @@
 precision highp float;
 precision highp int;
 
-struct OurVertexShaderOutput {
-    vec4 position;
-    vec2 texcoord;
-};
 layout(location = 0) out vec4 _fs2p_location0;
 
 void main() {

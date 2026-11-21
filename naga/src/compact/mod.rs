@@ -66,6 +66,15 @@ impl From<KeepUnused> for bool {
 ///
 /// If `module` would not pass validation, this may panic.
 pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
+    compact_with_global_origins(module, keep_unused);
+}
+
+/// Like [`compact`], and return the handle each global variable of the
+/// compacted module had before compaction.
+pub(crate) fn compact_with_global_origins(
+    module: &mut crate::Module,
+    keep_unused: KeepUnused,
+) -> Vec<arena::Handle<crate::GlobalVariable>> {
     // The trickiest part of compaction is determining what is used and what is
     // not. Once we have computed that correctly, it's easy enough to call
     // `retain_mut` on each arena, drop unused elements, and fix up the handles
@@ -116,6 +125,179 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     // not sure, then you could be marking it too late to be noticed. The thing
     // itself will be retained by compaction, but since it will not be traced,
     // anything it refers to could be compacted away.
+    let Traced {
+        module_tracer,
+        entry_point_maps,
+        function_maps,
+    } = trace(module, keep_unused, None);
+
+    // Now that we know what is used and what is never touched,
+    // produce maps from the `Handle`s that appear in `module` now to
+    // the corresponding `Handle`s that will refer to the same items
+    // in the compacted module.
+    let module_map = ModuleMap::from(module_tracer);
+
+    // Drop unused types from the type arena.
+    //
+    // `FastIndexSet`s don't have an underlying Vec<T> that we can
+    // steal, compact in place, and then rebuild the `FastIndexSet`
+    // from. So we have to rebuild the type arena from scratch.
+    log::trace!("compacting types");
+    let mut new_types = arena::UniqueArena::new();
+    for (old_handle, mut ty, span) in module.types.drain_all() {
+        if let Some(expected_new_handle) = module_map.types.try_adjust(old_handle) {
+            module_map.adjust_type(&mut ty);
+            let actual_new_handle = new_types.insert(ty, span);
+            assert_eq!(actual_new_handle, expected_new_handle);
+        }
+    }
+    module.types = new_types;
+    log::trace!("adjusting special types");
+    module_map.adjust_special_types(&mut module.special_types);
+
+    // Drop unused constant expressions, reusing existing storage.
+    log::trace!("adjusting constant expressions");
+    module.global_expressions.retain_mut(|handle, expr| {
+        if module_map.global_expressions.used(handle) {
+            module_map.adjust_expression(expr, &module_map.global_expressions);
+            true
+        } else {
+            false
+        }
+    });
+
+    // Drop unused constants in place, reusing existing storage.
+    log::trace!("adjusting constants");
+    module.constants.retain_mut(|handle, constant| {
+        if module_map.constants.used(handle) {
+            module_map.types.adjust(&mut constant.ty);
+            module_map.global_expressions.adjust(&mut constant.init);
+            true
+        } else {
+            false
+        }
+    });
+
+    // Drop unused overrides in place, reusing existing storage.
+    log::trace!("adjusting overrides");
+    module.overrides.retain_mut(|handle, r#override| {
+        if module_map.overrides.used(handle) {
+            module_map.types.adjust(&mut r#override.ty);
+            if let Some(ref mut init) = r#override.init {
+                module_map.global_expressions.adjust(init);
+            }
+            true
+        } else {
+            false
+        }
+    });
+
+    // Adjust workgroup_size_overrides
+    log::trace!("adjusting workgroup_size_overrides");
+    for e in module.entry_points.iter_mut() {
+        if let Some(sizes) = e.workgroup_size_overrides.as_mut() {
+            for size in sizes.iter_mut() {
+                if let Some(expr) = size.as_mut() {
+                    module_map.global_expressions.adjust(expr);
+                }
+            }
+        }
+    }
+
+    let global_origins = module
+        .global_variables
+        .iter()
+        .map(|(handle, _)| handle)
+        .filter(|&handle| module_map.globals.used(handle))
+        .collect();
+
+    // Drop unused global variables, reusing existing storage.
+    // Adjust used global variables' types and initializers.
+    log::trace!("adjusting global variables");
+    module.global_variables.retain_mut(|handle, global| {
+        if module_map.globals.used(handle) {
+            log::trace!("retaining global variable {:?}", global.name);
+            module_map.types.adjust(&mut global.ty);
+            if let Some(ref mut init) = global.init {
+                module_map.global_expressions.adjust(init);
+            }
+            true
+        } else {
+            log::trace!("dropping global variable {:?}", global.name);
+            false
+        }
+    });
+
+    // Adjust doc comments
+    if let Some(ref mut doc_comments) = module.doc_comments {
+        module_map.adjust_doc_comments(doc_comments.as_mut());
+    }
+
+    // Temporary storage to help us reuse allocations of existing
+    // named expression tables.
+    let mut reused_named_expressions = crate::NamedExpressions::default();
+
+    // Drop unused functions. Compact and adjust used functions.
+    module.functions.retain_mut(|handle, function| {
+        if let Some(map) = function_maps.get(handle) {
+            log::trace!("retaining and compacting function {:?}", function.name);
+            map.compact(function, &module_map, &mut reused_named_expressions);
+            true
+        } else {
+            log::trace!("dropping function {:?}", function.name);
+            false
+        }
+    });
+
+    // Compact each entry point.
+    for (entry, map) in module.entry_points.iter_mut().zip(entry_point_maps.iter()) {
+        log::trace!("compacting entry point {:?}", entry.function.name);
+        map.compact(
+            &mut entry.function,
+            &module_map,
+            &mut reused_named_expressions,
+        );
+        if let Some(ref mut task_payload) = entry.task_payload {
+            module_map.globals.adjust(task_payload);
+        }
+        if let Some(ref mut incoming_ray_payload) = entry.incoming_ray_payload {
+            module_map.globals.adjust(incoming_ray_payload);
+        }
+        if let Some(ref mut mesh_info) = entry.mesh_info {
+            module_map.globals.adjust(&mut mesh_info.output_variable);
+            module_map.types.adjust(&mut mesh_info.vertex_output_type);
+            module_map
+                .types
+                .adjust(&mut mesh_info.primitive_output_type);
+            if let Some(ref mut max_vertices_override) = mesh_info.max_vertices_override {
+                module_map.global_expressions.adjust(max_vertices_override);
+            }
+            if let Some(ref mut max_primitives_override) = mesh_info.max_primitives_override {
+                module_map
+                    .global_expressions
+                    .adjust(max_primitives_override);
+            }
+        }
+    }
+
+    global_origins
+}
+
+/// What [`trace`] found to be used in a module.
+struct Traced<'module> {
+    module_tracer: ModuleTracer<'module>,
+    entry_point_maps: Vec<FunctionMap>,
+    function_maps: HandleMap<crate::Function, FunctionMap>,
+}
+
+/// Mark everything in `module` that compaction must retain.
+///
+/// If `entry_point` is given, only that entry point is traced.
+fn trace(
+    module: &crate::Module,
+    keep_unused: KeepUnused,
+    entry_point: Option<usize>,
+) -> Traced<'_> {
     let mut module_tracer = ModuleTracer::new(module);
 
     // Observe what each entry point actually uses.
@@ -123,7 +305,9 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     let entry_point_maps = module
         .entry_points
         .iter()
-        .map(|e| {
+        .enumerate()
+        .filter(|&(index, _)| entry_point.is_none() || entry_point == Some(index))
+        .map(|(_, e)| {
             log::trace!("tracing entry point {:?}", e.function.name);
 
             if let Some(sizes) = e.workgroup_size_overrides {
@@ -264,146 +448,29 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
 
     module_tracer.type_expression_tandem();
 
-    // Now that we know what is used and what is never touched,
-    // produce maps from the `Handle`s that appear in `module` now to
-    // the corresponding `Handle`s that will refer to the same items
-    // in the compacted module.
-    let module_map = ModuleMap::from(module_tracer);
-
-    // Drop unused types from the type arena.
-    //
-    // `FastIndexSet`s don't have an underlying Vec<T> that we can
-    // steal, compact in place, and then rebuild the `FastIndexSet`
-    // from. So we have to rebuild the type arena from scratch.
-    log::trace!("compacting types");
-    let mut new_types = arena::UniqueArena::new();
-    for (old_handle, mut ty, span) in module.types.drain_all() {
-        if let Some(expected_new_handle) = module_map.types.try_adjust(old_handle) {
-            module_map.adjust_type(&mut ty);
-            let actual_new_handle = new_types.insert(ty, span);
-            assert_eq!(actual_new_handle, expected_new_handle);
-        }
+    Traced {
+        module_tracer,
+        entry_point_maps,
+        function_maps,
     }
-    module.types = new_types;
-    log::trace!("adjusting special types");
-    module_map.adjust_special_types(&mut module.special_types);
+}
 
-    // Drop unused constant expressions, reusing existing storage.
-    log::trace!("adjusting constant expressions");
-    module.global_expressions.retain_mut(|handle, expr| {
-        if module_map.global_expressions.used(handle) {
-            module_map.adjust_expression(expr, &module_map.global_expressions);
-            true
-        } else {
-            false
-        }
-    });
+/// The items of a module that an entry point uses, directly or indirectly.
+pub(crate) struct Reachable {
+    pub functions: HandleSet<crate::Function>,
+    pub overrides: HandleSet<crate::Override>,
+    pub global_expressions: HandleSet<crate::Expression>,
+}
 
-    // Drop unused constants in place, reusing existing storage.
-    log::trace!("adjusting constants");
-    module.constants.retain_mut(|handle, constant| {
-        if module_map.constants.used(handle) {
-            module_map.types.adjust(&mut constant.ty);
-            module_map.global_expressions.adjust(&mut constant.init);
-            true
-        } else {
-            false
-        }
-    });
-
-    // Drop unused overrides in place, reusing existing storage.
-    log::trace!("adjusting overrides");
-    module.overrides.retain_mut(|handle, r#override| {
-        if module_map.overrides.used(handle) {
-            module_map.types.adjust(&mut r#override.ty);
-            if let Some(ref mut init) = r#override.init {
-                module_map.global_expressions.adjust(init);
-            }
-            true
-        } else {
-            false
-        }
-    });
-
-    // Adjust workgroup_size_overrides
-    log::trace!("adjusting workgroup_size_overrides");
-    for e in module.entry_points.iter_mut() {
-        if let Some(sizes) = e.workgroup_size_overrides.as_mut() {
-            for size in sizes.iter_mut() {
-                if let Some(expr) = size.as_mut() {
-                    module_map.global_expressions.adjust(expr);
-                }
-            }
-        }
-    }
-
-    // Drop unused global variables, reusing existing storage.
-    // Adjust used global variables' types and initializers.
-    log::trace!("adjusting global variables");
-    module.global_variables.retain_mut(|handle, global| {
-        if module_map.globals.used(handle) {
-            log::trace!("retaining global variable {:?}", global.name);
-            module_map.types.adjust(&mut global.ty);
-            if let Some(ref mut init) = global.init {
-                module_map.global_expressions.adjust(init);
-            }
-            true
-        } else {
-            log::trace!("dropping global variable {:?}", global.name);
-            false
-        }
-    });
-
-    // Adjust doc comments
-    if let Some(ref mut doc_comments) = module.doc_comments {
-        module_map.adjust_doc_comments(doc_comments.as_mut());
-    }
-
-    // Temporary storage to help us reuse allocations of existing
-    // named expression tables.
-    let mut reused_named_expressions = crate::NamedExpressions::default();
-
-    // Drop unused functions. Compact and adjust used functions.
-    module.functions.retain_mut(|handle, function| {
-        if let Some(map) = function_maps.get(handle) {
-            log::trace!("retaining and compacting function {:?}", function.name);
-            map.compact(function, &module_map, &mut reused_named_expressions);
-            true
-        } else {
-            log::trace!("dropping function {:?}", function.name);
-            false
-        }
-    });
-
-    // Compact each entry point.
-    for (entry, map) in module.entry_points.iter_mut().zip(entry_point_maps.iter()) {
-        log::trace!("compacting entry point {:?}", entry.function.name);
-        map.compact(
-            &mut entry.function,
-            &module_map,
-            &mut reused_named_expressions,
-        );
-        if let Some(ref mut task_payload) = entry.task_payload {
-            module_map.globals.adjust(task_payload);
-        }
-        if let Some(ref mut incoming_ray_payload) = entry.incoming_ray_payload {
-            module_map.globals.adjust(incoming_ray_payload);
-        }
-        if let Some(ref mut mesh_info) = entry.mesh_info {
-            module_map.globals.adjust(&mut mesh_info.output_variable);
-            module_map.types.adjust(&mut mesh_info.vertex_output_type);
-            module_map
-                .types
-                .adjust(&mut mesh_info.primitive_output_type);
-            if let Some(ref mut max_vertices_override) = mesh_info.max_vertices_override {
-                module_map.global_expressions.adjust(max_vertices_override);
-            }
-            if let Some(ref mut max_primitives_override) = mesh_info.max_primitives_override {
-                module_map
-                    .global_expressions
-                    .adjust(max_primitives_override);
-            }
-        }
+/// Return what entry point `entry_point` of `module` uses, or what any entry point uses if `None`.
+///
+/// This is what [`compact`] with [`KeepUnused::No`] would retain.
+pub(crate) fn reachable(module: &crate::Module, entry_point: Option<usize>) -> Reachable {
+    let tracer = trace(module, KeepUnused::No, entry_point).module_tracer;
+    Reachable {
+        functions: tracer.functions_used,
+        overrides: tracer.overrides_used,
+        global_expressions: tracer.global_expressions_used,
     }
 }
 

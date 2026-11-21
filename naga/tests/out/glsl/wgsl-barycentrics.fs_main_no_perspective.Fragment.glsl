@@ -3,8 +3,8 @@
 layout(location = 0) out vec4 _fs2p_location0;
 
 void main() {
-    vec3 bary_1 = gl_BaryCoordNoPerspEXT;
-    _fs2p_location0 = vec4(bary_1, 1.0);
+    vec3 bary = gl_BaryCoordNoPerspEXT;
+    _fs2p_location0 = vec4(bary, 1.0);
     return;
 }
 
