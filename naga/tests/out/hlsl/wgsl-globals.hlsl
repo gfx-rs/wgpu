@@ -7,6 +7,20 @@ float2 __get_col_of_mat3x2_f32(__mat3x2_f32 mat, uint idx) {
     default: { return (float2)0; }
     }
 }
+void __set_col_of_mat3x2_f32(__mat3x2_f32 mat, uint idx, float2 value) {
+    switch(idx) {
+    case 0: { mat._0 = value; break; }
+    case 1: { mat._1 = value; break; }
+    case 2: { mat._2 = value; break; }
+    }
+}
+void __set_el_of_mat3x2_f32(__mat3x2_f32 mat, uint idx, uint vec_idx, float value) {
+    switch(idx) {
+    case 0: { mat._0[vec_idx] = value; break; }
+    case 1: { mat._1[vec_idx] = value; break; }
+    case 2: { mat._2[vec_idx] = value; break; }
+    }
+}
 
 typedef struct { float2 _0; float2 _1; float2 _2; float2 _3; } __mat4x2_f32;
 float2 __get_col_of_mat4x2_f32(__mat4x2_f32 mat, uint idx) {
@@ -16,6 +30,22 @@ float2 __get_col_of_mat4x2_f32(__mat4x2_f32 mat, uint idx) {
     case 2: { return mat._2; }
     case 3: { return mat._3; }
     default: { return (float2)0; }
+    }
+}
+void __set_col_of_mat4x2_f32(__mat4x2_f32 mat, uint idx, float2 value) {
+    switch(idx) {
+    case 0: { mat._0 = value; break; }
+    case 1: { mat._1 = value; break; }
+    case 2: { mat._2 = value; break; }
+    case 3: { mat._3 = value; break; }
+    }
+}
+void __set_el_of_mat4x2_f32(__mat4x2_f32 mat, uint idx, uint vec_idx, float value) {
+    switch(idx) {
+    case 0: { mat._0[vec_idx] = value; break; }
+    case 1: { mat._1[vec_idx] = value; break; }
+    case 2: { mat._2[vec_idx] = value; break; }
+    case 3: { mat._3[vec_idx] = value; break; }
     }
 }
 
@@ -36,40 +66,8 @@ cbuffer global_mat : register(b5) { __mat3x2_f32 global_mat; }
 cbuffer global_nested_arrays_of_matrices_2x4_ : register(b6) { row_major float2x4 global_nested_arrays_of_matrices_2x4_[2][2]; }
 cbuffer global_nested_arrays_of_matrices_4x2_ : register(b7) { __mat4x2_f32 global_nested_arrays_of_matrices_4x2_[2][2]; }
 
-void test_msl_packed_vec3_as_arg(float3 arg)
-{
-    return;
-}
-
-float3x3 ZeroValuefloat3x3() {
-    return (float3x3)0;
-}
-
-FooStruct ConstructFooStruct(float3 arg0, float arg1) {
-    FooStruct ret = (FooStruct)0;
-    ret.v3_ = arg0;
-    ret.v1_ = arg1;
-    return ret;
-}
-
-void test_msl_packed_vec3_()
-{
-    int idx = int(1);
-
-    alignment.Store3(0, asuint((1.0).xxx));
-    alignment.Store(0+0, asuint(1.0));
-    alignment.Store(0+0, asuint(2.0));
-    int _e16 = idx;
-    alignment.Store(_e16*4+0, asuint(3.0));
-    FooStruct data = ConstructFooStruct(asfloat(alignment.Load3(0)), asfloat(alignment.Load(12)));
-    float3 l0_ = data.v3_;
-    float2 l1_ = data.v3_.zx;
-    test_msl_packed_vec3_as_arg(data.v3_);
-    float3 mvm0_ = mul(ZeroValuefloat3x3(), data.v3_);
-    float3 mvm1_ = mul(data.v3_, ZeroValuefloat3x3());
-    float3 svm0_ = (data.v3_ * 2.0);
-    float3 svm1_ = (2.0 * data.v3_);
-    return;
+float3 ZeroValuefloat3() {
+    return (float3)0;
 }
 
 uint NagaBufferLength(ByteAddressBuffer buffer)
@@ -79,30 +77,39 @@ uint NagaBufferLength(ByteAddressBuffer buffer)
     return ret;
 }
 
+FooStruct ConstructFooStruct(float3 arg0, float arg1) {
+    FooStruct ret = (FooStruct)0;
+    ret.v3_ = arg0;
+    ret.v1_ = arg1;
+    return ret;
+}
+
 [numthreads(1, 1, 1)]
 void main(uint local_invocation_index : SV_GroupIndex)
 {
-    float Foo = 1.0;
-    bool at = true;
-    uint zero_init_index = (uint)0;
-
-    zero_init_index = local_invocation_index;
-    uint2 loop_bound = uint2(4294967295u, 4294967295u);
-    while(true) {
-        if (all(loop_bound == uint2(0u, 0u))) { break; }
-        loop_bound -= uint2(loop_bound.y == 0u, 1u);
-        uint _e60 = zero_init_index;
-        if ((_e60 >= 10u)) {
-            break;
-        }
-        wg[min(uint(_e60), 9u)] = 0.0;
-        zero_init_index = (_e60 + 1u);
+    [loop]
+    for (uint zero_flat_index = local_invocation_index; zero_flat_index < 10u; zero_flat_index += 1u) {
+        uint zero_index = zero_flat_index;
+        wg[zero_index] = (float)0;
     }
-    if ((local_invocation_index == 0u)) {
-        at_1 = 0u;
+    if (local_invocation_index == 0) {
+        at_1 = (uint)0;
     }
     GroupMemoryBarrierWithGroupSync();
-    test_msl_packed_vec3_();
+    float Foo = 1.0;
+    bool at = true;
+    int idx = (int)0;
+    float3 arg = (float3)0;
+
+    idx = int(1);
+    arg = ZeroValuefloat3();
+    alignment.Store3(0, asuint((1.0).xxx));
+    alignment.Store(0+0, asuint(1.0));
+    alignment.Store(0+0, asuint(2.0));
+    int _e72 = idx;
+    alignment.Store(_e72*4+0, asuint(3.0));
+    FooStruct _e76 = ConstructFooStruct(asfloat(alignment.Load3(0)), asfloat(alignment.Load(12)));
+    arg = _e76.v3_;
     float4x2 _e5 = ((float4x2)global_nested_arrays_of_matrices_4x2_[0][0]);
     float4 _e10 = global_nested_arrays_of_matrices_2x4_[0][0][0];
     wg[7] = mul(_e10, _e5).x;

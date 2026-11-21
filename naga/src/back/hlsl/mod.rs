@@ -831,9 +831,6 @@ pub struct Writer<'a, W> {
     temp_access_chain: Vec<storage::SubAccess>,
     need_bake_expressions: back::NeedBakeExpressions,
 
-    function_task_payload_var:
-        crate::FastHashMap<Handle<crate::Function>, Handle<crate::GlobalVariable>>,
-
     /// The name of the raw `uint4` array that backs each [`Immediate`] global.
     ///
     /// See the [`immediates`] module for background.

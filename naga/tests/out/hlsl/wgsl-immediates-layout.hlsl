@@ -79,12 +79,6 @@ Mixed ConstructMixed(int arg0, float3x2 arg1, Inner arg2, float4x3 arg3, int4 ar
 }
 
 
-uint read_nested_after_vec3_()
-{
-    uint _e3 = nested_after_vec3_.inner.b;
-    return _e3;
-}
-
 [numthreads(1, 1, 1)]
 void scalar_then_struct()
 {
@@ -104,14 +98,18 @@ void scalar_then_struct()
 void vec3_then_struct()
 {
     nested_after_vec3_ = ConstructNestedAfterVec3_(uint3(asuint(nested_after_vec3_raw[0].x), asuint(nested_after_vec3_raw[0].y), asuint(nested_after_vec3_raw[0].z)), ConstructInner(asuint(nested_after_vec3_raw[0].w), asuint(nested_after_vec3_raw[1].x)), asuint(nested_after_vec3_raw[1].y));
+    uint local = (uint)0;
+
     uint _e5 = nested_after_vec3_.v.z;
     out_.Store(0, asuint(_e5));
     uint _e11 = nested_after_vec3_.inner.a;
     out_.Store(4, asuint(_e11));
-    const uint _e14 = read_nested_after_vec3_();
-    out_.Store(8, asuint(_e14));
-    uint _e19 = nested_after_vec3_.y;
-    out_.Store(12, asuint(_e19));
+    uint _e17 = nested_after_vec3_.inner.b;
+    local = _e17;
+    uint _e19 = local;
+    out_.Store(8, asuint(_e19));
+    uint _e24 = nested_after_vec3_.y;
+    out_.Store(12, asuint(_e24));
     return;
 }
 

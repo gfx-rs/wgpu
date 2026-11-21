@@ -92,7 +92,7 @@ pub fn needs_inline(module: &Module, strategy: InlineStrategy) -> bool {
 /// Return the name of a function that `target` cannot express unless
 /// [`process`] has inlined it, or that contains a call `target` cannot
 /// express.
-#[cfg_attr(not(any(spv_out, msl_out, glsl_out, hlsl_out)), expect(dead_code))]
+#[cfg_attr(not(any(spv_out, msl_out, glsl_out)), expect(dead_code))]
 pub(crate) fn find_needs_inline(module: &Module, target: InlineTarget) -> Option<String> {
     let checker = Checker::new(module, InlineStrategy::OnlyNeeded(target))?;
     find_needs_inline_impl(module, &checker)

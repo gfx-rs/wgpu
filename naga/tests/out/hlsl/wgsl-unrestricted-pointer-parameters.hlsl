@@ -18,40 +18,13 @@ struct FragmentInput_frag {
     float2 uv_1 : LOC0;
 };
 
-void bump(inout uint p)
-{
-    uint count = 1u;
-
-    uint _e3 = p;
-    uint _e4 = count;
-    p = (_e3 + _e4);
-    uint _e6 = count;
-    count = (_e6 + 1u);
-    return;
-}
-
-void bump_twice(inout uint p_1)
-{
-    bump(p_1);
-    bump(p_1);
-    return;
-}
-
-void set_private(inout uint p_2)
-{
-    p_2 = 7u;
-    return;
-}
-
-uint not_inlined(inout uint p_3)
-{
-    uint _e1 = p_3;
-    return _e1;
-}
-
 typedef uint ret_ZeroValuearray2_uint_[2];
 ret_ZeroValuearray2_uint_ ZeroValuearray2_uint_() {
     return (uint[2])0;
+}
+
+uint ZeroValueuint() {
+    return (uint)0;
 }
 
 [numthreads(1, 1, 1)]
@@ -78,7 +51,10 @@ void main(uint index : SV_GroupIndex)
     bool local_4 = (bool)0;
     uint local_5 = (uint)0;
     bool local_6 = (bool)0;
+    uint count = (uint)0;
+    uint count_1 = (uint)0;
     bool c = (bool)0;
+    uint local_7 = (uint)0;
 
     v = index;
     uint _e3 = v;
@@ -172,8 +148,8 @@ void main(uint index : SV_GroupIndex)
         if (all(loop_bound_1 == uint2(0u, 0u))) { break; }
         loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
         if (!loop_init_1) {
-            uint _e69 = i;
-            i = (_e69 + 1u);
+            uint _e83 = i;
+            i = (_e83 + 1u);
         }
         loop_init_1 = false;
         uint _e62 = i;
@@ -183,22 +159,37 @@ void main(uint index : SV_GroupIndex)
         }
         {
             uint _e66 = i;
-            bump_twice(local[min(uint(_e66), 1u)]);
+            count = ZeroValueuint();
+            count_1 = ZeroValueuint();
+            count = 1u;
+            uint _e69 = local[min(uint(_e66), 1u)];
+            uint _e70 = count;
+            local[min(uint(_e66), 1u)] = (_e69 + _e70);
+            uint _e72 = count;
+            count = (_e72 + 1u);
+            count_1 = 1u;
+            uint _e76 = local[min(uint(_e66), 1u)];
+            uint _e77 = count_1;
+            local[min(uint(_e66), 1u)] = (_e76 + _e77);
+            uint _e79 = count_1;
+            count_1 = (_e79 + 1u);
         }
     }
-    set_private(private_arr[1]);
+    private_arr[1] = 7u;
     c = (index == 0u);
-    bool _e78 = c;
+    bool _e92 = c;
     do {
-        if (_e78) {
+        if (_e92) {
             break;
         }
         arr.Store(16, asuint(5u));
     } while(false);
-    uint _e82 = local[0];
-    uint _e85 = private_arr[1];
-    const uint _e87 = not_inlined(whole);
-    arr.Store(20, asuint(((_e82 + _e85) + _e87)));
+    uint _e96 = local[0];
+    uint _e99 = private_arr[1];
+    uint _e102 = whole;
+    local_7 = _e102;
+    uint _e104 = local_7;
+    arr.Store(20, asuint(((_e96 + _e99) + _e104)));
     return;
 }
 
@@ -213,12 +204,12 @@ float4 frag(FragmentInput_frag fragmentinput_frag) : SV_Target0
 {
     float2 uv = fragmentinput_frag.uv_1;
     uint i_2 = (uint)0;
-    float local_7 = (float)0;
-    bool local_8 = (bool)0;
+    float local_8 = (float)0;
+    bool local_9 = (bool)0;
 
     do {
         i_2 = 0u;
-        local_8 = false;
+        local_9 = false;
         uint2 loop_bound_2 = uint2(4294967295u, 4294967295u);
         bool loop_init_2 = true;
         while(true) {
@@ -240,19 +231,19 @@ float4 frag(FragmentInput_frag fragmentinput_frag) : SV_Target0
                 if ((_e7 > 0.0)) {
                     uint _e10 = i_2;
                     float _e12 = asfloat(lut.Load(_e10*4));
-                    local_7 = _e12;
-                    local_8 = true;
+                    local_8 = _e12;
+                    local_9 = true;
                     break;
                 }
             }
         }
-        bool _e17 = local_8;
+        bool _e17 = local_9;
         if (_e17) {
             break;
         }
-        local_7 = 0.0;
+        local_8 = 0.0;
     } while(false);
-    float v_4 = local_7;
+    float v_4 = local_8;
     float4 _e23 = t.Sample(s, uv);
     return (_e23 * v_4);
 }
