@@ -663,6 +663,7 @@ impl super::Device {
                 multiview: context
                     .multiview_mask
                     .map(|a| NonZeroU32::new(a.get().count_ones()).unwrap()),
+                constants: stage.constants.clone(),
             };
 
             let naga = match stage.module.source {
@@ -672,16 +673,7 @@ impl super::Device {
                 }
             };
 
-            let (module, info) = naga::back::pipeline_constants::process_overrides(
-                &naga.module,
-                &naga.info,
-                Some((naga_stage, stage.entry_point)),
-                stage.constants,
-            )
-            .map_err(|e| {
-                let msg = format!("{e}");
-                crate::PipelineError::PipelineConstants(map_naga_stage(naga_stage), msg)
-            })?;
+            let (module, info) = (&naga.module, &naga.info);
 
             let entry_point_index = module
                 .entry_points
@@ -723,16 +715,22 @@ impl super::Device {
             let mut writer =
                 glsl::Writer::new(&mut output, naga_options, &pipeline_options, policies);
 
-            let reflection_info = writer.write(&module, &info).map_err(|e| {
+            let reflection_info = writer.write(module).map_err(|e| {
                 let msg = format!("{e}");
-                crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
+                match e {
+                    // Bad override values, among other things.
+                    glsl::Error::Pass(_) => {
+                        crate::PipelineError::PipelineConstants(map_naga_stage(naga_stage), msg)
+                    }
+                    _ => crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg),
+                }
             })?;
 
             log::debug!("Naga generated shader:\n{output}");
 
             context.consume_reflection(
                 gl,
-                &module,
+                module,
                 info.get_entry_point(entry_point_index),
                 reflection_info,
                 naga_stage,
