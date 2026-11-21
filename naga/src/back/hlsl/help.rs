@@ -70,18 +70,6 @@ pub(super) struct WrappedConstructor {
 }
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
-pub(super) struct WrappedStructMatrixAccess {
-    pub(super) ty: Handle<crate::Type>,
-    pub(super) index: u32,
-}
-
-#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
-pub(super) struct WrappedMatCx2 {
-    pub(super) columns: crate::VectorSize,
-    pub(super) width: u8,
-}
-
-#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) struct WrappedMath {
     pub(super) fun: crate::MathFunction,
     pub(super) scalar: crate::Scalar,
@@ -890,53 +878,12 @@ impl<W: Write> super::Writer<'_, W> {
                     self.out,
                     "{INDENT}{struct_name} {RETURN_VARIABLE_NAME} = ({struct_name})0;"
                 )?;
-                for (i, member) in members.iter().enumerate() {
+                for i in 0..members.len() {
                     let field_name = &self.names[&NameKey::StructMember(constructor.ty, i as u32)];
-
-                    match module.types[member.ty].inner {
-                        crate::TypeInner::Matrix {
-                            columns,
-                            rows: crate::VectorSize::Bi,
-                            ..
-                        } if member.binding.is_none() => {
-                            for j in 0..columns as u8 {
-                                writeln!(
-                                    self.out,
-                                    "{INDENT}{RETURN_VARIABLE_NAME}.{field_name}_{j} = {ARGUMENT_VARIABLE_NAME}{i}[{j}];"
-                                )?;
-                            }
-                        }
-                        ref other => {
-                            // We cast arrays of native HLSL `floatCx2`s to arrays of `matCx2`s
-                            // (where the inner matrix is represented by a struct with C `float2` members).
-                            // See the module-level block comment in mod.rs for details.
-                            if let Some(super::writer::MatrixType {
-                                columns,
-                                rows: crate::VectorSize::Bi,
-                                width,
-                            }) = super::writer::get_inner_matrix_data(module, member.ty)
-                            {
-                                write!(
-                                    self.out,
-                                    "{}{}.{} = (__mat{}x2_f{}",
-                                    INDENT,
-                                    RETURN_VARIABLE_NAME,
-                                    field_name,
-                                    columns as u8,
-                                    width * 8
-                                )?;
-                                if let crate::TypeInner::Array { base, size, .. } = *other {
-                                    self.write_array_size(module, base, size)?;
-                                }
-                                writeln!(self.out, "){ARGUMENT_VARIABLE_NAME}{i};",)?;
-                            } else {
-                                writeln!(
-                                    self.out,
-                                    "{INDENT}{RETURN_VARIABLE_NAME}.{field_name} = {ARGUMENT_VARIABLE_NAME}{i};",
-                                )?;
-                            }
-                        }
-                    }
+                    writeln!(
+                        self.out,
+                        "{INDENT}{RETURN_VARIABLE_NAME}.{field_name} = {ARGUMENT_VARIABLE_NAME}{i};",
+                    )?;
                 }
             }
             crate::TypeInner::Array {
@@ -1025,70 +972,7 @@ impl<W: Write> super::Writer<'_, W> {
         Ok(())
     }
 
-    pub(super) fn write_wrapped_struct_matrix_get_function_name(
-        &mut self,
-        access: WrappedStructMatrixAccess,
-    ) -> BackendResult {
-        let name = &self.names[&NameKey::Type(access.ty)];
-        let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
-        write!(self.out, "GetMat{field_name}On{name}")?;
-        Ok(())
-    }
-
-    /// Writes a function used to get a matCx2 from within a structure.
-    pub(super) fn write_wrapped_struct_matrix_get_function(
-        &mut self,
-        module: &crate::Module,
-        access: WrappedStructMatrixAccess,
-    ) -> BackendResult {
-        use crate::back::INDENT;
-
-        const STRUCT_ARGUMENT_VARIABLE_NAME: &str = "obj";
-
-        // Write function return type and name
-        let member = match module.types[access.ty].inner {
-            crate::TypeInner::Struct { ref members, .. } => &members[access.index as usize],
-            _ => unreachable!(),
-        };
-        let ret_ty = &module.types[member.ty].inner;
-        self.write_value_type(module, ret_ty)?;
-        write!(self.out, " ")?;
-        self.write_wrapped_struct_matrix_get_function_name(access)?;
-
-        // Write function parameters
-        write!(self.out, "(")?;
-        let struct_name = &self.names[&NameKey::Type(access.ty)];
-        write!(self.out, "{struct_name} {STRUCT_ARGUMENT_VARIABLE_NAME}")?;
-
-        // Write function body
-        writeln!(self.out, ") {{")?;
-
-        // Write return value
-        write!(self.out, "{INDENT}return ")?;
-        self.write_value_type(module, ret_ty)?;
-        write!(self.out, "(")?;
-        let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
-        match module.types[member.ty].inner {
-            crate::TypeInner::Matrix { columns, .. } => {
-                for i in 0..columns as u8 {
-                    if i != 0 {
-                        write!(self.out, ", ")?;
-                    }
-                    write!(self.out, "{STRUCT_ARGUMENT_VARIABLE_NAME}.{field_name}_{i}")?;
-                }
-            }
-            _ => unreachable!(),
-        }
-        writeln!(self.out, ");")?;
-
-        // End of function body
-        writeln!(self.out, "}}")?;
-        // Write extra new line
-        writeln!(self.out)?;
-
-        Ok(())
-    }
-
+    /// Write functions to create special types.
     pub(super) fn write_special_functions(&mut self, module: &crate::Module) -> BackendResult {
         for (type_key, struct_ty) in module.special_types.predeclared_types.iter() {
             match type_key {
@@ -1882,39 +1766,6 @@ impl<W: Write> super::Writer<'_, W> {
                         }
                     }
                 }
-                // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
-                // (see top level module docs for details).
-                //
-                // The functions injected here are required to get the matrix accesses working.
-                crate::Expression::AccessIndex { base, index } => {
-                    let base_ty_res = &func_ctx.info[base].ty;
-                    let mut resolved = base_ty_res.inner_with(&module.types);
-                    let base_ty_handle = match *resolved {
-                        crate::TypeInner::Pointer { base, .. } => {
-                            resolved = &module.types[base].inner;
-                            Some(base)
-                        }
-                        _ => base_ty_res.handle(),
-                    };
-                    if let crate::TypeInner::Struct { ref members, .. } = *resolved {
-                        let member = &members[index as usize];
-
-                        match module.types[member.ty].inner {
-                            crate::TypeInner::Matrix {
-                                rows: crate::VectorSize::Bi,
-                                ..
-                            } if member.binding.is_none() => {
-                                let ty = base_ty_handle.unwrap();
-                                let access = WrappedStructMatrixAccess { ty, index };
-
-                                if self.wrapped.insert(WrappedType::StructMatrixAccess(access)) {
-                                    self.write_wrapped_struct_matrix_get_function(module, access)?;
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
                 _ => {}
             };
         }
@@ -2053,90 +1904,6 @@ impl<W: Write> super::Writer<'_, W> {
         Ok(())
     }
 
-    pub(super) fn write_mat_cx2_typedef_and_functions(
-        &mut self,
-        WrappedMatCx2 { columns, width }: WrappedMatCx2,
-    ) -> BackendResult {
-        use crate::back::INDENT;
-
-        let bit_width = width * 8;
-        let type_name = crate::Scalar {
-            kind: ScalarKind::Float,
-            width,
-        }
-        .to_hlsl_str()?;
-
-        // typedef
-        write!(self.out, "typedef struct {{ ")?;
-        for i in 0..columns as u8 {
-            write!(self.out, "{type_name}2 _{i}; ")?;
-        }
-        writeln!(self.out, "}} __mat{}x2_f{bit_width};", columns as u8)?;
-
-        // __get_col_of_mat
-        writeln!(
-            self.out,
-            "{type_name}2 __get_col_of_mat{}x2_f{bit_width}(__mat{}x2_f{bit_width} mat, uint idx) {{",
-            columns as u8, columns as u8
-        )?;
-        writeln!(self.out, "{INDENT}switch(idx) {{")?;
-        for i in 0..columns as u8 {
-            writeln!(self.out, "{INDENT}case {i}: {{ return mat._{i}; }}")?;
-        }
-        writeln!(self.out, "{INDENT}default: {{ return ({type_name}2)0; }}")?;
-        writeln!(self.out, "{INDENT}}}")?;
-        writeln!(self.out, "}}")?;
-
-        writeln!(self.out)?;
-
-        Ok(())
-    }
-
-    pub(super) fn write_all_mat_cx2_typedefs_and_functions(
-        &mut self,
-        module: &crate::Module,
-    ) -> BackendResult {
-        for (handle, _) in module.global_variables.iter() {
-            let global = &module.global_variables[handle];
-
-            if global.space == crate::AddressSpace::Uniform {
-                if let Some(super::writer::MatrixType {
-                    columns,
-                    rows: crate::VectorSize::Bi,
-                    width,
-                }) = super::writer::get_inner_matrix_data(module, global.ty)
-                {
-                    let entry = WrappedMatCx2 { columns, width };
-                    if self.wrapped.insert(WrappedType::MatCx2(entry)) {
-                        self.write_mat_cx2_typedef_and_functions(entry)?;
-                    }
-                }
-            }
-        }
-
-        for (_, ty) in module.types.iter() {
-            if let crate::TypeInner::Struct { ref members, .. } = ty.inner {
-                for member in members.iter() {
-                    if let crate::TypeInner::Array { .. } = module.types[member.ty].inner {
-                        if let Some(super::writer::MatrixType {
-                            columns,
-                            rows: crate::VectorSize::Bi,
-                            width,
-                        }) = super::writer::get_inner_matrix_data(module, member.ty)
-                        {
-                            let entry = WrappedMatCx2 { columns, width };
-                            if self.wrapped.insert(WrappedType::MatCx2(entry)) {
-                                self.write_mat_cx2_typedef_and_functions(entry)?;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     pub(super) fn write_wrapped_zero_value_function_name(
         &mut self,
         module: &crate::Module,
@@ -2153,15 +1920,6 @@ impl<W: Write> super::Writer<'_, W> {
     /// `.y` (in practice this can come up when consuming SPIRV that's been produced by glslc).
     ///
     /// So we can't just write `(float4)0` since `(float4)0.y` won't parse correctly.
-    ///
-    /// Parenthesizing the expression like `((float4)0).y` would work... except DXC can't handle
-    /// cases like:
-    ///
-    /// ```text
-    /// tests\out\hlsl\access.hlsl:183:41: error: cannot compile this l-value expression yet
-    ///     t_1.am = (__mat4x2_f32[2])((float4x2[2])0);
-    ///                                         ^
-    /// ```
     fn write_wrapped_zero_value_function(
         &mut self,
         module: &crate::Module,

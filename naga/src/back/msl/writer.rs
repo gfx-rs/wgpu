@@ -4851,6 +4851,7 @@ impl<W: Write> Writer<W> {
             module.into(),
             &back::passes::Passes {
                 inline: crate::inline::InlineStrategy::OnlyNeeded(crate::inline::InlineTarget::Msl),
+                uniform_matrix_layout: false,
                 workgroup_zero_init: options.zero_initialize_workgroup_memory,
                 ..options.passes.into()
             },

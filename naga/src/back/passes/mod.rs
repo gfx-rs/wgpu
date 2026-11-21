@@ -15,6 +15,18 @@ if any pass changed the module, the runner compacts it, which removes the
 unused items and puts the rest in order, before validating it. With
 [`PassOptions::compact`], the runner always compacts, and removes everything
 the entry points don't use.
+
+The passes are:
+
+- Uniform matrix layout, selected by `Passes::uniform_matrix_layout`: gives
+  `var<uniform>` globals types that have std140-compatible layouts. Matrices
+  whose columns std140 would pad but WGSL does not (`matCx2<f32>` and
+  `matCx{2,3,4}<f16>`) are stored as column vectors: a struct member matrix
+  becomes one member per column of the containing struct, and any other
+  matrix becomes a struct of its columns. The pass rewrites the accesses and
+  loads that use them. A dynamic column index into such a matrix indexes the
+  loaded matrix, so it is bounds-checked under the `index` policy, not the
+  `buffer` policy.
 */
 #![cfg_attr(
     not(any(glsl_out, hlsl_out, msl_out, spv_out)),
@@ -25,7 +37,10 @@ the entry points don't use.
 )]
 
 mod emit;
+mod uniform_matrix_layout;
 pub mod workgroup_zero_init;
+
+pub use uniform_matrix_layout::UniformMatrixLayoutError;
 
 use alloc::{borrow::Cow, boxed::Box};
 
@@ -45,6 +60,8 @@ pub enum PassError {
     WorkgroupZeroInit(#[from] workgroup_zero_init::WorkgroupZeroInitError),
     #[error("module failed revalidation after backend passes")]
     Validation(#[from] Box<WithSpan<ValidationError>>),
+    #[error(transparent)]
+    UniformMatrixLayout(#[from] UniformMatrixLayoutError),
 }
 
 /// Options for the IR passes a backend runs before writing a module.
@@ -70,6 +87,8 @@ pub(crate) struct Passes {
     pub compact: bool,
     /// Which calls to inline. This runs before the other passes.
     pub inline: InlineStrategy,
+    /// Give `var<uniform>` globals std140-compatible types.
+    pub uniform_matrix_layout: bool,
     /// Run [`workgroup_zero_init`].
     pub workgroup_zero_init: bool,
 }
@@ -82,6 +101,7 @@ impl From<PassOptions> for Passes {
         Self {
             compact,
             inline: InlineStrategy::Never,
+            uniform_matrix_layout: false,
             workgroup_zero_init: false,
         }
     }
@@ -98,6 +118,7 @@ pub(crate) fn run<'a>(
     let Passes {
         compact,
         inline,
+        uniform_matrix_layout,
         workgroup_zero_init,
     } = *passes;
     // Each pass calls `Cow::to_mut` only if it will change the module, which
@@ -110,6 +131,9 @@ pub(crate) fn run<'a>(
     let (inlined_changed, inlined) = crate::inline::inline_in_place(&mut module, inline);
     changed |= inlined_changed;
     dropped.functions = inlined;
+    if uniform_matrix_layout {
+        changed |= uniform_matrix_layout::run(&mut module)?;
+    }
     if workgroup_zero_init {
         changed |= workgroup_zero_init::run(&mut module)?;
     }

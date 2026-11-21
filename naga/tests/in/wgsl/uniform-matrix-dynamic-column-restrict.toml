@@ -1,0 +1,5 @@
+targets = "SPIRV | HLSL | GLSL"
+
+[bounds_check_policies]
+index = "Restrict"
+buffer = "Restrict"

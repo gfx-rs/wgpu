@@ -19,25 +19,25 @@ struct StructWithArrayOfStructOfMat
     StructWithMat a[4];
 };
 
-struct std140_mat4x2_f16_
+struct mat4x2f16_std140
 {
-    f16vec2 col0;
-    f16vec2 col1;
-    f16vec2 col2;
-    f16vec2 col3;
+    f16vec2 c_0;
+    f16vec2 c_1;
+    f16vec2 c_2;
+    f16vec2 c_3;
 };
 
-struct std140_StructWithMat
+struct StructWithMat_std140
 {
-    f16vec2 m_col0;
-    f16vec2 m_col1;
-    f16vec2 m_col2;
-    f16vec2 m_col3;
+    f16vec2 m_0;
+    f16vec2 m_1;
+    f16vec2 m_2;
+    f16vec2 m_3;
 };
 
-struct std140_StructWithArrayOfStructOfMat
+struct StructWithArrayOfStructOfMat_std140
 {
-    std140_StructWithMat a[4];
+    StructWithMat_std140 a[4];
 };
 
 layout(set = 0, binding = 0, std430) buffer s_m
@@ -47,7 +47,7 @@ layout(set = 0, binding = 0, std430) buffer s_m
 
 layout(set = 0, binding = 1, std140) uniform u_m
 {
-    std140_mat4x2_f16_ _m0;
+    mat4x2f16_std140 _m0;
 } u_m_1;
 
 layout(set = 1, binding = 0, std430) buffer s_sm
@@ -57,7 +57,7 @@ layout(set = 1, binding = 0, std430) buffer s_sm
 
 layout(set = 1, binding = 1, std140) uniform u_sm
 {
-    std140_StructWithMat _m0;
+    StructWithMat_std140 _m0;
 } u_sm_1;
 
 layout(set = 2, binding = 0, std430) buffer s_am
@@ -67,7 +67,7 @@ layout(set = 2, binding = 0, std430) buffer s_am
 
 layout(set = 2, binding = 1, std140) uniform u_am
 {
-    std140_mat4x2_f16_ _m0[4];
+    mat4x2f16_std140 _m0[4];
 } u_am_1;
 
 layout(set = 3, binding = 0, std430) buffer s_sasm
@@ -77,135 +77,105 @@ layout(set = 3, binding = 0, std430) buffer s_sasm
 
 layout(set = 3, binding = 1, std140) uniform u_sasm
 {
-    std140_StructWithArrayOfStructOfMat _m0;
+    StructWithArrayOfStructOfMat_std140 _m0;
 } u_sasm_1;
-
-f16mat4x2 mat4x2_f16_from_std140(std140_mat4x2_f16_ _45)
-{
-    return f16mat4x2(_45.col0, _45.col1, _45.col2, _45.col3);
-}
-
-f16vec2 mat4x2_f16_get_column(f16mat4x2 _53, uint _54)
-{
-    f16vec2 _67;
-    switch (_54)
-    {
-        case 0u:
-        {
-            _67 = _53[0];
-            break;
-        }
-        case 1u:
-        {
-            _67 = _53[1];
-            break;
-        }
-        case 2u:
-        {
-            _67 = _53[2];
-            break;
-        }
-        case 3u:
-        {
-            _67 = _53[3];
-            break;
-        }
-        default:
-        {
-            break; // unreachable workaround
-        }
-    }
-    return _67;
-}
 
 void access_m()
 {
     int idx = 1;
     idx--;
-    s_m_1._m0 = mat4x2_f16_from_std140(u_m_1._m0);
-    s_m_1._m0[0u] = u_m_1._m0.col0;
-    s_m_1._m0[idx] = mat4x2_f16_get_column(mat4x2_f16_from_std140(u_m_1._m0), uint(idx));
-    s_m_1._m0[0u].x = u_m_1._m0.col0.x;
-    s_m_1._m0[0u][idx] = u_m_1._m0.col0[idx];
-    s_m_1._m0[idx].x = mat4x2_f16_get_column(mat4x2_f16_from_std140(u_m_1._m0), uint(idx)).x;
-    s_m_1._m0[idx][idx] = mat4x2_f16_get_column(mat4x2_f16_from_std140(u_m_1._m0), uint(idx))[idx];
-}
-
-StructWithMat StructWithMat_from_std140(std140_StructWithMat _145)
-{
-    return StructWithMat(f16mat4x2(_145.m_col0, _145.m_col1, _145.m_col2, _145.m_col3));
+    f16mat4x2 _103 = f16mat4x2(u_m_1._m0.c_0, u_m_1._m0.c_1, u_m_1._m0.c_2, u_m_1._m0.c_3);
+    f16mat4x2 _123 = f16mat4x2(u_m_1._m0.c_0, u_m_1._m0.c_1, u_m_1._m0.c_2, u_m_1._m0.c_3);
+    f16mat4x2 _138 = f16mat4x2(u_m_1._m0.c_0, u_m_1._m0.c_1, u_m_1._m0.c_2, u_m_1._m0.c_3);
+    s_m_1._m0 = f16mat4x2(u_m_1._m0.c_0, u_m_1._m0.c_1, u_m_1._m0.c_2, u_m_1._m0.c_3);
+    s_m_1._m0[0u] = u_m_1._m0.c_0;
+    s_m_1._m0[idx] = _103[idx];
+    s_m_1._m0[0u].x = u_m_1._m0.c_0.x;
+    s_m_1._m0[0u][idx] = u_m_1._m0.c_0[idx];
+    s_m_1._m0[idx].x = _123[idx].x;
+    s_m_1._m0[idx][idx] = _138[idx][idx];
 }
 
 void access_sm()
 {
     int idx = 1;
     idx--;
-    s_sm_1._m0 = StructWithMat_from_std140(u_sm_1._m0);
-    s_sm_1._m0.m = f16mat4x2(u_sm_1._m0.m_col0, u_sm_1._m0.m_col1, u_sm_1._m0.m_col2, u_sm_1._m0.m_col3);
-    s_sm_1._m0.m[0u] = u_sm_1._m0.m_col0;
-    s_sm_1._m0.m[idx] = mat4x2_f16_get_column(f16mat4x2(u_sm_1._m0.m_col0, u_sm_1._m0.m_col1, u_sm_1._m0.m_col2, u_sm_1._m0.m_col3), uint(idx));
-    s_sm_1._m0.m[0u].x = u_sm_1._m0.m_col0.x;
-    s_sm_1._m0.m[0u][idx] = u_sm_1._m0.m_col0[idx];
-    s_sm_1._m0.m[idx].x = mat4x2_f16_get_column(f16mat4x2(u_sm_1._m0.m_col0, u_sm_1._m0.m_col1, u_sm_1._m0.m_col2, u_sm_1._m0.m_col3), uint(idx)).x;
-    s_sm_1._m0.m[idx][idx] = mat4x2_f16_get_column(f16mat4x2(u_sm_1._m0.m_col0, u_sm_1._m0.m_col1, u_sm_1._m0.m_col2, u_sm_1._m0.m_col3), uint(idx))[idx];
+    f16mat4x2 _210 = f16mat4x2(u_sm_1._m0.m_0, u_sm_1._m0.m_1, u_sm_1._m0.m_2, u_sm_1._m0.m_3);
+    f16mat4x2 _228 = f16mat4x2(u_sm_1._m0.m_0, u_sm_1._m0.m_1, u_sm_1._m0.m_2, u_sm_1._m0.m_3);
+    f16mat4x2 _242 = f16mat4x2(u_sm_1._m0.m_0, u_sm_1._m0.m_1, u_sm_1._m0.m_2, u_sm_1._m0.m_3);
+    s_sm_1._m0 = StructWithMat(f16mat4x2(u_sm_1._m0.m_0, u_sm_1._m0.m_1, u_sm_1._m0.m_2, u_sm_1._m0.m_3));
+    s_sm_1._m0.m = f16mat4x2(u_sm_1._m0.m_0, u_sm_1._m0.m_1, u_sm_1._m0.m_2, u_sm_1._m0.m_3);
+    s_sm_1._m0.m[0u] = u_sm_1._m0.m_0;
+    s_sm_1._m0.m[idx] = _210[idx];
+    s_sm_1._m0.m[0u].x = u_sm_1._m0.m_0.x;
+    s_sm_1._m0.m[0u][idx] = u_sm_1._m0.m_0[idx];
+    s_sm_1._m0.m[idx].x = _228[idx].x;
+    s_sm_1._m0.m[idx][idx] = _242[idx][idx];
 }
 
-f16mat4x2[4] array_mat4x2_f16_4_from_std140(std140_mat4x2_f16_ _258[4])
+f16mat4x2[4] convert_std140_0(mat4x2f16_std140 v[4])
 {
-    return f16mat4x2[](mat4x2_f16_from_std140(_258[0]), mat4x2_f16_from_std140(_258[1]), mat4x2_f16_from_std140(_258[2]), mat4x2_f16_from_std140(_258[3]));
+    return f16mat4x2[](f16mat4x2(v[0].c_0, v[0].c_1, v[0].c_2, v[0].c_3), f16mat4x2(v[1].c_0, v[1].c_1, v[1].c_2, v[1].c_3), f16mat4x2(v[2].c_0, v[2].c_1, v[2].c_2, v[2].c_3), f16mat4x2(v[3].c_0, v[3].c_1, v[3].c_2, v[3].c_3));
 }
 
 void access_am()
 {
     int idx = 1;
     idx--;
-    s_am_1._m0 = array_mat4x2_f16_4_from_std140(u_am_1._m0);
-    s_am_1._m0[0u] = mat4x2_f16_from_std140(u_am_1._m0[0u]);
-    s_am_1._m0[idx] = mat4x2_f16_from_std140(u_am_1._m0[idx]);
-    s_am_1._m0[0u][0u] = u_am_1._m0[0u].col0;
-    s_am_1._m0[0u][idx] = mat4x2_f16_get_column(mat4x2_f16_from_std140(u_am_1._m0[0u]), uint(idx));
-    s_am_1._m0[idx][0u] = u_am_1._m0[idx].col0;
-    s_am_1._m0[idx][idx] = mat4x2_f16_get_column(mat4x2_f16_from_std140(u_am_1._m0[idx]), uint(idx));
-    s_am_1._m0[0u][0u].x = u_am_1._m0[0u].col0.x;
-    s_am_1._m0[0u][0u][idx] = u_am_1._m0[0u].col0[idx];
-    s_am_1._m0[0u][idx].x = mat4x2_f16_get_column(mat4x2_f16_from_std140(u_am_1._m0[0u]), uint(idx)).x;
-    s_am_1._m0[0u][idx][idx] = mat4x2_f16_get_column(mat4x2_f16_from_std140(u_am_1._m0[0u]), uint(idx))[idx];
-    s_am_1._m0[idx][0u].x = u_am_1._m0[idx].col0.x;
-    s_am_1._m0[idx][0u][idx] = u_am_1._m0[idx].col0[idx];
-    s_am_1._m0[idx][idx].x = mat4x2_f16_get_column(mat4x2_f16_from_std140(u_am_1._m0[idx]), uint(idx)).x;
-    s_am_1._m0[idx][idx][idx] = mat4x2_f16_get_column(mat4x2_f16_from_std140(u_am_1._m0[idx]), uint(idx))[idx];
+    f16mat4x2 _376 = f16mat4x2(u_am_1._m0[0u].c_0, u_am_1._m0[0u].c_1, u_am_1._m0[0u].c_2, u_am_1._m0[0u].c_3);
+    f16mat4x2 _393 = f16mat4x2(u_am_1._m0[idx].c_0, u_am_1._m0[idx].c_1, u_am_1._m0[idx].c_2, u_am_1._m0[idx].c_3);
+    f16mat4x2 _411 = f16mat4x2(u_am_1._m0[0u].c_0, u_am_1._m0[0u].c_1, u_am_1._m0[0u].c_2, u_am_1._m0[0u].c_3);
+    f16mat4x2 _425 = f16mat4x2(u_am_1._m0[0u].c_0, u_am_1._m0[0u].c_1, u_am_1._m0[0u].c_2, u_am_1._m0[0u].c_3);
+    f16mat4x2 _446 = f16mat4x2(u_am_1._m0[idx].c_0, u_am_1._m0[idx].c_1, u_am_1._m0[idx].c_2, u_am_1._m0[idx].c_3);
+    f16mat4x2 _461 = f16mat4x2(u_am_1._m0[idx].c_0, u_am_1._m0[idx].c_1, u_am_1._m0[idx].c_2, u_am_1._m0[idx].c_3);
+    s_am_1._m0 = convert_std140_0(u_am_1._m0);
+    s_am_1._m0[0u] = f16mat4x2(u_am_1._m0[0u].c_0, u_am_1._m0[0u].c_1, u_am_1._m0[0u].c_2, u_am_1._m0[0u].c_3);
+    s_am_1._m0[idx] = f16mat4x2(u_am_1._m0[idx].c_0, u_am_1._m0[idx].c_1, u_am_1._m0[idx].c_2, u_am_1._m0[idx].c_3);
+    s_am_1._m0[0u][0u] = u_am_1._m0[0u].c_0;
+    s_am_1._m0[0u][idx] = _376[idx];
+    s_am_1._m0[idx][0u] = u_am_1._m0[idx].c_0;
+    s_am_1._m0[idx][idx] = _393[idx];
+    s_am_1._m0[0u][0u].x = u_am_1._m0[0u].c_0.x;
+    s_am_1._m0[0u][0u][idx] = u_am_1._m0[0u].c_0[idx];
+    s_am_1._m0[0u][idx].x = _411[idx].x;
+    s_am_1._m0[0u][idx][idx] = _425[idx][idx];
+    s_am_1._m0[idx][0u].x = u_am_1._m0[idx].c_0.x;
+    s_am_1._m0[idx][0u][idx] = u_am_1._m0[idx].c_0[idx];
+    s_am_1._m0[idx][idx].x = _446[idx].x;
+    s_am_1._m0[idx][idx][idx] = _461[idx][idx];
 }
 
-StructWithMat[4] array_StructWithMat_4_from_std140(std140_StructWithMat _435[4])
+StructWithMat[4] convert_std140_1(StructWithMat_std140 v[4])
 {
-    return StructWithMat[](StructWithMat_from_std140(_435[0]), StructWithMat_from_std140(_435[1]), StructWithMat_from_std140(_435[2]), StructWithMat_from_std140(_435[3]));
-}
-
-StructWithArrayOfStructOfMat StructWithArrayOfStructOfMat_from_std140(std140_StructWithArrayOfStructOfMat _430)
-{
-    return StructWithArrayOfStructOfMat(array_StructWithMat_4_from_std140(_430.a));
+    return StructWithMat[](StructWithMat(f16mat4x2(v[0].m_0, v[0].m_1, v[0].m_2, v[0].m_3)), StructWithMat(f16mat4x2(v[1].m_0, v[1].m_1, v[1].m_2, v[1].m_3)), StructWithMat(f16mat4x2(v[2].m_0, v[2].m_1, v[2].m_2, v[2].m_3)), StructWithMat(f16mat4x2(v[3].m_0, v[3].m_1, v[3].m_2, v[3].m_3)));
 }
 
 void access_sasm()
 {
     int idx = 1;
     idx--;
-    s_sasm_1._m0 = StructWithArrayOfStructOfMat_from_std140(u_sasm_1._m0);
-    s_sasm_1._m0.a = array_StructWithMat_4_from_std140(u_sasm_1._m0.a);
-    s_sasm_1._m0.a[0u].m = f16mat4x2(u_sasm_1._m0.a[0u].m_col0, u_sasm_1._m0.a[0u].m_col1, u_sasm_1._m0.a[0u].m_col2, u_sasm_1._m0.a[0u].m_col3);
-    s_sasm_1._m0.a[idx].m = f16mat4x2(u_sasm_1._m0.a[idx].m_col0, u_sasm_1._m0.a[idx].m_col1, u_sasm_1._m0.a[idx].m_col2, u_sasm_1._m0.a[idx].m_col3);
-    s_sasm_1._m0.a[0u].m[0u] = u_sasm_1._m0.a[0u].m_col0;
-    s_sasm_1._m0.a[0u].m[idx] = mat4x2_f16_get_column(f16mat4x2(u_sasm_1._m0.a[0u].m_col0, u_sasm_1._m0.a[0u].m_col1, u_sasm_1._m0.a[0u].m_col2, u_sasm_1._m0.a[0u].m_col3), uint(idx));
-    s_sasm_1._m0.a[idx].m[0u] = u_sasm_1._m0.a[idx].m_col0;
-    s_sasm_1._m0.a[idx].m[idx] = mat4x2_f16_get_column(f16mat4x2(u_sasm_1._m0.a[idx].m_col0, u_sasm_1._m0.a[idx].m_col1, u_sasm_1._m0.a[idx].m_col2, u_sasm_1._m0.a[idx].m_col3), uint(idx));
-    s_sasm_1._m0.a[0u].m[0u].x = u_sasm_1._m0.a[0u].m_col0.x;
-    s_sasm_1._m0.a[0u].m[0u][idx] = u_sasm_1._m0.a[0u].m_col0[idx];
-    s_sasm_1._m0.a[0u].m[idx].x = mat4x2_f16_get_column(f16mat4x2(u_sasm_1._m0.a[0u].m_col0, u_sasm_1._m0.a[0u].m_col1, u_sasm_1._m0.a[0u].m_col2, u_sasm_1._m0.a[0u].m_col3), uint(idx)).x;
-    s_sasm_1._m0.a[0u].m[idx][idx] = mat4x2_f16_get_column(f16mat4x2(u_sasm_1._m0.a[0u].m_col0, u_sasm_1._m0.a[0u].m_col1, u_sasm_1._m0.a[0u].m_col2, u_sasm_1._m0.a[0u].m_col3), uint(idx))[idx];
-    s_sasm_1._m0.a[idx].m[0u].x = u_sasm_1._m0.a[idx].m_col0.x;
-    s_sasm_1._m0.a[idx].m[0u][idx] = u_sasm_1._m0.a[idx].m_col0[idx];
-    s_sasm_1._m0.a[idx].m[idx].x = mat4x2_f16_get_column(f16mat4x2(u_sasm_1._m0.a[idx].m_col0, u_sasm_1._m0.a[idx].m_col1, u_sasm_1._m0.a[idx].m_col2, u_sasm_1._m0.a[idx].m_col3), uint(idx)).x;
-    s_sasm_1._m0.a[idx].m[idx][idx] = mat4x2_f16_get_column(f16mat4x2(u_sasm_1._m0.a[idx].m_col0, u_sasm_1._m0.a[idx].m_col1, u_sasm_1._m0.a[idx].m_col2, u_sasm_1._m0.a[idx].m_col3), uint(idx))[idx];
+    f16mat4x2 _627 = f16mat4x2(u_sasm_1._m0.a[0u].m_0, u_sasm_1._m0.a[0u].m_1, u_sasm_1._m0.a[0u].m_2, u_sasm_1._m0.a[0u].m_3);
+    f16mat4x2 _644 = f16mat4x2(u_sasm_1._m0.a[idx].m_0, u_sasm_1._m0.a[idx].m_1, u_sasm_1._m0.a[idx].m_2, u_sasm_1._m0.a[idx].m_3);
+    f16mat4x2 _662 = f16mat4x2(u_sasm_1._m0.a[0u].m_0, u_sasm_1._m0.a[0u].m_1, u_sasm_1._m0.a[0u].m_2, u_sasm_1._m0.a[0u].m_3);
+    f16mat4x2 _676 = f16mat4x2(u_sasm_1._m0.a[0u].m_0, u_sasm_1._m0.a[0u].m_1, u_sasm_1._m0.a[0u].m_2, u_sasm_1._m0.a[0u].m_3);
+    f16mat4x2 _697 = f16mat4x2(u_sasm_1._m0.a[idx].m_0, u_sasm_1._m0.a[idx].m_1, u_sasm_1._m0.a[idx].m_2, u_sasm_1._m0.a[idx].m_3);
+    f16mat4x2 _712 = f16mat4x2(u_sasm_1._m0.a[idx].m_0, u_sasm_1._m0.a[idx].m_1, u_sasm_1._m0.a[idx].m_2, u_sasm_1._m0.a[idx].m_3);
+    s_sasm_1._m0 = StructWithArrayOfStructOfMat(convert_std140_1(u_sasm_1._m0.a));
+    s_sasm_1._m0.a = convert_std140_1(u_sasm_1._m0.a);
+    s_sasm_1._m0.a[0u].m = f16mat4x2(u_sasm_1._m0.a[0u].m_0, u_sasm_1._m0.a[0u].m_1, u_sasm_1._m0.a[0u].m_2, u_sasm_1._m0.a[0u].m_3);
+    s_sasm_1._m0.a[idx].m = f16mat4x2(u_sasm_1._m0.a[idx].m_0, u_sasm_1._m0.a[idx].m_1, u_sasm_1._m0.a[idx].m_2, u_sasm_1._m0.a[idx].m_3);
+    s_sasm_1._m0.a[0u].m[0u] = u_sasm_1._m0.a[0u].m_0;
+    s_sasm_1._m0.a[0u].m[idx] = _627[idx];
+    s_sasm_1._m0.a[idx].m[0u] = u_sasm_1._m0.a[idx].m_0;
+    s_sasm_1._m0.a[idx].m[idx] = _644[idx];
+    s_sasm_1._m0.a[0u].m[0u].x = u_sasm_1._m0.a[0u].m_0.x;
+    s_sasm_1._m0.a[0u].m[0u][idx] = u_sasm_1._m0.a[0u].m_0[idx];
+    s_sasm_1._m0.a[0u].m[idx].x = _662[idx].x;
+    s_sasm_1._m0.a[0u].m[idx][idx] = _676[idx][idx];
+    s_sasm_1._m0.a[idx].m[0u].x = u_sasm_1._m0.a[idx].m_0.x;
+    s_sasm_1._m0.a[idx].m[0u][idx] = u_sasm_1._m0.a[idx].m_0[idx];
+    s_sasm_1._m0.a[idx].m[idx].x = _697[idx].x;
+    s_sasm_1._m0.a[idx].m[idx][idx] = _712[idx][idx];
 }
 
 void main()

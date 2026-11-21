@@ -33,6 +33,10 @@ impl<'a> Emitting<'a> {
 
     /// Append `expr`, which must not be covered by an `Emit`, such as a literal
     /// or a pointer to a variable.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "no pass on this branch pre-emits expressions")
+    )]
     pub(super) fn pre_emit(&mut self, expr: Expression) -> Handle<Expression> {
         self.flush();
         let handle = self.expressions.append(expr, self.span);

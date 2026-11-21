@@ -46,6 +46,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 inline: crate::inline::InlineStrategy::OnlyNeeded(
                     crate::inline::InlineTarget::Glsl,
                 ),
+                uniform_matrix_layout: true,
                 workgroup_zero_init: self.options.zero_initialize_workgroup_memory,
                 ..self.options.passes.into()
             },

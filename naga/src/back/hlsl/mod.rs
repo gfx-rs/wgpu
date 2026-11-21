@@ -54,73 +54,16 @@ as the translation of WGSL's `m[i]`:
   translate WGSL `m * v` and `v * m` to HLSL by simply reversing the
   arguments to `mul`.
 
-## Padding in two-row matrices
+## Matrices with narrow columns
 
-An HLSL `row_major floatKx2` matrix has padding between its rows that
-the WGSL `matKx2<f32>` matrix it represents does not. HLSL stores all
-matrix rows [aligned on 16-byte boundaries][16bb], whereas WGSL says
-that the columns of a `matKx2<f32>` need only be [aligned as required
-for `vec2<f32>`][ilov], which is [eight-byte alignment][8bb].
-
-To compensate for this, any time a `matKx2<f32>` appears in a WGSL
-`uniform` value or as part of a struct/array, we actually emit `K`
-separate `float2` members, and assemble/disassemble the matrix from its
-columns (in WGSL; rows in HLSL) upon load and store.
-
-For example, the following WGSL struct type:
-
-```ignore
-struct Baz {
-        m: mat3x2<f32>,
-}
-```
-
-is rendered as the HLSL struct type:
-
-```ignore
-struct Baz {
-    float2 m_0; float2 m_1; float2 m_2;
-};
-```
-
-The `wrapped_struct_matrix` functions in `help.rs` generate HLSL
-helper functions to access such members, converting between the stored
-form and the HLSL matrix types appropriately. For example, for reading
-the member `m` of the `Baz` struct above, we emit:
-
-```ignore
-float3x2 GetMatmOnBaz(Baz obj) {
-    return float3x2(obj.m_0, obj.m_1, obj.m_2);
-}
-```
-
-Stores to such members are written inline, touching only the columns
-being stored. A store of the whole matrix writes each column:
-
-```ignore
-{
-    float3x2 mat = value;
-    t.m_0 = mat[0];
-    t.m_1 = mat[1];
-    t.m_2 = mat[2];
-}
-```
-
-and a store to a column (or an element) with a dynamic index becomes a
-`switch` over the column index:
-
-```ignore
-switch(idx) {
-case 0: { t.m_0 = value; break; }
-case 1: { t.m_1 = value; break; }
-case 2: { t.m_2 = value; break; }
-}
-```
-
-Copying the struct into a helper function and back would lose the store
-when the helper takes it by value, and with `inout` it would write back
-the other members too, racing with other invocations storing to the same
-`var<workgroup>` struct.
+HLSL places each row of a matrix in a `cbuffer` [on a 16-byte boundary][16bb],
+whereas WGSL aligns the columns of `matCx2<f32>` and of `f16` matrices
+[as required for their vector type][8bb]. Before writing HLSL, the backend runs
+a pass that rewrites `uniform` globals containing such matrices to use
+equivalent types made of vectors, so the writer itself needs no special
+handling. The exception is the external texture params `cbuffer`, which the
+pass does not see: the writer declares the `mat3x2` members of its struct as
+separate `float2` columns.
 
 ## Layout of values in `immediate` buffers
 
@@ -733,8 +676,6 @@ enum WrappedType {
     ImageLoad(help::WrappedImageLoad),
     ImageLoadScalar(crate::Scalar),
     Constructor(help::WrappedConstructor),
-    StructMatrixAccess(help::WrappedStructMatrixAccess),
-    MatCx2(help::WrappedMatCx2),
     Math(help::WrappedMath),
     UnaryOp(help::WrappedUnaryOp),
     BinaryOp(help::WrappedBinaryOp),
