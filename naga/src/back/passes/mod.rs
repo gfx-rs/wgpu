@@ -127,3 +127,30 @@ fn finish<'a>(
     let info = Validator::new(ValidationFlags::all(), Capabilities::all()).validate(&module)?;
     Ok((module, info))
 }
+
+/// Parse and validate `source`, run `pass` on it, and then compact and
+/// validate the result as [`run`] does.
+///
+/// Return `None` if the pass reported that it left the module unchanged, in
+/// which case it must not have copied it either.
+#[cfg(all(test, feature = "wgsl-in"))]
+pub(crate) fn run_pass_on_wgsl<E>(
+    source: &str,
+    pass: impl FnOnce(&mut Cow<'_, Module>) -> Result<bool, E>,
+) -> Result<Option<Module>, PassError>
+where
+    PassError: From<E>,
+{
+    let module = crate::front::wgsl::parse_str(source).unwrap();
+    let mut prepared = Cow::Borrowed(&module);
+    let changed = pass(&mut prepared)?;
+    if !changed {
+        assert!(
+            matches!(prepared, Cow::Borrowed(_)),
+            "unchanged module was copied"
+        );
+        return Ok(None);
+    }
+    let (prepared, _) = finish(prepared, changed, false, &Dropped::default())?;
+    Ok(Some(prepared.into_owned()))
+}
