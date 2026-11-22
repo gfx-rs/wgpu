@@ -454,6 +454,9 @@ pub enum Error {
     /// A error occurred while writing to the output.
     #[error("Format error")]
     FmtError(#[from] FmtError),
+    /// The backend's passes failed.
+    #[error(transparent)]
+    Pass(#[from] back::passes::PassError),
     /// The specified [`Version`] doesn't have all required [`Features`].
     ///
     /// Contains the missing [`Features`], and the version that lacks them.

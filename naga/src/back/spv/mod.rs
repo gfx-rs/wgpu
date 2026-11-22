@@ -161,6 +161,8 @@ const BITS_PER_BYTE: crate::Bytes = 8;
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {
+    #[error(transparent)]
+    Pass(#[from] crate::back::passes::PassError),
     #[error("The requested entry point couldn't be found")]
     EntryPointNotFound,
     #[error("target SPIRV-{0}.{1} is not supported")]

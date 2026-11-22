@@ -676,6 +676,8 @@ pub struct PipelineOptions {
 pub enum Error {
     #[error(transparent)]
     IoError(#[from] FmtError),
+    #[error(transparent)]
+    Pass(#[from] back::passes::PassError),
     #[error("A scalar with an unsupported width was requested: {0:?}")]
     UnsupportedScalar(crate::Scalar),
     #[error("{0}")]
