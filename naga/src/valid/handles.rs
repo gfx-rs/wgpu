@@ -221,7 +221,7 @@ impl super::Validator {
                 )?;
             }
 
-            Self::validate_block_handles(body, expressions, functions)?;
+            Self::validate_block_handles(body, expressions, functions, function_handle)?;
 
             if let Some(handle) = *diagnostic_filter_leaf {
                 handle.check_valid_for(diagnostic_filters)?;
@@ -695,8 +695,11 @@ impl super::Validator {
         block: &crate::Block,
         expressions: &Arena<crate::Expression>,
         functions: &Arena<crate::Function>,
+        // The handle of the current function or `None` if it's an entry point
+        current_function: Option<Handle<crate::Function>>,
     ) -> Result<(), InvalidHandleError> {
-        let validate_block = |block| Self::validate_block_handles(block, expressions, functions);
+        let validate_block =
+            |block| Self::validate_block_handles(block, expressions, functions, current_function);
         let validate_expr = |handle| Self::validate_expression_handle(handle, expressions);
         let validate_expr_opt = |handle_opt| {
             if let Some(handle) = handle_opt {
@@ -822,6 +825,9 @@ impl super::Validator {
                 result,
             } => {
                 Self::validate_function_handle(function, functions)?;
+                if let Some(handle) = current_function {
+                    handle.check_dep(function)?;
+                }
                 for arg in arguments.iter().copied() {
                     validate_expr(arg)?;
                 }
@@ -1256,4 +1262,105 @@ fn override_init_deps() {
     // Validation should catch the cycle.
     m.overrides[r#override].init = Some(ex_arr);
     assert!(Validator::validate_module_handles(&m).is_err());
+}
+
+#[test]
+fn call_statement_deps() {
+    use super::Validator;
+    use crate::{Block, Expression, Function, Literal, ShaderStage, Span, Statement};
+    use alloc::vec::Vec;
+
+    let nowhere = Span::default();
+
+    // Valid backward call and entry-point call (`current_function` is `None`).
+    let mut valid_mod = crate::Module::default();
+    let callee = valid_mod.functions.append(Function::default(), nowhere);
+    let caller = valid_mod.functions.append(Function::default(), nowhere);
+    valid_mod.functions[caller].body.push(
+        Statement::Call {
+            function: callee,
+            arguments: Vec::new(),
+            result: None,
+        },
+        nowhere,
+    );
+    let mut ep_fun = Function::default();
+    ep_fun.body.push(
+        Statement::Call {
+            function: caller,
+            arguments: Vec::new(),
+            result: None,
+        },
+        nowhere,
+    );
+    valid_mod.entry_points.push(EntryPoint {
+        name: "main".to_string(),
+        stage: ShaderStage::Compute,
+        early_depth_test: None,
+        workgroup_size: [1, 1, 1],
+        workgroup_size_overrides: None,
+        function: ep_fun,
+        mesh_info: None,
+        task_payload: None,
+        incoming_ray_payload: None,
+    });
+    assert!(Validator::validate_module_handles(&valid_mod).is_ok());
+
+    // Forward call inside a nested block: `current_function` must be propagated to sub-blocks.
+    let mut forward = crate::Module::default();
+    let f_caller = forward.functions.append(Function::default(), nowhere);
+    let f_callee = forward.functions.append(Function::default(), nowhere);
+    let cond = forward.functions[f_caller]
+        .expressions
+        .append(Expression::Literal(Literal::Bool(true)), nowhere);
+    let mut accept = Block::new();
+    accept.push(
+        Statement::Call {
+            function: f_callee,
+            arguments: Vec::new(),
+            result: None,
+        },
+        nowhere,
+    );
+    forward.functions[f_caller].body.push(
+        Statement::If {
+            condition: cond,
+            accept,
+            reject: Block::new(),
+        },
+        nowhere,
+    );
+    let err = *Validator::validate_module_handles(&forward).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            ValidationError::InvalidHandle(InvalidHandleError::ForwardDependency(FwdDepError {
+                subject,
+                depends_on,
+                ..
+            })) if subject.index() == f_caller.index() && depends_on.index() == f_callee.index()
+        ),
+        "{err:?}"
+    );
+
+    // Out-of-bounds call still reports `BadHandle`, not `ForwardDependency`.
+    let mut oob = crate::Module::default();
+    let f_oob = oob.functions.append(Function::default(), nowhere);
+    let bad_fn: Handle<Function> = Handle::new(NonMaxU32::new(999).unwrap());
+    oob.functions[f_oob].body.push(
+        Statement::Call {
+            function: bad_fn,
+            arguments: Vec::new(),
+            result: None,
+        },
+        nowhere,
+    );
+    let err = *Validator::validate_module_handles(&oob).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            ValidationError::InvalidHandle(InvalidHandleError::BadHandle(_))
+        ),
+        "{err:?}"
+    );
 }
