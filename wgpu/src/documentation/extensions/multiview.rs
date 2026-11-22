@@ -31,7 +31,9 @@ These are fairly self-explanatory.
 
 Render & mesh pipeline descriptors, render pass descriptors and render bundle descriptors include new `multiview_mask` fields.
 These are used to determine which layers of an array texture are rendered to. They must match between a render pass
-and all of its used render pipelines and render bundles.
+and all of its used render pipelines and render bundles. A render pass whose attachments have more than one array layer
+must have a multiview mask. Load and store operations apply to the layers in the mask, and depending on the backend
+may also apply to the other layers of the attachments.
 
 WGSL also has a new `@builtin(view_index)` `u32` built-in. It doesn't currently have an enable extension. It
 is the index of the layer in the array texture as a whole, not just the index within the layers in the bitmask.

@@ -673,18 +673,19 @@ pub struct RenderPassDescriptor<'a> {
     /// to render to the first 2 layers, you would use 3=0b11. If you wanted to render to only the
     /// 2nd layer, you would use 2=0b10. If you aren't using multiview this should be `None`.
     ///
-    /// Requires [`Features::MULTIVIEW`]. Masks that are not of the form `0b1…1`, or that do not
-    /// cover every layer of the attachments, also require [`Features::SELECTIVE_MULTIVIEW`]. All
-    /// attachments must have the same number of array layers, which must not exceed
-    /// [`Limits::max_multiview_view_count`], and attachments with more than one layer must be
-    /// [`TextureViewDimension::D2Array`] views. The mask must match the `multiview_mask` of every
-    /// pipeline and render bundle used in the pass. Queries in the pass use one query slot per
-    /// view. See the [multiview documentation](crate::documentation::extensions::multiview).
+    /// Requires [`Features::MULTIVIEW`], and is required if the attachments have more than one
+    /// array layer. Masks that are not of the form `0b1…1`, or that do not cover every layer of the
+    /// attachments, also require [`Features::SELECTIVE_MULTIVIEW`]. All attachments must have the
+    /// same number of array layers, which must not exceed [`Limits::max_multiview_view_count`],
+    /// and attachments with more than one layer must be [`TextureViewDimension::D2Array`] views.
+    /// The mask must match the `multiview_mask` of every pipeline and render bundle used in the
+    /// pass. Queries in the pass use one query slot per view. See the
+    /// [multiview documentation](crate::documentation::extensions::multiview).
     ///
     /// Note that setting bits higher than the number of texture layers is a validation error.
     ///
-    /// This doesn't influence load/store/clear/etc operations, as those are defined for attachments,
-    /// therefore affecting all attachments. Meaning, this affects only any shaders executed on the `RenderPass`.
+    /// Load and store operations apply to the layers in the mask. Depending on the backend, they
+    /// may also apply to the other layers of the attachments.
     pub multiview_mask: Option<NonZeroU32>,
 }
 #[cfg(send_sync)]

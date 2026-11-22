@@ -280,3 +280,14 @@ fn pipeline_statistics_query_in_multiview_pass_overrunning_query_set() {
         Some("Query 1 uses 2 slots because the render pass has 2 multiview views"),
     );
 }
+
+#[test]
+fn render_pass_multi_layer_attachment_requires_multiview_mask() {
+    let (device, _queue) = multiview_device(Features::MULTIVIEW, 2);
+    let encoder = encode_pass(&device, 2, 0, None);
+    fail(
+        &device,
+        || encoder.finish(),
+        Some("Attachments with more than one array layer require a multiview mask"),
+    );
+}

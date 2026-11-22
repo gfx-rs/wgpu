@@ -16,6 +16,8 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(DRAW_MULTIVIEW_MESH_NONCONTIGUOUS);
     vec.push(DRAW_MULTIVIEW_MESH_SKIP_FIRST_LAYER);
     vec.push(MULTIVIEW_OCCLUSION_QUERY);
+    vec.push(MULTIVIEW_DISCARD_RESETS_ALL_LAYERS);
+    vec.push(SELECTIVE_MULTIVIEW_CLEAR_INITS_ONLY_MASKED_LAYERS);
 }
 
 #[apply(gpu_test!)]
@@ -50,18 +52,6 @@ static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration
             max_multiview_view_count: 4,
             ..Limits::defaults()
         },
-        failures: vec![
-            // https://github.com/gfx-rs/wgpu/issues/9620
-            FailureCase::lvp_poison_memory(
-                "assertion `left == right` failed: Expected 0\n  \
-                 left: Some(128)\n \
-                 right: None",
-            ),
-            // https://github.com/gfx-rs/wgpu/issues/9184
-            FailureCase::molten_vk().panic(
-                "assertion `left == right` failed: Expected 0\n  left: Some(255)\n right: None",
-            ),
-        ],
         ..Default::default()
     })
     .run_async(|ctx| run_test(ctx, 0b1001, 1, false));
@@ -506,3 +496,201 @@ static MULTIVIEW_OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::n
         assert_ne!(results[2] + results[3], 0, "results: {results:?}");
         assert_eq!(results[4] + results[5], 0, "results: {results:?}");
     });
+
+// Wide enough that a row is `COPY_BYTES_PER_ROW_ALIGNMENT` bytes.
+const ZERO_INIT_SIZE: u32 = 64;
+const ZERO_INIT_LAYERS: u32 = 2;
+const ZERO_INIT_BYTES_PER_LAYER: u32 = ZERO_INIT_SIZE * ZERO_INIT_SIZE * 4;
+
+fn zero_init_texture(ctx: &TestingContext) -> wgpu::Texture {
+    ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: ZERO_INIT_SIZE,
+            height: ZERO_INIT_SIZE,
+            depth_or_array_layers: ZERO_INIT_LAYERS,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::COPY_SRC
+            | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+        texture_binding_view_dimension: None,
+    })
+}
+
+/// Writes `0xff` to every byte of every layer of `texture`.
+fn fill_layers(ctx: &TestingContext, texture: &wgpu::Texture) {
+    ctx.queue.write_texture(
+        texture.as_image_copy(),
+        &vec![0xff; (ZERO_INIT_BYTES_PER_LAYER * ZERO_INIT_LAYERS) as usize],
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(ZERO_INIT_SIZE * 4),
+            rows_per_image: Some(ZERO_INIT_SIZE),
+        },
+        texture.size(),
+    );
+}
+
+fn encode_color_pass(
+    encoder: &mut wgpu::CommandEncoder,
+    view: &wgpu::TextureView,
+    ops: wgpu::Operations<wgpu::Color>,
+    multiview_mask: u32,
+) {
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: None,
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view,
+            depth_slice: None,
+            resolve_target: None,
+            ops,
+        })],
+        depth_stencil_attachment: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        multiview_mask: NonZero::new(multiview_mask),
+    });
+}
+
+/// Copies every layer of `texture` to a buffer and returns its bytes, one `Vec` per layer.
+async fn read_layers(ctx: &TestingContext, texture: &wgpu::Texture) -> Vec<Vec<u8>> {
+    let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: u64::from(ZERO_INIT_BYTES_PER_LAYER * ZERO_INIT_LAYERS),
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    encoder.copy_texture_to_buffer(
+        texture.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &buffer,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(ZERO_INIT_SIZE * 4),
+                rows_per_image: Some(ZERO_INIT_SIZE),
+            },
+        },
+        texture.size(),
+    );
+    ctx.queue.submit(Some(encoder.finish()));
+    buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
+    let data = buffer.slice(..).get_mapped_range().unwrap();
+    data.chunks(ZERO_INIT_BYTES_PER_LAYER as usize)
+        .map(<[u8]>::to_vec)
+        .collect()
+}
+
+/// A discard in a multiview pass resets every layer, so later reads see zeros.
+#[apply(gpu_test!)]
+static MULTIVIEW_DISCARD_RESETS_ALL_LAYERS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::MULTIVIEW)
+            .limits(Limits {
+                max_multiview_view_count: ZERO_INIT_LAYERS,
+                ..Limits::defaults()
+            }),
+    )
+    .run_async(|ctx| async move {
+        let texture = zero_init_texture(&ctx);
+        fill_layers(&ctx, &texture);
+        let view = texture.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        });
+
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        encode_color_pass(
+            &mut encoder,
+            &view,
+            wgpu::Operations {
+                load: wgpu::LoadOp::Load,
+                store: wgpu::StoreOp::Discard,
+            },
+            0b11,
+        );
+        ctx.queue.submit(Some(encoder.finish()));
+
+        for (layer, data) in read_layers(&ctx, &texture).await.iter().enumerate() {
+            assert_eq!(
+                data.iter().position(|&b| b != 0),
+                None,
+                "layer {layer} has a nonzero byte"
+            );
+        }
+    });
+
+/// A clear in a selective multiview pass only marks the layers in the mask as initialized, so
+/// discarded layers outside the mask still read as zeros.
+#[apply(gpu_test!)]
+static SELECTIVE_MULTIVIEW_CLEAR_INITS_ONLY_MASKED_LAYERS: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .features(Features::MULTIVIEW | Features::SELECTIVE_MULTIVIEW)
+                .limits(Limits {
+                    max_multiview_view_count: ZERO_INIT_LAYERS,
+                    ..Limits::defaults()
+                }),
+        )
+        .run_async(|ctx| async move {
+            let texture = zero_init_texture(&ctx);
+            fill_layers(&ctx, &texture);
+
+            // Discard layer 1 so that it is uninitialized but may still hold the old data.
+            let layer_1 = texture.create_view(&wgpu::TextureViewDescriptor {
+                dimension: Some(wgpu::TextureViewDimension::D2),
+                base_array_layer: 1,
+                array_layer_count: Some(1),
+                ..Default::default()
+            });
+            let all_layers = texture.create_view(&wgpu::TextureViewDescriptor {
+                dimension: Some(wgpu::TextureViewDimension::D2Array),
+                ..Default::default()
+            });
+
+            let mut encoder = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            encode_color_pass(
+                &mut encoder,
+                &layer_1,
+                wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Discard,
+                },
+                0,
+            );
+            encode_color_pass(
+                &mut encoder,
+                &all_layers,
+                wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    store: wgpu::StoreOp::Store,
+                },
+                0b01,
+            );
+            ctx.queue.submit(Some(encoder.finish()));
+
+            // Backends may or may not clear layers outside the mask, but either way they are zero.
+            for (layer, data) in read_layers(&ctx, &texture).await.iter().enumerate() {
+                assert_eq!(
+                    data.iter().position(|&b| b != 0),
+                    None,
+                    "layer {layer} has a nonzero byte"
+                );
+            }
+        });

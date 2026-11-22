@@ -339,6 +339,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - `wgpu_core` now validates pipeline stage interfaces after pipeline constant values have been applied, per spec. For example, workgroup sizes set by overrides are now checked against device limits. By @jimblandy in [#10430](https://github.com/gfx-rs/wgpu/pull/10430).
 - Validate `Limits::max_compute_workgroup_storage_size`. By @ErichDonGubler in [#9732](https://github.com/gfx-rs/wgpu/pull/9732).
 - Render passes with a `multiview_mask` now require `Features::MULTIVIEW`, even when the attachments have a single layer. Fixed a panic in debug builds when a multiview mask has all 32 bits set. By @inner-daemons in [#10804](https://github.com/gfx-rs/wgpu/pull/10804).
+- Render passes with attachments that have more than one array layer now require a `multiview_mask`. Zero-initialization of multiview attachments now accounts for every layer: a `StoreOp::Discard` previously reset only the first layer, and a clear marked layers outside the mask as initialized, exposing uninitialized memory (fixes [#9620](https://github.com/gfx-rs/wgpu/issues/9620)). By @inner-daemons in [#10804](https://github.com/gfx-rs/wgpu/pull/10804).
 - Occlusion queries, pipeline statistics queries, and timestamps written inside a multiview render pass now use one query slot per view. Previously, on Vulkan, they could overwrite other queries or write past the end of the query set. By @inner-daemons in [#10804](https://github.com/gfx-rs/wgpu/pull/10804).
 
 #### Naga
