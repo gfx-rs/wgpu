@@ -28,6 +28,25 @@ use crate::{Expression, FastHashMap, Function, Statement};
 
 type Index = crate::non_max_u32::NonMaxU32;
 
+/// An error from compaction when a function's forward references can't be put
+/// in order.
+///
+/// Compaction can reorder a function's expressions only if every expression an
+/// [`Emit`] statement evaluates is used only by that statement's expressions
+/// and by later statements, and no two different [`Emit`] ranges cover the
+/// same expression. A forward reference must therefore refer to an expression
+/// that its own [`Emit`] range or an earlier one evaluates.
+///
+/// [`Emit`]: crate::Statement::Emit
+#[derive(Clone, Debug, thiserror::Error)]
+#[error(
+    "expression {expression:?} of function {function:?} is used before the `Emit` that evaluates it, or is evaluated by two different `Emit` statements"
+)]
+pub struct ReorderError {
+    pub function: Option<alloc::string::String>,
+    pub expression: Handle<Expression>,
+}
+
 /// The post-compaction order of a function's expressions, when compaction has
 /// to reorder them.
 pub struct Reorder {
@@ -47,7 +66,10 @@ impl Reorder {
     ///
     /// Return a map from pre-compaction to post-compaction handles, and the
     /// `Reorder` needed to rebuild the arena and adjust `Emit` statements.
-    pub fn new(function: &Function, used: &HandleSet<Expression>) -> (HandleMap<Expression>, Self) {
+    pub fn new(
+        function: &Function,
+        used: &HandleSet<Expression>,
+    ) -> Result<(HandleMap<Expression>, Self), ReorderError> {
         let mut builder = Builder {
             expressions: &function.expressions,
             used,
@@ -58,7 +80,12 @@ impl Reorder {
             emit_ranges: FastHashMap::default(),
         };
 
-        builder.walk(&function.body);
+        builder
+            .walk(&function.body)
+            .map_err(|expression| ReorderError {
+                function: function.name.clone(),
+                expression,
+            })?;
 
         // Anything used only outside `Emit` statements: local variable
         // initializers, named expressions, pre-emitted expressions referred to
@@ -71,7 +98,7 @@ impl Reorder {
             order: builder.order,
             emit_ranges: builder.emit_ranges,
         };
-        (builder.map, reorder)
+        Ok((builder.map, reorder))
     }
 
     /// Adjust `range`, from an `Emit` statement in the pre-compaction
@@ -126,7 +153,10 @@ struct Builder<'a> {
 
 impl Builder<'_> {
     /// Visit the `Emit` statements in `body` and its nested blocks, in order.
-    fn walk(&mut self, body: &[Statement]) {
+    ///
+    /// On failure, return an expression that breaks the rule in
+    /// [`ReorderError`].
+    fn walk(&mut self, body: &[Statement]) -> Result<(), Handle<Expression>> {
         // A stack of the statement lists we are in the middle of visiting.
         // Nested blocks are pushed in reverse so that they are visited in
         // order.
@@ -137,7 +167,7 @@ impl Builder<'_> {
                 continue;
             };
             match *statement {
-                Statement::Emit(ref range) => self.emit(range),
+                Statement::Emit(ref range) => self.emit(range)?,
                 Statement::Block(ref block) => pending.push(block.iter()),
                 Statement::If {
                     condition: _,
@@ -190,16 +220,17 @@ impl Builder<'_> {
                 | Statement::DebugPrintf { .. } => {}
             }
         }
+        Ok(())
     }
 
     /// Place the used expressions in `range`, and record the new range.
-    fn emit(&mut self, range: &Range<Expression>) {
+    fn emit(&mut self, range: &Range<Expression>) -> Result<(), Handle<Expression>> {
         let old = range.index_range();
         let key = (old.start, old.end);
         // The same range may be emitted in two different blocks, for example
         // in both branches of an `If`. Both refer to the same expressions.
         if self.emit_ranges.contains_key(&key) {
-            return;
+            return Ok(());
         }
         // An `Emit` must cover exactly the expressions it evaluates. Anything
         // else the range's expressions depend on that has not been placed yet
@@ -234,15 +265,16 @@ impl Builder<'_> {
             match self.map.try_adjust(handle) {
                 // Placed already by an earlier expression in this range that
                 // refers to it.
-                Some(new) => assert!(
-                    new.index() >= start as usize,
-                    "expression {handle:?} is emitted by two overlapping `Emit` ranges"
-                ),
+                Some(new) if new.index() >= start as usize => {}
+                // Placed before this range: used before this range emits it,
+                // or emitted by another range too.
+                Some(_) => return Err(handle),
                 None => self.place_with_operands(handle),
             }
         }
         let end = self.order.len() as u32;
         self.emit_ranges.insert(key, (start, end));
+        Ok(())
     }
 
     /// Place `root`, after placing any of its operands that have not been
@@ -291,7 +323,7 @@ impl Builder<'_> {
 mod tests {
     use alloc::{boxed::Box, string::String, vec::Vec};
 
-    use crate::compact::{compact, KeepUnused, ModuleTracer};
+    use crate::compact::{compact, try_compact, KeepUnused, ModuleTracer};
     use crate::valid::{Capabilities, ModuleInfo, ValidationError, ValidationFlags, Validator};
     use crate::{
         BinaryOperator, EntryPoint, Expression, Function, Handle, Literal, LocalVariable, Module,
@@ -834,7 +866,6 @@ mod tests {
     /// Partially overlapping ranges in sibling blocks cannot both stay
     /// contiguous after reordering.
     #[test]
-    #[should_panic(expected = "is emitted by two overlapping `Emit` ranges")]
     fn overlapping_emit_ranges_in_two_blocks() {
         let mut module = Module::default();
         let f32 = scalar_type(&mut module, Scalar::F32);
@@ -884,7 +915,62 @@ mod tests {
             .push(Statement::Return { value: None }, Span::default());
         module.entry_points.push(entry_point(f));
 
-        compact(&mut module, KeepUnused::No);
+        let error = try_compact(&mut module, KeepUnused::No).unwrap_err();
+        assert_eq!(error.expression, b);
+    }
+
+    /// An expression used by an earlier `Emit` range than the one that
+    /// emits it can't be put in order.
+    #[test]
+    fn used_before_emitted() {
+        let mut module = Module::default();
+        let f32 = scalar_type(&mut module, Scalar::F32);
+        let mut f = Function::default();
+        let v = local(&mut f, f32);
+
+        // e0, refers forward to e3, which a later range emits
+        let sum = add(
+            &mut f,
+            Expression::Binary {
+                op: BinaryOperator::Add,
+                left: h(3),
+                right: h(3),
+            },
+        );
+        // e1
+        let pointer = add(&mut f, Expression::LocalVariable(v));
+        // e2
+        let one = add(&mut f, Expression::Literal(Literal::F32(1.0)));
+        // e3
+        let product = add(
+            &mut f,
+            Expression::Binary {
+                op: BinaryOperator::Multiply,
+                left: one,
+                right: one,
+            },
+        );
+
+        f.body.push(emit(0, 1), Span::default());
+        f.body.push(
+            Statement::Store {
+                pointer,
+                value: sum,
+            },
+            Span::default(),
+        );
+        f.body.push(emit(3, 4), Span::default());
+        f.body.push(
+            Statement::Store {
+                pointer,
+                value: product,
+            },
+            Span::default(),
+        );
+        module.entry_points.push(entry_point(f));
+
+        let error = try_compact(&mut module, KeepUnused::No).unwrap_err();
+        assert_eq!(error.expression, product);
     }
 
     /// Forward references in a function that is only kept because of
