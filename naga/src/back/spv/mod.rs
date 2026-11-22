@@ -192,8 +192,6 @@ struct Function {
     /// Map from a local variable that is a ray query to its tracker for the t max.
     ray_query_t_max_tracker_variables:
         crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
-    /// List of local variables used as a counters to ensure that all loops are bounded.
-    force_loop_bounding_vars: Vec<LocalVariable>,
 
     /// A map from a Naga expression to the temporary SPIR-V variable we have
     /// spilled its value to, if any.
@@ -784,8 +782,6 @@ struct BlockContext<'w> {
 
     /// Tracks the constness of `Expression`s residing in `self.ir_function.expressions`
     expression_constness: ExpressionConstnessTracker,
-
-    force_loop_bounding: bool,
 
     /// Hash from an expression whose type is a ray query / pointer to a ray query to its tracker.
     /// Note: this is sparse, so can't be a handle vec
