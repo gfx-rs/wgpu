@@ -3,12 +3,11 @@ use std::{iter, mem};
 use wgpu::{
     include_wgsl,
     util::{BufferInitDescriptor, DeviceExt},
-    AccelerationStructureFlags, AccelerationStructureGeometryFlags,
-    AccelerationStructureUpdateMode, BindGroupDescriptor, BindGroupEntry, BindingResource,
-    BlasBuildEntry, BlasGeometries, BlasGeometrySizeDescriptors, BlasTriangleGeometry,
-    BlasTriangleGeometrySizeDescriptor, BufferAddress, BufferUsages, CommandEncoderDescriptor,
-    ComputePassDescriptor, ComputePipelineDescriptor, CreateBlasDescriptor, CreateTlasDescriptor,
-    PollType, TlasInstance, VertexFormat,
+    AccelerationStructureFlags, AccelerationStructureGeometryFlags, BindGroupDescriptor,
+    BindGroupEntry, BindingResource, BlasBuildEntry, BlasGeometries, BlasGeometrySizeDescriptors,
+    BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor, BufferAddress, BufferUsages,
+    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    CreateBlasDescriptor, CreateTlasDescriptor, PollType, TlasInstance, VertexFormat,
 };
 use wgpu_test::{apply, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
@@ -45,7 +44,6 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
         &CreateBlasDescriptor {
             label: Some("blas use after free"),
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: AccelerationStructureUpdateMode::Build,
         },
         BlasGeometrySizeDescriptors::Triangles {
             descriptors: vec![blas_size.clone()],
@@ -56,7 +54,6 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
         label: Some("tlas use after free"),
         max_instances: 1,
         flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-        update_mode: AccelerationStructureUpdateMode::Build,
     });
 
     tlas[0] = Some(TlasInstance::from_blas_untransformed(&blas));
@@ -68,6 +65,7 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
     encoder.build_acceleration_structures(
         iter::once(&BlasBuildEntry {
             blas: &blas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
             geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
                 size: &blas_size,
                 vertex_buffer: &vertices,
@@ -91,7 +89,13 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
     let mut encoder = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default());
-    encoder.build_acceleration_structures(iter::empty(), iter::once(&tlas));
+    encoder.build_acceleration_structures(
+        iter::empty(),
+        iter::once(&wgpu::TlasBuildEntry {
+            tlas: &tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }),
+    );
     ctx.queue.submit(Some(encoder.finish()));
 
     // Create a compute shader that uses an AS.

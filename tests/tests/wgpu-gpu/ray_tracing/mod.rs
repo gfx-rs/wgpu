@@ -6,14 +6,15 @@ use wgpu::{
     CreateTlasDescriptor, Tlas, TlasInstance,
 };
 use wgpu::{
-    AccelerationStructureFlags, AccelerationStructureGeometryFlags,
-    AccelerationStructureUpdateMode, BufferAddress, BufferUsages, VertexFormat,
+    AccelerationStructureFlags, AccelerationStructureGeometryFlags, BufferAddress, BufferUsages,
+    VertexFormat,
 };
 use wgpu_test::TestingContext;
 
 mod as_aabb;
 mod as_build;
 mod as_create;
+mod as_update;
 mod as_use_after_free;
 mod limits;
 mod pipelines;
@@ -24,6 +25,7 @@ pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
     as_aabb::all_tests(tests);
     as_build::all_tests(tests);
     as_create::all_tests(tests);
+    as_update::all_tests(tests);
     as_use_after_free::all_tests(tests);
     limits::all_tests(tests);
     scene::all_tests(tests);
@@ -82,7 +84,6 @@ impl AsBuildContext {
             &CreateBlasDescriptor {
                 label: Some("BLAS"),
                 flags: AccelerationStructureFlags::PREFER_FAST_TRACE | additional_blas_flags,
-                update_mode: AccelerationStructureUpdateMode::Build,
             },
             BlasGeometrySizeDescriptors::Triangles {
                 descriptors: vec![blas_size.clone()],
@@ -93,7 +94,6 @@ impl AsBuildContext {
             label: Some("TLAS"),
             max_instances: 1,
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE | additional_tlas_flags,
-            update_mode: AccelerationStructureUpdateMode::Build,
         });
 
         tlas[0] = Some(TlasInstance::from_blas_untransformed(&blas));
@@ -109,6 +109,7 @@ impl AsBuildContext {
     pub fn blas_build_entry(&self) -> BlasBuildEntry<'_> {
         BlasBuildEntry {
             blas: &self.blas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
             geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
                 size: &self.blas_size,
                 vertex_buffer: &self.vertices,

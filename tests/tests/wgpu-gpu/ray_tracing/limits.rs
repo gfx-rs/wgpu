@@ -1,6 +1,5 @@
 use wgpu::wgt::{
-    AccelerationStructureFlags, AccelerationStructureGeometryFlags,
-    AccelerationStructureUpdateMode, BlasGeometrySizeDescriptors,
+    AccelerationStructureFlags, AccelerationStructureGeometryFlags, BlasGeometrySizeDescriptors,
 };
 use wgpu::{
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
@@ -38,7 +37,6 @@ fn hit_limits(ctx: TestingContext) {
                 &CreateBlasDescriptor {
                     label: None,
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-                    update_mode: AccelerationStructureUpdateMode::Build,
                 },
                 BlasGeometrySizeDescriptors::Triangles {
                     descriptors: vec![
@@ -63,7 +61,6 @@ fn hit_limits(ctx: TestingContext) {
                 &CreateBlasDescriptor {
                     label: None,
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-                    update_mode: AccelerationStructureUpdateMode::Build,
                 },
                 BlasGeometrySizeDescriptors::Triangles {
                     descriptors: vec![BlasTriangleGeometrySizeDescriptor {
@@ -85,7 +82,6 @@ fn hit_limits(ctx: TestingContext) {
                 label: None,
                 max_instances: 2,
                 flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-                update_mode: AccelerationStructureUpdateMode::Build,
             });
         },
         None,

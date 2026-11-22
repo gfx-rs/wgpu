@@ -3623,8 +3623,9 @@ pub struct Blas {
     pub(crate) size_info: hal::AccelerationStructureBuildSizes,
     pub(crate) sizes: wgt::BlasGeometrySizeDescriptors,
     pub(crate) flags: wgt::AccelerationStructureFlags,
-    pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
     pub(crate) built_index: RwLock<Option<NonZeroU64>>,
+    /// Inputs of the last submitted build, if it can be the source of an update.
+    pub(crate) last_build: Mutex<Option<crate::ray_tracing::BlasBuildSignature>>,
     pub(crate) handle: u64,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -3694,8 +3695,8 @@ impl Blas {
                 descriptors: Vec::new(),
             },
             flags: desc.flags,
-            update_mode: desc.update_mode,
             built_index: RwLock::new(rank::BLAS_BUILT_INDEX, None),
+            last_build: Mutex::new(rank::BLAS_LAST_BUILD, None),
             handle: 0,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(device.tracker_indices.blas_s.clone()),
@@ -3868,8 +3869,9 @@ pub struct Tlas {
     pub(crate) size_info: hal::AccelerationStructureBuildSizes,
     pub(crate) max_instance_count: u32,
     pub(crate) flags: wgt::AccelerationStructureFlags,
-    pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
     pub(crate) built_index: RwLock<Option<NonZeroU64>>,
+    /// Instance count of the last submitted build, if it can be the source of an update.
+    pub(crate) last_build: Mutex<Option<u32>>,
     pub(crate) dependencies: RwLock<Vec<Arc<Blas>>>,
     pub(crate) max_intersection_index: RwLock<Option<u32>>,
     /// The `label` from the descriptor used to create the resource.
@@ -3928,8 +3930,8 @@ impl Tlas {
             },
             max_instance_count: desc.max_instances,
             flags: desc.flags,
-            update_mode: desc.update_mode,
             built_index: RwLock::new(rank::TLAS_BUILT_INDEX, None),
+            last_build: Mutex::new(rank::TLAS_LAST_BUILD, None),
             dependencies: RwLock::new(rank::TLAS_DEPENDENCIES, Vec::new()),
             device,
             max_intersection_index: RwLock::new(rank::TLAS_MAX_INTERSECTION_IDX, None),

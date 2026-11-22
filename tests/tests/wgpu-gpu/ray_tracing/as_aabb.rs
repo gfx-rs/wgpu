@@ -4,11 +4,11 @@ use crate::ray_tracing::acceleration_structure_limits;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
     include_wgsl, AccelerationStructureFlags, AccelerationStructureGeometryFlags,
-    AccelerationStructureUpdateMode, BlasAABBGeometrySizeDescriptor, BlasAabbGeometry,
-    BlasBuildEntry, BlasGeometries, BlasGeometrySizeDescriptors, BlasTriangleGeometry,
-    BlasTriangleGeometrySizeDescriptor, BufferAddress, BufferUsages, CommandEncoderDescriptor,
-    ComputePassDescriptor, ComputePipelineDescriptor, CreateBlasDescriptor, CreateTlasDescriptor,
-    TlasInstance, VertexFormat, AABB_GEOMETRY_MIN_STRIDE,
+    BlasAABBGeometrySizeDescriptor, BlasAabbGeometry, BlasBuildEntry, BlasGeometries,
+    BlasGeometrySizeDescriptors, BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor,
+    BufferAddress, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor,
+    ComputePipelineDescriptor, CreateBlasDescriptor, CreateTlasDescriptor, TlasInstance,
+    VertexFormat, AABB_GEOMETRY_MIN_STRIDE,
 };
 use wgpu::{BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor};
 use wgpu_test::{
@@ -68,7 +68,6 @@ fn aabb_blas_build_and_trace(ctx: TestingContext) {
         &CreateBlasDescriptor {
             label: Some("AABB BLAS"),
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: AccelerationStructureUpdateMode::Build,
         },
         BlasGeometrySizeDescriptors::AABBs {
             descriptors: vec![blas_size.clone()],
@@ -79,7 +78,6 @@ fn aabb_blas_build_and_trace(ctx: TestingContext) {
         label: Some("TLAS"),
         max_instances: 1,
         flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-        update_mode: AccelerationStructureUpdateMode::Build,
     });
     tlas[0] = Some(TlasInstance::from_blas_untransformed(&blas));
 
@@ -91,6 +89,7 @@ fn aabb_blas_build_and_trace(ctx: TestingContext) {
     encoder.build_acceleration_structures(
         [&BlasBuildEntry {
             blas: &blas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
             geometry: BlasGeometries::AabbGeometries(vec![BlasAabbGeometry {
                 size: &blas_size,
                 stride: size_of::<AabbPrimitive>() as BufferAddress,
@@ -98,7 +97,10 @@ fn aabb_blas_build_and_trace(ctx: TestingContext) {
                 primitive_offset: 0,
             }]),
         }],
-        [&tlas],
+        [&wgpu::TlasBuildEntry {
+            tlas: &tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
     );
     ctx.queue.submit([encoder.finish()]);
 
@@ -177,7 +179,6 @@ fn aabb_unaligned_primitive_offset(ctx: TestingContext) {
         &CreateBlasDescriptor {
             label: Some("BLAS"),
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: AccelerationStructureUpdateMode::Build,
         },
         BlasGeometrySizeDescriptors::AABBs {
             descriptors: vec![blas_size.clone()],
@@ -190,6 +191,7 @@ fn aabb_unaligned_primitive_offset(ctx: TestingContext) {
     encoder.build_acceleration_structures(
         [&BlasBuildEntry {
             blas: &blas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
             geometry: BlasGeometries::AabbGeometries(vec![BlasAabbGeometry {
                 size: &blas_size,
                 stride,
@@ -228,7 +230,6 @@ fn aabb_invalid_stride(ctx: TestingContext) {
         &CreateBlasDescriptor {
             label: Some("BLAS"),
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: AccelerationStructureUpdateMode::Build,
         },
         BlasGeometrySizeDescriptors::AABBs {
             descriptors: vec![blas_size.clone()],
@@ -241,6 +242,7 @@ fn aabb_invalid_stride(ctx: TestingContext) {
     encoder.build_acceleration_structures(
         [&BlasBuildEntry {
             blas: &blas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
             geometry: BlasGeometries::AabbGeometries(vec![BlasAabbGeometry {
                 size: &blas_size,
                 stride: AABB_GEOMETRY_MIN_STRIDE + 1,
@@ -286,7 +288,6 @@ fn aabb_geometry_kind_mismatch(ctx: TestingContext) {
         &CreateBlasDescriptor {
             label: Some("AABB BLAS"),
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: AccelerationStructureUpdateMode::Build,
         },
         BlasGeometrySizeDescriptors::AABBs {
             descriptors: vec![aabb_blas_size.clone()],
@@ -308,6 +309,7 @@ fn aabb_geometry_kind_mismatch(ctx: TestingContext) {
     encoder.build_acceleration_structures(
         [&BlasBuildEntry {
             blas: &aabb_blas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
             geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
                 size: &tri_size,
                 vertex_buffer: &vertices,
@@ -328,7 +330,6 @@ fn aabb_geometry_kind_mismatch(ctx: TestingContext) {
         &CreateBlasDescriptor {
             label: Some("tri BLAS"),
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: AccelerationStructureUpdateMode::Build,
         },
         BlasGeometrySizeDescriptors::Triangles {
             descriptors: vec![tri_size.clone()],
@@ -341,6 +342,7 @@ fn aabb_geometry_kind_mismatch(ctx: TestingContext) {
     encoder.build_acceleration_structures(
         [&BlasBuildEntry {
             blas: &tri_blas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
             geometry: BlasGeometries::AabbGeometries(vec![BlasAabbGeometry {
                 size: &aabb_blas_size,
                 stride,
@@ -377,7 +379,6 @@ fn aabb_insufficient_buffer(ctx: TestingContext) {
         &CreateBlasDescriptor {
             label: Some("BLAS"),
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: AccelerationStructureUpdateMode::Build,
         },
         BlasGeometrySizeDescriptors::AABBs {
             descriptors: vec![blas_size.clone()],
@@ -390,6 +391,7 @@ fn aabb_insufficient_buffer(ctx: TestingContext) {
     encoder.build_acceleration_structures(
         [&BlasBuildEntry {
             blas: &blas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
             geometry: BlasGeometries::AabbGeometries(vec![BlasAabbGeometry {
                 size: &blas_size,
                 stride,
@@ -437,7 +439,6 @@ fn aabb_primitive_count_exceeds_creation(ctx: TestingContext) {
         &CreateBlasDescriptor {
             label: Some("BLAS"),
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: AccelerationStructureUpdateMode::Build,
         },
         BlasGeometrySizeDescriptors::AABBs {
             descriptors: vec![create_desc],
@@ -450,6 +451,7 @@ fn aabb_primitive_count_exceeds_creation(ctx: TestingContext) {
     encoder.build_acceleration_structures(
         [&BlasBuildEntry {
             blas: &blas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
             geometry: BlasGeometries::AabbGeometries(vec![BlasAabbGeometry {
                 size: &build_desc,
                 stride,
@@ -496,7 +498,6 @@ fn aabb_flags_mismatch(ctx: TestingContext) {
         &CreateBlasDescriptor {
             label: Some("BLAS"),
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: AccelerationStructureUpdateMode::Build,
         },
         BlasGeometrySizeDescriptors::AABBs {
             descriptors: vec![create_desc.clone()],
@@ -509,6 +510,7 @@ fn aabb_flags_mismatch(ctx: TestingContext) {
     encoder.build_acceleration_structures(
         [&BlasBuildEntry {
             blas: &blas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
             geometry: BlasGeometries::AabbGeometries(vec![BlasAabbGeometry {
                 size: &build_desc,
                 stride: size_of::<AabbPrimitive>() as BufferAddress,

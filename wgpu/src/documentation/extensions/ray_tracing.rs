@@ -72,8 +72,22 @@ the build) and instance staging memory (to copy the instances to the GPU). The s
 the [`Blas`] and [`Tlas`] builds so in general it is advisable to try and integrate the builds together. Because
 building is slow, it should be done as few times as possible. For moving geometry (players, particles, etc.), use
 [`AccelerationStructureFlags::PREFER_FAST_BUILD`](wgt::AccelerationStructureFlags::PREFER_FAST_BUILD)
-to speed up builds. Updating (performing a partial rebuild) is currently unsupported, but may be implemented in the
-future. You should compact any geometry which will not change (e.g. static level geometry) once it has been built.
+to speed up builds. You should compact any geometry which will not change (e.g. static level geometry) once it has
+been built.
+
+#### Updating
+
+Each build entry passed to [`CommandEncoder::build_acceleration_structures`] has a
+[`mode`](BlasBuildEntry::mode). [`AccelerationStructureBuildMode::Build`] builds from scratch.
+[`AccelerationStructureBuildMode::Update`] refits the acceleration structure in place, which is much cheaper, but only
+moves the existing tree, so the structure gets slower to trace the more its contents move away from their positions at
+the last full build. A common pattern for deforming geometry (e.g. skinned meshes, foliage, cloth) is to update every
+frame and do a full build every few frames, or after large changes.
+
+An update requires [`AccelerationStructureFlags::ALLOW_UPDATE`](wgt::AccelerationStructureFlags::ALLOW_UPDATE) at
+creation, and the same build inputs as the previous build except for the contents of the vertex, AABB, transform and
+instance data. See [`AccelerationStructureBuildMode::Update`] for the exact rules. A [`Tlas`] must still be built or
+updated after any [`Blas`] it references was updated.
 
 ### [`Blas`] compaction
 
@@ -84,7 +98,7 @@ method waits until all builds operating on the [`Blas`] are finished, prepares t
 the given callback. To check whether the [`Blas`] is ready, you can also call [`Blas::ready_for_compaction`] instead of
 waiting for the callback (useful if you are asynchronously compacting a large number of [`Blas`]es). Submitting a
 rebuild of a [`Blas`] terminates any [`Blas::prepare_compaction_async`], preventing the callback from being called, and
-making the [`Blas`] no longer ready to compact. Once a [`Blas`] is ready for compaction, it can be compacted using
+making the [`Blas`] no longer ready to compact. Updates do the same. Once a [`Blas`] is ready for compaction, it can be compacted using
 [`Queue::compact_blas`] this returns the new compacted [`Blas`], which is independent of the [`Blas`] passed in. The
 other [`Blas`] can be used for other things, including being rebuilt without affecting the new [`Blas`]. The returned
 [`Blas`] behaves largely like the [`Blas`] it was created from, except that it can be neither rebuilt, nor compacted
@@ -121,7 +135,13 @@ for blas_to_be_compacted in blas_s_pending_compaction {
 let mut encoder =
     device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 // do any other preparations on the TLAS here
-encoder.build_acceleration_structures(iter::empty(), iter::once(&tlas));
+encoder.build_acceleration_structures(
+    iter::empty(),
+    iter::once(&wgpu::TlasBuildEntry {
+        tlas: &tlas,
+        mode: wgpu::AccelerationStructureBuildMode::Build,
+    }),
+);
 // more render code
 queue.submit([encoder.finish()]);
 ```
@@ -433,4 +453,7 @@ These are tags that can be added to a acceleration structure (`acceleration_stru
 
 */
 
-use crate::{Blas, CommandEncoder, Device, Features, Queue, Tlas, TlasInstance};
+use crate::{
+    AccelerationStructureBuildMode, Blas, BlasBuildEntry, CommandEncoder, Device, Features, Queue,
+    Tlas, TlasInstance,
+};

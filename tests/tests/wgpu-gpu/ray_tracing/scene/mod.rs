@@ -49,7 +49,6 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
         &wgpu::CreateBlasDescriptor {
             label: None,
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
         },
         wgpu::BlasGeometrySizeDescriptors::Triangles {
             descriptors: vec![blas_geo_size_desc.clone()],
@@ -59,7 +58,6 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
     let mut tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
         label: None,
         flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-        update_mode: wgpu::AccelerationStructureUpdateMode::Build,
         max_instances,
     });
 
@@ -83,6 +81,7 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
     encoder.build_acceleration_structures(
         iter::once(&wgpu::BlasBuildEntry {
             blas: &blas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
             geometry: wgpu::BlasGeometries::TriangleGeometries(vec![wgpu::BlasTriangleGeometry {
                 size: &blas_geo_size_desc,
                 vertex_buffer: &vertex_buf,
@@ -94,7 +93,10 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
                 transform_buffer_offset: None,
             }]),
         }),
-        iter::once(&tlas),
+        iter::once(&wgpu::TlasBuildEntry {
+            tlas: &tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }),
     );
 
     ctx.queue.submit(Some(encoder.finish()));

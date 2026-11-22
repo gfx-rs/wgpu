@@ -1702,6 +1702,10 @@ impl Queue {
 
                     let mut baked = match cmd_buf_data {
                         Ok(cmd_buf_data) => {
+                            submission
+                                .command_index_guard
+                                .submission_as_builds
+                                .add(&cmd_buf_data);
                             let res = validate_command_buffer(
                                 command_buffer,
                                 self,
@@ -1746,15 +1750,24 @@ impl Queue {
                     if let Err(e) = baked
                         .process_deferred_query_set_resolves(&self.device, &submission.snatch_guard)
                     {
+                        submission
+                            .command_index_guard
+                            .submission_as_builds
+                            .forget_last_builds();
                         break 'error Err(e.into());
                     }
 
                     baked_command_buffers.push(baked);
                 }
 
+                // Failures after this point lose the device, so the recorded inputs of the
+                // builds in this submission only need to be forgotten here.
+                let as_builds = &mut submission.command_index_guard.submission_as_builds;
                 if let Some(first_error) = first_error {
+                    as_builds.forget_last_builds();
                     break 'error Err(first_error);
                 }
+                as_builds.clear();
 
                 // At this point we have validated all the command buffers, and we start
                 // making updates to global state. If we fail between here and successful
@@ -2155,7 +2168,6 @@ impl Queue {
                         &BlasDescriptor {
                             label: Some(new_label.into()),
                             flags: blas.flags,
-                            update_mode: blas.update_mode,
                         },
                     ),
                     Some(err),
@@ -2240,9 +2252,9 @@ impl Queue {
             size_info,
             sizes: blas.sizes.clone(),
             flags: blas.flags & !AccelerationStructureFlags::ALLOW_COMPACTION,
-            update_mode: blas.update_mode,
             // Bypass the submit checks which update this because we don't submit this normally.
             built_index: RwLock::new(rank::BLAS_BUILT_INDEX, Some(built_index)),
+            last_build: Mutex::new(rank::BLAS_LAST_BUILD, None),
             handle,
             label: new_label,
             tracking_data: TrackingData::new(blas.device.tracker_indices.blas_s.clone()),

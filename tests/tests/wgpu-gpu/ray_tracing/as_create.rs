@@ -1,7 +1,6 @@
 use crate::ray_tracing::acceleration_structure_limits;
 use wgpu::{
-    AccelerationStructureFlags, AccelerationStructureGeometryFlags,
-    AccelerationStructureUpdateMode, BlasGeometrySizeDescriptors,
+    AccelerationStructureFlags, AccelerationStructureGeometryFlags, BlasGeometrySizeDescriptors,
     BlasTriangleGeometrySizeDescriptor, CreateBlasDescriptor,
 };
 use wgpu::{IndexFormat, VertexFormat};
@@ -46,7 +45,6 @@ fn invalid_vertex_format_blas_create(ctx: TestingContext) {
                 &CreateBlasDescriptor {
                     label: Some("BLAS"),
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-                    update_mode: AccelerationStructureUpdateMode::Build,
                 },
                 BlasGeometrySizeDescriptors::Triangles {
                     descriptors: vec![blas_size.clone()],
@@ -88,7 +86,6 @@ fn mismatched_index_blas_create(ctx: TestingContext) {
                 &CreateBlasDescriptor {
                     label: Some("BLAS1"),
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-                    update_mode: AccelerationStructureUpdateMode::Build,
                 },
                 BlasGeometrySizeDescriptors::Triangles {
                     descriptors: vec![blas_size.clone()],
@@ -117,7 +114,6 @@ fn mismatched_index_blas_create(ctx: TestingContext) {
                 &CreateBlasDescriptor {
                     label: Some("BLAS2"),
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-                    update_mode: AccelerationStructureUpdateMode::Build,
                 },
                 BlasGeometrySizeDescriptors::Triangles {
                     descriptors: vec![blas_size.clone()],

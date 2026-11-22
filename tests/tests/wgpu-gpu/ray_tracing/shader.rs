@@ -49,7 +49,13 @@ fn access_all_struct_members(ctx: TestingContext) {
             label: Some("Build"),
         });
 
-    encoder_build.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas]);
+    encoder_build.build_acceleration_structures(
+        [&as_ctx.blas_build_entry()],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
 
     ctx.queue.submit([encoder_build.finish()]);
 
@@ -144,7 +150,13 @@ fn prevent_invalid_ray_query_calls(ctx: TestingContext) {
             label: Some("Build"),
         });
 
-    encoder_build.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas]);
+    encoder_build.build_acceleration_structures(
+        [&as_ctx.blas_build_entry()],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
 
     ctx.queue.submit([encoder_build.finish()]);
 

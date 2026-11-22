@@ -146,6 +146,7 @@ define_lock_ranks! {
         DEVICE_TRACKERS,
         QUEUE_LIFE_TRACKER,
         BLAS_COMPACTION_STATE,
+        BLAS_LAST_BUILD,
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         BUFFER_BIND_GROUPS,
         BUFFER_INITIALIZATION_STATUS,
@@ -159,6 +160,7 @@ define_lock_ranks! {
         TEXTURE_CLEAR_MODE,
         TEXTURE_INITIALIZATION_STATUS,
         TEXTURE_VIEWS,
+        TLAS_LAST_BUILD,
     }
     rank DEVICE_COMMAND_INDICES "Device::command_indices" followed by {
         COMMAND_BUFFER_DATA,
@@ -169,6 +171,7 @@ define_lock_ranks! {
         QUEUE_LIFE_TRACKER,
         BLAS_COMPACTION_STATE,
         BLAS_BUILT_INDEX,
+        BLAS_LAST_BUILD,
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         DEVICE_DEFERRED_DESTROY,
         DEVICE_TRACE,
@@ -179,6 +182,7 @@ define_lock_ranks! {
         TEXTURE_INITIALIZATION_STATUS,
         TLAS_BUILT_INDEX,
         TLAS_DEPENDENCIES,
+        TLAS_LAST_BUILD,
         TLAS_MAX_INTERSECTION_IDX,
         TLAS_REQUIRED_INTERSECTION_TYPES,
     }
@@ -186,7 +190,9 @@ define_lock_ranks! {
         BUFFER_MAP_STATE,
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         BLAS_COMPACTION_STATE,
+        BLAS_LAST_BUILD,
         BUFFER_POOL,
+        TLAS_LAST_BUILD,
         DEVICE_TRACE,
         DEVICE_USAGE_SCOPES,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
@@ -240,6 +246,7 @@ define_lock_ranks! {
 
     // Leaf ranks reachable from the graph above, alphabetical.
     rank BLAS_BUILT_INDEX "Blas::built_index" followed by { }
+    rank BLAS_LAST_BUILD "Blas::last_build" followed by { }
     rank BUFFER_BIND_GROUPS "Buffer::bind_groups" followed by { }
     rank BUFFER_INITIALIZATION_STATUS "Buffer::initialization_status" followed by { }
     rank BUFFER_POOL "BufferPool::buffers" followed by { }
@@ -254,6 +261,7 @@ define_lock_ranks! {
     rank TEXTURE_CLEAR_MODE "Texture::clear_mode" followed by { }
     rank TEXTURE_INITIALIZATION_STATUS "Texture::initialization_status" followed by { }
     rank TEXTURE_VIEWS "Texture::views" followed by { }
+    rank TLAS_LAST_BUILD "Tlas::last_build" followed by { }
     rank TLAS_MAX_INTERSECTION_IDX "Tlas::max_intersection_index" followed by { }
     rank TLAS_REQUIRED_INTERSECTION_TYPES "Tlas::required_intersection_types" followed by { }
 

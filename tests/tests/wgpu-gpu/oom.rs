@@ -1,9 +1,9 @@
 use wgpu::{
-    AccelerationStructureFlags, AccelerationStructureGeometryFlags,
-    AccelerationStructureUpdateMode, Backends, BlasGeometrySizeDescriptors,
-    BlasTriangleGeometrySizeDescriptor, BufferDescriptor, BufferUsages, CreateBlasDescriptor,
-    CreateTlasDescriptor, Error, ErrorFilter, Extent3d, Features, QuerySetDescriptor, QueryType,
-    TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, VertexFormat,
+    AccelerationStructureFlags, AccelerationStructureGeometryFlags, Backends,
+    BlasGeometrySizeDescriptors, BlasTriangleGeometrySizeDescriptor, BufferDescriptor,
+    BufferUsages, CreateBlasDescriptor, CreateTlasDescriptor, Error, ErrorFilter, Extent3d,
+    Features, QuerySetDescriptor, QueryType, TextureDescriptor, TextureDimension, TextureFormat,
+    TextureUsages, VertexFormat,
 };
 use wgpu_test::GpuTestInitializer;
 use wgpu_test::{apply, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
@@ -185,7 +185,6 @@ static BLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
                 &CreateBlasDescriptor {
                     label: None,
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-                    update_mode: AccelerationStructureUpdateMode::Build,
                 },
                 BlasGeometrySizeDescriptors::Triangles {
                     descriptors: vec![BlasTriangleGeometrySizeDescriptor {
@@ -227,7 +226,6 @@ static TLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
                 label: None,
                 max_instances: 1024 * 1024,
                 flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-                update_mode: AccelerationStructureUpdateMode::Build,
             });
             if let Some(err) = scope.pop().await {
                 match err {

@@ -50,7 +50,13 @@ fn unbuilt_blas(ctx: TestingContext) {
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default());
 
-    encoder.build_acceleration_structures([], [&as_ctx.tlas]);
+    encoder.build_acceleration_structures(
+        [],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
 
     fail(
         &ctx.device,
@@ -237,7 +243,13 @@ fn out_of_order_as_build(ctx: TestingContext) {
             label: Some("TLAS 1"),
         });
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]);
+    encoder_tlas.build_acceleration_structures(
+        [],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
 
     let mut encoder_blas = ctx
         .device
@@ -280,7 +292,13 @@ fn out_of_order_as_build(ctx: TestingContext) {
             label: Some("TLAS 2"),
         });
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]);
+    encoder_tlas.build_acceleration_structures(
+        [],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
 
     fail(
         &ctx.device,
@@ -332,7 +350,13 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
             label: Some("TLAS 1"),
         });
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]);
+    encoder_tlas.build_acceleration_structures(
+        [],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
 
     let mut encoder_blas2 = ctx
         .device
@@ -432,7 +456,13 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
             label: Some("TLAS 2"),
         });
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]);
+    encoder_tlas.build_acceleration_structures(
+        [],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
 
     ctx.queue.submit([
         encoder_blas.finish(),
@@ -538,7 +568,6 @@ fn build_with_transform(ctx: TestingContext) {
             label: Some("BLAS"),
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE
                 | AccelerationStructureFlags::USE_TRANSFORM,
-            update_mode: AccelerationStructureUpdateMode::Build,
         },
         BlasGeometrySizeDescriptors::Triangles {
             descriptors: vec![blas_size.clone()],
@@ -549,7 +578,6 @@ fn build_with_transform(ctx: TestingContext) {
         label: Some("TLAS"),
         max_instances: 1,
         flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-        update_mode: AccelerationStructureUpdateMode::Build,
     });
     tlas[0] = Some(TlasInstance::from_blas_untransformed(&blas));
 
@@ -562,6 +590,7 @@ fn build_with_transform(ctx: TestingContext) {
     encoder_build.build_acceleration_structures(
         [&BlasBuildEntry {
             blas: &blas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
             geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
                 size: &blas_size,
                 vertex_buffer: &vertices,
@@ -573,7 +602,10 @@ fn build_with_transform(ctx: TestingContext) {
                 transform_buffer_offset: Some(0),
             }]),
         }],
-        [&tlas],
+        [&wgpu::TlasBuildEntry {
+            tlas: &tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
     );
     ctx.queue.submit([encoder_build.finish()]);
 }
@@ -613,7 +645,13 @@ fn only_blas_vertex_return(ctx: TestingContext) {
             label: Some("TLAS 1"),
         });
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]);
+    encoder_tlas.build_acceleration_structures(
+        [],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
 
     ctx.queue
         .submit([encoder_blas.finish(), encoder_tlas.finish()]);
@@ -738,7 +776,13 @@ fn only_tlas_vertex_return(ctx: TestingContext) {
             label: Some("TLAS 1"),
         });
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]);
+    encoder_tlas.build_acceleration_structures(
+        [],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
     fail(&ctx.device, || encoder_tlas.finish(), None);
 }
 
@@ -805,7 +849,6 @@ fn test_as_build_format_stride(
         &CreateBlasDescriptor {
             label: Some("BLAS"),
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: AccelerationStructureUpdateMode::Build,
         },
         BlasGeometrySizeDescriptors::Triangles {
             descriptors: vec![blas_size.clone()],
@@ -820,6 +863,7 @@ fn test_as_build_format_stride(
     command_encoder.build_acceleration_structures(
         &[BlasBuildEntry {
             blas: &blas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
             geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
                 size: &blas_size,
                 vertex_buffer: &vertices,
@@ -867,7 +911,6 @@ fn blas_first_vertex(ctx: TestingContext) {
         &CreateBlasDescriptor {
             label: Some("BLAS"),
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: AccelerationStructureUpdateMode::Build,
         },
         BlasGeometrySizeDescriptors::Triangles {
             descriptors: vec![blas_size.clone()],
@@ -887,6 +930,7 @@ fn blas_first_vertex(ctx: TestingContext) {
 
     let entry = BlasBuildEntry {
         blas: &blas,
+        mode: wgpu::AccelerationStructureBuildMode::Build,
         geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
             size: &blas_size,
             vertex_buffer: &large_buffer,

@@ -57,18 +57,35 @@ pub enum BlasGeometrySizeDescriptors {
     },
 }
 
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// Update mode for acceleration structure builds.
-pub enum AccelerationStructureUpdateMode {
-    /// Always perform a full build.
+/// Whether a build of an acceleration structure is a full build or an update (refit).
+pub enum AccelerationStructureBuildMode {
+    /// Build the acceleration structure from scratch.
+    #[default]
     Build,
-    /// If possible, perform an incremental update.
+    /// Update (refit) the acceleration structure in place, starting from its previous build.
     ///
-    /// Not advised for major topology changes.
-    /// (Useful for e.g. skinning)
-    PreferUpdate,
+    /// An update is cheaper than a full build, but the acceleration structure is slower to
+    /// trace after large changes, until its next full build. It is useful for e.g. skinned
+    /// meshes or animated instances.
+    ///
+    /// The acceleration structure must have been created with
+    /// [`AccelerationStructureFlags::ALLOW_UPDATE`]. Its previous build, earlier in the same
+    /// command buffer or in an earlier submission, must have been made through
+    /// `build_acceleration_structures` with the same inputs, except for the contents of the
+    /// vertex, AABB, transform and instance data:
+    /// - For a BLAS, the same number of geometries and, for each geometry, the same size
+    ///   descriptor, vertex or AABB stride, and use of a transform buffer. Buffers and offsets
+    ///   may differ.
+    /// - For a TLAS, the same number of instances. Instances may reference different BLASes.
+    ///
+    /// Otherwise, submitting the command buffer fails. A build marked with
+    /// `CommandEncoder::mark_acceleration_structures_built` cannot be updated.
+    ///
+    /// An update must not change the values of the indices, and must not make a primitive active
+    /// or inactive (for example by setting a vertex to NaN). Otherwise the result is undefined.
+    Update,
 }
 
 #[repr(C)]
@@ -80,8 +97,6 @@ pub struct CreateBlasDescriptor<L> {
     pub label: L,
     /// Flags for the bottom level acceleration structure.
     pub flags: AccelerationStructureFlags,
-    /// Update mode for the bottom level acceleration structure.
-    pub update_mode: AccelerationStructureUpdateMode,
 }
 
 impl<L> CreateBlasDescriptor<L> {
@@ -90,7 +105,6 @@ impl<L> CreateBlasDescriptor<L> {
         CreateBlasDescriptor {
             label: fun(&self.label),
             flags: self.flags,
-            update_mode: self.update_mode,
         }
     }
 }
@@ -104,10 +118,8 @@ pub struct CreateTlasDescriptor<L> {
     pub label: L,
     /// Number of instances that can be stored in the acceleration structure.
     pub max_instances: u32,
-    /// Flags for the bottom level acceleration structure.
+    /// Flags for the top level acceleration structure.
     pub flags: AccelerationStructureFlags,
-    /// Update mode for the bottom level acceleration structure.
-    pub update_mode: AccelerationStructureUpdateMode,
 }
 
 impl<L> CreateTlasDescriptor<L> {
@@ -116,7 +128,6 @@ impl<L> CreateTlasDescriptor<L> {
         CreateTlasDescriptor {
             label: fun(&self.label),
             flags: self.flags,
-            update_mode: self.update_mode,
             max_instances: self.max_instances,
         }
     }
@@ -128,8 +139,10 @@ bitflags::bitflags!(
     #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct AccelerationStructureFlags: u8 {
-        /// Allow for incremental updates (no change in size), currently this is unimplemented
-        /// and will build as normal (this is fine, update vs build should be unnoticeable)
+        /// Allow builds with [`AccelerationStructureBuildMode::Update`], which refit the
+        /// acceleration structure instead of rebuilding it.
+        ///
+        /// This can make the acceleration structure larger and slower to trace.
         const ALLOW_UPDATE = 1 << 0;
         /// Allow the acceleration structure to be compacted in a copy operation
         /// (`Blas::prepare_for_compaction`, `CommandEncoder::compact_blas`).

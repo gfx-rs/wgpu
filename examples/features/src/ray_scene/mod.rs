@@ -220,7 +220,6 @@ fn upload_scene_components(
                 &wgpu::CreateBlasDescriptor {
                     label: None,
                     flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-                    update_mode: wgpu::AccelerationStructureUpdateMode::Build,
                 },
                 wgpu::BlasGeometrySizeDescriptors::Triangles {
                     descriptors: size_desc.clone(),
@@ -254,6 +253,7 @@ fn upload_scene_components(
             wgpu::BlasBuildEntry {
                 blas,
                 geometry: wgpu::BlasGeometries::TriangleGeometries(triangle_geometries),
+                mode: wgpu::AccelerationStructureBuildMode::Build,
             }
         })
         .collect();
@@ -344,7 +344,6 @@ impl crate::framework::Example for Example {
         let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
             label: None,
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             max_instances: side_count * side_count,
         });
 
@@ -496,7 +495,13 @@ impl crate::framework::Example for Example {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        encoder.build_acceleration_structures(iter::empty(), iter::once(&self.tlas));
+        encoder.build_acceleration_structures(
+            iter::empty(),
+            iter::once(&wgpu::TlasBuildEntry {
+                tlas: &self.tlas,
+                mode: wgpu::AccelerationStructureBuildMode::Build,
+            }),
+        );
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

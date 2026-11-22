@@ -140,7 +140,6 @@ impl crate::framework::Example for Example {
             &wgpu::CreateBlasDescriptor {
                 label: None,
                 flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-                update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             },
             wgpu::BlasGeometrySizeDescriptors::Triangles {
                 descriptors: vec![blas_geo_size_desc.clone()],
@@ -150,7 +149,6 @@ impl crate::framework::Example for Example {
         let mut tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
             label: None,
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             max_instances: 1,
         });
 
@@ -226,6 +224,7 @@ impl crate::framework::Example for Example {
         encoder.build_acceleration_structures(
             iter::once(&wgpu::BlasBuildEntry {
                 blas: &blas,
+                mode: wgpu::AccelerationStructureBuildMode::Build,
                 geometry: wgpu::BlasGeometries::TriangleGeometries(vec![
                     wgpu::BlasTriangleGeometry {
                         size: &blas_geo_size_desc,
@@ -239,7 +238,10 @@ impl crate::framework::Example for Example {
                     },
                 ]),
             }),
-            iter::once(&tlas),
+            iter::once(&wgpu::TlasBuildEntry {
+                tlas: &tlas,
+                mode: wgpu::AccelerationStructureBuildMode::Build,
+            }),
         );
 
         queue.submit(Some(encoder.finish()));
