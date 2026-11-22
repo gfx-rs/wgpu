@@ -3229,6 +3229,7 @@ impl Writer {
                     crate::inline::InlineTarget::Spirv,
                 ),
                 uniform_matrix_layout: true,
+                immediate_words: true,
                 workgroup_zero_init: self.zero_initialize_workgroup_memory
                     == super::ZeroInitializeWorkgroupMemoryMode::Polyfill,
                 ..self.passes.into()

@@ -1,0 +1,10 @@
+# No GLSL support for f16
+targets = "SPIRV | METAL | HLSL"
+capabilities = "SHADER_FLOAT16 | IMMEDIATES"
+
+[spv]
+version = [1, 0]
+
+[hlsl]
+shader_model = "V6_2"
+immediates_target = { space = 0, register = 0 }

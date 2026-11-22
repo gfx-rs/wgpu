@@ -1,11 +1,9 @@
 use std::fmt::Write;
 
-use wgpu::{Backends, DownlevelFlags, Features, Limits};
+use wgpu::{DownlevelFlags, Features, Limits};
 
 use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest, MAX_BUFFER_SIZE};
-use wgpu_test::{
-    apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
-};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -906,11 +904,7 @@ static IMMEDIATES_INPUT_F16: GpuTestConfiguration = GpuTestConfiguration::new()
             .limits(Limits {
                 max_immediate_size: MAX_BUFFER_SIZE as u32,
                 ..Limits::downlevel_defaults()
-            })
-            // https://github.com/gfx-rs/wgpu/issues/10083
-            .expect_fail(
-                FailureCase::backend(Backends::VULKAN).validation_error("storagePushConstant16"),
-            ),
+            }),
     )
     .run_async(|ctx| {
         shader_input_output_test(

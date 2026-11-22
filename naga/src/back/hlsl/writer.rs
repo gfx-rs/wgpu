@@ -327,6 +327,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             &back::passes::Passes {
                 inline: crate::inline::InlineStrategy::All,
                 uniform_matrix_layout: true,
+                immediate_words: false,
                 workgroup_zero_init: self.options.zero_initialize_workgroup_memory,
                 ..self.options.passes.into()
             },

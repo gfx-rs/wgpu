@@ -27,6 +27,10 @@ The passes are:
   loads that use them. A dynamic column index into such a matrix indexes the
   loaded matrix, so it is bounds-checked under the `index` policy, not the
   `buffer` policy.
+- Immediate words, selected by `Passes::immediate_words`: gives `var<immediate>`
+  globals that contain 16-bit scalars a struct of `u32` words as their type,
+  so that the target needs no 16-bit immediate storage. The pass rewrites
+  their loads to assemble the value from the words.
 */
 #![cfg_attr(
     not(any(glsl_out, hlsl_out, msl_out, spv_out)),
@@ -37,9 +41,11 @@ The passes are:
 )]
 
 mod emit;
+mod immediate_words;
 mod uniform_matrix_layout;
 pub mod workgroup_zero_init;
 
+pub use immediate_words::ImmediateWordsError;
 pub use uniform_matrix_layout::UniformMatrixLayoutError;
 
 use alloc::{borrow::Cow, boxed::Box};
@@ -62,6 +68,8 @@ pub enum PassError {
     Validation(#[from] Box<WithSpan<ValidationError>>),
     #[error(transparent)]
     UniformMatrixLayout(#[from] UniformMatrixLayoutError),
+    #[error(transparent)]
+    ImmediateWords(#[from] ImmediateWordsError),
 }
 
 /// Options for the IR passes a backend runs before writing a module.
@@ -89,6 +97,9 @@ pub(crate) struct Passes {
     pub inline: InlineStrategy,
     /// Give `var<uniform>` globals std140-compatible types.
     pub uniform_matrix_layout: bool,
+    /// Store `var<immediate>` globals that contain 16-bit scalars as 32-bit
+    /// words.
+    pub immediate_words: bool,
     /// Run [`workgroup_zero_init`].
     pub workgroup_zero_init: bool,
 }
@@ -102,6 +113,7 @@ impl From<PassOptions> for Passes {
             compact,
             inline: InlineStrategy::Never,
             uniform_matrix_layout: false,
+            immediate_words: false,
             workgroup_zero_init: false,
         }
     }
@@ -119,6 +131,7 @@ pub(crate) fn run<'a>(
         compact,
         inline,
         uniform_matrix_layout,
+        immediate_words,
         workgroup_zero_init,
     } = *passes;
     // Each pass calls `Cow::to_mut` only if it will change the module, which
@@ -133,6 +146,9 @@ pub(crate) fn run<'a>(
     dropped.functions = inlined;
     if uniform_matrix_layout {
         changed |= uniform_matrix_layout::run(&mut module)?;
+    }
+    if immediate_words {
+        changed |= immediate_words::run(&mut module)?;
     }
     if workgroup_zero_init {
         changed |= workgroup_zero_init::run(&mut module)?;
