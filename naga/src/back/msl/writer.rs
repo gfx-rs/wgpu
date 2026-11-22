@@ -4833,13 +4833,11 @@ impl<W: Write> Writer<W> {
     pub fn write<'m>(
         &mut self,
         module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
-        info: impl Into<alloc::borrow::Cow<'m, valid::ModuleInfo>>,
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
-        let (module, info) =
-            back::passes::run(module.into(), info.into(), &back::passes::Passes::default())?;
-        let (module, info) = (&*module, &*info);
+        let (module, info) = back::passes::run(module.into(), &back::passes::Passes::default())?;
+        let (module, info) = (&*module, &info);
         self.emit_int_div_checks = options.emit_int_div_checks;
         self.names.clear();
         self.namer.reset(

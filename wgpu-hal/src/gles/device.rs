@@ -657,7 +657,7 @@ impl super::Device {
                 }
             };
 
-            let (module, info) = naga::back::pipeline_constants::process_overrides(
+            let (module, _) = naga::back::pipeline_constants::process_overrides(
                 &naga.module,
                 &naga.info,
                 Some((naga_stage, stage.entry_point)),
@@ -710,7 +710,7 @@ impl super::Device {
             let mut writer =
                 glsl::Writer::new(&mut output, naga_options, &pipeline_options, policies);
 
-            let reflection_info = writer.write(&*module, &*info).map_err(|e| {
+            let reflection_info = writer.write(&*module).map_err(|e| {
                 let msg = format!("{e}");
                 crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
             })?;

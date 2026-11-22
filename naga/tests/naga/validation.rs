@@ -714,7 +714,7 @@ fn no_flat_first_in_glsl() {
     } = DummyInterpolationShader::new(naga::Interpolation::Flat, Some(naga::Sampling::First));
 
     let mut validator = naga::valid::Validator::new(Default::default(), Default::default());
-    let module_info = validator.validate(&module).unwrap();
+    validator.validate(&module).unwrap();
 
     let options = Default::default();
     let pipeline_options = naga::back::glsl::PipelineOptions {
@@ -729,11 +729,9 @@ fn no_flat_first_in_glsl() {
         Default::default(),
     );
 
-    let err = glsl_writer
-        .write(&module, &module_info)
-        .expect_err(&format!(
-            "`{interpolate_attr}` should fail backend validation"
-        ));
+    let err = glsl_writer.write(&module).expect_err(&format!(
+        "`{interpolate_attr}` should fail backend validation"
+    ));
 
     assert!(matches!(
         err,
@@ -753,7 +751,7 @@ fn no_linear_interpolation_in_glsl_es() {
     } = DummyInterpolationShader::new(naga::Interpolation::Linear, None);
 
     let mut validator = naga::valid::Validator::new(Default::default(), valid::Capabilities::all());
-    let module_info = validator.validate(&module).unwrap();
+    validator.validate(&module).unwrap();
 
     let options = naga::back::glsl::Options {
         version: naga::back::glsl::Version::Embedded {
@@ -773,7 +771,7 @@ fn no_linear_interpolation_in_glsl_es() {
         &pipeline_options,
         Default::default(),
     )
-    .write(&module, &module_info)
+    .write(&module)
     .err()
     .unwrap_or_else(|| {
         panic!("`{interpolate_attr}` should fail backend validation on GLSL ES");
@@ -2176,11 +2174,11 @@ fn write_spv_with_entry_point_name_len(name_len: usize) -> Vec<u32> {
     let source = format!("@compute @workgroup_size(1) fn {name}() {{}}");
 
     let module = naga::front::wgsl::parse_str(&source).unwrap();
-    let info = naga::valid::Validator::new(Default::default(), Default::default())
+    naga::valid::Validator::new(Default::default(), Default::default())
         .validate(&module)
         .unwrap();
 
-    naga::back::spv::write_vec(&module, &info, &Default::default(), None).unwrap()
+    naga::back::spv::write_vec(&module, &Default::default(), None).unwrap()
 }
 
 /// Ensure we behave when entry-point name is at its limit.

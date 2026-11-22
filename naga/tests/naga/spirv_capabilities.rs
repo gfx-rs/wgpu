@@ -19,15 +19,13 @@ fn capabilities_used(source: &str) -> naga::FastIndexSet<Ca> {
         );
     });
 
-    let info = valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all())
+    valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all())
         .validate(&module)
         .expect("validation failed");
 
     let mut words = vec![];
     let mut writer = spv::Writer::new(&spv::Options::default()).unwrap();
-    writer
-        .write(&module, &info, None, &None, &mut words)
-        .unwrap();
+    writer.write(&module, None, &None, &mut words).unwrap();
     writer.get_capabilities_used().clone()
 }
 
@@ -248,7 +246,7 @@ fn f16_io_capabilities() {
     use naga::valid;
 
     let module = naga::front::wgsl::parse_str(source).unwrap();
-    let info = valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all())
+    valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all())
         .validate(&module)
         .unwrap();
 
@@ -261,7 +259,7 @@ fn f16_io_capabilities() {
     let mut words_native = vec![];
     let mut writer_native = spv::Writer::new(&options_native).unwrap();
     writer_native
-        .write(&module, &info, None, &None, &mut words_native)
+        .write(&module, None, &None, &mut words_native)
         .unwrap();
     let caps_native = writer_native.get_capabilities_used();
 
@@ -277,7 +275,7 @@ fn f16_io_capabilities() {
     let mut words_polyfill = vec![];
     let mut writer_polyfill = spv::Writer::new(&options_polyfill).unwrap();
     writer_polyfill
-        .write(&module, &info, None, &None, &mut words_polyfill)
+        .write(&module, None, &None, &mut words_polyfill)
         .unwrap();
     let caps_polyfill = writer_polyfill.get_capabilities_used();
 
@@ -312,7 +310,7 @@ fn f16_io_polyfill_codegen() {
     use naga::{back::spv, valid};
 
     let module = naga::front::wgsl::parse_str(source).unwrap();
-    let info = valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all())
+    valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all())
         .validate(&module)
         .unwrap();
 
@@ -324,7 +322,7 @@ fn f16_io_polyfill_codegen() {
     let mut words_native = vec![];
     let mut writer_native = spv::Writer::new(&options_native).unwrap();
     writer_native
-        .write(&module, &info, None, &None, &mut words_native)
+        .write(&module, None, &None, &mut words_native)
         .unwrap();
     let caps_native = writer_native.get_capabilities_used();
     let dis_native = rspirv::dr::load_words(words_native).unwrap().disassemble();
@@ -341,7 +339,7 @@ fn f16_io_polyfill_codegen() {
     let mut words_polyfill = vec![];
     let mut writer_polyfill = spv::Writer::new(&options_polyfill).unwrap();
     writer_polyfill
-        .write(&module, &info, None, &None, &mut words_polyfill)
+        .write(&module, None, &None, &mut words_polyfill)
         .unwrap();
     let caps_polyfill = writer_polyfill.get_capabilities_used();
     let dis_polyfill = rspirv::dr::load_words(words_polyfill)

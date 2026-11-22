@@ -870,7 +870,7 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) = naga::back::pipeline_constants::process_overrides(
+            let (module, _) = naga::back::pipeline_constants::process_overrides(
                 module,
                 info,
                 entry_point.filter(|_| params.compact),
@@ -879,8 +879,7 @@ fn write_output(
             .unwrap_pretty();
 
             let pipeline_options = msl::PipelineOptions::default();
-            let (msl, _) =
-                msl::write_string(&*module, &*info, &options, &pipeline_options).unwrap_pretty();
+            let (msl, _) = msl::write_string(&*module, &options, &pipeline_options).unwrap_pretty();
             fs::write(output_path, msl)?;
         }
         "spv" => {
@@ -896,7 +895,7 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) = naga::back::pipeline_constants::process_overrides(
+            let (module, _) = naga::back::pipeline_constants::process_overrides(
                 module,
                 info,
                 entry_point.filter(|_| params.compact),
@@ -904,7 +903,7 @@ fn write_output(
             )
             .unwrap_pretty();
 
-            let spv = spv::write_vec(&*module, &*info, &params.spv_out, pipeline_options.as_ref())
+            let spv = spv::write_vec(&*module, &params.spv_out, pipeline_options.as_ref())
                 .unwrap_pretty();
             let bytes = spv
                 .iter()
@@ -950,7 +949,7 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) = naga::back::pipeline_constants::process_overrides(
+            let (module, _) = naga::back::pipeline_constants::process_overrides(
                 module,
                 info,
                 entry_point.filter(|_| params.compact),
@@ -965,7 +964,7 @@ fn write_output(
                 &pipeline_options,
                 params.bounds_check_policies,
             );
-            writer.write(&*module, &*info).unwrap_pretty();
+            writer.write(&*module).unwrap_pretty();
             fs::write(output_path, buffer)?;
         }
         "dot" => {
@@ -982,7 +981,7 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) = naga::back::pipeline_constants::process_overrides(
+            let (module, _) = naga::back::pipeline_constants::process_overrides(
                 module,
                 info,
                 entry_point.filter(|_| params.compact),
@@ -993,7 +992,7 @@ fn write_output(
             let mut buffer = String::new();
             let pipeline_options = Default::default();
             let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl, &pipeline_options);
-            writer.write(&*module, &*info, None).unwrap_pretty();
+            writer.write(&*module, None).unwrap_pretty();
             fs::write(output_path, buffer)?;
         }
         "wgsl" => {

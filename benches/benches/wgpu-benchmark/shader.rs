@@ -377,13 +377,7 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
                 }
                 let opt = input.options.spv.to_options(&shared_info, None);
                 if writer.set_options(&opt).is_ok() {
-                    let _ = writer.write(
-                        input.module.as_ref().unwrap(),
-                        input.module_info.as_ref().unwrap(),
-                        None,
-                        &None,
-                        &mut data,
-                    );
+                    let _ = writer.write(input.module.as_ref().unwrap(), None, &None, &mut data);
                     data.clear();
                 }
             }
@@ -412,7 +406,6 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
                         };
                         let _ = writer.write(
                             input.module.as_ref().unwrap(),
-                            input.module_info.as_ref().unwrap(),
                             Some(&pipeline_options),
                             &None,
                             &mut data,
@@ -431,12 +424,7 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
             if input.options.targets.unwrap().contains(Targets::METAL) {
                 let pipeline_options = naga::back::msl::PipelineOptions::default();
                 let mut writer = naga::back::msl::Writer::new(&mut string);
-                let _ = writer.write(
-                    input.module.as_ref().unwrap(),
-                    input.module_info.as_ref().unwrap(),
-                    &options,
-                    &pipeline_options,
-                );
+                let _ = writer.write(input.module.as_ref().unwrap(), &options, &pipeline_options);
                 string.clear();
             }
         }
@@ -450,11 +438,7 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
                 let pipeline_options = Default::default();
                 let mut writer =
                     naga::back::hlsl::Writer::new(&mut string, &options, &pipeline_options);
-                let _ = writer.write(
-                    input.module.as_ref().unwrap(),
-                    input.module_info.as_ref().unwrap(),
-                    None,
-                );
+                let _ = writer.write(input.module.as_ref().unwrap(), None);
                 string.clear();
             }
         }
@@ -478,7 +462,6 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
                     continue;
                 }
                 let module = input.module.as_ref().unwrap();
-                let info = input.module_info.as_ref().unwrap();
                 for ep in module.entry_points.iter() {
                     let pipeline_options = naga::back::glsl::PipelineOptions {
                         shader_stage: ep.stage,
@@ -492,7 +475,7 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
                         &pipeline_options,
                         naga::proc::BoundsCheckPolicies::default(),
                     )
-                    .write(module, info);
+                    .write(module);
 
                     string.clear();
                 }

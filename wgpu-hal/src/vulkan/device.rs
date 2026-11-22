@@ -813,7 +813,7 @@ impl super::Device {
                     &self.naga_options
                 };
 
-                let (module, info) = naga::back::pipeline_constants::process_overrides(
+                let (module, _) = naga::back::pipeline_constants::process_overrides(
                     &naga_shader.module,
                     &naga_shader.info,
                     Some((naga_stage, stage.entry_point)),
@@ -825,7 +825,7 @@ impl super::Device {
 
                 let spv = {
                     profiling::scope!("naga::spv::write_vec");
-                    naga::back::spv::write_vec(&*module, &*info, options, Some(&pipeline_options))
+                    naga::back::spv::write_vec(&*module, options, Some(&pipeline_options))
                 }
                 .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
                 self.create_shader_module_impl(&spv, &None)?
@@ -2070,13 +2070,8 @@ impl crate::Device for super::Device {
                         binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                     };
                 }
-                let spv = naga::back::spv::write_vec(
-                    &*naga_shader.module,
-                    &naga_shader.info,
-                    &naga_options,
-                    None,
-                )
-                .map_err(|e| crate::ShaderError::Compilation(format!("{e}")))?;
+                let spv = naga::back::spv::write_vec(&*naga_shader.module, &naga_options, None)
+                    .map_err(|e| crate::ShaderError::Compilation(format!("{e}")))?;
                 super::ShaderModule::Raw(self.create_shader_module_impl(&spv, &desc.label)?)
             }
             crate::ShaderInput::SpirV(data) => {

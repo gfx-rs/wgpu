@@ -75,7 +75,7 @@ use alloc::{
 };
 use core::fmt::{Error as FmtError, Write};
 
-use crate::{arena::Handle, back::TaskDispatchLimits, ir, proc::index, valid::ModuleInfo};
+use crate::{arena::Handle, back::TaskDispatchLimits, ir, proc::index};
 
 mod hoist;
 mod keywords;
@@ -839,12 +839,11 @@ pub struct TranslationInfo {
 
 pub fn write_string<'m>(
     module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
-    info: impl Into<alloc::borrow::Cow<'m, ModuleInfo>>,
     options: &Options,
     pipeline_options: &PipelineOptions,
 ) -> Result<(String, TranslationInfo), Error> {
     let mut w = Writer::new(String::new());
-    let info = w.write(module, info, options, pipeline_options)?;
+    let info = w.write(module, options, pipeline_options)?;
     Ok((w.finish(), info))
 }
 

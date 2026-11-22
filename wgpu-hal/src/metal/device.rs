@@ -279,13 +279,10 @@ impl super::Device {
                     binding_array_length_map: layout.binding_array_length_map.clone(),
                 };
 
-                let (source, info) = naga::back::msl::write_string(
-                    &*module,
-                    &*module_info,
-                    &options,
-                    &pipeline_options,
-                )
-                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {e:?}")))?;
+                let (source, info) =
+                    naga::back::msl::write_string(&*module, &options, &pipeline_options).map_err(
+                        |e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {e:?}")),
+                    )?;
 
                 log::debug!(
                     "Naga generated shader for entry point '{ep}' and stage {naga_stage:?}\n{source}",

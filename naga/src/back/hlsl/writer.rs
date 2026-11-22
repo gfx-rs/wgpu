@@ -336,15 +336,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     pub fn write<'m>(
         &mut self,
         module: impl Into<alloc::borrow::Cow<'m, Module>>,
-        module_info: impl Into<alloc::borrow::Cow<'m, valid::ModuleInfo>>,
         fragment_entry_point: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<super::ReflectionInfo, Error> {
-        let (module, module_info) = back::passes::run(
-            module.into(),
-            module_info.into(),
-            &back::passes::Passes::default(),
-        )?;
-        let (module, module_info) = (&*module, &*module_info);
+        let (module, module_info) =
+            back::passes::run(module.into(), &back::passes::Passes::default())?;
+        let (module, module_info) = (&*module, &module_info);
         self.reset(module);
 
         if module.uses_mesh_shaders() && self.options.shader_model < ShaderModel::V6_5 {

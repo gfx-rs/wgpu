@@ -24,7 +24,7 @@ fn main() {
 ";
 
 fn reflect(module: &naga::Module) -> ReflectionInfo {
-    let info = naga::valid::Validator::new(Default::default(), Default::default())
+    naga::valid::Validator::new(Default::default(), Default::default())
         .validate(module)
         .unwrap();
     let pipeline_options = glsl::PipelineOptions {
@@ -38,7 +38,7 @@ fn reflect(module: &naga::Module) -> ReflectionInfo {
         &pipeline_options,
         Default::default(),
     )
-    .write(module, &info)
+    .write(module)
     .unwrap()
 }
 

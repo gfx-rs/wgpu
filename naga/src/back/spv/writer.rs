@@ -4056,17 +4056,13 @@ impl Writer {
     pub fn write<'m>(
         &mut self,
         ir_module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
-        info: impl Into<alloc::borrow::Cow<'m, ModuleInfo>>,
         pipeline_options: Option<&PipelineOptions>,
         debug_info: &Option<DebugInfo>,
         words: &mut Vec<Word>,
     ) -> Result<(), Error> {
-        let (ir_module, info) = crate::back::passes::run(
-            ir_module.into(),
-            info.into(),
-            &crate::back::passes::Passes::default(),
-        )?;
-        let (ir_module, info) = (&*ir_module, &*info);
+        let (ir_module, info) =
+            crate::back::passes::run(ir_module.into(), &crate::back::passes::Passes::default())?;
+        let (ir_module, info) = (&*ir_module, &info);
         self.reset();
 
         // Try to find the entry point and corresponding index

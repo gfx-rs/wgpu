@@ -1176,20 +1176,13 @@ pub struct PipelineOptions {
 
 pub fn write_vec<'m>(
     module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
-    info: impl Into<alloc::borrow::Cow<'m, crate::valid::ModuleInfo>>,
     options: &Options,
     pipeline_options: Option<&PipelineOptions>,
 ) -> Result<Vec<u32>, Error> {
     let mut words: Vec<u32> = Vec::new();
     let mut w = Writer::new(options)?;
 
-    w.write(
-        module,
-        info,
-        pipeline_options,
-        &options.debug_info,
-        &mut words,
-    )?;
+    w.write(module, pipeline_options, &options.debug_info, &mut words)?;
     Ok(words)
 }
 
