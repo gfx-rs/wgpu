@@ -94,7 +94,7 @@ pub struct PassOptions {
 pub(crate) struct Passes {
     /// See [`PassOptions::compact`].
     pub compact: bool,
-    /// Which calls to inline. This runs before the other passes.
+    /// Which calls to inline. This runs before and after the other passes.
     pub inline: InlineStrategy,
     /// Run [`loop_bounding`].
     pub loop_bounding: bool,
@@ -145,7 +145,9 @@ pub(crate) fn run<'a>(
     // `dropped`.
     let mut changed = false;
     let mut dropped = Dropped::default();
-    // Inlining runs before the other passes.
+    // Inline first, so the other passes never see calls the backend can't
+    // express, such as `uniform` pointer arguments, which the uniform layout
+    // pass doesn't rewrite.
     let (inlined_changed, inlined) = crate::inline::inline_in_place(&mut module, inline);
     changed |= inlined_changed;
     dropped.functions = inlined;
@@ -160,9 +162,18 @@ pub(crate) fn run<'a>(
     if immediate_words {
         changed |= immediate_words::run(&mut module)?;
     }
+    // Zero-init only adds a prologue to entry points, so it needs nothing
+    // from the passes above and changes nothing they depend on.
     if workgroup_zero_init {
         changed |= workgroup_zero_init::run(&mut module)?;
     }
+    // Inline again: the passes above may have added functions, such as the
+    // uniform layout pass's converters, that a backend inlining every call
+    // can't write. The bodies it copies were bounded already, and loops the
+    // passes wrote stay unbounded.
+    let (inlined_changed, inlined) = crate::inline::inline_in_place(&mut module, inline);
+    changed |= inlined_changed;
+    dropped.functions.insert_iter(inlined.iter());
     finish(module, changed, compact, &dropped)
 }
 
