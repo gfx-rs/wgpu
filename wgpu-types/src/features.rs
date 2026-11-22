@@ -721,7 +721,7 @@ features! {
         /// - Vulkan (1.1+ or with VK_KHR_multiview)
         /// - Metal (with vertex amplification)
         /// - DX12 (with view instancing and SM 6.1+)
-        /// - GLES / WebGL (with OVR_multiview2)
+        /// - OpenGL, OpenGL ES and WebGL (with OVR_multiview2, on 2D array textures)
         ///
         /// This is a native only feature.
         ///

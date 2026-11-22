@@ -992,6 +992,8 @@ pub enum RenderPassErrorInner {
     TooManyMultiviewViews,
     #[error("Attachments with more than one array layer require a multiview mask")]
     MissingMultiviewMask,
+    #[error("Multiview pass attachments with more than one array layer must be of textures whose `texture_binding_view_dimension` is `D2Array` on this device")]
+    MultiViewTextureNotD2Array,
     #[error("missing occlusion query set")]
     MissingOcclusionQuerySet,
     #[error(transparent)]
@@ -1098,6 +1100,7 @@ impl WebGpuError for RenderPassError {
             | RenderPassErrorInner::MultiViewDimensionMismatch
             | RenderPassErrorInner::TooManyMultiviewViews
             | RenderPassErrorInner::MissingMultiviewMask
+            | RenderPassErrorInner::MultiViewTextureNotD2Array
             | RenderPassErrorInner::MissingOcclusionQuerySet
             | RenderPassErrorInner::PassEnded => ErrorType::Validation,
         }
@@ -1319,6 +1322,18 @@ impl RenderPassInfo {
             // Make sure that if this view is a multiview, it is set to be an array
             if this_multiview.is_some() && view.desc.dimension != TextureViewDimension::D2Array {
                 return Err(RenderPassErrorInner::MultiViewDimensionMismatch);
+            }
+            // Without arbitrary view dimensions, the texture's binding view dimension fixes how
+            // it can be attached. GL can only attach 2D array textures with multiple views.
+            if this_multiview.is_some()
+                && !device
+                    .downlevel
+                    .flags
+                    .contains(wgt::DownlevelFlags::ARBITRARY_BINDING_VIEW_DIMENSIONS)
+                && view.parent.texture_binding_view_dimension()
+                    != Some(TextureViewDimension::D2Array)
+            {
+                return Err(RenderPassErrorInner::MultiViewTextureNotD2Array);
             }
 
             // Validate matching first, or store the first one
