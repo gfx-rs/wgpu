@@ -637,3 +637,37 @@ fn convert_snapshots_glsl() {
         check_targets(&input, &mut module, None);
     }
 }
+
+/// Inline every call in every WGSL snapshot input, and check that the result
+/// still validates.
+#[test]
+fn inline_all_snapshots() {
+    let mut failures = Vec::new();
+    for input in Input::files_in_dir("wgsl", &["wgsl"], DIR_IN) {
+        let source = input.read_source(DIR_IN, false).replace('\r', "");
+        let params = input.read_parameters(DIR_IN);
+        let targets = params.targets.unwrap();
+        if targets.contains(Targets::NO_VALIDATION) {
+            continue;
+        }
+        let mut frontend = naga::front::wgsl::Frontend::new_with_options((&params.wgsl_in).into());
+        let Ok(mut module) = frontend.parse(&source) else {
+            continue;
+        };
+        let capabilities = params
+            .capabilities
+            .unwrap_or(naga::valid::Capabilities::all());
+        if naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
+            .validate(&module)
+            .is_err()
+        {
+            continue;
+        }
+        let name = input.file_name.display().to_string();
+        match naga::inline::process(&mut module, naga::inline::InlineStrategy::All) {
+            Ok(_) => {}
+            Err(e) => failures.push(format!("{name}: {e:?}")),
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}

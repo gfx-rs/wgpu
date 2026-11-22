@@ -181,6 +181,12 @@ pub struct ExpressionInfo {
     /// [`Load`]: crate::Expression::Load
     assignable_global: Option<Handle<crate::GlobalVariable>>,
 
+    /// The index of the pointer argument into which this expression produces a
+    /// pointer, like [`assignable_global`] for globals.
+    ///
+    /// [`assignable_global`]: Self::assignable_global
+    assignable_argument: Option<u32>,
+
     /// The type of this expression.
     pub ty: TypeResolution,
 }
@@ -191,6 +197,7 @@ impl ExpressionInfo {
             uniformity: Uniformity::new(),
             ref_count: 0,
             assignable_global: None,
+            assignable_argument: None,
             // this doesn't matter at this point, will be overwritten
             ty: TypeResolution::Value(crate::TypeInner::Scalar(crate::Scalar {
                 kind: crate::ScalarKind::Bool,
@@ -219,6 +226,7 @@ impl GlobalOrArgument {
             crate::Expression::Access { base, .. }
             | crate::Expression::AccessIndex { base, .. } => match expression_arena[base] {
                 crate::Expression::GlobalVariable(var) => GlobalOrArgument::Global(var),
+                crate::Expression::FunctionArgument(i) => GlobalOrArgument::Argument(i),
                 _ => return Err(ExpressionError::ExpectedGlobalOrArgument),
             },
             _ => return Err(ExpressionError::ExpectedGlobalOrArgument),
@@ -271,6 +279,10 @@ pub struct FunctionInfo {
     /// its usage information.
     pub global_uses: Box<[GlobalUse]>,
 
+    /// For each argument of this function, whether this function or its
+    /// callees may write through it.
+    written_arguments: Box<[bool]>,
+
     /// Information about each expression in this function's body.
     ///
     /// This is indexed by `Handle<Expression>` indices. However, `FunctionInfo`
@@ -310,6 +322,11 @@ impl FunctionInfo {
     }
     pub const fn expression_count(&self) -> usize {
         self.expressions.len()
+    }
+    /// Return `true` if this function or its callees may write through the
+    /// pointer argument at `index`.
+    pub fn writes_argument(&self, index: usize) -> bool {
+        self.written_arguments[index]
     }
     pub fn dominates_global_use(&self, other: &Self) -> bool {
         for (self_global_uses, other_global_uses) in
@@ -368,6 +385,11 @@ impl FunctionInfo {
         // Record usage if this expression may access a global
         if let Some(global) = info.assignable_global {
             self.global_uses[global.index()] |= global_use;
+        }
+        if let Some(argument) = info.assignable_argument {
+            if global_use.contains(GlobalUse::WRITE) {
+                self.written_arguments[argument as usize] = true;
+            }
         }
         info.uniformity.non_uniform_result
     }
@@ -430,6 +452,7 @@ impl FunctionInfo {
         &mut self,
         expr: Handle<crate::Expression>,
         assignable_global: &mut Option<Handle<crate::GlobalVariable>>,
+        assignable_argument: &mut Option<u32>,
     ) -> NonUniformResult {
         let info = &mut self.expressions[expr.index()];
         info.ref_count += 1;
@@ -440,6 +463,7 @@ impl FunctionInfo {
                 unreachable!()
             }
         }
+        *assignable_argument = info.assignable_argument;
         info.uniformity.non_uniform_result
     }
 
@@ -548,6 +572,7 @@ impl FunctionInfo {
 
         let expression = &expression_arena[handle];
         let mut assignable_global = None;
+        let mut assignable_argument = None;
         let uniformity = match *expression {
             E::Access { base, index } => {
                 let base_ty = self[base].ty.inner_with(resolve_context.types);
@@ -609,13 +634,17 @@ impl FunctionInfo {
 
                 Uniformity {
                     non_uniform_result: self
-                        .add_assignable_ref(base, &mut assignable_global)
+                        .add_assignable_ref(base, &mut assignable_global, &mut assignable_argument)
                         .or(self.add_ref(index)),
                     requirements: UniformityRequirements::empty(),
                 }
             }
             E::AccessIndex { base, .. } => Uniformity {
-                non_uniform_result: self.add_assignable_ref(base, &mut assignable_global),
+                non_uniform_result: self.add_assignable_ref(
+                    base,
+                    &mut assignable_global,
+                    &mut assignable_argument,
+                ),
                 requirements: UniformityRequirements::empty(),
             },
             // always uniform
@@ -640,6 +669,13 @@ impl FunctionInfo {
             // depends on the builtin
             E::FunctionArgument(index) => {
                 let arg = &resolve_context.arguments[index as usize];
+                if resolve_context.types[arg.ty]
+                    .inner
+                    .pointer_space()
+                    .is_some()
+                {
+                    assignable_argument = Some(index);
+                }
                 let uniform = match arg.binding {
                     Some(crate::Binding::BuiltIn(
                         // per-work-group built-ins are uniform
@@ -876,6 +912,7 @@ impl FunctionInfo {
             uniformity,
             ref_count: 0,
             assignable_global,
+            assignable_argument,
             ty,
         };
         Ok(())
@@ -1106,10 +1143,15 @@ impl FunctionInfo {
                     ref arguments,
                     result: _,
                 } => {
-                    for &argument in arguments {
-                        let _ = self.add_ref(argument);
-                    }
                     let info = &other_functions[function.index()];
+                    for (index, &argument) in arguments.iter().enumerate() {
+                        let usage = if info.written_arguments[index] {
+                            GlobalUse::READ | GlobalUse::WRITE
+                        } else {
+                            GlobalUse::READ
+                        };
+                        let _ = self.add_ref_impl(argument, usage);
+                    }
                     //Note: the result is validated by the Validator, not here
                     self.process_call(info, arguments, expression_arena)?
                 }
@@ -1321,6 +1363,7 @@ impl ModuleInfo {
             may_kill: false,
             sampling_set: crate::FastHashSet::default(),
             global_uses: vec![GlobalUse::empty(); module.global_variables.len()].into_boxed_slice(),
+            written_arguments: vec![false; fun.arguments.len()].into_boxed_slice(),
             expressions: vec![ExpressionInfo::new(); fun.expressions.len()].into_boxed_slice(),
             sampling: crate::FastHashSet::default(),
             dual_source_blending: false,
@@ -1456,6 +1499,7 @@ fn uniform_control_flow() {
         may_kill: false,
         sampling_set: crate::FastHashSet::default(),
         global_uses: vec![GlobalUse::empty(); global_var_arena.len()].into_boxed_slice(),
+        written_arguments: Box::new([]),
         expressions: vec![ExpressionInfo::new(); expressions.len()].into_boxed_slice(),
         sampling: crate::FastHashSet::default(),
         dual_source_blending: false,

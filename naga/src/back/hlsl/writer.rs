@@ -351,12 +351,21 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         let (module, module_info) = back::passes::run(
             module.into(),
             &back::passes::Passes {
+                inline: crate::inline::InlineStrategy::OnlyNeeded(
+                    crate::inline::InlineTarget::Hlsl,
+                ),
                 workgroup_zero_init: self.options.zero_initialize_workgroup_memory,
                 ..self.options.passes.into()
             },
         )?;
         let (module, module_info) = (&*module, &module_info);
         self.reset(module);
+
+        if let Some(name) =
+            crate::inline::find_needs_inline(module, crate::inline::InlineTarget::Hlsl)
+        {
+            return Err(Error::NeedsInline(name));
+        }
 
         if module.uses_mesh_shaders() && self.options.shader_model < ShaderModel::V6_5 {
             return Err(Error::ShaderModelTooLow(

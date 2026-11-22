@@ -26,6 +26,7 @@
                 (""),
                 (""),
             ],
+            written_arguments: [],
             expressions: [
                 (
                     uniformity: (
@@ -34,6 +35,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(0),
+                    assignable_argument: None,
                     ty: Handle(0),
                 ),
                 (
@@ -43,6 +45,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -55,6 +58,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -70,6 +74,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Quad,
                         scalar: (
@@ -85,6 +90,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Handle(1),
                 ),
                 (
@@ -94,6 +100,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -106,6 +113,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -121,6 +129,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Quad,
                         scalar: (
@@ -136,6 +145,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -145,6 +155,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -157,6 +168,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -172,6 +184,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Quad,
                         scalar: (
@@ -202,6 +215,7 @@
                 ("WRITE"),
                 ("WRITE"),
             ],
+            written_arguments: [],
             expressions: [
                 (
                     uniformity: (
@@ -210,6 +224,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
+                    assignable_argument: None,
                     ty: Handle(3),
                 ),
                 (
@@ -219,6 +234,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -231,6 +247,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -246,6 +263,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -258,6 +276,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Quad,
                         scalar: (
@@ -273,6 +292,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Handle(4),
                 ),
                 (
@@ -282,6 +302,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -294,6 +315,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -309,6 +331,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -321,6 +344,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Quad,
                         scalar: (
@@ -336,6 +360,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
+                    assignable_argument: None,
                     ty: Handle(5),
                 ),
                 (
@@ -345,6 +370,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -357,6 +383,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -372,6 +399,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -384,6 +412,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Quad,
                         scalar: (

@@ -3928,12 +3928,20 @@ impl Writer {
         let (ir_module, info) = crate::back::passes::run(
             ir_module.into(),
             &crate::back::passes::Passes {
+                inline: crate::inline::InlineStrategy::OnlyNeeded(
+                    crate::inline::InlineTarget::Spirv,
+                ),
                 workgroup_zero_init: self.zero_initialize_workgroup_memory
                     == super::ZeroInitializeWorkgroupMemoryMode::Polyfill,
                 ..self.passes.into()
             },
         )?;
         let (ir_module, info) = (&*ir_module, &info);
+        if let Some(name) =
+            crate::inline::find_needs_inline(ir_module, crate::inline::InlineTarget::Spirv)
+        {
+            return Err(Error::NeedsInline(name));
+        }
         self.reset();
 
         // Try to find the entry point and corresponding index
