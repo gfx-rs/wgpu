@@ -40,8 +40,21 @@ impl<'a, W: Write> Writer<'a, W> {
         &mut self,
         module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
     ) -> Result<ReflectionInfo, Error> {
-        let (module, info) = back::passes::run(module.into(), &self.options.passes.into())?;
+        let (module, info) = back::passes::run(
+            module.into(),
+            &back::passes::Passes {
+                inline: crate::inline::InlineStrategy::OnlyNeeded(
+                    crate::inline::InlineTarget::Glsl,
+                ),
+                ..self.options.passes.into()
+            },
+        )?;
         let (module, info) = (&*module, &info);
+        if let Some(name) =
+            crate::inline::find_needs_inline(module, crate::inline::InlineTarget::Glsl)
+        {
+            return Err(Error::NeedsInline(name));
+        }
         ModuleWriter::new(
             &mut self.out,
             module,

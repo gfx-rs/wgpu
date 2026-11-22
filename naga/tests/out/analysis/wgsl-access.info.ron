@@ -56,6 +56,7 @@
                 (""),
                 (""),
             ],
+            written_arguments: [],
             expressions: [
                 (
                     uniformity: (
@@ -64,6 +65,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Sint,
                         width: 4,
@@ -76,6 +78,7 @@
                     ),
                     ref_count: 14,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 2,
                         space: Function,
@@ -88,6 +91,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Sint,
                         width: 4,
@@ -100,6 +104,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -109,6 +114,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -118,6 +124,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 16,
                         space: Uniform,
@@ -130,6 +137,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 15,
                         space: Uniform,
@@ -142,6 +150,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(15),
                 ),
                 (
@@ -151,6 +160,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 16,
                         space: Uniform,
@@ -163,6 +173,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 15,
                         space: Uniform,
@@ -175,6 +186,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -191,6 +203,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -206,6 +219,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 16,
                         space: Uniform,
@@ -218,6 +232,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 15,
                         space: Uniform,
@@ -230,6 +245,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -239,6 +255,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -255,6 +272,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -270,6 +288,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 16,
                         space: Uniform,
@@ -282,6 +301,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 15,
                         space: Uniform,
@@ -294,6 +314,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -310,6 +331,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -326,6 +348,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -338,6 +361,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 16,
                         space: Uniform,
@@ -350,6 +374,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 15,
                         space: Uniform,
@@ -362,6 +387,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -378,6 +404,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -387,6 +414,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -403,6 +431,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -415,6 +444,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 16,
                         space: Uniform,
@@ -427,6 +457,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 15,
                         space: Uniform,
@@ -439,6 +470,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -448,6 +480,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -464,6 +497,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -480,6 +514,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -492,6 +527,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 16,
                         space: Uniform,
@@ -504,6 +540,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 15,
                         space: Uniform,
@@ -516,6 +553,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -525,6 +563,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -541,6 +580,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -550,6 +590,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -566,6 +607,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -578,6 +620,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -590,6 +633,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -605,6 +649,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -617,6 +662,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -632,6 +678,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -644,6 +691,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -659,6 +707,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(15),
                 ),
                 (
@@ -668,6 +717,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(16),
                 ),
                 (
@@ -677,6 +727,7 @@
                     ),
                     ref_count: 7,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 16,
                         space: Function,
@@ -689,6 +740,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Sint,
                         width: 4,
@@ -701,6 +753,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -710,6 +763,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -719,6 +773,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 15,
                         space: Function,
@@ -731,6 +786,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -743,6 +799,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -758,6 +815,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -770,6 +828,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -785,6 +844,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -797,6 +857,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -812,6 +873,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(15),
                 ),
                 (
@@ -821,6 +883,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 15,
                         space: Function,
@@ -833,6 +896,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -849,6 +913,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -861,6 +926,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -876,6 +942,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 15,
                         space: Function,
@@ -888,6 +955,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -897,6 +965,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -913,6 +982,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -925,6 +995,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -940,6 +1011,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 15,
                         space: Function,
@@ -952,6 +1024,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -968,6 +1041,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -984,6 +1058,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -996,6 +1071,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 15,
                         space: Function,
@@ -1008,6 +1084,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -1024,6 +1101,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -1033,6 +1111,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -1049,6 +1128,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -1061,6 +1141,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 15,
                         space: Function,
@@ -1073,6 +1154,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -1082,6 +1164,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -1098,6 +1181,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -1114,6 +1198,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -1126,6 +1211,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 15,
                         space: Function,
@@ -1138,6 +1224,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -1147,6 +1234,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -1163,6 +1251,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -1172,6 +1261,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -1188,6 +1278,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -1214,6 +1305,7 @@
                 (""),
                 ("READ"),
             ],
+            written_arguments: [],
             expressions: [
                 (
                     uniformity: (
@@ -1222,6 +1314,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Sint,
                         width: 4,
@@ -1234,6 +1327,7 @@
                     ),
                     ref_count: 14,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 2,
                         space: Function,
@@ -1246,6 +1340,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Sint,
                         width: 4,
@@ -1258,6 +1353,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -1267,6 +1363,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -1276,6 +1373,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 20,
                         space: Uniform,
@@ -1288,6 +1386,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 19,
                         space: Uniform,
@@ -1300,6 +1399,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(19),
                 ),
                 (
@@ -1309,6 +1409,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 20,
                         space: Uniform,
@@ -1321,6 +1422,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 19,
                         space: Uniform,
@@ -1333,6 +1435,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 18,
                         space: Uniform,
@@ -1345,6 +1448,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(18),
                 ),
                 (
@@ -1354,6 +1458,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 20,
                         space: Uniform,
@@ -1366,6 +1471,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 19,
                         space: Uniform,
@@ -1378,6 +1484,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 18,
                         space: Uniform,
@@ -1390,6 +1497,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -1406,6 +1514,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -1421,6 +1530,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 20,
                         space: Uniform,
@@ -1433,6 +1543,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 19,
                         space: Uniform,
@@ -1445,6 +1556,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 18,
                         space: Uniform,
@@ -1457,6 +1569,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -1466,6 +1579,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -1482,6 +1596,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -1497,6 +1612,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 20,
                         space: Uniform,
@@ -1509,6 +1625,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 19,
                         space: Uniform,
@@ -1521,6 +1638,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 18,
                         space: Uniform,
@@ -1533,6 +1651,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -1549,6 +1668,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -1565,6 +1685,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -1577,6 +1698,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 20,
                         space: Uniform,
@@ -1589,6 +1711,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 19,
                         space: Uniform,
@@ -1601,6 +1724,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 18,
                         space: Uniform,
@@ -1613,6 +1737,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -1629,6 +1754,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -1638,6 +1764,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -1654,6 +1781,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -1666,6 +1794,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 20,
                         space: Uniform,
@@ -1678,6 +1807,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 19,
                         space: Uniform,
@@ -1690,6 +1820,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 18,
                         space: Uniform,
@@ -1702,6 +1833,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -1711,6 +1843,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -1727,6 +1860,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -1743,6 +1877,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -1755,6 +1890,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 20,
                         space: Uniform,
@@ -1767,6 +1903,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 19,
                         space: Uniform,
@@ -1779,6 +1916,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 18,
                         space: Uniform,
@@ -1791,6 +1929,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -1800,6 +1939,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -1816,6 +1956,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -1825,6 +1966,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -1841,6 +1983,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -1853,6 +1996,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(19),
                 ),
                 (
@@ -1862,6 +2006,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(20),
                 ),
                 (
@@ -1871,6 +2016,7 @@
                     ),
                     ref_count: 8,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 20,
                         space: Function,
@@ -1883,6 +2029,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Sint,
                         width: 4,
@@ -1895,6 +2042,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -1904,6 +2052,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -1913,6 +2062,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 19,
                         space: Function,
@@ -1925,6 +2075,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(19),
                 ),
                 (
@@ -1934,6 +2085,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 19,
                         space: Function,
@@ -1946,6 +2098,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 18,
                         space: Function,
@@ -1958,6 +2111,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -1970,6 +2124,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -1985,6 +2140,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -1997,6 +2153,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -2012,6 +2169,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -2024,6 +2182,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -2039,6 +2198,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -2051,6 +2211,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -2066,6 +2227,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(18),
                 ),
                 (
@@ -2075,6 +2237,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 19,
                         space: Function,
@@ -2087,6 +2250,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 18,
                         space: Function,
@@ -2099,6 +2263,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -2115,6 +2280,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -2127,6 +2293,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -2142,6 +2309,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 19,
                         space: Function,
@@ -2154,6 +2322,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 18,
                         space: Function,
@@ -2166,6 +2335,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -2175,6 +2345,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -2191,6 +2362,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -2203,6 +2375,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -2218,6 +2391,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 19,
                         space: Function,
@@ -2230,6 +2404,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 18,
                         space: Function,
@@ -2242,6 +2417,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -2258,6 +2434,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -2274,6 +2451,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -2286,6 +2464,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 19,
                         space: Function,
@@ -2298,6 +2477,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 18,
                         space: Function,
@@ -2310,6 +2490,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -2326,6 +2507,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -2335,6 +2517,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -2351,6 +2534,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -2363,6 +2547,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 19,
                         space: Function,
@@ -2375,6 +2560,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 18,
                         space: Function,
@@ -2387,6 +2573,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -2396,6 +2583,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -2412,6 +2600,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -2428,6 +2617,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -2440,6 +2630,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 19,
                         space: Function,
@@ -2452,6 +2643,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 18,
                         space: Function,
@@ -2464,6 +2656,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -2473,6 +2666,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Bi),
                         scalar: (
@@ -2489,6 +2683,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -2498,6 +2693,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -2514,6 +2710,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -2540,6 +2737,9 @@
                 (""),
                 (""),
             ],
+            written_arguments: [
+                false,
+            ],
             expressions: [
                 (
                     uniformity: (
@@ -2548,6 +2748,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: Some(0),
                     ty: Handle(21),
                 ),
                 (
@@ -2557,6 +2758,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(5),
                 ),
             ],
@@ -2580,6 +2782,9 @@
                 (""),
                 (""),
             ],
+            written_arguments: [
+                false,
+            ],
             expressions: [
                 (
                     uniformity: (
@@ -2588,6 +2793,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(23),
                 ),
                 (
@@ -2597,6 +2803,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(22),
                 ),
                 (
@@ -2606,6 +2813,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(5),
                 ),
             ],
@@ -2629,6 +2837,9 @@
                 (""),
                 (""),
             ],
+            written_arguments: [
+                true,
+            ],
             expressions: [
                 (
                     uniformity: (
@@ -2637,6 +2848,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: Some(0),
                     ty: Handle(26),
                 ),
                 (
@@ -2646,6 +2858,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -2672,6 +2885,9 @@
                 (""),
                 (""),
             ],
+            written_arguments: [
+                true,
+            ],
             expressions: [
                 (
                     uniformity: (
@@ -2680,6 +2896,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: Some(0),
                     ty: Handle(28),
                 ),
                 (
@@ -2689,6 +2906,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -2701,6 +2919,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Quad,
                         scalar: (
@@ -2716,6 +2935,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -2728,6 +2948,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Quad,
                         scalar: (
@@ -2743,6 +2964,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(27),
                 ),
             ],
@@ -2766,6 +2988,7 @@
                 (""),
                 (""),
             ],
+            written_arguments: [],
             expressions: [
                 (
                     uniformity: (
@@ -2774,6 +2997,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -2786,6 +3010,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 0,
                         space: Function,
@@ -2798,6 +3023,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -2810,6 +3036,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Quad,
                         scalar: (
@@ -2825,6 +3052,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -2837,6 +3065,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Quad,
                         scalar: (
@@ -2852,6 +3081,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(27),
                 ),
                 (
@@ -2861,6 +3091,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 27,
                         space: Function,
@@ -2887,6 +3118,9 @@
                 (""),
                 (""),
             ],
+            written_arguments: [
+                false,
+            ],
             expressions: [
                 (
                     uniformity: (
@@ -2895,6 +3129,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: Some(0),
                     ty: Handle(30),
                 ),
                 (
@@ -2904,6 +3139,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: Some(0),
                     ty: Value(Pointer(
                         base: 0,
                         space: Function,
@@ -2916,6 +3152,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(0),
                 ),
             ],
@@ -2939,6 +3176,9 @@
                 (""),
                 (""),
             ],
+            written_arguments: [
+                true,
+            ],
             expressions: [
                 (
                     uniformity: (
@@ -2947,6 +3187,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: Some(0),
                     ty: Handle(30),
                 ),
                 (
@@ -2956,6 +3197,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: Some(0),
                     ty: Value(Pointer(
                         base: 0,
                         space: Function,
@@ -2968,6 +3210,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -2994,6 +3237,9 @@
                 (""),
                 (""),
             ],
+            written_arguments: [
+                false,
+            ],
             expressions: [
                 (
                     uniformity: (
@@ -3002,6 +3248,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: Some(0),
                     ty: Handle(32),
                 ),
                 (
@@ -3011,6 +3258,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: Some(0),
                     ty: Value(Pointer(
                         base: 0,
                         space: Function,
@@ -3023,6 +3271,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(0),
                 ),
             ],
@@ -3046,6 +3295,9 @@
                 (""),
                 (""),
             ],
+            written_arguments: [
+                true,
+            ],
             expressions: [
                 (
                     uniformity: (
@@ -3054,6 +3306,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: Some(0),
                     ty: Handle(32),
                 ),
                 (
@@ -3063,6 +3316,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: Some(0),
                     ty: Value(Pointer(
                         base: 0,
                         space: Function,
@@ -3075,6 +3329,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -3101,6 +3356,7 @@
                 (""),
                 (""),
             ],
+            written_arguments: [],
             expressions: [
                 (
                     uniformity: (
@@ -3109,6 +3365,7 @@
                     ),
                     ref_count: 2,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 29,
                         space: Function,
@@ -3121,6 +3378,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(0),
                 ),
                 (
@@ -3130,6 +3388,7 @@
                     ),
                     ref_count: 2,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 31,
                         space: Function,
@@ -3142,6 +3401,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(0),
                 ),
             ],
@@ -3165,6 +3425,9 @@
                 (""),
                 (""),
             ],
+            written_arguments: [
+                false,
+            ],
             expressions: [
                 (
                     uniformity: (
@@ -3173,6 +3436,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(33),
                 ),
                 (
@@ -3182,6 +3446,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(34),
                 ),
                 (
@@ -3191,6 +3456,7 @@
                     ),
                     ref_count: 2,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 34,
                         space: Function,
@@ -3203,6 +3469,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 33,
                         space: Function,
@@ -3215,6 +3482,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(33),
                 ),
             ],
@@ -3238,6 +3506,7 @@
                 (""),
                 (""),
             ],
+            written_arguments: [],
             expressions: [
                 (
                     uniformity: (
@@ -3246,6 +3515,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Sint,
                         width: 4,
@@ -3258,6 +3528,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(35),
                 ),
                 (
@@ -3267,6 +3538,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 35,
                         space: Function,
@@ -3279,6 +3551,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 2,
                         space: Function,
@@ -3291,6 +3564,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
             ],
@@ -3314,6 +3588,7 @@
                 (""),
                 (""),
             ],
+            written_arguments: [],
             expressions: [
                 (
                     uniformity: (
@@ -3322,6 +3597,7 @@
                     ),
                     ref_count: 3,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(37),
                 ),
                 (
@@ -3331,6 +3607,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(36),
                 ),
                 (
@@ -3340,6 +3617,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -3349,6 +3627,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(0),
                 ),
                 (
@@ -3358,6 +3637,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -3370,6 +3650,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Bool,
                         width: 1,
@@ -3382,6 +3663,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(36),
                 ),
                 (
@@ -3391,6 +3673,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
             ],
@@ -3414,6 +3697,7 @@
                 (""),
                 (""),
             ],
+            written_arguments: [],
             expressions: [
                 (
                     uniformity: (
@@ -3422,6 +3706,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(37),
                 ),
                 (
@@ -3431,6 +3716,7 @@
                     ),
                     ref_count: 3,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 37,
                         space: Function,
@@ -3443,6 +3729,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 36,
                         space: Function,
@@ -3455,6 +3742,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(36),
                 ),
                 (
@@ -3464,6 +3752,7 @@
                     ),
                     ref_count: 2,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 36,
                         space: Function,
@@ -3476,6 +3765,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 2,
                         space: Function,
@@ -3488,6 +3778,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -3497,6 +3788,7 @@
                     ),
                     ref_count: 2,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 2,
                         space: Function,
@@ -3509,6 +3801,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 0,
                         space: Function,
@@ -3521,6 +3814,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(0),
                 ),
                 (
@@ -3530,6 +3824,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -3539,6 +3834,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -3551,6 +3847,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Bool,
                         width: 1,
@@ -3563,6 +3860,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 36,
                         space: Function,
@@ -3575,6 +3873,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 2,
                         space: Function,
@@ -3587,6 +3886,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
             ],
@@ -3612,6 +3912,9 @@
                 ("READ"),
                 ("READ"),
             ],
+            written_arguments: [
+                false,
+            ],
             expressions: [
                 (
                     uniformity: (
@@ -3620,6 +3923,7 @@
                     ),
                     ref_count: 2,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(0),
                 ),
                 (
@@ -3629,6 +3933,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -3641,6 +3946,7 @@
                     ),
                     ref_count: 3,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 5,
                         space: Function,
@@ -3653,6 +3959,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(5),
                 ),
                 (
@@ -3662,6 +3969,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -3674,6 +3982,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(0),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 3,
                         space: Private,
@@ -3686,6 +3995,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(3),
                 ),
                 (
@@ -3695,6 +4005,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
@@ -3709,6 +4020,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 6,
                         space: Storage(
@@ -3723,6 +4035,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(6),
                 ),
                 (
@@ -3732,6 +4045,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
@@ -3746,6 +4060,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 12,
                         space: Storage(
@@ -3760,6 +4075,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(12),
                 ),
                 (
@@ -3769,6 +4085,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -3781,6 +4098,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
@@ -3795,6 +4113,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 6,
                         space: Storage(
@@ -3809,6 +4128,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Tri),
                         scalar: (
@@ -3827,6 +4147,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -3845,6 +4166,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -3857,6 +4179,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
@@ -3871,6 +4194,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 13,
                         space: Storage(
@@ -3885,6 +4209,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
@@ -3899,6 +4224,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 13,
                         space: Storage(
@@ -3913,6 +4239,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -3925,6 +4252,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -3937,6 +4265,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -3949,6 +4278,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 4,
                         space: Storage(
@@ -3963,6 +4293,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 2,
                         space: Storage(
@@ -3977,6 +4308,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -3986,6 +4318,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 17,
                         space: Storage(
@@ -4000,6 +4333,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(17),
                 ),
                 (
@@ -4009,6 +4343,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
@@ -4023,6 +4358,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 13,
                         space: Storage(
@@ -4037,6 +4373,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 4,
                         space: Storage(
@@ -4051,6 +4388,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 2,
                         space: Storage(
@@ -4065,6 +4403,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(5),
                 ),
                 (
@@ -4074,6 +4413,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Sint,
                         width: 4,
@@ -4086,6 +4426,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Sint,
                         width: 4,
@@ -4098,6 +4439,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Sint,
                         width: 4,
@@ -4110,6 +4452,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Sint,
                         width: 4,
@@ -4122,6 +4465,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(25),
                 ),
                 (
@@ -4131,6 +4475,7 @@
                     ),
                     ref_count: 3,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 25,
                         space: Function,
@@ -4143,6 +4488,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -4155,6 +4501,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(0),
                 ),
                 (
@@ -4164,6 +4511,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 2,
                         space: Function,
@@ -4176,6 +4524,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Sint,
                         width: 4,
@@ -4188,6 +4537,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 2,
                         space: Function,
@@ -4200,6 +4550,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -4209,6 +4560,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(23),
                 ),
                 (
@@ -4218,6 +4570,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(5),
                 ),
                 (
@@ -4227,6 +4580,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Quad,
                         scalar: (
@@ -4242,6 +4596,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Quad,
                         scalar: (
@@ -4257,6 +4612,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Tri,
                         scalar: (
@@ -4272,6 +4628,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -4284,6 +4641,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(24),
                 ),
             ],
@@ -4307,6 +4665,7 @@
                 ("WRITE"),
                 (""),
             ],
+            written_arguments: [],
             expressions: [
                 (
                     uniformity: (
@@ -4315,6 +4674,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
@@ -4329,6 +4689,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 6,
                         space: Storage(
@@ -4343,6 +4704,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: Some(Tri),
                         scalar: (
@@ -4361,6 +4723,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(ValuePointer(
                         size: None,
                         scalar: (
@@ -4379,6 +4742,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -4391,6 +4755,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
@@ -4405,6 +4770,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 6,
                         space: Storage(
@@ -4419,6 +4785,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -4431,6 +4798,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Tri,
                         scalar: (
@@ -4446,6 +4814,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -4458,6 +4827,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Tri,
                         scalar: (
@@ -4473,6 +4843,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -4485,6 +4856,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Tri,
                         scalar: (
@@ -4500,6 +4872,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -4512,6 +4885,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Tri,
                         scalar: (
@@ -4527,6 +4901,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(6),
                 ),
                 (
@@ -4536,6 +4911,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
@@ -4550,6 +4926,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 12,
                         space: Storage(
@@ -4564,6 +4941,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -4576,6 +4954,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -4591,6 +4970,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
@@ -4603,6 +4983,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Bi,
                         scalar: (
@@ -4618,6 +4999,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(12),
                 ),
                 (
@@ -4627,6 +5009,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
@@ -4641,6 +5024,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 13,
                         space: Storage(
@@ -4655,6 +5039,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 4,
                         space: Storage(
@@ -4669,6 +5054,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 2,
                         space: Storage(
@@ -4683,6 +5069,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Sint,
                         width: 4,
@@ -4695,6 +5082,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
+                    assignable_argument: None,
                     ty: Value(Pointer(
                         base: 17,
                         space: Storage(
@@ -4709,6 +5097,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(17),
                 ),
                 (
@@ -4718,6 +5107,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Float,
                         width: 4,
@@ -4730,6 +5120,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Vector(
                         size: Quad,
                         scalar: (
@@ -4759,6 +5150,7 @@
                 (""),
                 (""),
             ],
+            written_arguments: [],
             expressions: [
                 (
                     uniformity: (
@@ -4767,6 +5159,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Value(Scalar((
                         kind: Bool,
                         width: 1,
@@ -4779,6 +5172,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(33),
                 ),
                 (
@@ -4788,6 +5182,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -4797,6 +5192,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
                 (
@@ -4806,6 +5202,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: None,
+                    assignable_argument: None,
                     ty: Handle(2),
                 ),
             ],

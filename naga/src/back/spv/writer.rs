@@ -4063,8 +4063,21 @@ impl Writer {
         debug_info: &Option<DebugInfo>,
         words: &mut Vec<Word>,
     ) -> Result<(), Error> {
-        let (ir_module, info) = crate::back::passes::run(ir_module.into(), &self.passes.into())?;
+        let (ir_module, info) = crate::back::passes::run(
+            ir_module.into(),
+            &crate::back::passes::Passes {
+                inline: crate::inline::InlineStrategy::OnlyNeeded(
+                    crate::inline::InlineTarget::Spirv,
+                ),
+                ..self.passes.into()
+            },
+        )?;
         let (ir_module, info) = (&*ir_module, &info);
+        if let Some(name) =
+            crate::inline::find_needs_inline(ir_module, crate::inline::InlineTarget::Spirv)
+        {
+            return Err(Error::NeedsInline(name));
+        }
         self.reset();
 
         // Try to find the entry point and corresponding index

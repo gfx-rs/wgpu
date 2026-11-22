@@ -1472,16 +1472,14 @@ impl super::Validator {
             Ex::GlobalVariable(var_handle) => Ok(module.global_variables[var_handle].ty),
             Ex::FunctionArgument(i) => Ok(function.arguments[i as usize].ty),
             Ex::Access { base, .. } | Ex::AccessIndex { base, .. } => {
-                match function.expressions[base] {
-                    Ex::GlobalVariable(var_handle) => {
-                        let array_ty = module.global_variables[var_handle].ty;
-
-                        match module.types[array_ty].inner {
-                            crate::TypeInner::BindingArray { base, .. } => Ok(base),
-                            _ => Err(ExpressionError::ExpectedBindingArrayType(array_ty)),
-                        }
-                    }
-                    _ => Err(ExpressionError::ExpectedGlobalVariable),
+                let array_ty = match function.expressions[base] {
+                    Ex::GlobalVariable(var_handle) => module.global_variables[var_handle].ty,
+                    Ex::FunctionArgument(i) => function.arguments[i as usize].ty,
+                    _ => return Err(ExpressionError::ExpectedGlobalVariable),
+                };
+                match module.types[array_ty].inner {
+                    crate::TypeInner::BindingArray { base, .. } => Ok(base),
+                    _ => Err(ExpressionError::ExpectedBindingArrayType(array_ty)),
                 }
             }
             _ => Err(ExpressionError::ExpectedGlobalVariable),

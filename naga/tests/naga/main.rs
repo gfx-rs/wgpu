@@ -1,5 +1,6 @@
 mod example_wgsl;
 mod glsl_reflection;
+mod inline;
 mod snapshots;
 mod spirv_capabilities;
 mod spirv_debug_info;

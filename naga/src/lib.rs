@@ -113,6 +113,7 @@ pub mod compact;
 pub mod diagnostic_filter;
 pub mod error;
 pub mod front;
+pub mod inline;
 pub mod ir;
 pub mod keywords;
 mod non_max_u32;

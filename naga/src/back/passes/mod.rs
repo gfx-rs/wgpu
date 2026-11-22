@@ -30,6 +30,7 @@ use alloc::{borrow::Cow, boxed::Box};
 
 use crate::{
     compact::{try_compact, Dropped, KeepUnused, ReorderError},
+    inline::InlineStrategy,
     valid::{Capabilities, ModuleInfo, ValidationError, ValidationFlags, Validator},
     Module, WithSpan,
 };
@@ -60,16 +61,23 @@ pub struct PassOptions {
 }
 
 /// The passes a backend requests.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub(crate) struct Passes {
     /// See [`PassOptions::compact`].
     pub compact: bool,
+    /// Which calls to inline. This runs before the other passes.
+    pub inline: InlineStrategy,
 }
 
+/// The passes for `options`, with every other pass off. Backends turn on the
+/// passes they need with struct update syntax.
 impl From<PassOptions> for Passes {
     fn from(options: PassOptions) -> Self {
         let PassOptions { compact } = options;
-        Self { compact }
+        Self {
+            compact,
+            inline: InlineStrategy::Never,
+        }
     }
 }
 
@@ -81,13 +89,16 @@ pub(crate) fn run<'a>(
     module: Cow<'a, Module>,
     passes: &Passes,
 ) -> Result<(Cow<'a, Module>, ModuleInfo), PassError> {
-    let Passes { compact } = *passes;
+    let Passes { compact, inline } = *passes;
     // Each pass calls `Cow::to_mut` only if it will change the module, which
     // copies a borrowed module and is free for an owned one, reports whether
     // it changed it, and adds what it left for compaction to remove to
     // `dropped`.
-    let changed = false;
-    let dropped = Dropped::default();
+    // Inlining runs before the other passes.
+    let mut module = module;
+    let mut dropped = Dropped::default();
+    let (changed, inlined) = crate::inline::inline_in_place(&mut module, inline);
+    dropped.functions = inlined;
     finish(module, changed, compact, &dropped)
 }
 
