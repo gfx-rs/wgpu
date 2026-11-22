@@ -424,7 +424,7 @@ impl fmt::Debug for Device {
 }
 
 impl Drop for Device {
-    #[allow(trivial_casts)]
+    #[expect(trivial_casts, reason = "logs the address of `self`")]
     fn drop(&mut self) {
         profiling::scope!("Device::drop");
         api_log!("Device::drop {:?}", self as *const _);
@@ -1417,7 +1417,10 @@ impl Device {
                     .ptr
                     .write_bytes(0, (final_size - tail_start) as usize);
                 if !mapping.is_coherent {
-                    #[allow(clippy::single_range_in_vec_init)]
+                    #[expect(
+                        clippy::single_range_in_vec_init,
+                        reason = "the HAL method takes a slice of ranges, and one range is needed here"
+                    )]
                     self.raw()
                         .flush_mapped_ranges(raw, &[tail_start..final_size]);
                 }
@@ -1585,7 +1588,10 @@ impl Device {
         unsafe { core::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len()) };
 
         if !mapping.is_coherent {
-            #[allow(clippy::single_range_in_vec_init)]
+            #[expect(
+                clippy::single_range_in_vec_init,
+                reason = "the HAL method takes a slice of ranges, and one range is needed here"
+            )]
             unsafe {
                 device
                     .raw()

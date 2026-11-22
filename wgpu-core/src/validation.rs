@@ -80,7 +80,7 @@ impl From<&BindingType> for BindingTypeName {
 
 #[derive(Debug)]
 struct Resource {
-    #[allow(unused)]
+    #[expect(unused, reason = "only read through the `Debug` impl")]
     name: Option<String>,
     bind: naga::ResourceBinding,
     ty: ResourceType,

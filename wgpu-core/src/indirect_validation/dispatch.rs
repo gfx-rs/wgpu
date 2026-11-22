@@ -90,7 +90,10 @@ impl Dispatch {
             })
         })?;
         #[cfg(not(feature = "wgsl"))]
-        #[allow(clippy::diverging_sub_expression)]
+        #[expect(
+            clippy::diverging_sub_expression,
+            reason = "the shader is written in WGSL, so it cannot be built without the `wgsl` feature"
+        )]
         let module = panic!("Indirect validation requires the wgsl feature flag to be enabled!");
 
         let info = crate::device::create_validator(

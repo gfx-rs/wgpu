@@ -57,7 +57,11 @@ macro_rules! define_lock_ranks {
         )*
     } => {
         // An enum that assigns a unique number to each rank.
-        #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
+        #[expect(
+            non_camel_case_types,
+            clippy::upper_case_acronyms,
+            reason = "variants reuse the SCREAMING_SNAKE_CASE lock rank names"
+        )]
         enum LockRankNumber { $( $name, )* }
 
         bitflags::bitflags! {
@@ -80,7 +84,10 @@ macro_rules! define_lock_ranks {
                 }
             }
 
-            #[cfg_attr(not(feature = "observe_locks"), allow(dead_code))]
+            #[cfg_attr(
+                not(feature = "observe_locks"),
+                expect(dead_code, reason = "only used by the `observing` lock module")
+            )]
             pub fn const_name(self) -> &'static str {
                 match self {
                     $(

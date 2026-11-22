@@ -785,7 +785,10 @@ pub struct BindGroupDescriptor<
         ))
     )]
     /// The resources to bind to this bind group.
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the entry type is generic over every kind of bindable resource"
+    )]
     pub entries: Cow<'a, [BindGroupEntry<'a, B, S, TV, TLAS, ET>]>,
 }
 
@@ -1288,7 +1291,7 @@ pub struct BindGroupLayout {
 }
 
 impl Drop for BindGroupLayout {
-    #[allow(trivial_casts)]
+    #[expect(trivial_casts, reason = "logs the address of `self`")]
     fn drop(&mut self) {
         profiling::scope!("BindGroupLayout::drop");
         api_log!("BindGroupLayout::drop {:?}", self as *const _);
@@ -1504,7 +1507,7 @@ pub struct PipelineLayout {
 }
 
 impl Drop for PipelineLayout {
-    #[allow(trivial_casts)]
+    #[expect(trivial_casts, reason = "logs the address of `self`")]
     fn drop(&mut self) {
         profiling::scope!("PipelineLayout::drop");
         api_log!("PipelineLayout::drop {:?}", self as *const _);
@@ -1789,7 +1792,7 @@ pub struct BindGroup {
 }
 
 impl Drop for BindGroup {
-    #[allow(trivial_casts)]
+    #[expect(trivial_casts, reason = "logs the address of `self`")]
     fn drop(&mut self) {
         profiling::scope!("BindGroup::drop");
         api_log!("BindGroup::drop {:?}", self as *const _);

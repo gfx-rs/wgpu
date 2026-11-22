@@ -35,6 +35,10 @@ unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(wgpu_validate_locks_debug)',
 ] }
 
+[lints.clippy]
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+
 [lib]
 
 [features]

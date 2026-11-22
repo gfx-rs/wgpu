@@ -258,7 +258,14 @@ impl Instance {
     /// non-apple Unix-like platforms (Linux, FreeBSD) and currently only works
     /// with the Vulkan backend.
     #[cfg(drm)]
-    #[cfg_attr(not(vulkan), expect(unused_variables, unused_mut))]
+    #[cfg_attr(
+        not(vulkan),
+        expect(
+            unused_variables,
+            unused_mut,
+            reason = "the arguments are only used by the Vulkan backend"
+        )
+    )]
     pub unsafe fn create_surface_from_drm(
         &self,
         fd: i32,
@@ -1079,7 +1086,7 @@ impl Surface {
 }
 
 impl Drop for Surface {
-    #[allow(trivial_casts)]
+    #[expect(trivial_casts, reason = "logs the address of `self`")]
     fn drop(&mut self) {
         profiling::scope!("Surface::drop");
 
@@ -1387,7 +1394,7 @@ impl Adapter {
 }
 
 impl Drop for Adapter {
-    #[allow(trivial_casts)]
+    #[expect(trivial_casts, reason = "logs the address of `self`")]
     fn drop(&mut self) {
         profiling::scope!("Adapter::drop");
         api_log!("Adapter::drop {:?}", self as *const _);

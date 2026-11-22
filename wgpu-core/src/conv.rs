@@ -5,7 +5,13 @@ use crate::resource::{self, TextureDescriptor};
 // Some core-only texture format helpers. The helper methods on `TextureFormat`
 // defined in wgpu-types may need to be modified along with the ones here.
 
-#[cfg_attr(any(not(webgl)), expect(unused))]
+#[cfg_attr(
+    any(not(webgl)),
+    expect(
+        unused,
+        reason = "only used by `Queue::copy_external_image_to_texture`, which requires WebGL"
+    )
+)]
 pub fn is_valid_external_image_copy_dst_texture_format(format: wgt::TextureFormat) -> bool {
     use wgt::TextureFormat as Tf;
     match format {

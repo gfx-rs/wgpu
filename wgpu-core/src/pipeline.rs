@@ -40,7 +40,10 @@ pub(crate) struct LateSizedBufferGroup {
     pub(crate) shader_sizes: Vec<wgt::BufferAddress>,
 }
 
-#[allow(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the `Naga` variant can hold a whole `naga::Module` inline"
+)]
 pub enum ShaderModuleSource<'a> {
     #[cfg(feature = "wgsl")]
     Wgsl(Cow<'a, str>),
@@ -74,7 +77,10 @@ pub struct PassthroughInterface {
 // Most shaders will use a standard interface which is very large.
 // Passthrough shaders have a much smaller interface. No reason to
 // box the standard interface though.
-#[expect(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the standard interface is much larger than the passthrough one"
+)]
 #[derive(Debug)]
 pub enum ShaderModuleState {
     /// A Naga module, from which we generate a `wgpu_hal` shader module
@@ -99,7 +105,7 @@ pub struct ShaderModule {
 }
 
 impl Drop for ShaderModule {
-    #[allow(trivial_casts)]
+    #[expect(trivial_casts, reason = "logs the address of `self`")]
     fn drop(&mut self) {
         profiling::scope!("ShaderModule::drop");
         api_log!("ShaderModule::drop {:?}", self as *const _);
@@ -606,7 +612,7 @@ pub struct ComputePipeline {
 }
 
 impl Drop for ComputePipeline {
-    #[allow(trivial_casts)]
+    #[expect(trivial_casts, reason = "logs the address of `self`")]
     fn drop(&mut self) {
         profiling::scope!("ComputePipeline::drop");
         api_log!("ComputePipeline::drop {:?}", self as *const _);
@@ -729,7 +735,7 @@ pub struct PipelineCache {
 }
 
 impl Drop for PipelineCache {
-    #[allow(trivial_casts)]
+    #[expect(trivial_casts, reason = "logs the address of `self`")]
     fn drop(&mut self) {
         profiling::scope!("PipelineCache::drop");
         api_log!("PipelineCache::drop {:?}", self as *const _);
@@ -1240,7 +1246,7 @@ pub struct RenderPipeline {
 }
 
 impl Drop for RenderPipeline {
-    #[allow(trivial_casts)]
+    #[expect(trivial_casts, reason = "logs the address of `self`")]
     fn drop(&mut self) {
         profiling::scope!("RenderPipeline::drop");
         api_log!("RenderPipeline::drop {:?}", self as *const _);

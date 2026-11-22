@@ -45,20 +45,29 @@ pub mod rank;
 // `rust-analyzer` find references.
 
 #[cfg(feature = "std")] // requires thread-locals to work
-#[cfg_attr(not(wgpu_validate_locks), allow(dead_code))]
+#[cfg_attr(
+    not(wgpu_validate_locks),
+    expect(dead_code, reason = "only selected when `wgpu_validate_locks` is set")
+)]
 mod ranked;
 
 // The `observing` module requires the `serde` and `ron` dependencies
 // and the "std" feature for thread-locals. All are enabled by the
 // `"observe_locks"` feature.
 #[cfg(feature = "observe_locks")]
-#[cfg_attr(wgpu_validate_locks, allow(dead_code))]
+#[cfg_attr(
+    wgpu_validate_locks,
+    expect(
+        dead_code,
+        reason = "`ranked` is selected instead when `wgpu_validate_locks` is set"
+    )
+)]
 mod observing;
 
 // If "std" is not enabled, then none of the other modules can be built.
 #[cfg_attr(
     all(feature = "std", any(wgpu_validate_locks, feature = "observe_locks")),
-    allow(dead_code)
+    expect(dead_code, reason = "`ranked` or `observing` is selected instead")
 )]
 mod vanilla;
 

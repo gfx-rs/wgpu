@@ -1,7 +1,7 @@
 use core::fmt::{self, Debug, Display, Formatter};
 
 #[cfg(doc)]
-#[expect(unused_imports)]
+#[expect(unused_imports, reason = "only used by intra-doc links")]
 use crate::validation::StageError;
 
 /// Max shader I/O variable deductions for vertex shader output. Used by

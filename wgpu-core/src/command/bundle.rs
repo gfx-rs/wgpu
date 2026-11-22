@@ -74,8 +74,6 @@ index format changes.
 [rpeb]: crate::command::RenderPass::execute_bundles
 !*/
 
-#![allow(clippy::reversed_empty_ranges)]
-
 use alloc::{
     borrow::{Cow, ToOwned as _},
     boxed::Box,
@@ -1442,7 +1440,7 @@ pub struct RenderBundle {
 }
 
 impl Drop for RenderBundle {
-    #[expect(trivial_casts)]
+    #[expect(trivial_casts, reason = "logs the address of `self`")]
     fn drop(&mut self) {
         profiling::scope!("RenderBundle::drop");
         api_log!("RenderBundle::drop {:?}", self as *const _);

@@ -113,7 +113,6 @@ impl Data {
     }
 }
 
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 #[apply(serde_object_reference_struct)]
 pub enum Action<'a, R: ReferenceType> {

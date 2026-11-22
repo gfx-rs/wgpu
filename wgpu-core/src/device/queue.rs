@@ -269,7 +269,7 @@ crate::impl_parent_device!(Queue);
 crate::impl_storage_item!(Queue);
 
 impl Drop for Queue {
-    #[allow(trivial_casts)]
+    #[expect(trivial_casts, reason = "logs the address of `self`")]
     fn drop(&mut self) {
         profiling::scope!("Queue::drop");
         api_log!("Queue::drop {:?}", self as *const _);
@@ -1386,7 +1386,10 @@ impl Queue {
         // same way as `HTMLCanvasElement`.
         needs_flag |= source.origin != wgt::Origin2d::ZERO;
         needs_flag |= destination.color_space != wgt::PredefinedColorSpace::Srgb;
-        #[allow(clippy::bool_comparison)]
+        #[expect(
+            clippy::bool_comparison,
+            reason = "`!= false` matches the other comparisons against default values"
+        )]
         if matches!(source.source, wgt::ExternalImageSource::ImageBitmap(_)) {
             needs_flag |= source.flip_y != false;
             needs_flag |= destination.premultiplied_alpha != false;
@@ -1691,7 +1694,13 @@ impl Queue {
                     // Anything other than our own submission work in the remainder of this
                     // function that attempts to use the WebGPU command buffer after this
                     // point, will find it vacant (invalid), and produce an error.
-                    #[cfg_attr(not(feature = "trace"), expect(unused_mut))]
+                    #[cfg_attr(
+                        not(feature = "trace"),
+                        expect(
+                            unused_mut,
+                            reason = "only mutated to record the commands in the trace"
+                        )
+                    )]
                     let mut cmd_buf_data = command_buffer.take_finished();
 
                     if first_error.is_some() {
@@ -2141,7 +2150,7 @@ impl Queue {
         self.lock_life().add_work_done_closure(closure)
     }
 
-    #[allow(trivial_casts)]
+    #[expect(trivial_casts, reason = "logs the address of `self`")]
     pub fn compact_blas(&self, blas: &Arc<Blas>) -> (Arc<Blas>, Option<CompactBlasError>) {
         api_log!(
             "Queue::compact_blas {:?}, {:?}",

@@ -81,7 +81,10 @@ pub struct Mutex<T> {
 pub struct MutexGuard<'a, T> {
     inner: wgpu_sync::MutexGuard<'a, T>,
     // Never read, but `Drop` has important side effects.
-    #[cfg_attr(all(wgpu_validate_locks, not(miri)), expect(unused))]
+    #[cfg_attr(
+        all(wgpu_validate_locks, not(miri)),
+        expect(unused, reason = "only held for its `Drop` side effects")
+    )]
     saved: LockStateGuard,
 }
 
@@ -292,7 +295,10 @@ pub struct RwLockReadGuard<'a, T> {
 pub struct RwLockWriteGuard<'a, T> {
     inner: wgpu_sync::RwLockWriteGuard<'a, T>,
     // Never read, but `Drop` has important side effects.
-    #[cfg_attr(all(wgpu_validate_locks, not(miri)), expect(unused))]
+    #[cfg_attr(
+        all(wgpu_validate_locks, not(miri)),
+        expect(unused, reason = "only held for its `Drop` side effects")
+    )]
     saved: LockStateGuard,
 }
 
