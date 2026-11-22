@@ -928,7 +928,9 @@ fn invalid_instance_flags(ctx: TestingContext) {
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default());
 
-    as_ctx.tlas[0].as_mut().unwrap().flags = wgpu::AccelerationStructureInstanceFlags::FORCE_NO_OPAQUE | wgpu::AccelerationStructureInstanceFlags::FORCE_OPAQUE;
+    as_ctx.tlas[0].as_mut().unwrap().flags =
+        wgpu::AccelerationStructureInstanceFlags::FORCE_NO_OPAQUE
+            | wgpu::AccelerationStructureInstanceFlags::FORCE_OPAQUE;
 
     encoder.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas]);
 
