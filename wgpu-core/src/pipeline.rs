@@ -1115,6 +1115,12 @@ pub enum RenderError {
     TooManyVertexAttributes { given: u32, limit: u32 },
     #[error("Vertex attribute location {given} must be less than limit {limit}")]
     VertexAttributeLocationTooLarge { given: u32, limit: u32 },
+    #[error("Multiview mask {mask:#b} uses layer {highest_layer}, which is not less than the multiview view count limit {limit}")]
+    TooManyMultiviewViews {
+        mask: u32,
+        highest_layer: u32,
+        limit: u32,
+    },
     #[error("Vertex buffer {index} stride {given} exceeds the limit {limit}")]
     VertexStrideTooLarge { index: u32, given: u32, limit: u32 },
     #[error("Vertex attribute at location {location} stride {given} exceeds the limit {limit}")]
@@ -1165,6 +1171,7 @@ impl WebGpuError for RenderError {
             | Self::TooManyBuffersAndAccelerationStructuresInVertexStage { .. }
             | Self::TooManyVertexAttributes { .. }
             | Self::VertexAttributeLocationTooLarge { .. }
+            | Self::TooManyMultiviewViews { .. }
             | Self::VertexStrideTooLarge { .. }
             | Self::UnalignedVertexStride { .. }
             | Self::InvalidVertexAttributeOffset { .. }

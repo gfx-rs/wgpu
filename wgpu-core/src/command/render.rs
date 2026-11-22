@@ -1330,7 +1330,7 @@ impl RenderPassInfo {
                 // Multiview is only supported if the feature is enabled
                 if let Some(this_multiview) = this_multiview {
                     device.require_features(wgt::Features::MULTIVIEW)?;
-                    if this_multiview.get() > device.limits.max_multiview_view_count {
+                    if this_multiview.get() > device.limits.max_multiview_view_count.min(32) {
                         return Err(RenderPassErrorInner::TooManyMultiviewViews);
                     }
                 }

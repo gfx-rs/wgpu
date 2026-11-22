@@ -5290,6 +5290,15 @@ impl Device {
             if mv_mask.get().count_ones() != mv_mask.get().trailing_ones() {
                 self.require_features(wgt::Features::SELECTIVE_MULTIVIEW)?;
             }
+            let highest_layer = 31 - mv_mask.get().leading_zeros();
+            if highest_layer >= self.limits.max_multiview_view_count {
+                return Err(pipeline::RenderError::TooManyMultiviewViews {
+                    mask: mv_mask.get(),
+                    highest_layer,
+                    limit: self.limits.max_multiview_view_count,
+                }
+                .into());
+            }
         }
 
         if !self

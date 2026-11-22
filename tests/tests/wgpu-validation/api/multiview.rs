@@ -178,6 +178,27 @@ fn render_pipeline_multiview_mask_skipping_layer_0_requires_selective_multiview(
 }
 
 #[test]
+fn render_pipeline_multiview_mask_above_view_count_limit() {
+    let (device, _queue) = multiview_device(Features::MULTIVIEW, 2);
+    fail(
+        &device,
+        || create_pipeline(&device, 0b111),
+        Some("which is not less than the multiview view count limit 2"),
+    );
+}
+
+#[test]
+fn render_pass_multiview_attachment_with_more_than_32_layers() {
+    let (device, _queue) = multiview_device(Features::MULTIVIEW, 64);
+    let encoder = encode_pass(&device, 33, u32::MAX, None);
+    fail(
+        &device,
+        || encoder.finish(),
+        Some("Multiview view count limit violated"),
+    );
+}
+
+#[test]
 fn render_bundle_multiview_mask_matches_render_pass() {
     let (device, _queue) = multiview_device(Features::MULTIVIEW, 2);
     let encoder = encode_pass(&device, 2, 0b11, Some(0b11));
