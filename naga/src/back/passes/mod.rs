@@ -42,6 +42,7 @@ The passes are:
 
 mod emit;
 mod immediate_words;
+mod loop_bounding;
 mod uniform_matrix_layout;
 pub mod workgroup_zero_init;
 
@@ -95,6 +96,8 @@ pub(crate) struct Passes {
     pub compact: bool,
     /// Which calls to inline. This runs before the other passes.
     pub inline: InlineStrategy,
+    /// Run [`loop_bounding`].
+    pub loop_bounding: bool,
     /// Give `var<uniform>` globals std140-compatible types.
     pub uniform_matrix_layout: bool,
     /// Store `var<immediate>` globals that contain 16-bit scalars as 32-bit
@@ -112,6 +115,7 @@ impl From<PassOptions> for Passes {
         Self {
             compact,
             inline: InlineStrategy::Never,
+            loop_bounding: false,
             uniform_matrix_layout: false,
             immediate_words: false,
             workgroup_zero_init: false,
@@ -130,6 +134,7 @@ pub(crate) fn run<'a>(
     let Passes {
         compact,
         inline,
+        loop_bounding,
         uniform_matrix_layout,
         immediate_words,
         workgroup_zero_init,
@@ -144,6 +149,11 @@ pub(crate) fn run<'a>(
     let (inlined_changed, inlined) = crate::inline::inline_in_place(&mut module, inline);
     changed |= inlined_changed;
     dropped.functions = inlined;
+    // Loop bounding runs before any pass that writes loops of its own, so
+    // those loops aren't bounded.
+    if loop_bounding {
+        changed |= loop_bounding::run(&mut module);
+    }
     if uniform_matrix_layout {
         changed |= uniform_matrix_layout::run(&mut module)?;
     }
