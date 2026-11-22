@@ -1,5 +1,6 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![no_std]
+#![warn(clippy::allow_attributes, clippy::allow_attributes_without_reason)]
 extern crate alloc;
 #[cfg(any(feature = "std", test))]
 extern crate std;
@@ -107,11 +108,14 @@ pub struct TaskDispatchLimits {
 #[derive(Clone, Copy, Debug, PartialEq, bytemuck::Zeroable, bytemuck::Pod)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-#[allow(missing_docs)]
 pub struct ExternalTextureTransferFunction {
+    /// Scale of the power segment.
     pub a: f32,
+    /// Linear value at which the power segment starts.
     pub b: f32,
+    /// Gamma of the power segment, which raises `linear` to `1/g`.
     pub g: f32,
+    /// Slope of the linear segment.
     pub k: f32,
 }
 

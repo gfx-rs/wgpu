@@ -12,11 +12,13 @@ The key part of remoting are [`Id`](crate::id::Id) which are described in [`crat
 */
 
 #![allow(
-    // Need many arguments for some core functions to be able to re-use code in many situations.
     clippy::too_many_arguments,
+    reason = "some core functions need many arguments to be reused in many situations"
 )]
 #![warn(
     clippy::alloc_instead_of_core,
+    clippy::allow_attributes,
+    clippy::allow_attributes_without_reason,
     clippy::ptr_as_ptr,
     clippy::std_instead_of_alloc,
     clippy::std_instead_of_core,
