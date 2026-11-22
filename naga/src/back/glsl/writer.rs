@@ -39,11 +39,9 @@ impl<'a, W: Write> Writer<'a, W> {
     pub fn write<'m>(
         &mut self,
         module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
-        info: impl Into<alloc::borrow::Cow<'m, valid::ModuleInfo>>,
     ) -> Result<ReflectionInfo, Error> {
-        let (module, info) =
-            back::passes::run(module.into(), info.into(), &back::passes::Passes::default())?;
-        let (module, info) = (&*module, &*info);
+        let (module, info) = back::passes::run(module.into(), &back::passes::Passes::default())?;
+        let (module, info) = (&*module, &info);
         ModuleWriter::new(
             &mut self.out,
             module,

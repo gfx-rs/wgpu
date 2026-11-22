@@ -23,14 +23,13 @@ let module: naga::Module = naga::front::wgsl::parse_str(wgsl_source)?;
 
 // Validate the module.
 // Validation can be made less restrictive by changing the ValidationFlags.
-let module_info: naga::valid::ModuleInfo =
-    naga::valid::Validator::new(
-        naga::valid::ValidationFlags::all(),
-        naga::valid::Capabilities::all(),
-    )
-    .subgroup_stages(naga::valid::ShaderStages::all())
-    .subgroup_operations(naga::valid::SubgroupOperationSet::all())
-    .validate(&module)?;
+naga::valid::Validator::new(
+    naga::valid::ValidationFlags::all(),
+    naga::valid::Capabilities::all(),
+)
+.subgroup_stages(naga::valid::ShaderStages::all())
+.subgroup_operations(naga::valid::SubgroupOperationSet::all())
+.validate(&module)?;
 
 // Translate the module.
 use naga::back::glsl;
@@ -44,7 +43,7 @@ glsl::Writer::new(
         multiview: None,
     },
     naga::proc::BoundsCheckPolicies::default(),
-).write(&module, &module_info)?;
+).write(&module)?;
 
 assert_eq!(glsl_source, "\
 #version 310 es
