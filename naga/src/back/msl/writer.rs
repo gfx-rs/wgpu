@@ -4407,7 +4407,9 @@ impl<W: Write> Writer<W> {
                 | crate::Statement::MemoryBarrier(flags) => {
                     self.write_barrier(flags, level)?;
                 }
-                crate::Statement::Store { pointer, value } => {
+                // Metal can only store to atomic types with an atomic store.
+                crate::Statement::Store { pointer, value }
+                | crate::Statement::NonAtomicStore { pointer, value } => {
                     self.put_store(pointer, value, level, context)?
                 }
                 crate::Statement::ImageStore {

@@ -76,7 +76,7 @@ impl FunctionTracer<'_> {
                     St::Return { value: Some(value) } => {
                         self.expressions_used.insert(value);
                     }
-                    St::Store { pointer, value } => {
+                    St::Store { pointer, value } | St::NonAtomicStore { pointer, value } => {
                         self.expressions_used.insert(pointer);
                         self.expressions_used.insert(value);
                     }
@@ -368,6 +368,10 @@ impl FunctionMap {
                         value: Some(ref mut value),
                     } => adjust(value),
                     St::Store {
+                        ref mut pointer,
+                        ref mut value,
+                    }
+                    | St::NonAtomicStore {
                         ref mut pointer,
                         ref mut value,
                     } => {
