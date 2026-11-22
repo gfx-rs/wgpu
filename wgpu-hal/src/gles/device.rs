@@ -1718,6 +1718,7 @@ impl crate::Device for super::Device {
                 writer_flags,
                 binding_map,
                 zero_initialize_workgroup_memory: true,
+                passes: Default::default(),
             },
         })
     }

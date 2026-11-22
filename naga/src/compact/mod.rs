@@ -20,6 +20,17 @@ type Index = crate::non_max_u32::NonMaxU32;
 #[cfg(test)]
 use alloc::{format, string::ToString};
 
+/// Functions and global variables that compaction removes even when it keeps
+/// unused items.
+///
+/// A pass that makes an item unused, and must not have the backend write it,
+/// adds it here. Nothing in the module may still refer to these items.
+#[derive(Default)]
+pub(crate) struct Dropped {
+    pub functions: HandleSet<crate::Function>,
+    pub globals: HandleSet<crate::GlobalVariable>,
+}
+
 /// Configuration option for [`compact`]. See [`compact`] for details.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeepUnused {
@@ -93,15 +104,18 @@ impl From<KeepUnused> for bool {
 /// [`Function::expressions`]: crate::Function::expressions
 /// [`Emit`]: crate::Statement::Emit
 pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
-    try_compact(module, keep_unused)
+    try_compact(module, keep_unused, &Dropped::default())
         .expect("forward references must be in an order compaction can fix");
 }
 
 /// Like [`compact`], but return an error instead of panicking if a function's
 /// forward references can't be put in order. `module` is unchanged then.
+///
+/// Remove the items in `dropped` even if `keep_unused` is `Yes`.
 pub(crate) fn try_compact(
     module: &mut crate::Module,
     keep_unused: KeepUnused,
+    dropped: &Dropped,
 ) -> Result<(), ReorderError> {
     // The trickiest part of compaction is determining what is used and what is
     // not. Once we have computed that correctly, it's easy enough to call
@@ -245,6 +259,10 @@ pub(crate) fn try_compact(
     if keep_unused.into() {
         module_tracer.functions_used.add_all();
         module_tracer.functions_pending.add_all();
+        for handle in dropped.functions.iter() {
+            module_tracer.functions_used.remove(handle);
+            module_tracer.functions_pending.remove(handle);
+        }
     }
     while let Some(handle) = module_tracer.functions_pending.pop() {
         let function = &module.functions[handle];
@@ -261,6 +279,9 @@ pub(crate) fn try_compact(
     log::trace!("tracing global variables");
     if keep_unused.into() {
         module_tracer.global_variables_used.add_all();
+        for handle in dropped.globals.iter() {
+            module_tracer.global_variables_used.remove(handle);
+        }
     }
     for global in module_tracer.global_variables_used.iter() {
         log::trace!("tracing global {:?}", module.global_variables[global].name);
@@ -1431,4 +1452,47 @@ fn unnamed_override_type() {
     assert!(validator.validate(&module).is_ok());
     compact(&mut module, KeepUnused::Yes);
     assert!(validator.validate(&module).is_ok());
+}
+
+/// A global in [`Dropped`] is removed even with [`KeepUnused::Yes`], and later
+/// globals' handles are adjusted.
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn dropped_global_is_removed() {
+    let mut module = crate::front::wgsl::parse_str(
+        "
+        var<private> kept: f32;
+        var<private> dropped: f32;
+        var<private> after: f32;
+        @compute @workgroup_size(1)
+        fn main() { after = 1.0; }
+        ",
+    )
+    .unwrap();
+    let dropped = module
+        .global_variables
+        .iter()
+        .find(|&(_, global)| global.name.as_deref() == Some("dropped"))
+        .unwrap()
+        .0;
+    let mut globals = HandleSet::for_arena(&module.global_variables);
+    globals.insert(dropped);
+    let set = Dropped {
+        globals,
+        ..Dropped::default()
+    };
+
+    try_compact(&mut module, KeepUnused::Yes, &set).unwrap();
+
+    let names: Vec<_> = module
+        .global_variables
+        .iter()
+        .map(|(_, global)| global.name.clone().unwrap())
+        .collect();
+    assert_eq!(names, ["kept", "after"]);
+    let mut validator = crate::valid::Validator::new(
+        crate::valid::ValidationFlags::all(),
+        crate::valid::Capabilities::all(),
+    );
+    validator.validate(&module).unwrap();
 }

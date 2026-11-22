@@ -190,6 +190,8 @@ pub struct Options {
     pub binding_map: BindingMap,
     /// Should workgroup variables be zero initialized (by polyfilling)?
     pub zero_initialize_workgroup_memory: bool,
+    /// Options for the IR passes the backend runs before writing the module.
+    pub passes: back::PassOptions,
 }
 
 impl Default for Options {
@@ -199,6 +201,7 @@ impl Default for Options {
             writer_flags: WriterFlags::ADJUST_COORDINATE_SPACE,
             binding_map: BindingMap::default(),
             zero_initialize_workgroup_memory: true,
+            passes: Default::default(),
         }
     }
 }

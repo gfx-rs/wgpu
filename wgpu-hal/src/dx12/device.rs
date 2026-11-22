@@ -1579,6 +1579,7 @@ impl crate::Device for super::Device {
                 }),
                 mesh_shader_primitive_indices_clamp: true,
                 ray_query_initialization_tracking: true,
+                passes: Default::default(),
             },
         })
     }

@@ -915,7 +915,7 @@ mod tests {
             .push(Statement::Return { value: None }, Span::default());
         module.entry_points.push(entry_point(f));
 
-        let error = try_compact(&mut module, KeepUnused::No).unwrap_err();
+        let error = try_compact(&mut module, KeepUnused::No, &Default::default()).unwrap_err();
         assert_eq!(error.expression, b);
     }
 
@@ -969,7 +969,7 @@ mod tests {
         );
         module.entry_points.push(entry_point(f));
 
-        let error = try_compact(&mut module, KeepUnused::No).unwrap_err();
+        let error = try_compact(&mut module, KeepUnused::No, &Default::default()).unwrap_err();
         assert_eq!(error.expression, product);
     }
 

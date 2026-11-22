@@ -25,6 +25,7 @@ pub mod spv;
 pub mod wgsl;
 
 pub mod passes;
+pub use passes::PassOptions;
 pub mod pipeline_constants;
 
 #[cfg(any(hlsl_out, glsl_out))]

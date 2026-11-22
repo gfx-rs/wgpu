@@ -102,7 +102,9 @@ struct Args {
     /// compact the module's IR and revalidate.
     ///
     /// Output files will reflect the compacted IR. If you want to see the IR as
-    /// it was before compaction, use the `--before-compaction` option.
+    /// it was before compaction, use the `--before-compaction` option. The
+    /// SPIR-V, MSL, HLSL and GLSL backends also compact the module after their
+    /// own passes.
     ///
     /// Even when this option is not active, compaction may still occur as part
     /// of override processing.
@@ -579,6 +581,13 @@ fn run() -> anyhow::Result<()> {
     params.msl.task_dispatch_limits = args.task_limits.0;
     params.hlsl.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
     params.hlsl.task_dispatch_limits = args.task_limits.0;
+    let passes = naga::back::PassOptions {
+        compact: args.compact,
+    };
+    params.spv_out.passes = passes;
+    params.msl.passes = passes;
+    params.glsl.passes = passes;
+    params.hlsl.passes = passes;
 
     if args.bulk_validate {
         return bulk_validate(&args, &params);

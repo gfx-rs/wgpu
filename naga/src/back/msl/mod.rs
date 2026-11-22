@@ -334,6 +334,8 @@ pub struct Options {
     pub emit_int_div_checks: bool,
     /// Whether to validate ray query calls
     pub ray_query_initialization_tracking: bool,
+    /// Options for the IR passes the backend runs before writing the module.
+    pub passes: crate::back::PassOptions,
 }
 
 impl Default for Options {
@@ -351,6 +353,7 @@ impl Default for Options {
             mesh_shader_primitive_indices_clamp: true,
             ray_query_initialization_tracking: true,
             emit_int_div_checks: true,
+            passes: Default::default(),
         }
     }
 }
