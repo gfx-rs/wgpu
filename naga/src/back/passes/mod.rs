@@ -21,6 +21,8 @@ it. If no pass changes anything, the backend writes the module and
     )
 )]
 
+mod emit;
+
 use alloc::{borrow::Cow, boxed::Box};
 
 use crate::{
