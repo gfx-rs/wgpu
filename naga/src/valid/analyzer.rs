@@ -1082,7 +1082,7 @@ impl FunctionInfo {
                 // Here and below, the used expressions are already emitted,
                 // and their results do not affect the function return value,
                 // so we can ignore their non-uniformity.
-                S::Store { pointer, value } => {
+                S::Store { pointer, value } | S::NonAtomicStore { pointer, value } => {
                     let _ = self.add_ref_impl(pointer, GlobalUse::WRITE);
                     let _ = self.add_ref(value);
                     FunctionUniformity::new()

@@ -2248,6 +2248,29 @@ pub enum Statement {
         pointer: Handle<Expression>,
         value: Handle<Expression>,
     },
+
+    /// Stores a scalar to an [`Atomic`] in [`WorkGroup`] or [`TaskPayload`]
+    /// memory, without the atomicity of a [`Store`].
+    ///
+    /// No other invocation may access the location between this statement and
+    /// the next [`ControlBarrier`] that includes [`Barrier::WORK_GROUP`], so a
+    /// backend may write an ordinary, non-atomic store. Backends that can only
+    /// store to atomics atomically write a relaxed atomic store instead.
+    ///
+    /// The value has the [`Atomic`]'s scalar type. Frontends never produce
+    /// this statement; backend passes such as workgroup zero initialization
+    /// use it.
+    ///
+    /// [`Atomic`]: TypeInner::Atomic
+    /// [`WorkGroup`]: AddressSpace::WorkGroup
+    /// [`TaskPayload`]: AddressSpace::TaskPayload
+    /// [`Store`]: Statement::Store
+    /// [`ControlBarrier`]: Statement::ControlBarrier
+    NonAtomicStore {
+        pointer: Handle<Expression>,
+        value: Handle<Expression>,
+    },
+
     /// Stores a texel value to an image.
     ///
     /// The `image`, `coordinate`, and `array_index` fields have the same

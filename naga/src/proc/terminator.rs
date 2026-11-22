@@ -33,6 +33,7 @@ pub fn ensure_block_returns(block: &mut crate::Block) {
             &mut (S::Emit(_)
             | S::Loop { .. }
             | S::Store { .. }
+            | S::NonAtomicStore { .. }
             | S::ImageStore { .. }
             | S::Call { .. }
             | S::RayQuery { .. }

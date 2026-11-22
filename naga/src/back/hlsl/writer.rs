@@ -2394,9 +2394,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     writeln!(self.out, ";")?
                 }
             }
-            Statement::Store { pointer, value } => {
+            Statement::Store { pointer, value } | Statement::NonAtomicStore { pointer, value } => {
                 let ty_inner = func_ctx.resolve_type(pointer, &module.types);
-                if ty_inner.is_atomic_pointer(&module.types) {
+                if matches!(*stmt, Statement::Store { .. })
+                    && ty_inner.is_atomic_pointer(&module.types)
+                {
                     let pointer_space = ty_inner.pointer_space().unwrap();
                     let dummy = self.namer.call("dummy");
                     write!(self.out, "{level}{{ ")?;

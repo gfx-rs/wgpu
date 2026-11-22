@@ -1619,6 +1619,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | S::ControlBarrier(_)
                 | S::MemoryBarrier(_)
                 | S::Store { .. }
+                | S::NonAtomicStore { .. }
                 | S::ImageStore { .. }
                 | S::Atomic { .. }
                 | S::ImageAtomic { .. }

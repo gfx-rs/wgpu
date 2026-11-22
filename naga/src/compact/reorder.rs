@@ -204,6 +204,7 @@ impl Builder<'_> {
                 | Statement::ControlBarrier(_)
                 | Statement::MemoryBarrier(_)
                 | Statement::Store { .. }
+                | Statement::NonAtomicStore { .. }
                 | Statement::ImageStore { .. }
                 | Statement::Atomic { .. }
                 | Statement::ImageAtomic { .. }

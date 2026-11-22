@@ -2196,3 +2196,80 @@ fn spv_longest_entry_point_name() {
 fn spv_entry_point_name_too_long() {
     write_spv_with_entry_point_name_len(LONGEST_SPV_ENTRY_POINT_NAME_LEN + 1);
 }
+
+/// Replace the first statement of `source`'s entry point, a `Store`, with a
+/// `NonAtomicStore`, and validate the result.
+fn validate_non_atomic_store(
+    source: &str,
+) -> Result<ModuleInfo, Box<naga::valid::ValidationError>> {
+    let mut module = naga::front::wgsl::parse_str(source).unwrap();
+    let body = &mut module.entry_points[0].function.body;
+    let index = body
+        .iter()
+        .position(|s| matches!(*s, ir::Statement::Store { .. }))
+        .unwrap();
+    let ir::Statement::Store { pointer, value } = body[index] else {
+        unreachable!()
+    };
+    body[index] = ir::Statement::NonAtomicStore { pointer, value };
+    valid::Validator::new(ValidationFlags::all(), Capabilities::all())
+        .validate(&module)
+        .map_err(|e| Box::new(e.into_inner()))
+}
+
+#[test]
+fn non_atomic_store() {
+    // Workgroup atomics are fine.
+    validate_non_atomic_store(
+        "
+        var<workgroup> a: atomic<u32>;
+        @compute @workgroup_size(1)
+        fn main() { atomicStore(&a, 0u); }
+        ",
+    )
+    .unwrap();
+
+    // Other address spaces are not.
+    let error = validate_non_atomic_store(
+        "
+        @group(0) @binding(0) var<storage, read_write> a: atomic<u32>;
+        @compute @workgroup_size(1)
+        fn main() { atomicStore(&a, 0u); }
+        ",
+    )
+    .unwrap_err();
+    assert!(
+        matches!(
+            *error,
+            naga::valid::ValidationError::EntryPoint {
+                source: naga::valid::EntryPointError::Function(
+                    naga::valid::FunctionError::InvalidStorePointer(_)
+                ),
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+
+    // Neither are non-atomic pointees.
+    let error = validate_non_atomic_store(
+        "
+        var<workgroup> a: u32;
+        @compute @workgroup_size(1)
+        fn main() { a = 0u; }
+        ",
+    )
+    .unwrap_err();
+    assert!(
+        matches!(
+            *error,
+            naga::valid::ValidationError::EntryPoint {
+                source: naga::valid::EntryPointError::Function(
+                    naga::valid::FunctionError::InvalidStoreTypes { .. }
+                ),
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+}

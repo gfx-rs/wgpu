@@ -2032,12 +2032,13 @@ impl<'a, W: Write> ModuleWriter<'a, W> {
                 self.write_memory_barrier(flags, level)?;
             }
             // Stores in glsl are just variable assignments written as `pointer = value;`
-            Statement::Store { pointer, value } => {
+            Statement::Store { pointer, value } | Statement::NonAtomicStore { pointer, value } => {
                 write!(self.out, "{level}")?;
-                let is_atomic_pointer = ctx
-                    .resolve_type(pointer, &self.module.types)
-                    .is_atomic_pointer(&self.module.types);
-                if is_atomic_pointer {
+                let is_atomic_store = matches!(*sta, Statement::Store { .. })
+                    && ctx
+                        .resolve_type(pointer, &self.module.types)
+                        .is_atomic_pointer(&self.module.types);
+                if is_atomic_store {
                     write!(self.out, "atomicExchange(")?;
                     self.write_expr(pointer, ctx)?;
                     write!(self.out, ", ")?;
