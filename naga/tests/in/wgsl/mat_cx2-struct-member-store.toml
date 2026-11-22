@@ -1,1 +1,1 @@
-targets = "HLSL | WGSL"
+targets = "SPIRV | HLSL | WGSL"
