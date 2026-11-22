@@ -672,16 +672,12 @@ impl super::Device {
                 }
             };
 
-            let (module, info) = naga::back::pipeline_constants::process_overrides(
-                &naga.module,
-                &naga.info,
-                Some((naga_stage, stage.entry_point)),
-                stage.constants,
-            )
-            .map_err(|e| {
-                let msg = format!("{e}");
-                crate::PipelineError::PipelineConstants(map_naga_stage(naga_stage), msg)
-            })?;
+            let (module, info) = naga
+                .process_overrides((naga_stage, stage.entry_point), stage.constants)
+                .map_err(|e| {
+                    let msg = format!("{e}");
+                    crate::PipelineError::PipelineConstants(map_naga_stage(naga_stage), msg)
+                })?;
 
             let entry_point_index = module
                 .entry_points

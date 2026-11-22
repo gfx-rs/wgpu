@@ -813,15 +813,11 @@ impl super::Device {
                     &self.naga_options
                 };
 
-                let (module, info) = naga::back::pipeline_constants::process_overrides(
-                    &naga_shader.module,
-                    &naga_shader.info,
-                    Some((naga_stage, stage.entry_point)),
-                    stage.constants,
-                )
-                .map_err(|e| {
-                    crate::PipelineError::PipelineConstants(stage_flags, format!("{e}"))
-                })?;
+                let (module, info) = naga_shader
+                    .process_overrides((naga_stage, stage.entry_point), stage.constants)
+                    .map_err(|e| {
+                        crate::PipelineError::PipelineConstants(stage_flags, format!("{e}"))
+                    })?;
 
                 let spv = {
                     profiling::scope!("naga::spv::write_vec");

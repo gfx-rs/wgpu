@@ -263,6 +263,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 - `TextureDescriptor` has a new field `texture_binding_view_dimension`. It must be `Some` on devices without `DownlevelFlags::ARBITRARY_BINDING_VIEW_DIMENSIONS` (the GLES backend allocates the texture's GL target from it), and is ignored otherwise. By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - `hal::Queue::present` gained a `damage_rects: &[wgt::Rect<u32>]` parameter. The rects must be non-empty and within the surface. Pass an empty slice for the previous behavior. By @sauliusvl in [#10152](https://github.com/gfx-rs/wgpu/pull/10152).
+- `wgpu_hal::NagaShader` has a new `overrides_resolved` field. Set it to `true` only for a module already processed with `process_overrides`, and use empty stage constants with it, so hal doesn't process it again. By @inner-daemons in [#11075](https://github.com/gfx-rs/wgpu/pull/11075).
 
 #### Metal
 
