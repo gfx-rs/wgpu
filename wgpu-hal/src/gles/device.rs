@@ -79,60 +79,45 @@ impl CompilationContext<'_> {
     fn consume_reflection(
         self,
         gl: &glow::Context,
-        module: &naga::Module,
-        ep_info: &naga::valid::FunctionInfo,
         reflection_info: naga::back::glsl::ReflectionInfo,
         naga_stage: naga::ShaderStage,
         program: glow::Program,
     ) {
-        for (handle, var) in module.global_variables.iter() {
-            if ep_info[handle].is_empty() {
-                continue;
-            }
-            let register = match var.space {
-                naga::AddressSpace::Uniform => super::BindingRegister::UniformBuffers,
-                naga::AddressSpace::Storage { .. } => super::BindingRegister::StorageBuffers,
-                _ => continue,
-            };
+        use naga::back::glsl::{BufferKind, GlobalResource};
 
-            let br = var.binding.as_ref().unwrap();
-            let slot = self.layout.get_slot(br);
+        // Validation requires every resource global to have a binding.
+        fn binding(global: &GlobalResource) -> &naga::ResourceBinding {
+            global.binding.as_ref().unwrap()
+        }
 
-            let name = match reflection_info.uniforms.get(&handle) {
-                Some(name) => name.clone(),
-                None => continue,
+        for buffer in reflection_info.uniforms {
+            let register = match buffer.kind {
+                BufferKind::Uniform => super::BindingRegister::UniformBuffers,
+                BufferKind::Storage => super::BindingRegister::StorageBuffers,
             };
+            let slot = self.layout.get_slot(binding(&buffer.global));
             log::trace!(
                 "Rebind buffer: {:?} -> {}, register={:?}, slot={}",
-                var.name.as_ref(),
-                name,
+                buffer.global.name.as_ref(),
+                buffer.name,
                 register,
                 slot
             );
-            self.name_binding_map.insert(name, (register, slot));
+            self.name_binding_map.insert(buffer.name, (register, slot));
         }
 
         for (name, mapping) in reflection_info.texture_mapping {
-            let var = &module.global_variables[mapping.texture];
-            let register = match module.types[var.ty].inner {
-                naga::TypeInner::Image {
-                    class: naga::ImageClass::Storage { .. },
-                    ..
-                } => super::BindingRegister::Images,
+            let register = match mapping.class {
+                naga::ImageClass::Storage { .. } => super::BindingRegister::Images,
                 _ => super::BindingRegister::Textures,
             };
 
-            let tex_br = var.binding.as_ref().unwrap();
-            let texture_linear_index = self.layout.get_slot(tex_br);
+            let texture_linear_index = self.layout.get_slot(binding(&mapping.texture));
 
             self.name_binding_map
                 .insert(name, (register, texture_linear_index));
-            if let Some(sampler_handle) = mapping.sampler {
-                let sam_br = module.global_variables[sampler_handle]
-                    .binding
-                    .as_ref()
-                    .unwrap();
-                let sampler_linear_index = self.layout.get_slot(sam_br);
+            if let Some(ref sampler) = mapping.sampler {
+                let sampler_linear_index = self.layout.get_slot(binding(sampler));
                 self.sampler_map[texture_linear_index as usize] = Some(sampler_linear_index);
             }
         }
@@ -679,11 +664,13 @@ impl super::Device {
                     crate::PipelineError::PipelineConstants(map_naga_stage(naga_stage), msg)
                 })?;
 
-            let entry_point_index = module
+            if !module
                 .entry_points
                 .iter()
-                .position(|ep| ep.name.as_str() == stage.entry_point)
-                .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
+                .any(|ep| ep.name.as_str() == stage.entry_point)
+            {
+                return Err(crate::PipelineError::EntryPoint(naga_stage));
+            }
 
             use naga::proc::BoundsCheckPolicy;
             // The image bounds checks require the TEXTURE_LEVELS feature available in GL core 4.3+.
@@ -726,14 +713,7 @@ impl super::Device {
 
             log::debug!("Naga generated shader:\n{output}");
 
-            context.consume_reflection(
-                gl,
-                &module,
-                info.get_entry_point(entry_point_index),
-                reflection_info,
-                naga_stage,
-                program,
-            );
+            context.consume_reflection(gl, reflection_info, naga_stage, program);
             Cow::Owned(output)
         };
 
