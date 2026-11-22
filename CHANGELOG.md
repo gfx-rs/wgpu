@@ -352,6 +352,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 #### DX12
 
+- Fix graphics pipeline creation on 32-bit Windows by aligning pipeline state stream subobjects to the native pointer size. By @Clad3815 in [#11071](https://github.com/gfx-rs/wgpu/pull/11071).
 - Fix 64-bit integer literal truncation and comparisons against zero in DX12 shaders compiled with DXC. By @pbkx in [#10585](https://github.com/gfx-rs/wgpu/pull/10585).
 - Make sure padding bytes are 0 in the destination buffer after a `copy_texture_to_buffer` when `UnrestrictedBufferTextureCopyPitchSupported` is not available. By @teoxoy in [#10005](https://github.com/gfx-rs/wgpu/pull/10005).
 - Sanitize shader labels before passing them to DXC as the source name. Fixes compilation when label contains a `:`. By @lucasmerlin in [#10134](https://github.com/gfx-rs/wgpu/pull/10134).
