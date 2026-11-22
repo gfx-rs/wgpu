@@ -4,10 +4,6 @@ use crate::{arena::Arena, Block, Expression, Handle, Span, Statement};
 
 /// Appends expressions to a function, and `Emit` statements that evaluate
 /// them to a block.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "no pass on this branch uses it yet")
-)]
 pub(super) struct Emitting<'a> {
     pub(super) expressions: &'a mut Arena<Expression>,
     pub(super) block: &'a mut Block,
@@ -16,10 +12,6 @@ pub(super) struct Emitting<'a> {
     pub(super) span: Span,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "no pass on this branch uses it yet")
-)]
 impl<'a> Emitting<'a> {
     pub(super) const fn new(
         expressions: &'a mut Arena<Expression>,
