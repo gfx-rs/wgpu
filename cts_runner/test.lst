@@ -371,6 +371,8 @@ webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type=
 webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="SimpleStruct";*
 webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="u32";*
 webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="vec4u";*
+webgpu:shader,execution,expression,call,user,ptr_aliasing:*
+webgpu:shader,execution,expression,call,user,ptr_params:*
 webgpu:shader,execution,expression,unary,bool_conversion:*
 webgpu:shader,execution,flow_control,return:*
 // Fails on Metal in CI only, not when running locally. https://github.com/gfx-rs/wgpu/issues/8023
@@ -490,6 +492,8 @@ webgpu:shader,validation,expression,unary,*
 webgpu:shader,validation,extension,clip_distances:*
 webgpu:shader,validation,extension,dual_source_blending:*
 webgpu:shader,validation,extension,pointer_composite_access:*
+fails-if(vulkan) webgpu:shader,validation,functions,restrictions:function_parameter_matching:*
+webgpu:shader,validation,functions,restrictions:function_parameter_types:*
 webgpu:shader,validation,functions,restrictions:param_type_can_be_alias:*
 webgpu:shader,validation,parse,blankspace:blankspace:*
 webgpu:shader,validation,parse,blankspace:bom:*
@@ -504,6 +508,7 @@ webgpu:shader,validation,parse,requires:have_all_language_features:feature="imme
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="packed_4x8_integer_dot_product"
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="pointer_composite_access"
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="readonly_and_readwrite_storage_textures"
+webgpu:shader,validation,parse,requires:have_all_language_features:feature="unrestricted_pointer_parameters"
 webgpu:shader,validation,parse,requires:requires:*
 webgpu:shader,validation,parse,requires:wgsl_matches_api:*
 webgpu:shader,validation,parse,semicolon:*
@@ -542,4 +547,6 @@ webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="l
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="switch1"
 webgpu:shader,validation,statement,switch:*
 webgpu:shader,validation,statement,while:*
+webgpu:shader,validation,types,array:valid:case="same_override"
+webgpu:shader,validation,types,array:valid:case="same_rta"
 webgpu:util,texture,texture_ok:*
