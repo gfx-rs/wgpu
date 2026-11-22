@@ -19,6 +19,7 @@ mod limits;
 mod pipelines;
 mod scene;
 mod shader;
+mod trace_rays_indirect;
 
 pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
     as_aabb::all_tests(tests);
@@ -29,6 +30,7 @@ pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
     scene::all_tests(tests);
     shader::all_tests(tests);
     pipelines::all_tests(tests);
+    trace_rays_indirect::all_tests(tests);
 }
 
 fn acceleration_structure_limits() -> wgpu::Limits {

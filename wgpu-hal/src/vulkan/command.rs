@@ -39,6 +39,66 @@ impl super::Texture {
 }
 
 impl super::CommandEncoder {
+    fn ray_tracing_pipeline_functions(&self) -> &ash::khr::ray_tracing_pipeline::Device {
+        self.device
+            .extension_fns
+            .ray_tracing_pipelines
+            .as_ref()
+            .expect("Feature `EXPERIMENTAL_RAY_TRACING_PIPELINES` not enabled")
+    }
+
+    unsafe fn buffer_device_address(&self, buffer: &super::Buffer) -> vk::DeviceAddress {
+        let ray_tracing_functions = self
+            .device
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `EXPERIMENTAL_RAY_TRACING` not enabled");
+        unsafe {
+            ray_tracing_functions
+                .buffer_device_address
+                .get_buffer_device_address(
+                    &vk::BufferDeviceAddressInfo::default().buffer(buffer.raw),
+                )
+        }
+    }
+
+    /// Returns the ray generation, miss, hit and callable shader binding table regions.
+    unsafe fn shader_binding_table_regions(
+        &self,
+        ray_generation_group_data: crate::PipelineGroupData<super::Buffer>,
+        miss_group_data: crate::PipelineGroupData<super::Buffer>,
+        intersection_group_data: crate::PipelineGroupData<super::Buffer>,
+    ) -> [vk::StridedDeviceAddressRegionKHR; 4] {
+        unsafe {
+            [
+                vk::StridedDeviceAddressRegionKHR {
+                    device_address: self.buffer_device_address(ray_generation_group_data.buffer)
+                        + ray_generation_group_data.offset,
+                    stride: ray_generation_group_data.stride,
+                    size: ray_generation_group_data.stride, /* no need for multiplying by count, vulkan requires the ray gen sbt to be just one group */
+                },
+                vk::StridedDeviceAddressRegionKHR {
+                    device_address: self.buffer_device_address(miss_group_data.buffer)
+                        + miss_group_data.offset,
+                    stride: miss_group_data.stride,
+                    size: miss_group_data.stride * miss_group_data.count,
+                },
+                vk::StridedDeviceAddressRegionKHR {
+                    device_address: self.buffer_device_address(intersection_group_data.buffer)
+                        + intersection_group_data.offset,
+                    stride: intersection_group_data.stride,
+                    size: intersection_group_data.stride * intersection_group_data.count,
+                },
+                vk::StridedDeviceAddressRegionKHR {
+                    device_address: 0,
+                    stride: 0,
+                    size: 0,
+                },
+            ]
+        }
+    }
+
     /// Like `write_timestamp`, but at `TOP_OF_PIPE`. Users may write a timestamp once before some
     /// work and once after to measure time taken for that work. If `TOP_OF_PIPE` is not used the
     /// driver is free to reorder the first timestamp to be after the work, defeating the point.
@@ -1443,58 +1503,55 @@ impl crate::CommandEncoder for super::CommandEncoder {
         miss_group_data: crate::PipelineGroupData<super::Buffer>,
         intersection_group_data: crate::PipelineGroupData<super::Buffer>,
     ) {
-        let ray_tracing_functions = self
-            .device
-            .extension_fns
-            .ray_tracing
-            .as_ref()
-            .expect("Feature `EXPERIMENTAL_RAY_TRACING` not enabled");
-
-        let ray_tracing_pipeline_functions = self
-            .device
-            .extension_fns
-            .ray_tracing_pipelines
-            .as_ref()
-            .expect("Feature `EXPERIMENTAL_RAY_TRACING_PIPELINES` not enabled");
-
-        let get_device_address = |buffer: &super::Buffer| unsafe {
-            ray_tracing_functions
-                .buffer_device_address
-                .get_buffer_device_address(
-                    &vk::BufferDeviceAddressInfo::default().buffer(buffer.raw),
-                )
+        let [ray_gen, miss, hit, callable] = unsafe {
+            self.shader_binding_table_regions(
+                ray_generation_group_data,
+                miss_group_data,
+                intersection_group_data,
+            )
         };
 
         unsafe {
-            ray_tracing_pipeline_functions.cmd_trace_rays(
+            self.ray_tracing_pipeline_functions().cmd_trace_rays(
                 self.raw_handle(),
-                &vk::StridedDeviceAddressRegionKHR {
-                    device_address: get_device_address(ray_generation_group_data.buffer)
-                        + ray_generation_group_data.offset,
-                    stride: ray_generation_group_data.stride,
-                    size: ray_generation_group_data.stride /* no need for multiplying by count, vulkan requires the ray gen sbt to be just one group */,
-                },
-                &vk::StridedDeviceAddressRegionKHR {
-                    device_address: get_device_address(miss_group_data.buffer)
-                        + miss_group_data.offset,
-                    stride: miss_group_data.stride,
-                    size: miss_group_data.stride * miss_group_data.count,
-                },
-                &vk::StridedDeviceAddressRegionKHR {
-                    device_address: get_device_address(intersection_group_data.buffer)
-                        + intersection_group_data.offset,
-                    stride: intersection_group_data.stride,
-                    size: intersection_group_data.stride * intersection_group_data.count,
-                },
-                &vk::StridedDeviceAddressRegionKHR {
-                    device_address: 0,
-                    stride: 0,
-                    size: 0,
-                },
+                &ray_gen,
+                &miss,
+                &hit,
+                &callable,
                 count[0],
                 count[1],
                 count[2],
             )
+        };
+    }
+
+    unsafe fn trace_rays_indirect(
+        &mut self,
+        buffer: &super::Buffer,
+        offset: wgt::BufferAddress,
+        ray_generation_group_data: crate::PipelineGroupData<super::Buffer>,
+        miss_group_data: crate::PipelineGroupData<super::Buffer>,
+        intersection_group_data: crate::PipelineGroupData<super::Buffer>,
+    ) {
+        let [ray_gen, miss, hit, callable] = unsafe {
+            self.shader_binding_table_regions(
+                ray_generation_group_data,
+                miss_group_data,
+                intersection_group_data,
+            )
+        };
+        let indirect_device_address = unsafe { self.buffer_device_address(buffer) } + offset;
+
+        unsafe {
+            self.ray_tracing_pipeline_functions()
+                .cmd_trace_rays_indirect(
+                    self.raw_handle(),
+                    &ray_gen,
+                    &miss,
+                    &hit,
+                    &callable,
+                    indirect_device_address,
+                )
         };
     }
 

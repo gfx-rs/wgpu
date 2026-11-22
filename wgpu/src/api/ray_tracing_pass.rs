@@ -83,6 +83,29 @@ impl RayTracingPass<'_> {
     pub fn trace_rays(&mut self, x: u32, y: u32, z: u32) {
         self.inner.trace_rays(x, y, z);
     }
+
+    /// Traces rays with the current ray tracing pipeline, with the number of rays read from
+    /// `indirect_buffer`.
+    ///
+    /// The buffer must have [`BufferUsages::INDIRECT`] and `indirect_offset` must be a multiple
+    /// of 4. The structure expected in `indirect_buffer` has the same layout as
+    /// [`DispatchIndirectArgs`](crate::util::DispatchIndirectArgs), with `x`, `y` and `z` being
+    /// the number of rays in each dimension.
+    ///
+    /// If [`InstanceFlags::VALIDATION_INDIRECT_CALL`] is enabled, the call traces no rays if the
+    /// number of rays is above the limits that [`trace_rays`](Self::trace_rays) checks. If it is
+    /// disabled, exceeding those limits is undefined behavior.
+    ///
+    /// [`BufferUsages::INDIRECT`]: crate::BufferUsages::INDIRECT
+    /// [`InstanceFlags::VALIDATION_INDIRECT_CALL`]: crate::InstanceFlags::VALIDATION_INDIRECT_CALL
+    pub fn trace_rays_indirect(
+        &mut self,
+        indirect_buffer: &Buffer,
+        indirect_offset: BufferAddress,
+    ) {
+        self.inner
+            .trace_rays_indirect(&indirect_buffer.inner, indirect_offset);
+    }
 }
 
 /// [`Features::IMMEDIATES`] must be enabled on the device in order to call these functions.

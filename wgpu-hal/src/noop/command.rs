@@ -319,6 +319,16 @@ impl crate::CommandEncoder for CommandBuffer {
         _intersection_group_data: crate::PipelineGroupData<Buffer>,
     ) {
     }
+
+    unsafe fn trace_rays_indirect(
+        &mut self,
+        _buffer: &Buffer,
+        _offset: wgt::BufferAddress,
+        _ray_generation_group_data: crate::PipelineGroupData<Buffer>,
+        _miss_group_data: crate::PipelineGroupData<Buffer>,
+        _intersection_group_data: crate::PipelineGroupData<Buffer>,
+    ) {
+    }
 }
 
 impl Command {

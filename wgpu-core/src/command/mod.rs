@@ -77,6 +77,7 @@ pub(crate) use self::{
     clear::clear_texture,
     encoder::EncodingState,
     memory_init::CommandBufferTextureMemoryActions,
+    ray_tracing_pass::max_trace_rays_dimensions,
     render::{get_dst_stride_of_indirect_args, get_src_stride_of_indirect_args, VertexState},
     transfer::{
         validate_linear_texture_data, validate_texture_buffer_copy,
@@ -2094,8 +2095,8 @@ pub enum PassErrorScope {
     PopDebugGroup,
     #[error("In a insert_debug_marker command")]
     InsertDebugMarker,
-    #[error("In a trace rays command")]
-    TraceRays,
+    #[error("In a trace rays command, indirect:{indirect}")]
+    TraceRays { indirect: bool },
 }
 
 /// Variant of `EncoderStateError` that includes the pass scope.

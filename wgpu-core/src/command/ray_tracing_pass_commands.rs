@@ -30,6 +30,11 @@ pub enum RayTracingCommand<R: ReferenceType> {
 
     TraceRays([u32; 3]),
 
+    TraceRaysIndirect {
+        buffer: R::Buffer,
+        offset: wgt::BufferAddress,
+    },
+
     PushDebugGroup {
         color: u32,
         len: usize,

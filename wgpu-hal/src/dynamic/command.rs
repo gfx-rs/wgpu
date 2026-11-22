@@ -250,6 +250,16 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         intersection_group_data: crate::PipelineGroupData<dyn DynBuffer>,
     );
 
+    /// Dynamic version of [CommandEncoder::trace_rays_indirect]
+    unsafe fn trace_rays_indirect(
+        &mut self,
+        buffer: &dyn DynBuffer,
+        offset: wgt::BufferAddress,
+        ray_generation_group_data: crate::PipelineGroupData<dyn DynBuffer>,
+        miss_group_data: crate::PipelineGroupData<dyn DynBuffer>,
+        intersection_group_data: crate::PipelineGroupData<dyn DynBuffer>,
+    );
+
     /// Dynamic version of [CommandEncoder::set_ray_tracing_pipeline]
     unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &dyn DynRayTracingPipeline);
 
@@ -752,6 +762,35 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
             C::trace_rays(
                 self,
                 count,
+                downcast_group_data(ray_generation_group_data),
+                downcast_group_data(miss_group_data),
+                downcast_group_data(intersection_group_data),
+            );
+        }
+    }
+
+    unsafe fn trace_rays_indirect<'a>(
+        &mut self,
+        buffer: &dyn DynBuffer,
+        offset: wgt::BufferAddress,
+        ray_generation_group_data: crate::PipelineGroupData<'a, dyn DynBuffer>,
+        miss_group_data: crate::PipelineGroupData<'a, dyn DynBuffer>,
+        intersection_group_data: crate::PipelineGroupData<'a, dyn DynBuffer>,
+    ) {
+        let downcast_group_data =
+            |data: crate::PipelineGroupData<'a, dyn DynBuffer>| crate::PipelineGroupData {
+                buffer: data.buffer.expect_downcast_ref(),
+                offset: data.offset,
+                stride: data.stride,
+                count: data.count,
+            };
+
+        let buffer = buffer.expect_downcast_ref();
+        unsafe {
+            C::trace_rays_indirect(
+                self,
+                buffer,
+                offset,
                 downcast_group_data(ray_generation_group_data),
                 downcast_group_data(miss_group_data),
                 downcast_group_data(intersection_group_data),

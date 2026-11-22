@@ -1331,6 +1331,10 @@ impl Player {
             C::SetPipeline(id) => C::SetPipeline(self.resolve_ray_tracing_pipeline_id(id)),
             C::SetImmediate { offset, data } => C::SetImmediate { offset, data },
             C::TraceRays(groups) => C::TraceRays(groups),
+            C::TraceRaysIndirect { buffer, offset } => C::TraceRaysIndirect {
+                buffer: self.resolve_buffer_id(buffer),
+                offset,
+            },
             C::PushDebugGroup { color, len } => C::PushDebugGroup { color, len },
             C::PopDebugGroup => C::PopDebugGroup,
             C::InsertDebugMarker { color, len } => C::InsertDebugMarker { color, len },

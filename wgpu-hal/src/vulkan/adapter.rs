@@ -583,9 +583,12 @@ impl PhysicalDeviceFeatures {
                 None
             },
             ray_tracing_pipeline: if enabled_extensions.contains(&khr::ray_tracing_pipeline::NAME) {
+                // Both features are required to be supported by all implementations of
+                // `VK_KHR_ray_tracing_pipeline`.
                 Some(
                     vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::default()
-                        .ray_tracing_pipeline(true),
+                        .ray_tracing_pipeline(true)
+                        .ray_tracing_pipeline_trace_rays_indirect(true),
                 )
             } else {
                 None

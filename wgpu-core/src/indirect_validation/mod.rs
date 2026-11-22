@@ -37,13 +37,14 @@ impl IndirectValidation {
         instance_flags: wgt::InstanceFlags,
         backend: wgt::Backend,
     ) -> Result<Self, DeviceError> {
-        let dispatch = match Dispatch::new(device, instance_flags, required_limits) {
-            Ok(dispatch) => dispatch,
-            Err(e) => {
-                log::error!("indirect-validation error: {e:?}");
-                return Err(DeviceError::Lost);
-            }
-        };
+        let dispatch =
+            match Dispatch::new(device, instance_flags, required_limits, required_features) {
+                Ok(dispatch) => dispatch,
+                Err(e) => {
+                    log::error!("indirect-validation error: {e:?}");
+                    return Err(DeviceError::Lost);
+                }
+            };
         let dispatch = guard(dispatch, |dispatch| dispatch.dispose(device));
 
         let draw = match Draw::new(
