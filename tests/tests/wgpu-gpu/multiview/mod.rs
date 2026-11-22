@@ -15,6 +15,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(DRAW_MULTIVIEW_MESH);
     vec.push(DRAW_MULTIVIEW_MESH_NONCONTIGUOUS);
     vec.push(DRAW_MULTIVIEW_MESH_SKIP_FIRST_LAYER);
+    vec.push(DRAW_MULTIVIEW_VIEWPORT);
     vec.push(MULTIVIEW_OCCLUSION_QUERY);
     vec.push(MULTIVIEW_DISCARD_RESETS_ALL_LAYERS);
     vec.push(SELECTIVE_MULTIVIEW_CLEAR_INITS_ONLY_MASKED_LAYERS);
@@ -133,6 +134,93 @@ static DRAW_MULTIVIEW_MESH_SKIP_FIRST_LAYER: GpuTestConfiguration = GpuTestConfi
             }),
     )
     .run_async(|ctx| run_test(ctx, 0b10, 1, true));
+
+/// The viewport applies to every view.
+#[apply(gpu_test!)]
+static DRAW_MULTIVIEW_VIEWPORT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::MULTIVIEW)
+            .limits(Limits {
+                max_multiview_view_count: 2,
+                ..Limits::defaults()
+            }),
+    )
+    .run_async(|ctx| async move {
+        let shader = ctx
+            .device
+            .create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
+        let pipeline = ctx
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: None,
+                layout: None,
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_main"),
+                    compilation_options: Default::default(),
+                    buffers: &[],
+                },
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_main"),
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgpu::TextureFormat::Rgba8Unorm.into())],
+                }),
+                multiview_mask: NonZero::new(0b11),
+                cache: None,
+            });
+
+        let texture = zero_init_texture(&ctx);
+        let view = texture.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        });
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: NonZero::new(0b11),
+            });
+            pass.set_pipeline(&pipeline);
+            let half = ZERO_INIT_SIZE as f32 / 2.0;
+            pass.set_viewport(0.0, 0.0, half, ZERO_INIT_SIZE as f32, 0.0, 1.0);
+            pass.draw(0..3, 0..1);
+        }
+        ctx.queue.submit(Some(encoder.finish()));
+
+        let row_bytes = (ZERO_INIT_SIZE * 4) as usize;
+        for (layer, data) in read_layers(&ctx, &texture).await.iter().enumerate() {
+            for (y, row) in data.chunks(row_bytes).enumerate() {
+                let (left, right) = row.split_at(row_bytes / 2);
+                assert!(
+                    left.iter().all(|&b| b != 0),
+                    "layer {layer} row {y}: the left half was not drawn"
+                );
+                assert!(
+                    right.iter().all(|&b| b == 0),
+                    "layer {layer} row {y}: the right half, outside the viewport, was drawn"
+                );
+            }
+        }
+    });
 
 async fn run_test(ctx: TestingContext, layer_mask: u32, sample_count: u32, mesh: bool) {
     let num_layers = 32 - layer_mask.leading_zeros();
