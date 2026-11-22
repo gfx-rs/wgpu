@@ -230,18 +230,52 @@ pub struct VaryingLocation {
 }
 
 /// Reflection info for texture mappings and uniforms.
+///
+/// This does not refer to the module by handle, so it stays valid when the module
+/// is compacted or otherwise rewritten before writing.
 #[derive(Debug)]
 pub struct ReflectionInfo {
     /// Mapping between texture names and variables/samplers.
     pub texture_mapping: crate::FastHashMap<String, TextureMapping>,
-    /// Mapping between uniform variables and names.
-    pub uniforms: crate::FastHashMap<Handle<crate::GlobalVariable>, String>,
+    /// Uniform and storage buffer blocks used by the entry point.
+    pub uniforms: Vec<BufferMapping>,
     /// Mapping between names and attribute locations.
     pub varying: crate::FastHashMap<String, VaryingLocation>,
     /// List of immediate data items in the shader.
     pub immediates_items: Vec<ImmediateItem>,
     /// Number of user-defined clip planes. Only applicable to vertex shaders.
     pub clip_distance_count: u32,
+}
+
+/// Identifies a global variable of the source module without a [`Handle`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GlobalResource {
+    /// The global's resource binding, if it has one.
+    pub binding: Option<crate::ResourceBinding>,
+    /// The global's name in the module, if it has one.
+    ///
+    /// Use this to identify globals that have no [`binding`](Self::binding).
+    pub name: Option<String>,
+}
+
+/// The kind of buffer backing a [`BufferMapping`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BufferKind {
+    /// A global in the [`Uniform`](crate::AddressSpace::Uniform) address space.
+    Uniform,
+    /// A global in the [`Storage`](crate::AddressSpace::Storage) address space.
+    Storage,
+}
+
+/// A uniform or storage buffer global, written as a GLSL interface block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BufferMapping {
+    /// The GLSL name of the interface block.
+    pub name: String,
+    /// The buffer global variable.
+    pub global: GlobalResource,
+    /// Whether this is a uniform or a storage buffer.
+    pub kind: BufferKind,
 }
 
 /// Mapping between a texture and its sampler, if it exists.
@@ -253,12 +287,18 @@ pub struct ReflectionInfo {
 ///
 /// [`Storage`](crate::ImageClass::Storage) images produce `gimageN` and don't have an associated sampler,
 /// so the [`sampler`](Self::sampler) field will be [`None`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextureMapping {
-    /// Handle to the image global variable.
-    pub texture: Handle<crate::GlobalVariable>,
-    /// Handle to the associated sampler global variable, if it exists.
-    pub sampler: Option<Handle<crate::GlobalVariable>>,
+    /// The image global variable.
+    pub texture: GlobalResource,
+    /// The image's dimension.
+    pub dim: crate::ImageDimension,
+    /// Whether the image is arrayed.
+    pub arrayed: bool,
+    /// The image's class.
+    pub class: crate::ImageClass,
+    /// The associated sampler global variable, if it exists.
+    pub sampler: Option<GlobalResource>,
 }
 
 /// All information to bind a single uniform value to the shader.
