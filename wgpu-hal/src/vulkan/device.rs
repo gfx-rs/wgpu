@@ -1477,6 +1477,8 @@ impl crate::Device for super::Device {
             temp: super::Temp::default(),
             free: Vec::new(),
             discarded: Vec::new(),
+            min_unused: usize::MAX,
+            resets_since_trim: 0,
             rpass_debug_marker_active: false,
             end_of_pass_timer_query: None,
             framebuffers: Default::default(),

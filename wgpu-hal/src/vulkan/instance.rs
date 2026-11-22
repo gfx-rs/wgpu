@@ -413,6 +413,7 @@ impl super::Instance {
         extensions: Vec<&'static CStr>,
         flags: wgt::InstanceFlags,
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
+        backend_options: wgt::VulkanBackendOptions,
         has_nv_optimus: bool,
         drop_callback: Option<crate::DropCallback>,
     ) -> Result<Self, crate::InstanceError> {
@@ -464,6 +465,7 @@ impl super::Instance {
                 drop_guard,
                 flags,
                 memory_budget_thresholds,
+                backend_options,
                 debug_utils,
                 get_physical_device_properties,
                 entry,
@@ -1066,6 +1068,7 @@ impl super::Instance {
                 extensions,
                 desc.flags,
                 desc.memory_budget_thresholds,
+                desc.backend_options.vulkan.clone(),
                 has_nv_optimus,
                 None,
             )
