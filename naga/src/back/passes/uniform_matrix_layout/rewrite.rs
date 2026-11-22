@@ -1139,9 +1139,8 @@ mod tests {
         let (module, _) = super::super::super::run(
             Cow::Borrowed(&module),
             &super::super::super::Passes {
-                compact: false,
                 uniform_matrix_layout: true,
-                immediate_words: false,
+                ..super::super::super::PassOptions { compact: false }.into()
             },
         )
         .unwrap();
