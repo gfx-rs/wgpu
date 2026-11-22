@@ -208,11 +208,11 @@ bitflags::bitflags! {
         /// to counterclockwise.
         const FRONT_FACE_CCW = 1 << 0;
         /// Forces the instance to be treated as if it was opaque. This overrides
-        /// [AccelerationStructureGeometryFlags] and is in turn overriden by the ray flags in
+        /// [AccelerationStructureGeometryFlags] and is in turn overridden by the ray flags in
         /// the shader.
         const FORCE_OPAQUE = 1 << 1;
         /// Forces the instance to be treated as if it was not opaque. This overrides
-        /// [AccelerationStructureGeometryFlags] and is in turn overriden by the ray flags in
+        /// [AccelerationStructureGeometryFlags] and is in turn overridden by the ray flags in
         /// the shader.
         const FORCE_NO_OPAQUE = 1 << 2;
     }
