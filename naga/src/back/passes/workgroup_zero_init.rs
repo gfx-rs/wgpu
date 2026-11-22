@@ -12,9 +12,11 @@ workgroup, so that no single invocation writes a large aggregate.
 
 use alloc::{borrow::Cow, vec, vec::Vec};
 
+use super::emit::Emitting;
+
 use crate::{
     arena::{Arena, Handle, HandleSet, UniqueArena},
-    proc::{Emitter, IndexableLength},
+    proc::IndexableLength,
     AddressSpace, BinaryOperator, Binding, Block, BuiltIn, Expression, FastHashMap, Function,
     FunctionArgument, GlobalVariable, Literal, LocalVariable, Scalar, ShaderStage, Span, Statement,
     Type, TypeInner,
@@ -94,7 +96,6 @@ pub(crate) fn run(module: &mut Cow<'_, crate::Module>) -> Result<bool, Workgroup
             stage: ep.stage,
             workgroup_size: ep.workgroup_size,
             function: &mut ep.function,
-            emitter: Emitter::default(),
             block: &mut prologue,
             local_invocation_index: None,
             counter: None,
@@ -224,7 +225,7 @@ struct WorkgroupInit<'a> {
     stage: ShaderStage,
     workgroup_size: [u32; 3],
     function: &'a mut Function,
-    emitter: Emitter,
+    /// The prologue being built.
     block: &'a mut Block,
     local_invocation_index: Option<Handle<Expression>>,
     counter: Option<Handle<LocalVariable>>,
@@ -268,17 +269,19 @@ impl WorkgroupInit<'_> {
 
         if !single.is_empty() {
             let index = self.local_invocation_index();
-            let zero = self.literal(Literal::U32(0));
-            let condition = self.emit(Expression::Binary {
+            let mut prologue = self.prologue();
+            let zero = prologue.pre_emit(Expression::Literal(Literal::U32(0)));
+            let condition = prologue.expr(Expression::Binary {
                 op: BinaryOperator::Equal,
                 left: index,
                 right: zero,
             });
+            prologue.flush();
             let mut accept = Block::new();
             for (handle, leaf) in single {
                 self.write_store(&mut accept, handle, &leaf, &[]);
             }
-            self.push(Statement::If {
+            self.prologue().push(Statement::If {
                 condition,
                 accept,
                 reject: Block::new(),
@@ -286,7 +289,8 @@ impl WorkgroupInit<'_> {
         }
 
         if any {
-            self.push(Statement::ControlBarrier(crate::Barrier::WORK_GROUP));
+            self.prologue()
+                .push(Statement::ControlBarrier(crate::Barrier::WORK_GROUP));
         }
         Ok(())
     }
@@ -369,13 +373,14 @@ impl WorkgroupInit<'_> {
             if count == invocations {
                 self.block.append(&mut body);
             } else {
-                let count = self.literal(Literal::U32(count));
-                let condition = self.emit(Expression::Binary {
+                let mut prologue = self.prologue();
+                let count = prologue.pre_emit(Expression::Literal(Literal::U32(count)));
+                let condition = prologue.expr(Expression::Binary {
                     op: BinaryOperator::Less,
                     left: index,
                     right: count,
                 });
-                self.push(Statement::If {
+                prologue.push(Statement::If {
                     condition,
                     accept: body,
                     reject: Block::new(),
@@ -386,54 +391,46 @@ impl WorkgroupInit<'_> {
 
         // Every invocation stores at least one element, since `index < invocations < count`.
         let counter = self.counter();
-        let counter = self
-            .function
-            .expressions
-            .append(Expression::LocalVariable(counter), Span::UNDEFINED);
-        self.push(Statement::Store {
+        let mut prologue = self.prologue();
+        let counter = prologue.pre_emit(Expression::LocalVariable(counter));
+        prologue.push(Statement::Store {
             pointer: counter,
             value: index,
         });
+        let count = prologue.pre_emit(Expression::Literal(Literal::U32(count)));
+        let stride = prologue.pre_emit(Expression::Literal(Literal::U32(invocations)));
 
         let mut body = Block::new();
-        let count = self.literal(Literal::U32(count));
-        let stride = self.literal(Literal::U32(invocations));
-        self.emitter.start(&self.function.expressions);
-        let current = self.append(Expression::Load { pointer: counter });
-        let done = self.append(Expression::Binary {
+        let mut emitting =
+            Emitting::new(&mut self.function.expressions, &mut body, Span::UNDEFINED);
+        let current = emitting.expr(Expression::Load { pointer: counter });
+        let done = emitting.expr(Expression::Binary {
             op: BinaryOperator::GreaterEqual,
             left: current,
             right: count,
         });
-        body.extend(self.emitter.finish(&self.function.expressions));
-        body.push(
-            Statement::If {
-                condition: done,
-                accept: Block::from_vec(vec![Statement::Break]),
-                reject: Block::new(),
-            },
-            Span::UNDEFINED,
-        );
+        emitting.push(Statement::If {
+            condition: done,
+            accept: Block::from_vec(vec![Statement::Break]),
+            reject: Block::new(),
+        });
         let indices = self.element_indices(&mut body, current, dimensions);
         for leaf in leaves {
             self.write_store(&mut body, var, leaf, &indices);
         }
-        self.emitter.start(&self.function.expressions);
-        let next = self.append(Expression::Binary {
+        let mut emitting =
+            Emitting::new(&mut self.function.expressions, &mut body, Span::UNDEFINED);
+        let next = emitting.expr(Expression::Binary {
             op: BinaryOperator::Add,
             left: current,
             right: stride,
         });
-        body.extend(self.emitter.finish(&self.function.expressions));
-        body.push(
-            Statement::Store {
-                pointer: counter,
-                value: next,
-            },
-            Span::UNDEFINED,
-        );
+        emitting.push(Statement::Store {
+            pointer: counter,
+            value: next,
+        });
 
-        self.push(Statement::Loop {
+        self.prologue().push(Statement::Loop {
             body,
             continuing: Block::new(),
             break_if: None,
@@ -448,22 +445,24 @@ impl WorkgroupInit<'_> {
         flat: Handle<Expression>,
         dimensions: &[u32],
     ) -> Vec<Handle<Expression>> {
+        let mut emitting = Emitting::new(&mut self.function.expressions, block, Span::UNDEFINED);
         let mut literals = Vec::with_capacity(dimensions.len() * 2);
         let mut stride = dimensions.iter().product::<u32>();
         for &length in dimensions {
             stride /= length;
+            let stride =
+                (stride != 1).then(|| emitting.pre_emit(Expression::Literal(Literal::U32(stride))));
             literals.push((
-                (stride != 1).then(|| self.literal(Literal::U32(stride))),
-                self.literal(Literal::U32(length)),
+                stride,
+                emitting.pre_emit(Expression::Literal(Literal::U32(length))),
             ));
         }
 
-        self.emitter.start(&self.function.expressions);
         let mut indices = Vec::with_capacity(dimensions.len());
         for (i, (stride, length)) in literals.into_iter().enumerate() {
             let mut value = flat;
             if let Some(stride) = stride {
-                value = self.append(Expression::Binary {
+                value = emitting.expr(Expression::Binary {
                     op: BinaryOperator::Divide,
                     left: value,
                     right: stride,
@@ -471,7 +470,7 @@ impl WorkgroupInit<'_> {
             }
             // The flat index is in bounds, so the outermost index is too.
             if i != 0 {
-                value = self.append(Expression::Binary {
+                value = emitting.expr(Expression::Binary {
                     op: BinaryOperator::Modulo,
                     left: value,
                     right: length,
@@ -479,7 +478,7 @@ impl WorkgroupInit<'_> {
             }
             indices.push(value);
         }
-        block.extend(self.emitter.finish(&self.function.expressions));
+        emitting.flush();
         indices
     }
 
@@ -490,17 +489,17 @@ impl WorkgroupInit<'_> {
         leaf: &Leaf,
         indices: &[Handle<Expression>],
     ) {
+        let mut emitting = Emitting::new(&mut self.function.expressions, block, Span::UNDEFINED);
         let (value, atomic) = match leaf.value {
-            LeafValue::Zero(ty) => (self.pre_emit(zero_value(self.types, ty)), false),
+            LeafValue::Zero(ty) => (emitting.pre_emit(zero_value(self.types, ty)), false),
             LeafValue::Atomic(scalar) => (
-                self.pre_emit(Expression::Literal(Literal::zero(scalar).unwrap())),
+                emitting.pre_emit(Expression::Literal(Literal::zero(scalar).unwrap())),
                 true,
             ),
         };
-        let mut pointer = self.pre_emit(Expression::GlobalVariable(var));
-        self.emitter.start(&self.function.expressions);
+        let mut pointer = emitting.pre_emit(Expression::GlobalVariable(var));
         for &step in &leaf.steps {
-            pointer = self.append(match step {
+            pointer = emitting.expr(match step {
                 Step::Member(index) => Expression::AccessIndex {
                     base: pointer,
                     index,
@@ -511,15 +510,13 @@ impl WorkgroupInit<'_> {
                 },
             });
         }
-        block.extend(self.emitter.finish(&self.function.expressions));
         // Each element is stored by one invocation before the barrier, so
         // atomics don't need atomic stores.
-        let statement = if atomic {
+        emitting.push(if atomic {
             Statement::NonAtomicStore { pointer, value }
         } else {
             Statement::Store { pointer, value }
-        };
-        block.push(statement, Span::UNDEFINED);
+        });
     }
 
     /// Return the entry point's local invocation index, adding an argument for it if needed.
@@ -556,13 +553,15 @@ impl WorkgroupInit<'_> {
             });
             (self.function.arguments.len() - 1, None)
         });
-        let mut index = self.pre_emit(Expression::FunctionArgument(argument as u32));
+        let mut prologue = self.prologue();
+        let mut index = prologue.pre_emit(Expression::FunctionArgument(argument as u32));
         if let Some(member) = member {
-            index = self.emit(Expression::AccessIndex {
+            index = prologue.expr(Expression::AccessIndex {
                 base: index,
                 index: member as u32,
             });
         }
+        prologue.flush();
         self.local_invocation_index = Some(index);
         index
     }
@@ -587,42 +586,9 @@ impl WorkgroupInit<'_> {
         })
     }
 
-    fn literal(&mut self, literal: Literal) -> Handle<Expression> {
-        self.pre_emit(Expression::Literal(literal))
-    }
-
-    /// Append an expression that must not be covered by an [`Emit`](Statement::Emit).
-    fn pre_emit(&mut self, expression: Expression) -> Handle<Expression> {
-        self.function
-            .expressions
-            .append(expression, Span::UNDEFINED)
-    }
-
-    /// Append an expression while the emitter is running.
-    fn append(&mut self, expression: Expression) -> Handle<Expression> {
-        self.function
-            .expressions
-            .append(expression, Span::UNDEFINED)
-    }
-
-    /// Append `expression` and emit it in the prologue.
-    fn emit(&mut self, expression: Expression) -> Handle<Expression> {
-        self.emitter.start(&self.function.expressions);
-        let handle = self.append(expression);
-        self.flush();
-        handle
-    }
-
-    fn flush(&mut self) {
-        if self.emitter.is_running() {
-            self.block
-                .extend(self.emitter.finish(&self.function.expressions));
-        }
-    }
-
-    fn push(&mut self, statement: Statement) {
-        self.flush();
-        self.block.push(statement, Span::UNDEFINED);
+    /// Build statements at the end of the prologue.
+    const fn prologue(&mut self) -> Emitting<'_> {
+        Emitting::new(&mut self.function.expressions, self.block, Span::UNDEFINED)
     }
 }
 
