@@ -187,35 +187,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.immediate_raw_names.clear();
     }
 
-    /// Generates statements to be inserted immediately before and at the very
-    /// start of the body of each loop, to defeat infinite loop reasoning.
-    /// The 0th item of the returned tuple should be inserted immediately prior
-    /// to the loop and the 1st item should be inserted at the very start of
-    /// the loop body.
-    ///
-    /// See [`back::msl::Writer::gen_force_bounded_loop_statements`] for details.
-    fn gen_force_bounded_loop_statements(
-        &mut self,
-        level: back::Level,
-    ) -> Option<(String, String)> {
-        if !self.options.force_loop_bounding {
-            return None;
-        }
-
-        let loop_bound_name = self.namer.call("loop_bound");
-        let max = u32::MAX;
-        // Count down from u32::MAX rather than up from 0 to avoid hang on
-        // certain Intel drivers. See <https://github.com/gfx-rs/wgpu/issues/7319>.
-        let decl = format!("{level}uint2 {loop_bound_name} = uint2({max}u, {max}u);");
-        let level = level.next();
-        let break_and_inc = format!(
-            "{level}if (all({loop_bound_name} == uint2(0u, 0u))) {{ break; }}
-{level}{loop_bound_name} -= uint2({loop_bound_name}.y == 0u, 1u);"
-        );
-
-        Some((decl, break_and_inc))
-    }
-
     /// Helper method used to find which expressions of a given function require baking
     ///
     /// # Notes
@@ -326,6 +297,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             module.into(),
             &back::passes::Passes {
                 inline: crate::inline::InlineStrategy::All,
+                loop_bounding: self.options.force_loop_bounding,
                 uniform_matrix_layout: true,
                 immediate_words: false,
                 workgroup_zero_init: self.options.zero_initialize_workgroup_memory,
@@ -2235,22 +2207,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 ref continuing,
                 break_if,
             } => {
-                let force_loop_bound_statements = self.gen_force_bounded_loop_statements(level);
                 let gate_name = (!continuing.is_empty() || break_if.is_some())
                     .then(|| self.namer.call("loop_init"));
 
-                if let Some((ref decl, _)) = force_loop_bound_statements {
-                    writeln!(self.out, "{decl}")?;
-                }
                 if let Some(ref gate_name) = gate_name {
                     writeln!(self.out, "{level}bool {gate_name} = true;")?;
                 }
 
                 self.continue_ctx.enter_loop();
                 writeln!(self.out, "{level}while(true) {{")?;
-                if let Some((_, ref break_and_inc)) = force_loop_bound_statements {
-                    writeln!(self.out, "{break_and_inc}")?;
-                }
                 let l2 = level.next();
                 if let Some(gate_name) = gate_name {
                     writeln!(self.out, "{l2}if (!{gate_name}) {{")?;
