@@ -188,11 +188,11 @@ void _ms_main(
 , object_data TaskPayload const& taskPayload [[payload]]
 ) {
     threadgroup struct {
+        metal::uint4 mesh_output[9];
         float workgroupData;
     } nagaWorkgroupMemory_1;
+    threadgroup MeshOutput& mesh_output = *reinterpret_cast<threadgroup MeshOutput*>(nagaWorkgroupMemory_1.mesh_output);
     threadgroup float& workgroupData = nagaWorkgroupMemory_1.workgroupData;
-    threadgroup metal::uint4 mesh_output_storage[9];
-    threadgroup MeshOutput& mesh_output = *reinterpret_cast<threadgroup MeshOutput*>(mesh_output_storage);
     _ms_main(__local_invocation_index, taskPayload, workgroupData, mesh_output);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_object_data);
@@ -255,11 +255,11 @@ void _ms_no_ts(
 , uint __local_invocation_index [[thread_index_in_threadgroup]]
 ) {
     threadgroup struct {
+        metal::uint4 mesh_output[9];
         float workgroupData;
     } nagaWorkgroupMemory_2;
+    threadgroup MeshOutput& mesh_output = *reinterpret_cast<threadgroup MeshOutput*>(nagaWorkgroupMemory_2.mesh_output);
     threadgroup float& workgroupData = nagaWorkgroupMemory_2.workgroupData;
-    threadgroup metal::uint4 mesh_output_storage_1[9];
-    threadgroup MeshOutput& mesh_output = *reinterpret_cast<threadgroup MeshOutput*>(mesh_output_storage_1);
     _ms_no_ts(__local_invocation_index, workgroupData, mesh_output);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_object_data);
@@ -330,11 +330,11 @@ void _ms_divergent(
 , uint __local_invocation_index [[thread_index_in_threadgroup]]
 ) {
     threadgroup struct {
+        metal::uint4 mesh_output[9];
         float workgroupData;
     } nagaWorkgroupMemory_3;
+    threadgroup MeshOutput& mesh_output = *reinterpret_cast<threadgroup MeshOutput*>(nagaWorkgroupMemory_3.mesh_output);
     threadgroup float& workgroupData = nagaWorkgroupMemory_3.workgroupData;
-    threadgroup metal::uint4 mesh_output_storage_2[9];
-    threadgroup MeshOutput& mesh_output = *reinterpret_cast<threadgroup MeshOutput*>(mesh_output_storage_2);
     _ms_divergent(thread_id_1, __local_invocation_index, workgroupData, mesh_output);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_object_data);

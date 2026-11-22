@@ -55,21 +55,21 @@ struct main_Input {
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
     threadgroup struct {
+        metal::uint4 data[75];
+        metal::uint4 tagged[1];
         metal::uint3 vector;
+        metal::uint4 matrix_[2];
         type_10 dynamic;
         type_11 floats;
         uint scalar;
     } nagaWorkgroupMemory;
+    threadgroup type_9& data = *reinterpret_cast<threadgroup type_9*>(nagaWorkgroupMemory.data);
+    threadgroup Tagged& tagged = *reinterpret_cast<threadgroup Tagged*>(nagaWorkgroupMemory.tagged);
     threadgroup metal::uint3& vector = nagaWorkgroupMemory.vector;
+    threadgroup metal::float2x3& matrix_ = *reinterpret_cast<threadgroup metal::float2x3*>(nagaWorkgroupMemory.matrix_);
     threadgroup type_10& dynamic = nagaWorkgroupMemory.dynamic;
     threadgroup type_11& floats = nagaWorkgroupMemory.floats;
     threadgroup uint& scalar = nagaWorkgroupMemory.scalar;
-    threadgroup metal::uint4 data_storage[75];
-    threadgroup type_9& data = *reinterpret_cast<threadgroup type_9*>(data_storage);
-    threadgroup metal::uint4 matrix_storage[2];
-    threadgroup metal::float2x3& matrix_ = *reinterpret_cast<threadgroup metal::float2x3*>(matrix_storage);
-    threadgroup metal::uint4 tagged_storage[1];
-    threadgroup Tagged& tagged = *reinterpret_cast<threadgroup Tagged*>(tagged_storage);
     if (zero_flat_index == 0u) {
         for (int __i0 = 0; __i0 < 3; __i0++) {
             data.inner[__i0].values = {};
