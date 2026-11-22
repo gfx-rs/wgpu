@@ -40,6 +40,17 @@ Layers are counted from the base array layer of the attachment texture views, no
 An example of using multiview can be seen
 [here](https://github.com/gfx-rs/wgpu/tree/trunk/examples/features/src/multiview).
 
+## Queries
+
+Inside a multiview render pass, occlusion queries, pipeline statistics queries and timestamps written
+with `RenderPass::write_timestamp` use one query slot per view. A query at index `i` uses the `n` slots
+starting at `i`, where `n` is the number of bits set in the multiview mask. All of these slots must be
+in the query set, and no other query in the same pass may use them.
+
+For occlusion and pipeline statistics queries, the results of these slots sum to the result for all views.
+How the result is split between the slots depends on the backend and driver. For timestamps, the first slot
+holds the timestamp, and the others hold zero or timestamps.
+
 ## Use cases
 
 ### VR

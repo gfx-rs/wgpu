@@ -13,6 +13,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(DRAW_MULTIVIEW_MULTISAMPLE);
     vec.push(DRAW_MULTIVIEW_MESH);
     vec.push(DRAW_MULTIVIEW_MESH_NONCONTIGUOUS);
+    vec.push(MULTIVIEW_OCCLUSION_QUERY);
 }
 
 #[apply(gpu_test!)]
@@ -305,3 +306,170 @@ async fn run_test(ctx: TestingContext, layer_mask: u32, sample_count: u32, mesh:
         assert_eq!(failed_value, None, "Expected {target_value}");
     }
 }
+
+/// Occlusion queries in a multiview pass use one slot per view, and the slots of each query sum
+/// to its result.
+#[apply(gpu_test!)]
+static MULTIVIEW_OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::MULTIVIEW)
+            .limits(Limits {
+                max_multiview_view_count: 2,
+                ..Limits::defaults()
+            })
+            .expect_fail(FailureCase::webgl2()),
+    )
+    .run_async(|ctx| async move {
+        const QUERY_COUNT: u32 = 6;
+
+        let depth_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: 64,
+                height: 64,
+                depth_or_array_layers: 2,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+            texture_binding_view_dimension: None,
+        });
+        let multiview_depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        });
+        let single_depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::D2),
+            array_layer_count: Some(1),
+            ..Default::default()
+        });
+
+        let shader = ctx
+            .device
+            .create_shader_module(wgpu::include_wgsl!("../occlusion_query/shader.wgsl"));
+        let create_pipeline = |multiview_mask| {
+            ctx.device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: None,
+                    layout: None,
+                    vertex: wgpu::VertexState {
+                        module: &shader,
+                        entry_point: Some("vs_main"),
+                        compilation_options: Default::default(),
+                        buffers: &[],
+                    },
+                    fragment: None,
+                    primitive: wgpu::PrimitiveState::default(),
+                    depth_stencil: Some(wgpu::DepthStencilState {
+                        format: wgpu::TextureFormat::Depth32Float,
+                        depth_write_enabled: Some(true),
+                        depth_compare: Some(wgpu::CompareFunction::Less),
+                        stencil: wgpu::StencilState::default(),
+                        bias: wgpu::DepthBiasState::default(),
+                    }),
+                    multisample: wgpu::MultisampleState::default(),
+                    multiview_mask: NonZero::new(multiview_mask),
+                    cache: None,
+                })
+        };
+        let single_pipeline = create_pipeline(0);
+        let multiview_pipeline = create_pipeline(0b11);
+
+        let query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
+            label: None,
+            ty: wgpu::QueryType::Occlusion,
+            count: QUERY_COUNT,
+        });
+
+        let depth_attachment = |view| {
+            Some(wgpu::RenderPassDepthStencilAttachment {
+                view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            })
+        };
+
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        {
+            // Leave a nonzero result in slot 5, which the last multiview query also uses.
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[],
+                depth_stencil_attachment: depth_attachment(&single_depth_view),
+                timestamp_writes: None,
+                occlusion_query_set: Some(&query_set),
+                multiview_mask: None,
+            });
+            pass.set_pipeline(&single_pipeline);
+            pass.begin_occlusion_query(5);
+            pass.draw(0..3, 0..1);
+            pass.end_occlusion_query();
+        }
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[],
+                depth_stencil_attachment: depth_attachment(&multiview_depth_view),
+                timestamp_writes: None,
+                occlusion_query_set: Some(&query_set),
+                multiview_mask: NonZero::new(0b11),
+            });
+            pass.set_pipeline(&multiview_pipeline);
+
+            // Not occluded (z = 0.5, nothing drawn yet)
+            pass.begin_occlusion_query(0);
+            pass.draw(4..7, 0..1);
+            pass.end_occlusion_query();
+
+            // Not occluded (z = 0.0)
+            pass.begin_occlusion_query(2);
+            pass.draw(0..3, 0..1);
+            pass.end_occlusion_query();
+
+            // Occluded (z = 0.5)
+            pass.begin_occlusion_query(4);
+            pass.draw(4..7, 0..1);
+            pass.end_occlusion_query();
+        }
+
+        let query_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: size_of::<u64>() as u64 * u64::from(QUERY_COUNT),
+            usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        encoder.resolve_query_set(&query_set, 0..QUERY_COUNT, &query_buffer, 0);
+
+        let mapping_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: query_buffer.size(),
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        encoder.copy_buffer_to_buffer(&query_buffer, 0, &mapping_buffer, 0, query_buffer.size());
+
+        ctx.queue.submit(Some(encoder.finish()));
+
+        mapping_buffer
+            .slice(..)
+            .map_async(wgpu::MapMode::Read, |_| ());
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
+        let view = mapping_buffer.slice(..).get_mapped_range().unwrap();
+        let results: &[u64] = bytemuck::cast_slice(&view);
+
+        // Occlusion results are only defined as zero or nonzero.
+        assert_ne!(results[0] + results[1], 0, "results: {results:?}");
+        assert_ne!(results[2] + results[3], 0, "results: {results:?}");
+        assert_eq!(results[4] + results[5], 0, "results: {results:?}");
+    });

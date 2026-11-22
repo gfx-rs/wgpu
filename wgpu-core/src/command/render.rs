@@ -2370,6 +2370,11 @@ pub(super) fn encode_render_pass(
             active_pipeline_statistics_query: None,
         };
 
+        let multiview_view_count = state
+            .info
+            .multiview_mask
+            .map_or(1, |mask| mask.get().count_ones());
+
         for command in base.commands.drain(..) {
             match command {
                 ArcRenderCommand::SetBindGroup {
@@ -2569,6 +2574,7 @@ pub(super) fn encode_render_pass(
                         Some(&mut pending_query_resets),
                         query_set,
                         query_index,
+                        multiview_view_count,
                     )
                     .map_pass_err(scope)?;
                 }
@@ -2586,6 +2592,7 @@ pub(super) fn encode_render_pass(
                         state.pass.base.raw_encoder,
                         &mut state.pass.base.tracker.query_sets,
                         query_index,
+                        multiview_view_count,
                         Some(&mut pending_query_resets),
                         &mut state.active_occlusion_query,
                         state.pass.base.snatch_guard,
@@ -2599,6 +2606,7 @@ pub(super) fn encode_render_pass(
                     end_occlusion_query(
                         state.pass.base.raw_encoder,
                         &mut state.active_occlusion_query,
+                        multiview_view_count,
                         state.pass.base.snatch_guard,
                         state.pass.base.query_set_writes,
                     )
@@ -2620,6 +2628,7 @@ pub(super) fn encode_render_pass(
                         &mut state.pass.base.tracker.query_sets,
                         device,
                         query_index,
+                        multiview_view_count,
                         Some(&mut pending_query_resets),
                         &mut state.active_pipeline_statistics_query,
                         state.pass.base.snatch_guard,
@@ -2633,6 +2642,7 @@ pub(super) fn encode_render_pass(
                     end_pipeline_statistics_query(
                         state.pass.base.raw_encoder,
                         &mut state.active_pipeline_statistics_query,
+                        multiview_view_count,
                         state.pass.base.snatch_guard,
                         state.pass.base.query_set_writes,
                     )

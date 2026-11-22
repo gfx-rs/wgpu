@@ -993,7 +993,7 @@ impl CommandEncoder {
             .into_iter()
             .flatten()
         {
-            query_set.validate_query(SimplifiedQueryType::Timestamp, idx, None)?;
+            query_set.validate_query(SimplifiedQueryType::Timestamp, idx, 1, None)?;
         }
 
         if let Some((begin, end)) = beginning_of_pass_write_index.zip(end_of_pass_write_index) {

@@ -24,6 +24,38 @@ fn encode_pass(
     multiview_mask: u32,
     bundle_mask: Option<u32>,
 ) -> CommandEncoder {
+    let bundle = bundle_mask.map(|mask| {
+        device
+            .create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
+                label: None,
+                color_formats: &[],
+                depth_stencil: Some(RenderBundleDepthStencil {
+                    format: TextureFormat::Depth32Float,
+                    depth_read_only: false,
+                    stencil_read_only: false,
+                }),
+                sample_count: 1,
+                multiview_mask: NonZeroU32::new(mask),
+            })
+            .finish(&RenderBundleDescriptor::default())
+    });
+
+    encode_pass_with(device, layers, multiview_mask, None, |pass| {
+        if let Some(bundle) = &bundle {
+            pass.execute_bundles([bundle]);
+        }
+    })
+}
+
+/// Records a render pass with a depth attachment of `layers` array layers, recording its
+/// commands with `record`.
+fn encode_pass_with(
+    device: &Device,
+    layers: u32,
+    multiview_mask: u32,
+    occlusion_query_set: Option<&QuerySet>,
+    record: impl FnOnce(&mut RenderPass<'_>),
+) -> CommandEncoder {
     let texture = device.create_texture(&TextureDescriptor {
         label: None,
         size: Extent3d {
@@ -48,22 +80,6 @@ fn encode_pass(
         ..Default::default()
     });
 
-    let bundle = bundle_mask.map(|mask| {
-        device
-            .create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
-                label: None,
-                color_formats: &[],
-                depth_stencil: Some(RenderBundleDepthStencil {
-                    format: TextureFormat::Depth32Float,
-                    depth_read_only: false,
-                    stencil_read_only: false,
-                }),
-                sample_count: 1,
-                multiview_mask: NonZeroU32::new(mask),
-            })
-            .finish(&RenderBundleDescriptor::default())
-    });
-
     let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor::default());
     {
         let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
@@ -78,12 +94,10 @@ fn encode_pass(
                 stencil_ops: None,
             }),
             timestamp_writes: None,
-            occlusion_query_set: None,
+            occlusion_query_set,
             multiview_mask: NonZeroU32::new(multiview_mask),
         });
-        if let Some(bundle) = &bundle {
-            pass.execute_bundles([bundle]);
-        }
+        record(&mut pass);
     }
     encoder
 }
@@ -175,4 +189,94 @@ fn render_bundle_multiview_mask_mismatching_render_pass() {
     let (device, _queue) = multiview_device(Features::MULTIVIEW, 2);
     let encoder = encode_pass(&device, 2, 0b11, Some(0b01));
     fail(&device, || encoder.finish(), Some("multiview"));
+}
+
+fn query_set(device: &Device, ty: QueryType, count: u32) -> QuerySet {
+    device.create_query_set(&QuerySetDescriptor {
+        label: None,
+        ty,
+        count,
+    })
+}
+
+#[test]
+fn occlusion_queries_in_multiview_pass_use_one_slot_per_view() {
+    let (device, _queue) = multiview_device(Features::MULTIVIEW, 2);
+    let set = query_set(&device, QueryType::Occlusion, 4);
+    let encoder = encode_pass_with(&device, 2, 0b11, Some(&set), |pass| {
+        pass.begin_occlusion_query(0);
+        pass.end_occlusion_query();
+        pass.begin_occlusion_query(2);
+        pass.end_occlusion_query();
+    });
+    valid(&device, || encoder.finish());
+}
+
+#[test]
+fn occlusion_queries_in_multiview_pass_with_overlapping_slots() {
+    let (device, _queue) = multiview_device(Features::MULTIVIEW, 2);
+    let set = query_set(&device, QueryType::Occlusion, 4);
+    let encoder = encode_pass_with(&device, 2, 0b11, Some(&set), |pass| {
+        pass.begin_occlusion_query(0);
+        pass.end_occlusion_query();
+        pass.begin_occlusion_query(1);
+        pass.end_occlusion_query();
+    });
+    fail(
+        &device,
+        || encoder.finish(),
+        Some("Query 1 has already been used within the same renderpass"),
+    );
+}
+
+#[test]
+fn occlusion_query_in_multiview_pass_overrunning_query_set() {
+    let (device, _queue) = multiview_device(Features::MULTIVIEW, 2);
+    let set = query_set(&device, QueryType::Occlusion, 2);
+    let encoder = encode_pass_with(&device, 2, 0b11, Some(&set), |pass| {
+        pass.begin_occlusion_query(1);
+        pass.end_occlusion_query();
+    });
+    fail(
+        &device,
+        || encoder.finish(),
+        Some("Query 1 uses 2 slots because the render pass has 2 multiview views"),
+    );
+}
+
+#[test]
+fn timestamp_in_multiview_pass_overrunning_query_set() {
+    let (device, _queue) = multiview_device(
+        Features::MULTIVIEW | Features::TIMESTAMP_QUERY | Features::TIMESTAMP_QUERY_INSIDE_PASSES,
+        2,
+    );
+    let set = query_set(&device, QueryType::Timestamp, 2);
+    let encoder = encode_pass_with(&device, 2, 0b11, None, |pass| {
+        pass.write_timestamp(&set, 1);
+    });
+    fail(
+        &device,
+        || encoder.finish(),
+        Some("Query 1 uses 2 slots because the render pass has 2 multiview views"),
+    );
+}
+
+#[test]
+fn pipeline_statistics_query_in_multiview_pass_overrunning_query_set() {
+    let (device, _queue) =
+        multiview_device(Features::MULTIVIEW | Features::PIPELINE_STATISTICS_QUERY, 2);
+    let set = query_set(
+        &device,
+        QueryType::PipelineStatistics(PipelineStatisticsTypes::VERTEX_SHADER_INVOCATIONS),
+        2,
+    );
+    let encoder = encode_pass_with(&device, 2, 0b11, None, |pass| {
+        pass.begin_pipeline_statistics_query(&set, 1);
+        pass.end_pipeline_statistics_query();
+    });
+    fail(
+        &device,
+        || encoder.finish(),
+        Some("Query 1 uses 2 slots because the render pass has 2 multiview views"),
+    );
 }
