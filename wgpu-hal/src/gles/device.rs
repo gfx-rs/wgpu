@@ -710,7 +710,7 @@ impl super::Device {
             let mut writer =
                 glsl::Writer::new(&mut output, naga_options, &pipeline_options, policies);
 
-            let reflection_info = writer.write(&module, &info).map_err(|e| {
+            let reflection_info = writer.write(&*module, &*info).map_err(|e| {
                 let msg = format!("{e}");
                 crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
             })?;

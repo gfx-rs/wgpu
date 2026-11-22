@@ -406,7 +406,7 @@ fn write_output_msl(
     options.bounds_check_policies = shared_options.bounds_checks_policies;
     options.mesh_shader_primitive_indices_clamp = shared_options.mesh_output_validation;
     options.task_dispatch_limits = shared_options.task_limits;
-    let (string, tr_info) = msl::write_string(&module, &info, &options, pipeline_options)
+    let (string, tr_info) = msl::write_string(&*module, &*info, &options, pipeline_options)
         .unwrap_or_else(|err| panic!("Metal write failed: {err}"));
 
     for (ep, result) in module.entry_points.iter().zip(tr_info.entry_point_names) {
@@ -450,7 +450,7 @@ fn write_output_glsl(
         &pipeline_options,
         bounds_check_policies,
     );
-    writer.write(&module, &info).expect("GLSL write failed");
+    writer.write(&*module, &*info).expect("GLSL write failed");
 
     let extension = format!("{ep_name}.{stage:?}.glsl");
     input.write_output_file("glsl", &extension, buffer, DIR_OUT);
@@ -481,7 +481,7 @@ fn write_output_hlsl(
     let pipeline_options = Default::default();
     let mut writer = hlsl::Writer::new(&mut buffer, &options, &pipeline_options);
     let reflection_info = writer
-        .write(&module, &info, frag_ep.as_ref())
+        .write(&*module, &*info, frag_ep.as_ref())
         .expect("HLSL write failed");
 
     input.write_output_file("hlsl", "hlsl", buffer, DIR_OUT);

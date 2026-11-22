@@ -825,7 +825,7 @@ impl super::Device {
 
                 let spv = {
                     profiling::scope!("naga::spv::write_vec");
-                    naga::back::spv::write_vec(&module, &info, options, Some(&pipeline_options))
+                    naga::back::spv::write_vec(&*module, &*info, options, Some(&pipeline_options))
                 }
                 .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
                 self.create_shader_module_impl(&spv, &None)?
@@ -2071,7 +2071,7 @@ impl crate::Device for super::Device {
                     };
                 }
                 let spv = naga::back::spv::write_vec(
-                    &naga_shader.module,
+                    &*naga_shader.module,
                     &naga_shader.info,
                     &naga_options,
                     None,

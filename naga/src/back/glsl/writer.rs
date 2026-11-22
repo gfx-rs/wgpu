@@ -36,12 +36,13 @@ impl<'a, W: Write> Writer<'a, W> {
     ///
     /// # Panics
     /// Might panic if the module is invalid
-    pub fn write(
+    pub fn write<'m>(
         &mut self,
-        module: &crate::Module,
-        info: &valid::ModuleInfo,
+        module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
+        info: impl Into<alloc::borrow::Cow<'m, valid::ModuleInfo>>,
     ) -> Result<ReflectionInfo, Error> {
-        let (module, info) = back::passes::run(module, info, &back::passes::Passes::default())?;
+        let (module, info) =
+            back::passes::run(module.into(), info.into(), &back::passes::Passes::default())?;
         let (module, info) = (&*module, &*info);
         ModuleWriter::new(
             &mut self.out,
