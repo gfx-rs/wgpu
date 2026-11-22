@@ -141,8 +141,9 @@ fn inline_with(module: &mut Module, checker: Checker) -> bool {
         inlined: false,
     };
 
-    // A function may only call functions that precede it, so every callee is
-    // processed before its callers.
+    // A callee may come after its caller in the arena, for example if a pass
+    // appended it. That's fine: the body spliced in for a call is inlined
+    // again, so its own calls are inlined too.
     for index in 0..inliner.module.functions.len() {
         let handle = Handle::new(NonMaxU32::new(index as u32).unwrap());
         let mut function = core::mem::take(&mut inliner.module.functions[handle]);
@@ -859,4 +860,113 @@ fn splice(
         );
     }
     block
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::{string::String, vec::Vec};
+
+    use super::{inline, InlineStrategy};
+    use crate::{
+        compact::{compact, KeepUnused},
+        valid::{Capabilities, ValidationFlags, Validator},
+        AddressSpace, Block, EntryPoint, Expression, Function, GlobalVariable, Handle, Literal,
+        Module, Scalar, ShaderStage, Span, Statement, Type, TypeInner,
+    };
+
+    fn call(function: &mut Function, callee: Handle<Function>) {
+        function.body.push(
+            Statement::Call {
+                function: callee,
+                arguments: Vec::new(),
+                result: None,
+            },
+            Span::default(),
+        );
+    }
+
+    fn has_call(block: &Block) -> bool {
+        block.iter().any(|statement| match *statement {
+            Statement::Call { .. } => true,
+            Statement::Block(ref block) => has_call(block),
+            _ => false,
+        })
+    }
+
+    /// A caller that precedes its callee in the arena, where the callee calls
+    /// another function, gets the callee's body with its call inlined. Passes
+    /// can append functions that earlier functions call.
+    #[test]
+    fn caller_before_callee() {
+        let mut module = Module::default();
+        let i32_ty = module.types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Scalar(Scalar::I32),
+            },
+            Span::default(),
+        );
+        let x = module.global_variables.append(
+            GlobalVariable {
+                name: Some(String::from("x")),
+                space: AddressSpace::Private,
+                binding: None,
+                ty: i32_ty,
+                init: None,
+                memory_decorations: Default::default(),
+            },
+            Span::default(),
+        );
+        let handle = |index: u32| Handle::new(super::NonMaxU32::new(index).unwrap());
+        let (caller, middle, leaf) = (handle(0), handle(1), handle(2));
+
+        let mut caller_fn = Function::default();
+        call(&mut caller_fn, middle);
+        let mut middle_fn = Function::default();
+        call(&mut middle_fn, leaf);
+        let mut leaf_fn = Function::default();
+        let pointer = leaf_fn
+            .expressions
+            .append(Expression::GlobalVariable(x), Span::default());
+        let one = leaf_fn
+            .expressions
+            .append(Expression::Literal(Literal::I32(1)), Span::default());
+        leaf_fn.body.push(
+            Statement::Store {
+                pointer,
+                value: one,
+            },
+            Span::default(),
+        );
+        for function in [caller_fn, middle_fn, leaf_fn] {
+            module.functions.append(function, Span::default());
+        }
+
+        let mut main = Function::default();
+        call(&mut main, caller);
+        module.entry_points.push(EntryPoint {
+            name: String::from("main"),
+            stage: ShaderStage::Compute,
+            early_depth_test: None,
+            workgroup_size: [1, 1, 1],
+            workgroup_size_overrides: None,
+            function: main,
+            mesh_info: None,
+            task_payload: None,
+            incoming_ray_payload: None,
+        });
+
+        assert!(inline(&mut module, InlineStrategy::All));
+        let body = &module.entry_points[0].function.body;
+        assert!(!has_call(body), "calls left in the entry point: {body:?}");
+        assert!(
+            body.iter()
+                .any(|statement| matches!(*statement, Statement::Store { .. })),
+            "the leaf's store wasn't inlined: {body:?}"
+        );
+        compact(&mut module, KeepUnused::No);
+        Validator::new(ValidationFlags::all(), Capabilities::all())
+            .validate(&module)
+            .expect("inlined module should be valid");
+    }
 }
