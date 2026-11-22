@@ -152,7 +152,12 @@ fn never_changes() {
 #[test]
 fn storage_pointer() {
     let (module, _) = parse(STORAGE_POINTER);
-    for target in [InlineTarget::Spirv, InlineTarget::Hlsl, InlineTarget::Glsl] {
+    for target in [
+        InlineTarget::Spirv,
+        InlineTarget::Hlsl,
+        InlineTarget::Glsl,
+        InlineTarget::Wgsl,
+    ] {
         let inlined = inline(&module, InlineStrategy::OnlyNeeded(target)).unwrap();
         assert!(inlined.functions.is_empty(), "{target:?}");
         assert!(!has_call(&inlined.entry_points[0].function.body));
@@ -164,7 +169,12 @@ fn storage_pointer() {
 #[test]
 fn immediate_pointer() {
     let (module, _) = parse(IMMEDIATE_POINTER);
-    for target in [InlineTarget::Spirv, InlineTarget::Hlsl, InlineTarget::Glsl] {
+    for target in [
+        InlineTarget::Spirv,
+        InlineTarget::Hlsl,
+        InlineTarget::Glsl,
+        InlineTarget::Wgsl,
+    ] {
         let inlined = inline(&module, InlineStrategy::OnlyNeeded(target)).unwrap();
         assert!(inlined.functions.is_empty(), "{target:?}");
         assert!(!has_call(&inlined.entry_points[0].function.body));
@@ -176,7 +186,12 @@ fn immediate_pointer() {
 #[test]
 fn task_payload_pointer() {
     let (module, _) = parse(TASK_PAYLOAD_POINTER);
-    for target in [InlineTarget::Spirv, InlineTarget::Hlsl, InlineTarget::Glsl] {
+    for target in [
+        InlineTarget::Spirv,
+        InlineTarget::Hlsl,
+        InlineTarget::Glsl,
+        InlineTarget::Wgsl,
+    ] {
         let inlined = inline(&module, InlineStrategy::OnlyNeeded(target)).unwrap();
         assert!(inlined.functions.is_empty(), "{target:?}");
         assert!(!has_call(&inlined.entry_points[0].function.body));
@@ -193,6 +208,7 @@ fn binding_array_inlined_for_every_target() {
             InlineTarget::Hlsl,
             InlineTarget::Glsl,
             InlineTarget::Msl,
+            InlineTarget::Wgsl,
         ] {
             let inlined = inline(&module, InlineStrategy::OnlyNeeded(target)).unwrap();
             assert!(inlined.functions.is_empty(), "{target:?}");
@@ -204,14 +220,90 @@ fn binding_array_inlined_for_every_target() {
 #[test]
 fn sub_object_argument_passed_through() {
     let (module, _) = parse(SUB_OBJECT_ARGUMENT);
-    let inlined = inline(&module, InlineStrategy::OnlyNeeded(InlineTarget::Spirv)).unwrap();
-    assert!(inlined.functions.is_empty());
-    assert!(!has_call(&inlined.entry_points[0].function.body));
+    for target in [InlineTarget::Spirv, InlineTarget::Wgsl] {
+        let inlined = inline(&module, InlineStrategy::OnlyNeeded(target)).unwrap();
+        assert!(inlined.functions.is_empty(), "{target:?}");
+        assert!(!has_call(&inlined.entry_points[0].function.body));
+    }
 
     for target in [InlineTarget::Hlsl, InlineTarget::Glsl, InlineTarget::Msl] {
         let inlined = inline(&module, InlineStrategy::OnlyNeeded(target));
         assert!(inlined.is_none(), "{target:?}");
     }
+}
+
+#[test]
+fn wgsl_keeps_whole_variable_pointers() {
+    let (module, _) = parse(
+        "
+        var<private> g: u32;
+
+        fn store(p: ptr<function, u32>, q: ptr<private, u32>) {
+            *p = 1u;
+            *q = 2u;
+        }
+
+        fn forward(p: ptr<function, u32>) {
+            store(p, &g);
+        }
+
+        @compute @workgroup_size(1)
+        fn main() {
+            var a = 0u;
+            forward(&a);
+            store(&a, &g);
+        }
+        ",
+    );
+    let inlined = inline(&module, InlineStrategy::OnlyNeeded(InlineTarget::Wgsl));
+    assert!(inlined.is_none());
+}
+
+#[test]
+fn wgsl_inlines_only_calls_that_need_it() {
+    let (module, _) = parse(
+        "
+        struct S {
+            a: u32,
+            b: u32,
+        }
+
+        fn store(p: ptr<function, u32>) {
+            *p = 1u;
+        }
+
+        fn store_workgroup(p: ptr<workgroup, u32>) {
+            *p = 1u;
+        }
+
+        var<workgroup> w: u32;
+
+        @compute @workgroup_size(1)
+        fn main() {
+            var whole = 0u;
+            var s = S();
+            store(&whole);
+            store(&s.b);
+            store_workgroup(&w);
+        }
+        ",
+    );
+    let inlined = inline(&module, InlineStrategy::OnlyNeeded(InlineTarget::Wgsl)).unwrap();
+    let calls = {
+        fn count(block: &naga::Block) -> usize {
+            block
+                .iter()
+                .filter(|statement| matches!(statement, Statement::Call { .. }))
+                .count()
+        }
+        count(&inlined.entry_points[0].function.body)
+    };
+    assert_eq!(calls, 1);
+    assert_eq!(inlined.functions.len(), 1);
+    assert_eq!(
+        inlined.functions.iter().next().unwrap().1.name.as_deref(),
+        Some("store")
+    );
 }
 
 #[test]

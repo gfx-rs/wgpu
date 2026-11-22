@@ -55,6 +55,11 @@ pub enum InlineTarget {
     /// Inline calls to functions with pointer parameters to runtime-sized
     /// types, whose length the callee could not determine.
     Msl,
+    /// WGSL without the `unrestricted_pointer_parameters` language extension:
+    /// inline calls to functions with pointer parameters outside the
+    /// `function` and `private` address spaces, and calls with pointer
+    /// arguments that refer to part of a variable.
+    Wgsl,
 }
 
 /// The error returned by [`process`] if the inlined module fails validation.
@@ -92,7 +97,7 @@ pub fn needs_inline(module: &Module, strategy: InlineStrategy) -> bool {
 /// Return the name of a function that `target` cannot express unless
 /// [`process`] has inlined it, or that contains a call `target` cannot
 /// express.
-#[cfg_attr(not(any(spv_out, msl_out, glsl_out)), expect(dead_code))]
+#[cfg_attr(not(any(spv_out, msl_out, glsl_out, wgsl_out)), expect(dead_code))]
 pub(crate) fn find_needs_inline(module: &Module, target: InlineTarget) -> Option<String> {
     let checker = Checker::new(module, InlineStrategy::OnlyNeeded(target))?;
     find_needs_inline_impl(module, &checker)
@@ -210,6 +215,9 @@ fn function_needs_inline(module: &Module, function: &Function, target: InlineTar
                     is_unrestricted_pointer_space(space)
                 }
                 InlineTarget::Msl => module.types[base].inner.is_dynamically_sized(&module.types),
+                InlineTarget::Wgsl => {
+                    !matches!(space, AddressSpace::Function | AddressSpace::Private)
+                }
             },
             TypeInner::BindingArray { .. } => true,
             _ => false,
@@ -257,7 +265,7 @@ impl Checker {
                     .iter()
                     .map(|(_, function)| function_needs_inline(module, function, target))
                     .collect(),
-                target == InlineTarget::Spirv,
+                matches!(target, InlineTarget::Spirv | InlineTarget::Wgsl),
             ),
             InlineStrategy::All => (vec![true; module.functions.len()], false),
         };
