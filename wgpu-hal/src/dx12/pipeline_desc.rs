@@ -301,8 +301,48 @@ mod tests {
         )
     }
 
+    implement_stream_object!(unsafe u16 => D3D12_PIPELINE_STATE_SUBOBJECT_TYPE(1));
+    implement_stream_object!(unsafe u32 => D3D12_PIPELINE_STATE_SUBOBJECT_TYPE(2));
+    implement_stream_object!(unsafe u64 => D3D12_PIPELINE_STATE_SUBOBJECT_TYPE(3));
+
     #[test]
     fn stream() {
+        let mut stream = RenderPipelineStateStream::new();
+
+        stream.add_object(42u16);
+        stream.add_object(84u32);
+        stream.add_object(168u64);
+
+        assert_eq!(stream.bytes.len(), 32);
+
+        // Object 1: u16
+
+        // Tag at the beginning
+        assert_eq!(&stream.bytes[0..4], &1u32.to_ne_bytes());
+        // Data tucked in, aligned to the natural alignment of u16
+        assert_eq!(&stream.bytes[4..6], &42u16.to_ne_bytes());
+        // Padding to align the next subobject to the native word boundary.
+        assert_eq!(&stream.bytes[6..8], &[0, 0]);
+
+        // Object 2: u32
+
+        // Tag at the beginning
+        assert_eq!(&stream.bytes[8..12], &2u32.to_ne_bytes());
+        // Data tucked in, aligned to the natural alignment of u32
+        assert_eq!(&stream.bytes[12..16], &84u32.to_ne_bytes());
+
+        // Object 3: u64
+
+        // Tag at the beginning
+        assert_eq!(&stream.bytes[16..20], &3u32.to_ne_bytes());
+        // Padding to align the u64 to an 8 byte boundary.
+        assert_eq!(&stream.bytes[20..24], &[0, 0, 0, 0]);
+        // Data tucked in, aligned to the natural alignment of u64
+        assert_eq!(&stream.bytes[24..32], &168u64.to_ne_bytes());
+    }
+
+    #[test]
+    fn stream_d3d12_subobjects() {
         let mut stream = RenderPipelineStateStream::new();
         let code = [1u8, 2, 3];
         let shader = D3D12_SHADER_BYTECODE {
