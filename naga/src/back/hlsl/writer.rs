@@ -339,6 +339,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         module_info: &valid::ModuleInfo,
         fragment_entry_point: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<super::ReflectionInfo, Error> {
+        let (module, module_info) =
+            back::passes::run(module, module_info, &back::passes::Passes::default())?;
+        let (module, module_info) = (&*module, &*module_info);
         self.reset(module);
 
         if module.uses_mesh_shaders() && self.options.shader_model < ShaderModel::V6_5 {

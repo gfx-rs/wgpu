@@ -4061,6 +4061,9 @@ impl Writer {
         debug_info: &Option<DebugInfo>,
         words: &mut Vec<Word>,
     ) -> Result<(), Error> {
+        let (ir_module, info) =
+            crate::back::passes::run(ir_module, info, &crate::back::passes::Passes::default())?;
+        let (ir_module, info) = (&*ir_module, &*info);
         self.reset();
 
         // Try to find the entry point and corresponding index

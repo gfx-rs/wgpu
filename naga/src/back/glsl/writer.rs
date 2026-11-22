@@ -41,6 +41,8 @@ impl<'a, W: Write> Writer<'a, W> {
         module: &crate::Module,
         info: &valid::ModuleInfo,
     ) -> Result<ReflectionInfo, Error> {
+        let (module, info) = back::passes::run(module, info, &back::passes::Passes::default())?;
+        let (module, info) = (&*module, &*info);
         ModuleWriter::new(
             &mut self.out,
             module,
