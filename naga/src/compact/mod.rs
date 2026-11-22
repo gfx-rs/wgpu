@@ -13,6 +13,7 @@ use crate::{
     ir,
 };
 use handle_set_map::HandleMap;
+pub use reorder::ReorderError;
 
 type Index = crate::non_max_u32::NonMaxU32;
 
@@ -85,11 +86,23 @@ impl From<KeepUnused> for bool {
 /// # Panics
 ///
 /// If `module` would not pass validation for any reason other than forward
-/// references in function expression arenas, this may panic.
+/// references in function expression arenas and calls to later functions,
+/// this may panic. It panics if forward references break the rule described in
+/// [`ReorderError`].
 ///
 /// [`Function::expressions`]: crate::Function::expressions
 /// [`Emit`]: crate::Statement::Emit
 pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
+    try_compact(module, keep_unused)
+        .expect("forward references must be in an order compaction can fix");
+}
+
+/// Like [`compact`], but return an error instead of panicking if a function's
+/// forward references can't be put in order. `module` is unchanged then.
+pub(crate) fn try_compact(
+    module: &mut crate::Module,
+    keep_unused: KeepUnused,
+) -> Result<(), ReorderError> {
     // The trickiest part of compaction is determining what is used and what is
     // not. Once we have computed that correctly, it's easy enough to call
     // `retain_mut` on each arena, drop unused elements, and fix up the handles
@@ -205,9 +218,9 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
 
             let mut used = module_tracer.as_function(&e.function);
             used.trace();
-            FunctionMap::from(used)
+            FunctionMap::new(used)
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Observe which types, constant expressions, constants, and expressions
     // each function uses, and produce maps for each function from
@@ -238,7 +251,7 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
         log::trace!("tracing function {function:?}");
         let mut function_tracer = module_tracer.as_function(function);
         function_tracer.trace();
-        function_maps.insert(handle, FunctionMap::from(function_tracer));
+        function_maps.insert(handle, FunctionMap::new(function_tracer)?);
     }
 
     // We treat all special types as used by definition.
@@ -462,6 +475,8 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
             }
         }
     }
+
+    Ok(())
 }
 
 /// Return the used functions of `module` in an order in which every function

@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 
 use super::arena::HandleSet;
 use super::expressions::ForwardRefs;
-use super::reorder::Reorder;
+use super::reorder::{Reorder, ReorderError};
 use super::{FunctionMap, HandleMap, ModuleMap};
 
 pub struct FunctionTracer<'a> {
@@ -85,10 +85,10 @@ impl FunctionTracer<'_> {
     }
 }
 
-impl From<FunctionTracer<'_>> for FunctionMap {
-    fn from(used: FunctionTracer) -> Self {
-        if used.forward_refs.seen {
-            let (expressions, reorder) = Reorder::new(used.function, &used.expressions_used);
+impl FunctionMap {
+    pub fn new(used: FunctionTracer) -> Result<Self, ReorderError> {
+        Ok(if used.forward_refs.seen {
+            let (expressions, reorder) = Reorder::new(used.function, &used.expressions_used)?;
             FunctionMap {
                 expressions,
                 reorder: Some(reorder),
@@ -100,11 +100,9 @@ impl From<FunctionTracer<'_>> for FunctionMap {
                 reorder: None,
                 callees: used.callees,
             }
-        }
+        })
     }
-}
 
-impl FunctionMap {
     pub fn compact(
         &self,
         function: &mut crate::Function,
