@@ -191,6 +191,7 @@ impl super::Device {
         layout: &super::PipelineLayout,
         primitive_class: MTLPrimitiveTopologyClass,
         naga_stage: naga::ShaderStage,
+        multiview_mask: Option<core::num::NonZeroU32>,
     ) -> Result<CompiledShader, crate::PipelineError> {
         match stage.module.source {
             ShaderModuleSource::Naga(ref naga_shader) => {
@@ -277,6 +278,7 @@ impl super::Device {
                     vertex_pulling_transform: true,
                     vertex_buffer_mappings: vertex_buffer_mappings.to_vec(),
                     binding_array_length_map: layout.binding_array_length_map.clone(),
+                    multiview_mask,
                 };
 
                 let (source, info) = naga::back::msl::write_string(
@@ -1648,6 +1650,7 @@ impl crate::Device for super::Device {
                             desc.layout,
                             primitive_class,
                             naga::ShaderStage::Vertex,
+                            desc.multiview_mask,
                         )?;
 
                         descriptor.setVertexFunction(Some(&vs.function));
@@ -1745,6 +1748,7 @@ impl crate::Device for super::Device {
                             desc.layout,
                             primitive_class,
                             naga::ShaderStage::Task,
+                            desc.multiview_mask,
                         )?;
                         unsafe { descriptor.setObjectFunction(Some(&ts.function)) };
                         if supports_mutability {
@@ -1774,6 +1778,7 @@ impl crate::Device for super::Device {
                             desc.layout,
                             primitive_class,
                             naga::ShaderStage::Mesh,
+                            desc.multiview_mask,
                         )?;
                         unsafe { descriptor.setMeshFunction(Some(&ms.function)) };
                         if supports_mutability {
@@ -1815,6 +1820,7 @@ impl crate::Device for super::Device {
                         desc.layout,
                         primitive_class,
                         naga::ShaderStage::Fragment,
+                        desc.multiview_mask,
                     )?;
 
                     unsafe { descriptor.setFragmentFunction(Some(&fs.function)) };
@@ -2053,6 +2059,7 @@ impl crate::Device for super::Device {
                     desc.layout,
                     MTLPrimitiveTopologyClass::Unspecified,
                     naga::ShaderStage::Compute,
+                    None,
                 )?
             };
 

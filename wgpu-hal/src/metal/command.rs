@@ -946,6 +946,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
         assert!(self.state.compute.is_none());
         assert!(self.state.render.is_none());
 
+        // Vertex amplification ignores the view mapping when there is only one view, so a
+        // single-view pass renders to the view's layer directly.
+        let amplified_multiview_mask = desc.multiview_mask.filter(|mv| mv.get().count_ones() > 1);
+        let single_view_layer = match desc.multiview_mask {
+            Some(mv) if amplified_multiview_mask.is_none() => mv.get().trailing_zeros(),
+            _ => 0,
+        };
+
         autoreleasepool(|_| {
             let descriptor = MTLRenderPassDescriptor::new();
 
@@ -955,7 +963,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         unsafe { descriptor.colorAttachments().objectAtIndexedSubscript(i) };
                     at_descriptor.setTexture(Some(&at.target.view.attachment.texture));
                     at_descriptor.setLevel(at.target.view.attachment.base_mip_level as _);
-                    at_descriptor.setSlice(at.target.view.attachment.base_array_layer as _);
+                    at_descriptor.setSlice(
+                        (at.target.view.attachment.base_array_layer + single_view_layer) as _,
+                    );
 
                     if let Some(depth_slice) = at.depth_slice {
                         at_descriptor.setDepthPlane(depth_slice as usize);
@@ -963,8 +973,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     if let Some(ref resolve) = at.resolve_target {
                         at_descriptor.setResolveTexture(Some(&resolve.view.attachment.texture));
                         at_descriptor.setResolveLevel(resolve.view.attachment.base_mip_level as _);
-                        at_descriptor
-                            .setResolveSlice(resolve.view.attachment.base_array_layer as _);
+                        at_descriptor.setResolveSlice(
+                            (resolve.view.attachment.base_array_layer + single_view_layer) as _,
+                        );
                     }
                     let load_action = if at.ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
@@ -990,7 +1001,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     let at_descriptor = descriptor.depthAttachment();
                     at_descriptor.setTexture(Some(&at.target.view.attachment.texture));
                     at_descriptor.setLevel(at.target.view.attachment.base_mip_level as _);
-                    at_descriptor.setSlice(at.target.view.attachment.base_array_layer as _);
+                    at_descriptor.setSlice(
+                        (at.target.view.attachment.base_array_layer + single_view_layer) as _,
+                    );
 
                     let load_action = if at.depth_ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
@@ -1019,7 +1032,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     let at_descriptor = descriptor.stencilAttachment();
                     at_descriptor.setTexture(Some(&at.target.view.attachment.texture));
                     at_descriptor.setLevel(at.target.view.attachment.base_mip_level as _);
-                    at_descriptor.setSlice(at.target.view.attachment.base_array_layer as _);
+                    at_descriptor.setSlice(
+                        (at.target.view.attachment.base_array_layer + single_view_layer) as _,
+                    );
 
                     let load_action = if at.stencil_ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
@@ -1100,12 +1115,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
             // also say "The number of active layers that all attachments must have for layered rendering," implying it is only for layered rendering.
             // However, when I don't set this, I get undefined behavior in nonzero layers, and all non-apple examples of vertex amplification set it.
             // So this is just one of those undocumented requirements.
-            if let Some(mv) = desc.multiview_mask {
+            if let Some(mv) = amplified_multiview_mask {
                 descriptor.setRenderTargetArrayLength(32 - mv.leading_zeros() as usize);
             }
             let raw = self.raw_cmd_buf.as_ref().unwrap();
             let encoder = raw.renderCommandEncoderWithDescriptor(&descriptor).unwrap();
-            if let Some(mv) = desc.multiview_mask {
+            if let Some(mv) = amplified_multiview_mask {
                 // Most likely the API just wasn't thought about enough. It's not like they ever allow you
                 // to use enough views to overflow a 32-bit bitmask.
                 let mv = mv.get();
@@ -1125,7 +1140,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         maps.as_ptr(),
                     )
                 };
-                self.state.multiview_view_count = mv.count_ones();
+            }
+            if let Some(mv) = desc.multiview_mask {
+                self.state.multiview_view_count = mv.get().count_ones();
             }
             if let Some(label) = desc.label {
                 encoder.setLabel(Some(&NSString::from_str(label)));

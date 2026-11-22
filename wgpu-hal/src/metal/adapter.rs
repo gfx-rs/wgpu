@@ -1526,7 +1526,7 @@ impl super::CapabilitiesQuery {
         );
 
         if self.supported_vertex_amplification_factor > 1 {
-            features.insert(F::MULTIVIEW);
+            features.insert(F::MULTIVIEW | F::SELECTIVE_MULTIVIEW);
         }
 
         features.set(F::EXPERIMENTAL_RAY_QUERY, self.supports_raytracing);

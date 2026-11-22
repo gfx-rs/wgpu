@@ -10,9 +10,11 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(DRAW_MULTIVIEW_SINGLE);
     vec.push(DRAW_MULTIVIEW);
     vec.push(DRAW_MULTIVIEW_NONCONTIGUOUS);
+    vec.push(DRAW_MULTIVIEW_SKIP_FIRST_LAYER);
     vec.push(DRAW_MULTIVIEW_MULTISAMPLE);
     vec.push(DRAW_MULTIVIEW_MESH);
     vec.push(DRAW_MULTIVIEW_MESH_NONCONTIGUOUS);
+    vec.push(DRAW_MULTIVIEW_MESH_SKIP_FIRST_LAYER);
     vec.push(MULTIVIEW_OCCLUSION_QUERY);
 }
 
@@ -64,6 +66,19 @@ static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration
     })
     .run_async(|ctx| run_test(ctx, 0b1001, 1, false));
 
+/// Renders only to layer 1, so `view_index` differs from the index of the view within the mask.
+#[apply(gpu_test!)]
+static DRAW_MULTIVIEW_SKIP_FIRST_LAYER: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::MULTIVIEW | Features::SELECTIVE_MULTIVIEW)
+            .limits(Limits {
+                max_multiview_view_count: 2,
+                ..Limits::defaults()
+            }),
+    )
+    .run_async(|ctx| run_test(ctx, 0b10, 1, false));
+
 #[apply(gpu_test!)]
 static DRAW_MULTIVIEW_MULTISAMPLE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
@@ -110,6 +125,24 @@ static DRAW_MULTIVIEW_MESH_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfigur
             }),
     )
     .run_async(|ctx| run_test(ctx, 0b1001, 1, true));
+
+#[apply(gpu_test!)]
+static DRAW_MULTIVIEW_MESH_SKIP_FIRST_LAYER: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(
+                Features::MULTIVIEW
+                    | Features::SELECTIVE_MULTIVIEW
+                    | Features::EXPERIMENTAL_MESH_SHADER
+                    | Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
+            )
+            .limits(Limits {
+                max_multiview_view_count: 2,
+                max_mesh_multiview_view_count: 2,
+                ..Limits::defaults().using_recommended_minimum_mesh_shader_values()
+            }),
+    )
+    .run_async(|ctx| run_test(ctx, 0b10, 1, true));
 
 async fn run_test(ctx: TestingContext, layer_mask: u32, sample_count: u32, mesh: bool) {
     let num_layers = 32 - layer_mask.leading_zeros();

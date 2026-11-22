@@ -1094,8 +1094,7 @@ features! {
         /// Supported platforms:
         /// - Vulkan
         /// - DX12 (with view instancing and SM 6.1+)
-        ///
-        /// While metal supports this in theory, the behavior of `view_index` differs from vulkan and dx12 so the feature isn't exposed.
+        /// - Metal (with vertex amplification)
         ///
         /// This is a native only feature.
         ///
