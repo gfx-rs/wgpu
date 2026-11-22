@@ -2092,7 +2092,10 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "generic over the expression context, so the arena, type lookup and writer are passed separately"
+    )]
     fn put_possibly_const_expression<C, I, E>(
         &mut self,
         expr_handle: Handle<crate::Expression>,
@@ -6453,7 +6456,10 @@ template <typename A>
         format!("{DOT_FUNCTION_PREFIX}_{type_name}{size_suffix}")
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "arguments mirror the fields of `Expression::Math`"
+    )]
     fn write_wrapped_math_function(
         &mut self,
         module: &crate::Module,
@@ -6688,7 +6694,10 @@ template <typename A>
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "arguments mirror the fields of `Expression::ImageLoad`"
+    )]
     fn write_wrapped_image_load(
         &mut self,
         module: &crate::Module,
@@ -6774,7 +6783,10 @@ template <typename A>
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "arguments mirror the fields of `Expression::ImageSample`"
+    )]
     fn write_wrapped_image_sample(
         &mut self,
         module: &crate::Module,

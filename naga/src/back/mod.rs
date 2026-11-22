@@ -1,6 +1,7 @@
 /*!
 Backend functions that export shader [`Module`](super::Module)s into binary and text formats.
 */
+#![warn(clippy::allow_attributes, clippy::allow_attributes_without_reason)]
 #![cfg_attr(
     not(any(dot_out, glsl_out, hlsl_out, msl_out, spv_out, wgsl_out)),
     allow(
@@ -49,7 +50,7 @@ pub type NeedBakeExpressions = crate::FastHashSet<crate::Handle<crate::Expressio
 /// [`Handle`]: crate::Handle
 #[cfg_attr(
     not(any(glsl_out, hlsl_out, msl_out, wgsl_out)),
-    allow(
+    expect(
         dead_code,
         reason = "shared helpers can be dead if none of the enabled backends need it"
     )
@@ -65,13 +66,6 @@ impl core::fmt::Display for Baked {
 bitflags::bitflags! {
     /// How far through a ray query are we
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    #[cfg_attr(
-        not(any(hlsl_out, spv_out)),
-        allow(
-            dead_code,
-            reason = "shared helpers can be dead if none of the enabled backends need it"
-        )
-    )]
     pub(super) struct RayQueryPoint: u32 {
         /// Ray query has been successfully initialized.
         const INITIALIZED = 1 << 0;
@@ -238,10 +232,13 @@ impl FunctionCtx<'_> {
                     external_texture_key,
                 )
             }
-            // This is a const function, which _sometimes_ gets called,
-            // so this lint is _sometimes_ triggered, depending on feature set.
-            #[expect(clippy::allow_attributes)]
-            #[allow(clippy::panic)]
+            #[cfg_attr(
+                not(test),
+                expect(
+                    clippy::panic,
+                    reason = "entry points never have external texture arguments"
+                )
+            )]
             FunctionType::EntryPoint(_) => {
                 panic!("External textures cannot be used as arguments to entry points")
             }

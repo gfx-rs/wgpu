@@ -420,7 +420,10 @@ impl super::Writer {
     }
 
     /// This writes the actual loop
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the caller allocates the loop IDs and builds the loop body"
+    )]
     fn write_mesh_copy_loop(
         &mut self,
         body: &mut Vec<Instruction>,

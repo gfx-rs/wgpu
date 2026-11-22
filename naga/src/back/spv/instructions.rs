@@ -784,7 +784,10 @@ impl super::Instruction {
     //
     //  Ray Query Instructions
     //
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one parameter per operand of `OpRayQueryInitializeKHR`"
+    )]
     pub(super) fn ray_query_initialize(
         query: Word,
         acceleration_structure: Word,
@@ -881,7 +884,10 @@ impl super::Instruction {
     //  Ray Tracing Pipeline Instructions
     //
 
-    #[expect(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one parameter per operand of `OpTraceRayKHR`"
+    )]
     pub(super) fn trace_ray(
         acceleration_structure: Word,
         ray_flags: Word,
@@ -914,7 +920,10 @@ impl super::Instruction {
     //  Ray Tracing Invocation Reorder Instructions
     //
 
-    #[expect(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one parameter per operand of `OpHitObjectTraceRayEXT`"
+    )]
     pub(super) fn hit_object_trace_ray(
         hit_object: Word,
         acceleration_structure: Word,

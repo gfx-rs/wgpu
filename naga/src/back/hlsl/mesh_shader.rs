@@ -37,7 +37,10 @@ impl NestedEntryPointArgs {
 }
 
 impl<W: fmt::Write> super::Writer<'_, W> {
-    #[expect(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the wrapper needs the nested function and entry point state"
+    )]
     fn write_mesh_shader_wrapper(
         &mut self,
         module: &Module,
@@ -287,7 +290,10 @@ impl<W: fmt::Write> super::Writer<'_, W> {
     /// Mesh and task entry points must all return at the same `return` statement,
     /// so we have a nested function that can return wherever. This writes the caller,
     /// or the actual entry point.
-    #[expect(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the wrapper needs the nested function and entry point state"
+    )]
     pub(super) fn write_nested_function_outer(
         &mut self,
         module: &Module,
