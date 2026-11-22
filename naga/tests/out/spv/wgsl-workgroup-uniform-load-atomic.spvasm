@@ -45,8 +45,8 @@ OpDecorate %22 BuiltIn LocalInvocationIndex
 %38 = OpConstantNull  %9
 %40 = OpConstantNull  %9
 %45 = OpTypePointer Workgroup %5
-%47 = OpConstant  %4  2
-%52 = OpConstant  %3  264
+%51 = OpConstant  %3  264
+%59 = OpConstant  %4  2
 %25 = OpFunction  %2  None %26
 %16 = OpLabel
 %34 = OpVariable  %35  Function %36
@@ -62,47 +62,47 @@ OpSelectionMerge %43 None
 OpBranchConditional %42 %44 %43
 %44 = OpLabel
 %46 = OpAccessChain  %13  %14 %30 %24
-OpAtomicStore %46 %47 %31 %33
+OpStore %46 %33
 OpBranch %43
 %43 = OpLabel
-%48 = OpIEqual  %9  %24 %31
-OpSelectionMerge %49 None
-OpBranchConditional %48 %50 %49
-%50 = OpLabel
-OpAtomicStore %10 %47 %31 %31
-OpAtomicStore %12 %47 %31 %33
-%51 = OpAccessChain  %11  %14 %31
-OpAtomicStore %51 %47 %31 %31
-OpBranch %49
+%47 = OpIEqual  %9  %24 %31
+OpSelectionMerge %48 None
+OpBranchConditional %47 %49 %48
 %49 = OpLabel
-OpControlBarrier %6 %6 %52
-%53 = OpCompositeExtract  %3  %19 0
-%54 = OpCompositeExtract  %3  %19 1
-%55 = OpIMul  %3  %54 %27
-%56 = OpIAdd  %3  %53 %55
-%57 = OpUGreaterThanEqual  %9  %56 %28
-%58 = OpSelect  %3  %57 %30 %31
-%59 = OpAtomicOr  %3  %10 %47 %31 %58
-%60 = OpAtomicIAdd  %4  %12 %47 %31 %29
+OpStore %10 %31
+OpStore %12 %33
+%50 = OpAccessChain  %11  %14 %31
+OpStore %50 %31
+OpBranch %48
+%48 = OpLabel
+OpControlBarrier %6 %6 %51
+%52 = OpCompositeExtract  %3  %19 0
+%53 = OpCompositeExtract  %3  %19 1
+%54 = OpIMul  %3  %53 %27
+%55 = OpIAdd  %3  %52 %54
+%56 = OpUGreaterThanEqual  %9  %55 %28
+%57 = OpSelect  %3  %56 %30 %31
+%58 = OpAtomicOr  %3  %10 %59 %31 %57
+%60 = OpAtomicIAdd  %4  %12 %59 %31 %29
 %61 = OpAccessChain  %11  %14 %31
-OpAtomicStore %61 %47 %31 %30
+OpAtomicStore %61 %59 %31 %30
 %63 = OpAccessChain  %13  %14 %30 %31
-%62 = OpAtomicIAdd  %4  %63 %47 %31 %29
-OpControlBarrier %6 %6 %52
-OpControlBarrier %6 %6 %52
-%64 = OpAtomicLoad  %3  %10 %47 %31
-OpControlBarrier %6 %6 %52
-OpControlBarrier %6 %6 %52
-%65 = OpAtomicLoad  %4  %12 %47 %31
-OpControlBarrier %6 %6 %52
-OpControlBarrier %6 %6 %52
+%62 = OpAtomicIAdd  %4  %63 %59 %31 %29
+OpControlBarrier %6 %6 %51
+OpControlBarrier %6 %6 %51
+%64 = OpAtomicLoad  %3  %10 %59 %31
+OpControlBarrier %6 %6 %51
+OpControlBarrier %6 %6 %51
+%65 = OpAtomicLoad  %4  %12 %59 %31
+OpControlBarrier %6 %6 %51
+OpControlBarrier %6 %6 %51
 %66 = OpAccessChain  %11  %14 %31
-%67 = OpAtomicLoad  %3  %66 %47 %31
-OpControlBarrier %6 %6 %52
-OpControlBarrier %6 %6 %52
+%67 = OpAtomicLoad  %3  %66 %59 %31
+OpControlBarrier %6 %6 %51
+OpControlBarrier %6 %6 %51
 %68 = OpAccessChain  %13  %14 %30 %31
-%69 = OpAtomicLoad  %4  %68 %47 %31
-OpControlBarrier %6 %6 %52
+%69 = OpAtomicLoad  %4  %68 %59 %31
+OpControlBarrier %6 %6 %51
 %70 = OpIEqual  %9  %64 %31
 OpSelectionMerge %71 None
 OpBranchConditional %70 %72 %73

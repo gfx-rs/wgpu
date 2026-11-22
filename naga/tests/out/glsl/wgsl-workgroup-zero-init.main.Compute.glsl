@@ -39,7 +39,7 @@ void main() {
     }
     if ((index < 2u)) {
         particles[index].position = vec3(0.0);
-        atomicExchange(particles[index].hits, 0u);
+        particles[index].hits = 0u;
     }
     particles[(index / 4u)].history[(index - 4u * (index / 4u))] = 0.0;
     if ((index == 0u)) {

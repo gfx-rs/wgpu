@@ -18,16 +18,16 @@ void main()
     bool _39 = false;
     if (gl_LocalInvocationIndex < 2u)
     {
-        atomicExchange(_14._m1[gl_LocalInvocationIndex], 0);
+        _14._m1[gl_LocalInvocationIndex] = 0;
     }
     if (gl_LocalInvocationIndex == 0u)
     {
-        atomicExchange(_10, 0u);
-        atomicExchange(_12, 0);
-        atomicExchange(_14._m0, 0u);
+        _10 = 0u;
+        _12 = 0;
+        _14._m0 = 0u;
     }
     barrier();
-    uint _59 = atomicOr(_10, uint((gl_WorkGroupID.x + (gl_WorkGroupID.y * 32768u)) >= 64u));
+    uint _58 = atomicOr(_10, uint((gl_WorkGroupID.x + (gl_WorkGroupID.y * 32768u)) >= 64u));
     int _60 = atomicAdd(_12, 1);
     atomicExchange(_14._m0, 1u);
     int _62 = atomicAdd(_14._m1[0u], 1);

@@ -112,7 +112,7 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
         if ((_e368 >= 57u)) {
             break;
         }
-        { uint dummy = 0; InterlockedExchange(data[min(uint(naga_div(_e368, 19u)), 2u)].atoms[min(uint(naga_mod(_e368, 19u)), 18u)], 0u, dummy); }
+        data[min(uint(naga_div(_e368, 19u)), 2u)].atoms[min(uint(naga_mod(_e368, 19u)), 18u)] = 0u;
         zero_init_index = (_e368 + 16u);
     }
     if ((zero_flat_index < 3u)) {
@@ -414,7 +414,7 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
                     {
                         uint _e240 = i_2;
                         uint _e243 = j_4;
-                        { uint dummy_1 = 0; InterlockedExchange(data[min(uint(_e240), 2u)].atoms[min(uint(_e243), 18u)], 42u, dummy_1); }
+                        { uint dummy = 0; InterlockedExchange(data[min(uint(_e240), 2u)].atoms[min(uint(_e243), 18u)], 42u, dummy); }
                     }
                 }
             }

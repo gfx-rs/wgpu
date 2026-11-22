@@ -58,13 +58,13 @@ void main()
         {
             break;
         }
-        atomicExchange(w_mem.atom_arr[naga_div(zero_init_index, 8u)][naga_mod(zero_init_index, 8u)], 0);
+        w_mem.atom_arr[naga_div(zero_init_index, 8u)][naga_mod(zero_init_index, 8u)] = 0;
         zero_init_index++;
         continue;
     }
     if (gl_LocalInvocationIndex == 0u)
     {
-        atomicExchange(w_mem.atom, 0);
+        w_mem.atom = 0;
     }
     barrier();
     _output_1._m0 = w_mem.arr;

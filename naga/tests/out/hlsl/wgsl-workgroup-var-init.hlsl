@@ -41,11 +41,11 @@ void main(uint local_invocation_index : SV_GroupIndex)
         if ((_e18 >= 64u)) {
             break;
         }
-        { int dummy = 0; InterlockedExchange(w_mem.atom_arr[min(uint(naga_div(_e18, 8u)), 7u)][min(uint(naga_mod(_e18, 8u)), 7u)], int(0), dummy); }
+        w_mem.atom_arr[min(uint(naga_div(_e18, 8u)), 7u)][min(uint(naga_mod(_e18, 8u)), 7u)] = int(0);
         zero_init_index = (_e18 + 1u);
     }
     if ((local_invocation_index == 0u)) {
-        { int dummy_1 = 0; InterlockedExchange(w_mem.atom, int(0), dummy_1); }
+        w_mem.atom = int(0);
     }
     GroupMemoryBarrierWithGroupSync();
     uint _e3[512] = w_mem.arr;

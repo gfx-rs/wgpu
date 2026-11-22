@@ -69,10 +69,10 @@ OpDecorate %146 BuiltIn LocalInvocationIndex
 %94 = OpTypePointer Workgroup %3
 %100 = OpTypePointer Workgroup %8
 %101 = OpTypePointer Workgroup %4
-%105 = OpTypeInt 32 1
-%104 = OpConstant  %105  2
-%112 = OpConstant  %5  264
-%134 = OpConstant  %3  4294967000
+%110 = OpConstant  %5  264
+%132 = OpConstant  %3  4294967000
+%138 = OpTypeInt 32 1
+%137 = OpConstant  %138  2
 %146 = OpVariable  %48  Input
 %28 = OpFunction  %5  None %29
 %30 = OpFunctionParameter  %5
@@ -153,52 +153,52 @@ OpBranchConditional %97 %99 %98
 %102 = OpAccessChain  %101  %26 %49 %34
 OpStore %102 %55
 %103 = OpAccessChain  %19  %26 %49 %36
-OpAtomicStore %103 %104 %34 %34
+OpStore %103 %34
 OpBranch %98
 %98 = OpLabel
-%106 = OpFunctionCall  %5  %39 %49 %7
-%107 = OpFunctionCall  %5  %28 %49 %7
-%108 = OpAccessChain  %94  %26 %106 %17 %107
-OpStore %108 %54
-%109 = OpIEqual  %33  %49 %34
-OpSelectionMerge %110 None
-OpBranchConditional %109 %111 %110
-%111 = OpLabel
+%104 = OpFunctionCall  %5  %39 %49 %7
+%105 = OpFunctionCall  %5  %28 %49 %7
+%106 = OpAccessChain  %94  %26 %104 %17 %105
+OpStore %106 %54
+%107 = OpIEqual  %33  %49 %34
+OpSelectionMerge %108 None
+OpBranchConditional %107 %109 %108
+%109 = OpLabel
 OpStore %18 %34
-OpBranch %110
-%110 = OpLabel
-OpControlBarrier %17 %17 %112
-%113 = OpFunctionCall  %5  %28 %49 %10
-%114 = OpAccessChain  %19  %20 %113
-%115 = OpLoad  %5  %114
-%116 = OpConvertUToF  %3  %115
-%117 = OpAccessChain  %94  %22 %49 %34
-%118 = OpLoad  %3  %117
-%119 = OpFAdd  %3  %116 %118
-%120 = OpFunctionCall  %5  %28 %49 %15
-%121 = OpFunctionCall  %5  %28 %49 %7
-%122 = OpAccessChain  %94  %24 %120 %121
-%123 = OpLoad  %3  %122
-%124 = OpFAdd  %3  %119 %123
-%125 = OpFunctionCall  %5  %28 %49 %17
-%126 = OpAccessChain  %94  %26 %125 %34 %34
-%127 = OpLoad  %3  %126
-%128 = OpFAdd  %3  %124 %127
-%129 = OpFunctionCall  %5  %28 %49 %17
-%130 = OpFunctionCall  %5  %28 %49 %7
-%131 = OpAccessChain  %94  %26 %129 %17 %130
-%132 = OpLoad  %3  %131
-%133 = OpFAdd  %3  %128 %132
-%135 = OpExtInst  %3  %1 FClamp %133 %54 %134
-%136 = OpConvertFToU  %5  %135
-%138 = OpAccessChain  %19  %26 %34 %36
-%137 = OpAtomicIAdd  %5  %138 %104 %34 %136
+OpBranch %108
+%108 = OpLabel
+OpControlBarrier %17 %17 %110
+%111 = OpFunctionCall  %5  %28 %49 %10
+%112 = OpAccessChain  %19  %20 %111
+%113 = OpLoad  %5  %112
+%114 = OpConvertUToF  %3  %113
+%115 = OpAccessChain  %94  %22 %49 %34
+%116 = OpLoad  %3  %115
+%117 = OpFAdd  %3  %114 %116
+%118 = OpFunctionCall  %5  %28 %49 %15
+%119 = OpFunctionCall  %5  %28 %49 %7
+%120 = OpAccessChain  %94  %24 %118 %119
+%121 = OpLoad  %3  %120
+%122 = OpFAdd  %3  %117 %121
+%123 = OpFunctionCall  %5  %28 %49 %17
+%124 = OpAccessChain  %94  %26 %123 %34 %34
+%125 = OpLoad  %3  %124
+%126 = OpFAdd  %3  %122 %125
+%127 = OpFunctionCall  %5  %28 %49 %17
+%128 = OpFunctionCall  %5  %28 %49 %7
+%129 = OpAccessChain  %94  %26 %127 %17 %128
+%130 = OpLoad  %3  %129
+%131 = OpFAdd  %3  %126 %130
+%133 = OpExtInst  %3  %1 FClamp %131 %54 %132
+%134 = OpConvertFToU  %5  %133
+%136 = OpAccessChain  %19  %26 %34 %36
+%135 = OpAtomicIAdd  %5  %136 %137 %34 %134
 %139 = OpIEqual  %33  %49 %34
 OpSelectionMerge %140 None
 OpBranchConditional %139 %141 %142
 %141 = OpLabel
 %143 = OpAccessChain  %19  %26 %36 %36
-%144 = OpAtomicLoad  %5  %143 %104 %34
+%144 = OpAtomicLoad  %5  %143 %137 %34
 OpStore %18 %144
 OpReturn
 %142 = OpLabel
@@ -218,7 +218,7 @@ OpBranchConditional %150 %152 %151
 OpStore %18 %34
 OpBranch %151
 %151 = OpLabel
-OpControlBarrier %17 %17 %112
+OpControlBarrier %17 %17 %110
 %153 = OpLoad  %5  %18
 OpReturn
 OpFunctionEnd

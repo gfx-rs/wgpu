@@ -108,7 +108,7 @@ void main()
     }
     if (gl_LocalInvocationIndex == 0u)
     {
-        atomicExchange(_32, 0u);
+        _32 = 0u;
     }
     barrier();
     _61();

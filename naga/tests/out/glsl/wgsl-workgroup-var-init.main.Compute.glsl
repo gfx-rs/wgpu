@@ -33,11 +33,11 @@ void main() {
         if ((_e18 >= 64u)) {
             break;
         }
-        atomicExchange(w_mem.atom_arr[(_e18 / 8u)][(_e18 - 8u * (_e18 / 8u))], 0);
+        w_mem.atom_arr[(_e18 / 8u)][(_e18 - 8u * (_e18 / 8u))] = 0;
         zero_init_index = (_e18 + 1u);
     }
     if ((local_invocation_index == 0u)) {
-        atomicExchange(w_mem.atom, 0);
+        w_mem.atom = 0;
     }
     memoryBarrierShared();
     barrier();

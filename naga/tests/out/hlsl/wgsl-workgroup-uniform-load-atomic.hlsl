@@ -15,18 +15,18 @@ void test_atomic_workgroup_uniform_load(uint3 workgroup_id : SV_GroupID, uint3 l
     bool local_2 = (bool)0;
 
     if ((local_invocation_index < 2u)) {
-        { int dummy = 0; InterlockedExchange(wg_struct.atomic_arr[min(uint(local_invocation_index), 1u)], int(0), dummy); }
+        wg_struct.atomic_arr[min(uint(local_invocation_index), 1u)] = int(0);
     }
     if ((local_invocation_index == 0u)) {
-        { uint dummy_1 = 0; InterlockedExchange(wg_scalar, 0u, dummy_1); }
-        { int dummy_2 = 0; InterlockedExchange(wg_signed, int(0), dummy_2); }
-        { uint dummy_3 = 0; InterlockedExchange(wg_struct.atomic_scalar, 0u, dummy_3); }
+        wg_scalar = 0u;
+        wg_signed = int(0);
+        wg_struct.atomic_scalar = 0u;
     }
     GroupMemoryBarrierWithGroupSync();
     uint active_tile_index = (workgroup_id.x + (workgroup_id.y * 32768u));
     uint _e11; InterlockedOr(wg_scalar, uint((active_tile_index >= 64u)), _e11);
     int _e14; InterlockedAdd(wg_signed, int(1), _e14);
-    { uint dummy_4 = 0; InterlockedExchange(wg_struct.atomic_scalar, 1u, dummy_4); }
+    { uint dummy = 0; InterlockedExchange(wg_struct.atomic_scalar, 1u, dummy); }
     int _e22; InterlockedAdd(wg_struct.atomic_arr[0], int(1), _e22);
     GroupMemoryBarrierWithGroupSync();
     GroupMemoryBarrierWithGroupSync();

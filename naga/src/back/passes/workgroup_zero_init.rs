@@ -490,11 +490,12 @@ impl WorkgroupInit<'_> {
         leaf: &Leaf,
         indices: &[Handle<Expression>],
     ) {
-        let value = match leaf.value {
-            LeafValue::Zero(ty) => self.pre_emit(zero_value(self.types, ty)),
-            LeafValue::Atomic(scalar) => {
-                self.pre_emit(Expression::Literal(Literal::zero(scalar).unwrap()))
-            }
+        let (value, atomic) = match leaf.value {
+            LeafValue::Zero(ty) => (self.pre_emit(zero_value(self.types, ty)), false),
+            LeafValue::Atomic(scalar) => (
+                self.pre_emit(Expression::Literal(Literal::zero(scalar).unwrap())),
+                true,
+            ),
         };
         let mut pointer = self.pre_emit(Expression::GlobalVariable(var));
         self.emitter.start(&self.function.expressions);
@@ -511,7 +512,14 @@ impl WorkgroupInit<'_> {
             });
         }
         block.extend(self.emitter.finish(&self.function.expressions));
-        block.push(Statement::Store { pointer, value }, Span::UNDEFINED);
+        // Each element is stored by one invocation before the barrier, so
+        // atomics don't need atomic stores.
+        let statement = if atomic {
+            Statement::NonAtomicStore { pointer, value }
+        } else {
+            Statement::Store { pointer, value }
+        };
+        block.push(statement, Span::UNDEFINED);
     }
 
     /// Return the entry point's local invocation index, adding an argument for it if needed.
@@ -648,7 +656,21 @@ mod tests {
         assert!(has_barrier(&body));
     }
 
-    /// An array with no more elements than invocations needs no loop.
+    fn has_non_atomic_store(block: &crate::Block) -> bool {
+        block.iter().any(|s| match *s {
+            Statement::NonAtomicStore { .. } => true,
+            Statement::If {
+                ref accept,
+                ref reject,
+                ..
+            } => has_non_atomic_store(accept) || has_non_atomic_store(reject),
+            Statement::Loop { ref body, .. } => has_non_atomic_store(body),
+            _ => false,
+        })
+    }
+
+    /// An array with no more elements than invocations needs no loop. Its
+    /// atomics are zeroed with non-atomic stores.
     #[test]
     fn small_array_uses_if() {
         let body = body(
@@ -660,6 +682,7 @@ mod tests {
         );
         assert!(!body.iter().any(|s| matches!(*s, Statement::Loop { .. })));
         assert!(body.iter().any(|s| matches!(*s, Statement::If { .. })));
+        assert!(has_non_atomic_store(&body));
         assert!(has_barrier(&body));
     }
 
