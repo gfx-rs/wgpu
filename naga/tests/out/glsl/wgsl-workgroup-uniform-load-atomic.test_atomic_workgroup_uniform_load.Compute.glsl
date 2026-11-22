@@ -24,12 +24,12 @@ void main() {
     bool local_1 = false;
     bool local_2 = false;
     if ((local_invocation_index < 2u)) {
-        atomicExchange(wg_struct.atomic_arr[local_invocation_index], 0);
+        wg_struct.atomic_arr[local_invocation_index] = 0;
     }
     if ((local_invocation_index == 0u)) {
-        atomicExchange(wg_scalar, 0u);
-        atomicExchange(wg_signed, 0);
-        atomicExchange(wg_struct.atomic_scalar, 0u);
+        wg_scalar = 0u;
+        wg_signed = 0;
+        wg_struct.atomic_scalar = 0u;
     }
     memoryBarrierShared();
     barrier();

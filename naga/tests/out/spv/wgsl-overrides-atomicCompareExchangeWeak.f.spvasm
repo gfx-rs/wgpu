@@ -34,7 +34,7 @@ OpBranch %19
 OpSelectionMerge %21 None
 OpBranchConditional %20 %22 %21
 %22 = OpLabel
-OpAtomicStore %8 %7 %18 %18
+OpStore %8 %18
 OpBranch %21
 %21 = OpLabel
 OpControlBarrier %16 %16 %23

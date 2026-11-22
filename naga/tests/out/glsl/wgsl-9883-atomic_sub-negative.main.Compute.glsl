@@ -11,7 +11,7 @@ shared int a;
 void main() {
     uint local_invocation_index = gl_LocalInvocationIndex;
     if ((local_invocation_index == 0u)) {
-        atomicExchange(a, 0);
+        a = 0;
     }
     memoryBarrierShared();
     barrier();

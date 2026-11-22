@@ -46,12 +46,12 @@ shared _8 _26;
 
 void main()
 {
-    atomicExchange(_24[gl_LocalInvocationIndex], 0l);
-    atomicExchange(_26._m1[gl_LocalInvocationIndex], 0l);
+    _24[gl_LocalInvocationIndex] = 0l;
+    _26._m1[gl_LocalInvocationIndex] = 0l;
     if (gl_LocalInvocationIndex == 0u)
     {
-        atomicExchange(_22, 0ul);
-        atomicExchange(_26._m0, 0ul);
+        _22 = 0ul;
+        _26._m0 = 0ul;
     }
     barrier();
     atomicExchange(_13._m0, 1ul);

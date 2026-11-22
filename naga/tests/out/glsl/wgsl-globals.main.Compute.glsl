@@ -67,7 +67,7 @@ void main() {
         zero_init_index = (_e60 + 1u);
     }
     if ((local_invocation_index == 0u)) {
-        atomicExchange(at_1, 0u);
+        at_1 = 0u;
     }
     memoryBarrierShared();
     barrier();

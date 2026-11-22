@@ -53,7 +53,7 @@ void main(uint index : SV_GroupIndex)
     }
     if ((index < 2u)) {
         particles[min(uint(index), 1u)].position = ZeroValuefloat3();
-        { uint dummy = 0; InterlockedExchange(particles[min(uint(index), 1u)].hits, 0u, dummy); }
+        particles[min(uint(index), 1u)].hits = 0u;
     }
     particles[min(uint(naga_div(index, 4u)), 1u)].history[min(uint(naga_mod(index, 4u)), 3u)] = 0.0;
     if ((index == 0u)) {

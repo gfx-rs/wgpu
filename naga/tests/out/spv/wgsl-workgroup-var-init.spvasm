@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 113
+; Bound: 112
 OpCapability Shader
 OpExtension "SPV_KHR_storage_buffer_storage_class"
 %1 = OpExtInstImport "GLSL.std.450"
@@ -90,8 +90,7 @@ OpDecorate %36 BuiltIn LocalInvocationIndex
 %100 = OpTypePointer Workgroup %8
 %101 = OpTypePointer Workgroup %7
 %102 = OpConstant  %4  2
-%104 = OpConstant  %7  2
-%110 = OpConstant  %4  264
+%109 = OpConstant  %4  264
 %17 = OpFunction  %4  None %18
 %19 = OpFunctionParameter  %4
 %20 = OpFunctionParameter  %4
@@ -199,33 +198,33 @@ OpLine %3 1 1
 OpLine %3 1 1
 OpLine %3 1 1
 %103 = OpAccessChain  %101  %12 %102 %97 %98
-OpAtomicStore %103 %104 %23 %44
+OpStore %103 %44
 OpLine %3 1 1
-%105 = OpIAdd  %4  %93 %25
+%104 = OpIAdd  %4  %93 %25
 OpLine %3 1 1
-OpStore %45 %105
+OpStore %45 %104
 OpBranch %81
 %81 = OpLabel
 OpBranch %78
 %79 = OpLabel
 OpLine %3 1 1
-%106 = OpIEqual  %22  %38 %23
+%105 = OpIEqual  %22  %38 %23
 OpLine %3 1 1
-OpSelectionMerge %107 None
-OpBranchConditional %106 %108 %107
-%108 = OpLabel
-OpLine %3 1 1
-OpLine %3 1 1
-%109 = OpAccessChain  %101  %12 %25
-OpAtomicStore %109 %104 %23 %44
-OpBranch %107
+OpSelectionMerge %106 None
+OpBranchConditional %105 %107 %106
 %107 = OpLabel
 OpLine %3 1 1
-OpControlBarrier %102 %102 %110
+OpLine %3 1 1
+%108 = OpAccessChain  %101  %12 %25
+OpStore %108 %44
+OpBranch %106
+%106 = OpLabel
+OpLine %3 1 1
+OpControlBarrier %102 %102 %109
 OpLine %3 14 14
-%111 = OpAccessChain  %74  %12 %23
-%112 = OpLoad  %5  %111
+%110 = OpAccessChain  %74  %12 %23
+%111 = OpLoad  %5  %110
 OpLine %3 14 5
-OpStore %42 %112
+OpStore %42 %111
 OpReturn
 OpFunctionEnd

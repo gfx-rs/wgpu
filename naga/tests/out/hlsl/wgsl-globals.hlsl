@@ -99,7 +99,7 @@ void main(uint local_invocation_index : SV_GroupIndex)
         zero_init_index = (_e60 + 1u);
     }
     if ((local_invocation_index == 0u)) {
-        { uint dummy_1 = 0; InterlockedExchange(at_1, 0u, dummy_1); }
+        at_1 = 0u;
     }
     GroupMemoryBarrierWithGroupSync();
     test_msl_packed_vec3_();
@@ -119,6 +119,6 @@ void main(uint local_invocation_index : SV_GroupIndex)
     wg[2] = _e43;
     alignment.Store(12, asuint(4.0));
     wg[1] = float(((NagaBufferLength(dummy) - 0) / 8));
-    { uint dummy_2 = 0; InterlockedExchange(at_1, 2u, dummy_2); }
+    { uint dummy_1 = 0; InterlockedExchange(at_1, 2u, dummy_1); }
     return;
 }

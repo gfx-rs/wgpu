@@ -80,16 +80,16 @@ OpDecorate %31 BuiltIn LocalInvocationIndex
 OpBranch %47
 %47 = OpLabel
 %49 = OpAccessChain  %48  %23 %33
-OpAtomicStore %49 %45 %37 %46
+OpStore %49 %46
 %50 = OpAccessChain  %48  %25 %43 %33
-OpAtomicStore %50 %45 %37 %46
+OpStore %50 %46
 %51 = OpIEqual  %9  %33 %37
 OpSelectionMerge %52 None
 OpBranchConditional %51 %53 %52
 %53 = OpLabel
-OpAtomicStore %21 %45 %37 %37
+OpStore %21 %37
 %54 = OpAccessChain  %22  %25 %37
-OpAtomicStore %54 %45 %37 %37
+OpStore %54 %37
 OpBranch %52
 %52 = OpLabel
 OpControlBarrier %6 %6 %55

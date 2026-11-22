@@ -13,7 +13,7 @@ void main()
 {
     if (gl_LocalInvocationIndex == 0u)
     {
-        atomicExchange(_8, 0u);
+        _8 = 0u;
     }
     barrier();
     uint _25 = atomicCompSwap(_8, 2u, 1u);
