@@ -366,7 +366,7 @@ impl super::Device {
 
                     profiling::scope!("naga::back::hlsl::write");
                     let mut reflection_info = writer
-                        .write(&module, &info, frag_ep.as_ref())
+                        .write(&*module, &*info, frag_ep.as_ref())
                         .map_err(|e| {
                             crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}"))
                         })?;

@@ -946,3 +946,16 @@ fn validate_atomic_compare_exchange_struct(
         && members[1].name.as_deref() == Some("exchanged")
         && types[members[1].ty].inner == crate::TypeInner::Scalar(crate::Scalar::BOOL)
 }
+
+/// Lets a function take a module's info either by reference or by value.
+impl<'a> From<&'a ModuleInfo> for alloc::borrow::Cow<'a, ModuleInfo> {
+    fn from(info: &'a ModuleInfo) -> Self {
+        Self::Borrowed(info)
+    }
+}
+
+impl From<ModuleInfo> for alloc::borrow::Cow<'_, ModuleInfo> {
+    fn from(info: ModuleInfo) -> Self {
+        Self::Owned(info)
+    }
+}

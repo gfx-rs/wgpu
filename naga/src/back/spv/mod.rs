@@ -1174,9 +1174,9 @@ pub struct PipelineOptions {
     pub entry_point: String,
 }
 
-pub fn write_vec(
-    module: &crate::Module,
-    info: &crate::valid::ModuleInfo,
+pub fn write_vec<'m>(
+    module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
+    info: impl Into<alloc::borrow::Cow<'m, crate::valid::ModuleInfo>>,
     options: &Options,
     pipeline_options: Option<&PipelineOptions>,
 ) -> Result<Vec<u32>, Error> {

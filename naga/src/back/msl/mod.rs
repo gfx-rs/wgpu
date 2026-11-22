@@ -837,9 +837,9 @@ pub struct TranslationInfo {
     pub entry_point_names: Vec<Result<String, EntryPointError>>,
 }
 
-pub fn write_string(
-    module: &crate::Module,
-    info: &ModuleInfo,
+pub fn write_string<'m>(
+    module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
+    info: impl Into<alloc::borrow::Cow<'m, ModuleInfo>>,
     options: &Options,
     pipeline_options: &PipelineOptions,
 ) -> Result<(String, TranslationInfo), Error> {

@@ -4830,14 +4830,15 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    pub fn write(
+    pub fn write<'m>(
         &mut self,
-        module: &crate::Module,
-        info: &valid::ModuleInfo,
+        module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
+        info: impl Into<alloc::borrow::Cow<'m, valid::ModuleInfo>>,
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
-        let (module, info) = back::passes::run(module, info, &back::passes::Passes::default())?;
+        let (module, info) =
+            back::passes::run(module.into(), info.into(), &back::passes::Passes::default())?;
         let (module, info) = (&*module, &*info);
         self.emit_int_div_checks = options.emit_int_div_checks;
         self.names.clear();

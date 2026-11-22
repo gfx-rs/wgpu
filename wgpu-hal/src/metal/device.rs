@@ -276,8 +276,8 @@ impl super::Device {
                 };
 
                 let (source, info) = naga::back::msl::write_string(
-                    &module,
-                    &module_info,
+                    &*module,
+                    &*module_info,
                     &options,
                     &pipeline_options,
                 )
