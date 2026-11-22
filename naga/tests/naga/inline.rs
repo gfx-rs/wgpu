@@ -327,3 +327,79 @@ fn msl_inlines_what_it_needs() {
         );
     }
 }
+
+/// `requires unrestricted_pointer_parameters;` only documents the use of the
+/// language extension, which is available without it. Both forms of a module
+/// validate, and each backend writes the same output for them.
+#[test]
+fn requires_unrestricted_pointer_parameters_is_optional() {
+    const BODY: &str = "
+        struct R { m: mat2x2<f32> }
+        struct Outer { inner: R }
+
+        @group(0) @binding(0) var<storage, read_write> buffer: array<u32, 4>;
+
+        fn f(r: ptr<function, R>) {
+            (*r).m = mat2x2<f32>();
+        }
+
+        fn g(p: ptr<storage, u32, read_write>) {
+            *p = 1u;
+        }
+
+        @compute @workgroup_size(1)
+        fn main() {
+            var n: Outer;
+            f(&n.inner);
+            g(&buffer[1]);
+        }
+    ";
+    let with = parse(&format!(
+        "requires unrestricted_pointer_parameters;\n{BODY}"
+    ));
+    let without = parse(BODY);
+    let outputs = |(module, _): &(Module, ModuleInfo)| {
+        let mut outputs: Vec<String> = Vec::new();
+        #[cfg(spv_out)]
+        outputs.push(format!(
+            "{:?}",
+            naga::back::spv::write_vec(module, &Default::default(), None).unwrap()
+        ));
+        #[cfg(hlsl_out)]
+        {
+            let mut output = String::new();
+            naga::back::hlsl::Writer::new(&mut output, &Default::default(), &Default::default())
+                .write(module, None)
+                .unwrap();
+            outputs.push(output);
+        }
+        #[cfg(msl_out)]
+        outputs.push(
+            naga::back::msl::write_string(module, &Default::default(), &Default::default())
+                .unwrap()
+                .0,
+        );
+        #[cfg(glsl_out)]
+        {
+            let mut output = String::new();
+            let pipeline_options = naga::back::glsl::PipelineOptions {
+                shader_stage: naga::ShaderStage::Compute,
+                entry_point: "main".into(),
+                multiview: None,
+            };
+            naga::back::glsl::Writer::new(
+                &mut output,
+                &Default::default(),
+                &pipeline_options,
+                Default::default(),
+            )
+            .write(module)
+            .unwrap();
+            outputs.push(output);
+        }
+        outputs
+    };
+    let with = outputs(&with);
+    assert!(!with.is_empty(), "no backends enabled");
+    assert_eq!(with, outputs(&without));
+}

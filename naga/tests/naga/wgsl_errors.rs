@@ -7132,3 +7132,19 @@ fn main() {
 ",
     );
 }
+
+/// Every implemented language extension may be named in a `requires`
+/// directive, and an unknown name is still an error.
+#[test]
+fn requires_language_extensions() {
+    for extension in naga::front::wgsl::ImplementedLanguageExtension::all() {
+        check_success(&format!(
+            "requires {};\n@compute @workgroup_size(1) fn main() {{}}",
+            extension.to_ident()
+        ));
+    }
+    check_error_matches(
+        "requires no_such_extension;\n@compute @workgroup_size(1) fn main() {}",
+        "unknown language extension `no_such_extension`",
+    );
+}
