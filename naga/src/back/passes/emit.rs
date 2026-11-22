@@ -39,10 +39,6 @@ impl<'a> Emitting<'a> {
 
     /// Append `expr`, which must not be covered by an `Emit`, such as a literal
     /// or a pointer to a variable.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "no pass on this branch pre-emits expressions")
-    )]
     pub(super) fn pre_emit(&mut self, expr: Expression) -> Handle<Expression> {
         self.flush();
         let handle = self.expressions.append(expr, self.span);
@@ -168,7 +164,7 @@ pub(super) fn for_each_direct_operand(
         Statement::Switch { selector, .. } => f(selector),
         Statement::Loop { break_if, .. } => break_if.into_iter().for_each(f),
         Statement::Return { value } => value.into_iter().for_each(f),
-        Statement::Store { pointer, value } => {
+        Statement::Store { pointer, value } | Statement::NonAtomicStore { pointer, value } => {
             f(pointer);
             f(value);
         }

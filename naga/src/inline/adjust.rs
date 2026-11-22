@@ -247,6 +247,10 @@ pub fn adjust_block(block: &mut Block, adjust: &mut dyn FnMut(&mut Handle<Expres
                 St::Store {
                     ref mut pointer,
                     ref mut value,
+                }
+                | St::NonAtomicStore {
+                    ref mut pointer,
+                    ref mut value,
                 } => {
                     adjust(pointer);
                     adjust(value);
