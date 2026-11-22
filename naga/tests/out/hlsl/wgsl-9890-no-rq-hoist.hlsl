@@ -37,17 +37,21 @@ void main()
     uint i = 0u;
     RayQuery<RAY_FLAG_NONE> sq;
     uint naga_query_init_tracker_for_sq = 0;
+    uint2 loop_bound = (uint2)0;
 
-    uint2 loop_bound = uint2(4294967295u, 4294967295u);
+    loop_bound = (4294967295u).xx;
     bool loop_init = true;
     while(true) {
-        if (all(loop_bound == uint2(0u, 0u))) { break; }
-        loop_bound -= uint2(loop_bound.y == 0u, 1u);
         if (!loop_init) {
             uint _e21 = i;
             i = (_e21 + 1u);
         }
         loop_init = false;
+        uint2 _e29 = loop_bound;
+        if (all((_e29 == (0u).xx))) {
+            break;
+        }
+        loop_bound = (_e29 - uint2(((_e29.y == 0u) ? 1u : 0u), 1u));
         uint _e2 = i;
         if ((_e2 < 4u)) {
         } else {

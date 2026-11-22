@@ -28,17 +28,22 @@ void test_atomic_compare_exchange_i64_()
     uint i = 0u;
     int64_t old = (int64_t)0;
     bool exchanged = (bool)0;
+    uint2 loop_bound = (uint2)0;
+    uint2 loop_bound_1 = (uint2)0;
 
-    uint2 loop_bound = uint2(4294967295u, 4294967295u);
+    loop_bound = (4294967295u).xx;
     bool loop_init = true;
     while(true) {
-        if (all(loop_bound == uint2(0u, 0u))) { break; }
-        loop_bound -= uint2(loop_bound.y == 0u, 1u);
         if (!loop_init) {
             uint _e26 = i;
             i = (_e26 + 1u);
         }
         loop_init = false;
+        uint2 _e49 = loop_bound;
+        if (all((_e49 == (0u).xx))) {
+            break;
+        }
+        loop_bound = (_e49 - uint2(((_e49.y == 0u) ? 1u : 0u), 1u));
         uint _e2 = i;
         if ((_e2 < SIZE)) {
         } else {
@@ -49,10 +54,13 @@ void test_atomic_compare_exchange_i64_()
             int64_t _e8; arr_i64_.InterlockedOr(_e6*8, 0, _e8);
             old = _e8;
             exchanged = false;
-            uint2 loop_bound_1 = uint2(4294967295u, 4294967295u);
+            loop_bound_1 = (4294967295u).xx;
             while(true) {
-                if (all(loop_bound_1 == uint2(0u, 0u))) { break; }
-                loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
+                uint2 _e34 = loop_bound_1;
+                if (all((_e34 == (0u).xx))) {
+                    break;
+                }
+                loop_bound_1 = (_e34 - uint2(((_e34.y == 0u) ? 1u : 0u), 1u));
                 bool _e12 = exchanged;
                 if (!(_e12)) {
                 } else {
@@ -80,17 +88,22 @@ void test_atomic_compare_exchange_u64_()
     uint i_1 = 0u;
     uint64_t old_1 = (uint64_t)0;
     bool exchanged_1 = (bool)0;
+    uint2 loop_bound_2 = (uint2)0;
+    uint2 loop_bound_3 = (uint2)0;
 
-    uint2 loop_bound_2 = uint2(4294967295u, 4294967295u);
+    loop_bound_2 = (4294967295u).xx;
     bool loop_init_1 = true;
     while(true) {
-        if (all(loop_bound_2 == uint2(0u, 0u))) { break; }
-        loop_bound_2 -= uint2(loop_bound_2.y == 0u, 1u);
         if (!loop_init_1) {
             uint _e26 = i_1;
             i_1 = (_e26 + 1u);
         }
         loop_init_1 = false;
+        uint2 _e49 = loop_bound_2;
+        if (all((_e49 == (0u).xx))) {
+            break;
+        }
+        loop_bound_2 = (_e49 - uint2(((_e49.y == 0u) ? 1u : 0u), 1u));
         uint _e2 = i_1;
         if ((_e2 < SIZE)) {
         } else {
@@ -101,10 +114,13 @@ void test_atomic_compare_exchange_u64_()
             uint64_t _e8; arr_u64_.InterlockedOr(_e6*8, 0, _e8);
             old_1 = _e8;
             exchanged_1 = false;
-            uint2 loop_bound_3 = uint2(4294967295u, 4294967295u);
+            loop_bound_3 = (4294967295u).xx;
             while(true) {
-                if (all(loop_bound_3 == uint2(0u, 0u))) { break; }
-                loop_bound_3 -= uint2(loop_bound_3.y == 0u, 1u);
+                uint2 _e34 = loop_bound_3;
+                if (all((_e34 == (0u).xx))) {
+                    break;
+                }
+                loop_bound_3 = (_e34 - uint2(((_e34.y == 0u) ? 1u : 0u), 1u));
                 bool _e12 = exchanged_1;
                 if (!(_e12)) {
                 } else {

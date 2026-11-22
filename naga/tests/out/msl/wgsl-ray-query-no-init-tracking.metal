@@ -60,6 +60,7 @@ RayIntersection query_loop(
     metal::raytracing::instance_acceleration_structure acs
 ) {
     metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> rq_1 = {};
+    metal::uint2 loop_bound = {};
     RayDesc _e8 = RayDesc {4u, 255u, 0.1, 100.0, pos, dir};
     {
         RayDesc desc = _e8;
@@ -78,10 +79,13 @@ RayIntersection query_loop(
         metal::raytracing::ray ray = metal::raytracing::ray(desc.origin, desc.dir, desc.tmin, desc.tmax);
         rq_1.reset(ray,acs, desc.cull_mask, params);
     }
-    uint2 loop_bound = uint2(4294967295u);
+    loop_bound = metal::uint2(4294967295u);
     while(true) {
-        if (metal::all(loop_bound == uint2(0u))) { break; }
-        loop_bound -= uint2(loop_bound.y == 0u, 1u);
+        metal::uint2 _e17 = loop_bound;
+        if (metal::all(_e17 == metal::uint2(0u))) {
+            break;
+        }
+        loop_bound = _e17 - metal::uint2((_e17.y == 0u) ? 1u : 0u, 1u);
         bool _e9 = false;
         _e9 = rq_1.next();
         if (_e9) {

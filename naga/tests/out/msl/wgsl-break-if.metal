@@ -7,17 +7,21 @@ using metal::uint;
 
 void breakIfEmpty(
 ) {
-    uint2 loop_bound = uint2(4294967295u);
+    metal::uint2 loop_bound = {};
+    loop_bound = metal::uint2(4294967295u);
     bool loop_init = true;
     while(true) {
-        if (metal::all(loop_bound == uint2(0u))) { break; }
-        loop_bound -= uint2(loop_bound.y == 0u, 1u);
         if (!loop_init) {
             if (true) {
                 break;
             }
         }
         loop_init = false;
+        metal::uint2 _e7 = loop_bound;
+        if (metal::all(_e7 == metal::uint2(0u))) {
+            break;
+        }
+        loop_bound = _e7 - metal::uint2((_e7.y == 0u) ? 1u : 0u, 1u);
     }
     return;
 }
@@ -27,11 +31,10 @@ void breakIfEmptyBody(
 ) {
     bool b = {};
     bool c = {};
-    uint2 loop_bound_1 = uint2(4294967295u);
+    metal::uint2 loop_bound_1 = {};
+    loop_bound_1 = metal::uint2(4294967295u);
     bool loop_init_1 = true;
     while(true) {
-        if (metal::all(loop_bound_1 == uint2(0u))) { break; }
-        loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
         if (!loop_init_1) {
             b = a;
             bool _e2 = b;
@@ -42,6 +45,11 @@ void breakIfEmptyBody(
             }
         }
         loop_init_1 = false;
+        metal::uint2 _e13 = loop_bound_1;
+        if (metal::all(_e13 == metal::uint2(0u))) {
+            break;
+        }
+        loop_bound_1 = _e13 - metal::uint2((_e13.y == 0u) ? 1u : 0u, 1u);
     }
     return;
 }
@@ -51,11 +59,10 @@ void breakIf(
 ) {
     bool d = {};
     bool e = {};
-    uint2 loop_bound_2 = uint2(4294967295u);
+    metal::uint2 loop_bound_2 = {};
+    loop_bound_2 = metal::uint2(4294967295u);
     bool loop_init_2 = true;
     while(true) {
-        if (metal::all(loop_bound_2 == uint2(0u))) { break; }
-        loop_bound_2 -= uint2(loop_bound_2.y == 0u, 1u);
         if (!loop_init_2) {
             bool _e5 = e;
             if (a_1 == _e5) {
@@ -63,6 +70,11 @@ void breakIf(
             }
         }
         loop_init_2 = false;
+        metal::uint2 _e13 = loop_bound_2;
+        if (metal::all(_e13 == metal::uint2(0u))) {
+            break;
+        }
+        loop_bound_2 = _e13 - metal::uint2((_e13.y == 0u) ? 1u : 0u, 1u);
         d = a_1;
         bool _e2 = d;
         e = a_1 != _e2;
@@ -73,11 +85,10 @@ void breakIf(
 void breakIfSeparateVariable(
 ) {
     uint counter = 0u;
-    uint2 loop_bound_3 = uint2(4294967295u);
+    metal::uint2 loop_bound_3 = {};
+    loop_bound_3 = metal::uint2(4294967295u);
     bool loop_init_3 = true;
     while(true) {
-        if (metal::all(loop_bound_3 == uint2(0u))) { break; }
-        loop_bound_3 -= uint2(loop_bound_3.y == 0u, 1u);
         if (!loop_init_3) {
             uint _e5 = counter;
             if (_e5 == 5u) {
@@ -85,6 +96,11 @@ void breakIfSeparateVariable(
             }
         }
         loop_init_3 = false;
+        metal::uint2 _e14 = loop_bound_3;
+        if (metal::all(_e14 == metal::uint2(0u))) {
+            break;
+        }
+        loop_bound_3 = _e14 - metal::uint2((_e14.y == 0u) ? 1u : 0u, 1u);
         uint _e2 = counter;
         counter = _e2 + 1u;
     }

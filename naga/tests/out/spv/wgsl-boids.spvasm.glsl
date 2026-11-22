@@ -39,22 +39,23 @@ void main()
     int cVelCount = 0;
     vec2 cVel = vec2(0.0);
     vec2 vPos = vec2(0.0);
+    uvec2 loop_bound = uvec2(0u);
     vec2 pos = vec2(0.0);
     vec2 colVel = vec2(0.0);
     vec2 vVel = vec2(0.0);
     vec2 vel = vec2(0.0);
     int cMassCount = 0;
     vec2 cMass = vec2(0.0);
-    uvec2 loop_bound = uvec2(4294967295u);
     if (gl_GlobalInvocationID.x >= 1500u)
     {
         return;
     }
     vPos = particlesSrc.particles[gl_GlobalInvocationID.x].pos;
     vVel = particlesSrc.particles[gl_GlobalInvocationID.x].vel;
+    loop_bound = uvec2(4294967295u);
     for (;;)
     {
-        if (all(equal(uvec2(0u), loop_bound)))
+        if (all(equal(loop_bound, uvec2(0u))))
         {
             break;
         }
@@ -65,8 +66,8 @@ void main()
         }
         if (i == gl_GlobalInvocationID.x)
         {
-            uint _144 = i;
-            i = _144 + 1u;
+            uint _145 = i;
+            i = _145 + 1u;
             continue;
         }
         pos = particlesSrc.particles[i].pos;
@@ -85,8 +86,8 @@ void main()
             cVel += vel;
             cVelCount++;
         }
-        uint _144 = i;
-        i = _144 + 1u;
+        uint _145 = i;
+        i = _145 + 1u;
         continue;
     }
     if (cMassCount > 0)

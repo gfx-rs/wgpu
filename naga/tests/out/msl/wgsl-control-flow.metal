@@ -169,10 +169,14 @@ void switch_const_expr_case_selectors(
 void loop_switch_continue(
     int x
 ) {
-    uint2 loop_bound = uint2(4294967295u);
+    metal::uint2 loop_bound = {};
+    loop_bound = metal::uint2(4294967295u);
     while(true) {
-        if (metal::all(loop_bound == uint2(0u))) { break; }
-        loop_bound -= uint2(loop_bound.y == 0u, 1u);
+        metal::uint2 _e7 = loop_bound;
+        if (metal::all(_e7 == metal::uint2(0u))) {
+            break;
+        }
+        loop_bound = _e7 - metal::uint2((_e7.y == 0u) ? 1u : 0u, 1u);
         switch(x) {
             case 1: {
                 continue;
@@ -190,10 +194,16 @@ void loop_switch_continue_nesting(
     int y,
     int z
 ) {
-    uint2 loop_bound_1 = uint2(4294967295u);
+    metal::uint2 loop_bound_1 = {};
+    metal::uint2 loop_bound_2 = {};
+    metal::uint2 loop_bound_3 = {};
+    loop_bound_1 = metal::uint2(4294967295u);
     while(true) {
-        if (metal::all(loop_bound_1 == uint2(0u))) { break; }
-        loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
+        metal::uint2 _e24 = loop_bound_1;
+        if (metal::all(_e24 == metal::uint2(0u))) {
+            break;
+        }
+        loop_bound_1 = _e24 - metal::uint2((_e24.y == 0u) ? 1u : 0u, 1u);
         switch(x_1) {
             case 1: {
                 continue;
@@ -204,10 +214,13 @@ void loop_switch_continue_nesting(
                         continue;
                     }
                     default: {
-                        uint2 loop_bound_2 = uint2(4294967295u);
+                        loop_bound_2 = metal::uint2(4294967295u);
                         while(true) {
-                            if (metal::all(loop_bound_2 == uint2(0u))) { break; }
-                            loop_bound_2 -= uint2(loop_bound_2.y == 0u, 1u);
+                            metal::uint2 _e9 = loop_bound_2;
+                            if (metal::all(_e9 == metal::uint2(0u))) {
+                                break;
+                            }
+                            loop_bound_2 = _e9 - metal::uint2((_e9.y == 0u) ? 1u : 0u, 1u);
                             switch(z) {
                                 case 1: {
                                     continue;
@@ -232,10 +245,13 @@ void loop_switch_continue_nesting(
             }
         }
     }
-    uint2 loop_bound_3 = uint2(4294967295u);
+    loop_bound_3 = metal::uint2(4294967295u);
     while(true) {
-        if (metal::all(loop_bound_3 == uint2(0u))) { break; }
-        loop_bound_3 -= uint2(loop_bound_3.y == 0u, 1u);
+        metal::uint2 _e39 = loop_bound_3;
+        if (metal::all(_e39 == metal::uint2(0u))) {
+            break;
+        }
+        loop_bound_3 = _e39 - metal::uint2((_e39.y == 0u) ? 1u : 0u, 1u);
         switch(y) {
             case 1:
             default: {
@@ -258,10 +274,15 @@ void loop_switch_omit_continue_variable_checks(
     int w
 ) {
     int pos_1 = 0;
-    uint2 loop_bound_4 = uint2(4294967295u);
+    metal::uint2 loop_bound_4 = {};
+    metal::uint2 loop_bound_5 = {};
+    loop_bound_4 = metal::uint2(4294967295u);
     while(true) {
-        if (metal::all(loop_bound_4 == uint2(0u))) { break; }
-        loop_bound_4 -= uint2(loop_bound_4.y == 0u, 1u);
+        metal::uint2 _e14 = loop_bound_4;
+        if (metal::all(_e14 == metal::uint2(0u))) {
+            break;
+        }
+        loop_bound_4 = _e14 - metal::uint2((_e14.y == 0u) ? 1u : 0u, 1u);
         switch(x_2) {
             case 1: {
                 pos_1 = 1;
@@ -272,10 +293,13 @@ void loop_switch_omit_continue_variable_checks(
             }
         }
     }
-    uint2 loop_bound_5 = uint2(4294967295u);
+    loop_bound_5 = metal::uint2(4294967295u);
     while(true) {
-        if (metal::all(loop_bound_5 == uint2(0u))) { break; }
-        loop_bound_5 -= uint2(loop_bound_5.y == 0u, 1u);
+        metal::uint2 _e29 = loop_bound_5;
+        if (metal::all(_e29 == metal::uint2(0u))) {
+            break;
+        }
+        loop_bound_5 = _e29 - metal::uint2((_e29.y == 0u) ? 1u : 0u, 1u);
         switch(x_2) {
             case 1: {
                 break;
