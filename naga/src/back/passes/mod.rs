@@ -27,6 +27,10 @@ The passes are:
   loads that use them. A dynamic column index into such a matrix indexes the
   loaded matrix, so it is bounds-checked under the `index` policy, not the
   `buffer` policy.
+- Immediate words, selected by `Passes::immediate_words`: gives `var<immediate>`
+  globals that contain 16-bit scalars a struct of `u32` words as their type,
+  so that the target needs no 16-bit immediate storage. The pass rewrites
+  their loads to assemble the value from the words.
 */
 #![cfg_attr(
     not(any(glsl_out, hlsl_out, msl_out, spv_out)),
@@ -37,8 +41,10 @@ The passes are:
 )]
 
 mod emit;
+mod immediate_words;
 mod uniform_matrix_layout;
 
+pub use immediate_words::ImmediateWordsError;
 pub use uniform_matrix_layout::UniformMatrixLayoutError;
 
 use alloc::{borrow::Cow, boxed::Box};
@@ -58,6 +64,8 @@ pub enum PassError {
     Validation(#[from] Box<WithSpan<ValidationError>>),
     #[error(transparent)]
     UniformMatrixLayout(#[from] UniformMatrixLayoutError),
+    #[error(transparent)]
+    ImmediateWords(#[from] ImmediateWordsError),
 }
 
 /// Options for the IR passes a backend runs before writing a module.
@@ -83,6 +91,9 @@ pub(crate) struct Passes {
     pub compact: bool,
     /// Give `var<uniform>` globals std140-compatible types.
     pub uniform_matrix_layout: bool,
+    /// Store `var<immediate>` globals that contain 16-bit scalars as 32-bit
+    /// words.
+    pub immediate_words: bool,
 }
 
 impl From<PassOptions> for Passes {
@@ -106,6 +117,7 @@ pub(crate) fn run<'a>(
     let Passes {
         compact,
         uniform_matrix_layout,
+        immediate_words,
     } = *passes;
     // Each pass calls `Cow::to_mut` only if it will change the module, which
     // copies a borrowed module and is free for an owned one, reports whether
@@ -116,6 +128,9 @@ pub(crate) fn run<'a>(
     let dropped = Dropped::default();
     if uniform_matrix_layout {
         changed |= uniform_matrix_layout::run(&mut module)?;
+    }
+    if immediate_words {
+        changed |= immediate_words::run(&mut module)?;
     }
     finish(module, changed, compact, &dropped)
 }

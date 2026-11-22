@@ -3364,6 +3364,7 @@ impl Writer {
             ir_module.into(),
             &crate::back::passes::Passes {
                 uniform_matrix_layout: true,
+                immediate_words: true,
                 ..self.passes.into()
             },
         )?;

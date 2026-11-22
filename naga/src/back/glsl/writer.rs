@@ -44,6 +44,7 @@ impl<'a, W: Write> Writer<'a, W> {
             module.into(),
             &back::passes::Passes {
                 uniform_matrix_layout: true,
+                immediate_words: false,
                 ..self.options.passes.into()
             },
         )?;

@@ -4840,6 +4840,7 @@ impl<W: Write> Writer<W> {
             module.into(),
             &back::passes::Passes {
                 uniform_matrix_layout: false,
+                immediate_words: false,
                 ..options.passes.into()
             },
         )?;

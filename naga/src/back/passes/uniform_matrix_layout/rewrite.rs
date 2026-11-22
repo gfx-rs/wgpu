@@ -4,14 +4,12 @@ use alloc::{format, vec, vec::Vec};
 use core::mem;
 
 use super::{is_affected_matrix, Layouts, MemberMap, UniformMatrixLayoutError};
-use crate::back::passes::emit::Emitting;
+use crate::back::passes::emit::{self, access_base, with_base, Emitting};
 use crate::{
-    arena::{Arena, Range},
-    compact::expressions::for_each_operand,
-    non_max_u32::NonMaxU32,
-    ArraySize, BinaryOperator, Block, Expression, FastHashMap, FastHashSet, Function,
-    FunctionArgument, FunctionResult, GlobalVariable, Handle, Literal, LocalVariable, Module,
-    Scalar, Span, Statement, Type, TypeInner, UniqueArena, VectorSize,
+    arena::Arena, compact::expressions::for_each_operand, non_max_u32::NonMaxU32, ArraySize,
+    BinaryOperator, Block, Expression, FastHashMap, FastHashSet, Function, FunctionArgument,
+    FunctionResult, GlobalVariable, Handle, Literal, LocalVariable, Module, Scalar, Span,
+    Statement, Type, TypeInner, UniqueArena, VectorSize,
 };
 
 use UniformMatrixLayoutError::UnsupportedUse;
@@ -117,7 +115,24 @@ impl Rewriter<'_> {
             .named_expressions
             .retain(|handle, _| matches!(places.get(handle), None | Some(&Place::Pointer(_))));
         let mut body = mem::take(&mut function.body);
-        let result = self.block(&mut body, &mut function.expressions, &places, &loads);
+        let result = emit::rewrite_loads(
+            &mut body,
+            &mut function.expressions,
+            &loads,
+            &mut |statement| {
+                let mut place_operand = None;
+                emit::for_each_direct_operand(statement, |operand| {
+                    if places.contains_key(&operand) {
+                        place_operand.get_or_insert(operand);
+                    }
+                });
+                place_operand.map_or(Ok(()), |operand| Err(UnsupportedUse(operand)))
+            },
+            &mut |out, load| {
+                let value = self.load(out, &places, load)?;
+                Ok(out.replace(load, value))
+            },
+        );
         function.body = body;
         result.map(|()| true)
     }
@@ -225,85 +240,6 @@ impl Rewriter<'_> {
                 .contains_key(&ty)
                 .then_some(Place::Pointer(ty)),
         }
-    }
-
-    fn block(
-        &mut self,
-        block: &mut Block,
-        expressions: &mut Arena<Expression>,
-        places: &Places,
-        loads: &FastHashSet<Handle<Expression>>,
-    ) -> Result<(), UniformMatrixLayoutError> {
-        for (mut statement, span) in mem::take(block).span_into_iter() {
-            let mut place_operand = None;
-            for_each_direct_operand(&statement, |operand| {
-                if places.contains_key(&operand) {
-                    place_operand.get_or_insert(operand);
-                }
-            });
-            if let Some(operand) = place_operand {
-                return Err(UnsupportedUse(operand));
-            }
-            match statement {
-                Statement::Emit(ref range) => {
-                    if range.clone().any(|handle| loads.contains(&handle)) {
-                        let range = range.clone();
-                        self.split_emit(block, expressions, places, loads, range, span)?;
-                        continue;
-                    }
-                }
-                Statement::Block(ref mut inner) => {
-                    self.block(inner, expressions, places, loads)?;
-                }
-                Statement::If {
-                    ref mut accept,
-                    ref mut reject,
-                    ..
-                } => {
-                    self.block(accept, expressions, places, loads)?;
-                    self.block(reject, expressions, places, loads)?;
-                }
-                Statement::Switch { ref mut cases, .. } => {
-                    for case in cases {
-                        self.block(&mut case.body, expressions, places, loads)?;
-                    }
-                }
-                Statement::Loop {
-                    ref mut body,
-                    ref mut continuing,
-                    ..
-                } => {
-                    self.block(body, expressions, places, loads)?;
-                    self.block(continuing, expressions, places, loads)?;
-                }
-                _ => {}
-            }
-            block.push(statement, span);
-        }
-        Ok(())
-    }
-
-    /// Push `range` to `block`, rewriting the loads in it. Each load's new
-    /// expressions get an `Emit` of their own, just before the load.
-    fn split_emit(
-        &mut self,
-        block: &mut Block,
-        expressions: &mut Arena<Expression>,
-        places: &Places,
-        loads: &FastHashSet<Handle<Expression>>,
-        range: Range<Expression>,
-        span: Span,
-    ) -> Result<(), UniformMatrixLayoutError> {
-        let mut start = range.index_range().start;
-        for load in range.clone().filter(|handle| loads.contains(handle)) {
-            let at = load.index() as u32;
-            push_emit(block, expressions, start..at, span);
-            let mut out = Emitting::new(expressions, block, expressions.get_span(load));
-            let value = self.load(&mut out, places, load)?;
-            start = if out.replace(load, value) { at } else { at + 1 };
-        }
-        push_emit(block, expressions, start..range.index_range().end, span);
-        Ok(())
     }
 
     fn load(
@@ -656,93 +592,6 @@ impl Emitting<'_> {
                 self.expr(Expression::Load { pointer })
             })
             .collect()
-    }
-}
-
-fn push_emit(
-    block: &mut Block,
-    expressions: &Arena<Expression>,
-    range: core::ops::Range<u32>,
-    span: Span,
-) {
-    if !range.is_empty() {
-        block.push(
-            Statement::Emit(Range::from_index_range(range, expressions)),
-            span,
-        );
-    }
-}
-
-/// Call `f` on the expressions `statement` uses directly. These include every
-/// pointer a statement can take, but not the operands nested in its function
-/// payload, such as a ray query's.
-fn for_each_direct_operand(statement: &Statement, mut f: impl FnMut(Handle<Expression>)) {
-    match *statement {
-        Statement::If { condition, .. } => f(condition),
-        Statement::Switch { selector, .. } => f(selector),
-        Statement::Loop { break_if, .. } => break_if.into_iter().for_each(f),
-        Statement::Return { value } => value.into_iter().for_each(f),
-        Statement::Store { pointer, value } => {
-            f(pointer);
-            f(value);
-        }
-        Statement::ImageStore {
-            image,
-            coordinate,
-            array_index,
-            value,
-        }
-        | Statement::ImageAtomic {
-            image,
-            coordinate,
-            array_index,
-            value,
-            ..
-        } => {
-            f(image);
-            f(coordinate);
-            array_index.into_iter().for_each(&mut f);
-            f(value);
-        }
-        Statement::Atomic { pointer, value, .. } => {
-            f(pointer);
-            f(value);
-        }
-        Statement::WorkGroupUniformLoad { pointer, .. } => f(pointer),
-        Statement::Call { ref arguments, .. } | Statement::DebugPrintf { ref arguments, .. } => {
-            arguments.iter().copied().for_each(f)
-        }
-        Statement::RayQuery { query, .. } => f(query),
-        Statement::HitObject { hit_object, .. } => f(hit_object),
-        Statement::SubgroupBallot { predicate, .. } => predicate.into_iter().for_each(f),
-        Statement::SubgroupGather { argument, .. }
-        | Statement::SubgroupCollectiveOperation { argument, .. }
-        | Statement::SubgroupBallotFindBit { argument, .. } => f(argument),
-        Statement::CooperativeStore { target, .. } => f(target),
-        Statement::Emit(_)
-        | Statement::Block(_)
-        | Statement::Break
-        | Statement::Continue
-        | Statement::Kill
-        | Statement::ControlBarrier(_)
-        | Statement::MemoryBarrier(_)
-        | Statement::RayPipelineFunction(_) => {}
-    }
-}
-
-fn access_base(expr: &Expression) -> Handle<Expression> {
-    match *expr {
-        Expression::Access { base, .. } | Expression::AccessIndex { base, .. } => base,
-        _ => unreachable!("only accesses have the `Value` place"),
-    }
-}
-
-/// `expr`, an access, with its base replaced by `base`.
-fn with_base(expr: &Expression, base: Handle<Expression>) -> Expression {
-    match *expr {
-        Expression::Access { index, .. } => Expression::Access { base, index },
-        Expression::AccessIndex { index, .. } => Expression::AccessIndex { base, index },
-        _ => unreachable!("only accesses have the `Value` place"),
     }
 }
 
@@ -1292,6 +1141,7 @@ mod tests {
             &super::super::super::Passes {
                 compact: false,
                 uniform_matrix_layout: true,
+                immediate_words: false,
             },
         )
         .unwrap();
