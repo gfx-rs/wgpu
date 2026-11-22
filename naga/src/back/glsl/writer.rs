@@ -4595,24 +4595,29 @@ impl<'a, W: Write> ModuleWriter<'a, W> {
         Ok(())
     }
 
+    fn global_resource(&self, handle: Handle<crate::GlobalVariable>) -> GlobalResource {
+        let var = &self.module.global_variables[handle];
+        GlobalResource {
+            binding: var.binding,
+            name: var.name.clone(),
+        }
+    }
+
     /// Helper method used to produce the reflection info that's returned to the user
     fn collect_reflection_info(&mut self) -> Result<ReflectionInfo, Error> {
         let info = self.info.get_entry_point(self.entry_point_idx as usize);
-        let mut texture_mapping = crate::FastHashMap::default();
-        let mut uniforms = crate::FastHashMap::default();
+        let mut texture_handles = crate::FastHashMap::default();
+        let mut uniforms = Vec::new();
 
         for sampling in info.sampling_set.iter() {
             let tex_name = self.reflection_names_globals[&sampling.image].clone();
 
-            match texture_mapping.entry(tex_name) {
+            match texture_handles.entry(tex_name) {
                 hash_map::Entry::Vacant(v) => {
-                    v.insert(TextureMapping {
-                        texture: sampling.image,
-                        sampler: Some(sampling.sampler),
-                    });
+                    v.insert((sampling.image, Some(sampling.sampler)));
                 }
                 hash_map::Entry::Occupied(e) => {
-                    if e.get().sampler != Some(sampling.sampler) {
+                    if e.get().1 != Some(sampling.sampler) {
                         log::error!("Conflicting samplers for {}", e.key());
                         return Err(Error::ImageMultipleSamplers);
                     }
@@ -4628,31 +4633,50 @@ impl<'a, W: Write> ModuleWriter<'a, W> {
             match self.module.types[var.ty].inner {
                 TypeInner::Image { .. } => {
                     let tex_name = self.reflection_names_globals[&handle].clone();
-                    match texture_mapping.entry(tex_name) {
-                        hash_map::Entry::Vacant(v) => {
-                            v.insert(TextureMapping {
-                                texture: handle,
-                                sampler: None,
-                            });
-                        }
-                        hash_map::Entry::Occupied(_) => {
-                            // already used with a sampler, do nothing
-                        }
-                    }
+                    // If the texture was already used with a sampler, keep that entry.
+                    texture_handles.entry(tex_name).or_insert((handle, None));
                 }
-                _ => match var.space {
-                    crate::AddressSpace::Uniform | crate::AddressSpace::Storage { .. } => {
-                        let name = self.reflection_names_globals[&handle].clone();
-                        uniforms.insert(handle, name);
-                    }
-                    crate::AddressSpace::Immediate => {
-                        let name = self.reflection_names_globals[&handle].clone();
-                        immediates_info = Some((name, var.ty));
-                    }
-                    _ => (),
-                },
+                _ => {
+                    let kind = match var.space {
+                        crate::AddressSpace::Uniform => BufferKind::Uniform,
+                        crate::AddressSpace::Storage { .. } => BufferKind::Storage,
+                        crate::AddressSpace::Immediate => {
+                            let name = self.reflection_names_globals[&handle].clone();
+                            immediates_info = Some((name, var.ty));
+                            continue;
+                        }
+                        _ => continue,
+                    };
+                    uniforms.push(BufferMapping {
+                        name: self.reflection_names_globals[&handle].clone(),
+                        global: self.global_resource(handle),
+                        kind,
+                    });
+                }
             }
         }
+
+        let texture_mapping = texture_handles
+            .into_iter()
+            .map(|(name, (texture, sampler))| {
+                let TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class,
+                } = self.module.types[self.module.global_variables[texture].ty].inner
+                else {
+                    unreachable!("texture mapping for a non-image global");
+                };
+                let mapping = TextureMapping {
+                    texture: self.global_resource(texture),
+                    dim,
+                    arrayed,
+                    class,
+                    sampler: sampler.map(|sampler| self.global_resource(sampler)),
+                };
+                (name, mapping)
+            })
+            .collect();
 
         let mut immediates_segments = Vec::new();
         let mut immediates_items = vec![];
