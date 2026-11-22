@@ -53,10 +53,7 @@ kernel void main_(
     }
     exact.inner[index] = metal::float4 {};
     zero_init_index = index;
-    uint2 loop_bound = uint2(4294967295u);
     while(true) {
-        if (metal::all(loop_bound == uint2(0u))) { break; }
-        loop_bound -= uint2(loop_bound.y == 0u, 1u);
         uint _e63 = zero_init_index;
         if (_e63 >= 20u) {
             break;

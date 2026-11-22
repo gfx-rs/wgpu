@@ -220,15 +220,9 @@ bool _24()
 void _158()
 {
     uint _170 = 0u;
-    uvec2 _184 = uvec2(4294967295u);
     _170 = gl_LocalInvocationIndex;
     for (;;)
     {
-        if (all(equal(uvec2(0u), _184)))
-        {
-            break;
-        }
-        _184 -= uvec2(uint(_184.y == 0u), 1u);
         if (_170 >= 3u)
         {
             break;
@@ -263,19 +257,19 @@ void main()
 {
     _158();
     barrier();
-    uint _245 = min(_21._m2, 3u);
-    uint _248 = min(_21._m3, 1u);
-    SetMeshOutputsEXT(_245, _248);
-    for (uint _239 = gl_LocalInvocationIndex; _239 < _245; _239++)
+    uint _228 = min(_21._m2, 3u);
+    uint _231 = min(_21._m3, 1u);
+    SetMeshOutputsEXT(_228, _231);
+    for (uint _222 = gl_LocalInvocationIndex; _222 < _228; _222++)
     {
-        gl_MeshVerticesEXT[_239].gl_Position = _21._m0[_239]._m0;
-        _151[_239] = _21._m0[_239]._m1;
+        gl_MeshVerticesEXT[_222].gl_Position = _21._m0[_222]._m0;
+        _151[_222] = _21._m0[_222]._m1;
     }
-    for (uint _240 = gl_LocalInvocationIndex; _240 < _248; _240++)
+    for (uint _223 = gl_LocalInvocationIndex; _223 < _231; _223++)
     {
-        gl_PrimitiveTriangleIndicesEXT[_240] = _21._m1[_240]._m0;
-        gl_MeshPrimitivesEXT[_240].gl_CullPrimitiveEXT = _21._m1[_240]._m1;
-        _157[_240] = _21._m1[_240]._m2;
+        gl_PrimitiveTriangleIndicesEXT[_223] = _21._m1[_223]._m0;
+        gl_MeshPrimitivesEXT[_223].gl_CullPrimitiveEXT = _21._m1[_223]._m1;
+        _157[_223] = _21._m1[_223]._m2;
     }
 }
 
@@ -326,29 +320,23 @@ struct _66
     uint _m1;
 };
 
-layout(location = 0) out vec4 _302[3];
-layout(location = 1) perprimitiveEXT out vec4 _308[1];
+layout(location = 0) out vec4 _285[3];
+layout(location = 1) perprimitiveEXT out vec4 _291[1];
 shared float _19;
 shared _16 _21;
 
-void _309()
+void _292()
 {
-    uint _311 = 0u;
-    uvec2 _318 = uvec2(4294967295u);
-    _311 = gl_LocalInvocationIndex;
+    uint _294 = 0u;
+    _294 = gl_LocalInvocationIndex;
     for (;;)
     {
-        if (all(equal(uvec2(0u), _318)))
+        if (_294 >= 3u)
         {
             break;
         }
-        _318 -= uvec2(uint(_318.y == 0u), 1u);
-        if (_311 >= 3u)
-        {
-            break;
-        }
-        _21._m0[_311] = _7(vec4(0.0), vec4(0.0));
-        _311++;
+        _21._m0[_294] = _7(vec4(0.0), vec4(0.0));
+        _294++;
         continue;
     }
     _21._m1[gl_LocalInvocationIndex] = _10(uvec3(0u), false, vec4(0.0));
@@ -375,21 +363,21 @@ void _309()
 
 void main()
 {
-    _309();
+    _292();
     barrier();
-    uint _360 = min(_21._m2, 3u);
-    uint _363 = min(_21._m3, 1u);
-    SetMeshOutputsEXT(_360, _363);
-    for (uint _354 = gl_LocalInvocationIndex; _354 < _360; _354++)
+    uint _332 = min(_21._m2, 3u);
+    uint _335 = min(_21._m3, 1u);
+    SetMeshOutputsEXT(_332, _335);
+    for (uint _326 = gl_LocalInvocationIndex; _326 < _332; _326++)
     {
-        gl_MeshVerticesEXT[_354].gl_Position = _21._m0[_354]._m0;
-        _302[_354] = _21._m0[_354]._m1;
+        gl_MeshVerticesEXT[_326].gl_Position = _21._m0[_326]._m0;
+        _285[_326] = _21._m0[_326]._m1;
     }
-    for (uint _355 = gl_LocalInvocationIndex; _355 < _363; _355++)
+    for (uint _327 = gl_LocalInvocationIndex; _327 < _335; _327++)
     {
-        gl_PrimitiveTriangleIndicesEXT[_355] = _21._m1[_355]._m0;
-        gl_MeshPrimitivesEXT[_355].gl_CullPrimitiveEXT = _21._m1[_355]._m1;
-        _308[_355] = _21._m1[_355]._m2;
+        gl_PrimitiveTriangleIndicesEXT[_327] = _21._m1[_327]._m0;
+        gl_MeshPrimitivesEXT[_327].gl_CullPrimitiveEXT = _21._m1[_327]._m1;
+        _291[_327] = _21._m1[_327]._m2;
     }
 }
 
@@ -440,29 +428,23 @@ struct _66
     uint _m1;
 };
 
-layout(location = 0) out vec4 _416[3];
-layout(location = 1) perprimitiveEXT out vec4 _422[1];
+layout(location = 0) out vec4 _388[3];
+layout(location = 1) perprimitiveEXT out vec4 _394[1];
 shared float _19;
 shared _16 _21;
 
-void _423()
+void _395()
 {
-    uint _424 = 0u;
-    uvec2 _431 = uvec2(4294967295u);
-    _424 = gl_LocalInvocationIndex;
+    uint _396 = 0u;
+    _396 = gl_LocalInvocationIndex;
     for (;;)
     {
-        if (all(equal(uvec2(0u), _431)))
+        if (_396 >= 3u)
         {
             break;
         }
-        _431 -= uvec2(uint(_431.y == 0u), 1u);
-        if (_424 >= 3u)
-        {
-            break;
-        }
-        _21._m0[_424] = _7(vec4(0.0), vec4(0.0));
-        _424 += 2u;
+        _21._m0[_396] = _7(vec4(0.0), vec4(0.0));
+        _396 += 2u;
         continue;
     }
     if (gl_LocalInvocationIndex < 1u)
@@ -500,21 +482,21 @@ void _423()
 
 void main()
 {
-    _423();
+    _395();
     barrier();
-    uint _481 = min(_21._m2, 3u);
-    uint _484 = min(_21._m3, 1u);
-    SetMeshOutputsEXT(_481, _484);
-    for (uint _475 = gl_LocalInvocationIndex; _475 < _481; _475 += 2u)
+    uint _442 = min(_21._m2, 3u);
+    uint _445 = min(_21._m3, 1u);
+    SetMeshOutputsEXT(_442, _445);
+    for (uint _436 = gl_LocalInvocationIndex; _436 < _442; _436 += 2u)
     {
-        gl_MeshVerticesEXT[_475].gl_Position = _21._m0[_475]._m0;
-        _416[_475] = _21._m0[_475]._m1;
+        gl_MeshVerticesEXT[_436].gl_Position = _21._m0[_436]._m0;
+        _388[_436] = _21._m0[_436]._m1;
     }
-    for (uint _476 = gl_LocalInvocationIndex; _476 < _484; _476 += 2u)
+    for (uint _437 = gl_LocalInvocationIndex; _437 < _445; _437 += 2u)
     {
-        gl_PrimitiveTriangleIndicesEXT[_476] = _21._m1[_476]._m0;
-        gl_MeshPrimitivesEXT[_476].gl_CullPrimitiveEXT = _21._m1[_476]._m1;
-        _422[_476] = _21._m1[_476]._m2;
+        gl_PrimitiveTriangleIndicesEXT[_437] = _21._m1[_437]._m0;
+        gl_MeshPrimitivesEXT[_437].gl_CullPrimitiveEXT = _21._m1[_437]._m1;
+        _394[_437] = _21._m1[_437]._m2;
     }
 }
 
@@ -563,12 +545,12 @@ struct _66
     uint _m1;
 };
 
-layout(location = 0) in vec4 _527;
-layout(location = 1) perprimitiveEXT in vec4 _530;
-layout(location = 0) out vec4 _532;
+layout(location = 0) in vec4 _488;
+layout(location = 1) perprimitiveEXT in vec4 _491;
+layout(location = 0) out vec4 _493;
 
 void main()
 {
-    _532 = _7(gl_FragCoord, _527)._m1 * _11(_530)._m0;
+    _493 = _7(gl_FragCoord, _488)._m1 * _11(_491)._m0;
 }
 

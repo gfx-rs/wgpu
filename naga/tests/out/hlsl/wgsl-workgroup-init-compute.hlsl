@@ -25,56 +25,41 @@ groupshared uint3 vector_;
 groupshared float2x3 matrix_;
 RWByteAddressBuffer output : register(u0);
 
+uint naga_div(uint lhs, uint rhs) {
+    return lhs / (rhs == 0u ? 1u : rhs);
+}
+
+uint naga_mod(uint lhs, uint rhs) {
+    return lhs % (rhs == 0u ? 1u : rhs);
+}
+
+float4 ZeroValuefloat4() {
+    return (float4)0;
+}
+
+float3x2 ZeroValuefloat3x2() {
+    return (float3x2)0;
+}
+
+float2x2 ZeroValuefloat2x2() {
+    return (float2x2)0;
+}
+
+Tagged ZeroValueTagged() {
+    return (Tagged)0;
+}
+
+uint3 ZeroValueuint3() {
+    return (uint3)0;
+}
+
+float2x3 ZeroValuefloat2x3() {
+    return (float2x3)0;
+}
+
 [numthreads(8, 2, 1)]
 void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
 {
-    [loop]
-    for (uint zero_flat_index_1 = zero_flat_index; zero_flat_index_1 < 45u; zero_flat_index_1 += 16u) {
-        uint zero_index = zero_flat_index_1 / 15u;
-        uint zero_index_1 = (zero_flat_index_1 / 3u) % 5u;
-        uint zero_index_2 = zero_flat_index_1 % 3u;
-        data[zero_index].values[zero_index_1][zero_index_2] = (float4)0;
-    }
-    [loop]
-    for (uint zero_flat_index_2 = zero_flat_index; zero_flat_index_2 < 57u; zero_flat_index_2 += 16u) {
-        uint zero_index = zero_flat_index_2 / 19u;
-        uint zero_index_3 = zero_flat_index_2 % 19u;
-        data[zero_index].atoms[zero_index_3] = (uint)0;
-    }
-    [loop]
-    for (uint zero_flat_index_3 = zero_flat_index; zero_flat_index_3 < 3u; zero_flat_index_3 += 16u) {
-        uint zero_index = zero_flat_index_3;
-        data[zero_index].matrix_ = (float3x2)0;
-    }
-    [loop]
-    for (uint zero_flat_index_4 = zero_flat_index; zero_flat_index_4 < 9u; zero_flat_index_4 += 16u) {
-        uint zero_index = zero_flat_index_4 / 3u;
-        uint zero_index_4 = zero_flat_index_4 % 3u;
-        data[zero_index].matrices[zero_index_4] = (float2x2)0;
-    }
-    [loop]
-    for (uint zero_flat_index_5 = zero_flat_index; zero_flat_index_5 < 37u; zero_flat_index_5 += 16u) {
-        uint zero_index_5 = zero_flat_index_5;
-        dynamic[zero_index_5] = (uint)0;
-    }
-    [loop]
-    for (uint zero_flat_index_6 = zero_flat_index; zero_flat_index_6 < 37u; zero_flat_index_6 += 16u) {
-        uint zero_index_6 = zero_flat_index_6;
-        floats[zero_index_6] = (float)0;
-    }
-    if (zero_flat_index == 0) {
-        tagged.matrix_ = (float2x2)0;
-    }
-    if (zero_flat_index == 0) {
-        scalar = (uint)0;
-    }
-    if (zero_flat_index == 0) {
-        vector_ = (uint3)0;
-    }
-    if (zero_flat_index == 0) {
-        matrix_ = (float2x3)0;
-    }
-    GroupMemoryBarrierWithGroupSync();
     bool local = (bool)0;
     bool ok = (bool)0;
     bool local_1 = (bool)0;
@@ -102,7 +87,57 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
     uint2 loop_bound_8 = (uint2)0;
     uint2 loop_bound_9 = (uint2)0;
     uint2 loop_bound_10 = (uint2)0;
+    uint zero_init_index = (uint)0;
 
+    zero_init_index = zero_flat_index;
+    while(true) {
+        uint _e513 = zero_init_index;
+        if ((_e513 >= 45u)) {
+            break;
+        }
+        data[min(uint(naga_div(_e513, 15u)), 2u)].values[min(uint(naga_mod(naga_div(_e513, 3u), 5u)), 4u)][min(uint(naga_mod(_e513, 3u)), 2u)] = ZeroValuefloat4();
+        zero_init_index = (_e513 + 16u);
+    }
+    zero_init_index = zero_flat_index;
+    while(true) {
+        uint _e533 = zero_init_index;
+        if ((_e533 >= 57u)) {
+            break;
+        }
+        data[min(uint(naga_div(_e533, 19u)), 2u)].atoms[min(uint(naga_mod(_e533, 19u)), 18u)] = 0u;
+        zero_init_index = (_e533 + 16u);
+    }
+    if ((zero_flat_index < 3u)) {
+        data[min(uint(zero_flat_index), 2u)].matrix_ = ZeroValuefloat3x2();
+    }
+    if ((zero_flat_index < 9u)) {
+        data[min(uint(naga_div(zero_flat_index, 3u)), 2u)].matrices[min(uint(naga_mod(zero_flat_index, 3u)), 2u)] = ZeroValuefloat2x2();
+    }
+    zero_init_index = zero_flat_index;
+    while(true) {
+        uint _e565 = zero_init_index;
+        if ((_e565 >= 37u)) {
+            break;
+        }
+        dynamic[min(uint(_e565), 36u)] = 0u;
+        zero_init_index = (_e565 + 16u);
+    }
+    zero_init_index = zero_flat_index;
+    while(true) {
+        uint _e574 = zero_init_index;
+        if ((_e574 >= 37u)) {
+            break;
+        }
+        floats[min(uint(_e574), 36u)] = 0.0;
+        zero_init_index = (_e574 + 16u);
+    }
+    if ((zero_flat_index == 0u)) {
+        tagged = ZeroValueTagged();
+        scalar = 0u;
+        vector_ = ZeroValueuint3();
+        matrix_ = ZeroValuefloat2x3();
+    }
+    GroupMemoryBarrierWithGroupSync();
     uint _e3 = scalar;
     if ((_e3 == 0u)) {
         uint3 _e9 = vector_;
@@ -457,8 +492,8 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
 [numthreads(1, 1, 1)]
 void single(uint local_invocation_index : SV_GroupIndex)
 {
-    if (local_invocation_index == 0) {
-        scalar = (uint)0;
+    if ((local_invocation_index == 0u)) {
+        scalar = 0u;
     }
     GroupMemoryBarrierWithGroupSync();
     uint _e3 = scalar;

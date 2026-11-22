@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 151
+; Bound: 134
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
@@ -58,14 +58,8 @@ OpDecorate %112 BuiltIn LocalInvocationIndex
 %113 = OpTypePointer Input %5
 %112 = OpVariable  %113  Input
 %117 = OpConstantNull  %5
-%123 = OpTypeVector %5 2
-%124 = OpTypePointer Function %123
-%125 = OpTypeBool
-%126 = OpTypeVector %125 2
-%127 = OpConstantComposite  %123  %11 %11
-%128 = OpConstant  %5  4294967295
-%129 = OpConstantComposite  %123  %128 %128
-%147 = OpConstant  %5  264
+%124 = OpTypeBool
+%130 = OpConstant  %5  264
 %20 = OpFunction  %2  None %21
 %19 = OpLabel
 %63 = OpVariable  %36  Function %64
@@ -154,7 +148,6 @@ OpFunctionEnd
 %115 = OpFunction  %2  None %21
 %111 = OpLabel
 %116 = OpVariable  %36  Function %117
-%130 = OpVariable  %124  Function %129
 %114 = OpLoad  %5  %112
 OpBranch %118
 %118 = OpLabel
@@ -162,40 +155,26 @@ OpStore %116 %114
 OpBranch %119
 %119 = OpLabel
 OpLoopMerge %120 %122 None
-OpBranch %131
-%131 = OpLabel
-%132 = OpLoad  %123  %130
-%133 = OpIEqual  %126  %127 %132
-%134 = OpAll  %125  %133
-OpSelectionMerge %135 None
-OpBranchConditional %134 %120 %135
-%135 = OpLabel
-%136 = OpCompositeExtract  %5  %132 1
-%137 = OpIEqual  %125  %136 %11
-%138 = OpSelect  %5  %137 %29 %11
-%139 = OpCompositeConstruct  %123  %138 %29
-%140 = OpISub  %123  %132 %139
-OpStore %130 %140
 OpBranch %121
 %121 = OpLabel
-%141 = OpLoad  %5  %116
-%142 = OpUGreaterThanEqual  %125  %141 %7
-OpSelectionMerge %143 None
-OpBranchConditional %142 %144 %143
-%144 = OpLabel
+%123 = OpLoad  %5  %116
+%125 = OpUGreaterThanEqual  %124  %123 %7
+OpSelectionMerge %126 None
+OpBranchConditional %125 %127 %126
+%127 = OpLabel
 OpBranch %120
-%143 = OpLabel
-%145 = OpAccessChain  %108  %17 %141
-OpStore %145 %11
-%146 = OpIAdd  %5  %141 %29
-OpStore %116 %146
+%126 = OpLabel
+%128 = OpAccessChain  %108  %17 %123
+OpStore %128 %11
+%129 = OpIAdd  %5  %123 %29
+OpStore %116 %129
 OpBranch %122
 %122 = OpLabel
 OpBranch %119
 %120 = OpLabel
-OpControlBarrier %30 %30 %147
-%148 = OpFunctionCall  %2  %20
-%149 = OpFunctionCall  %2  %100
-%150 = OpFunctionCall  %2  %105
+OpControlBarrier %30 %30 %130
+%131 = OpFunctionCall  %2  %20
+%132 = OpFunctionCall  %2  %100
+%133 = OpFunctionCall  %2  %105
 OpReturn
 OpFunctionEnd

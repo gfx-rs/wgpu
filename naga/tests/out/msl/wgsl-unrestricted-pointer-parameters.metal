@@ -47,16 +47,20 @@ int find(
     uint needle
 ) {
     int i_2 = 0;
-    uint2 loop_bound = uint2(4294967295u);
+    metal::uint2 loop_bound_2 = {};
+    loop_bound_2 = metal::uint2(4294967295u);
     bool loop_init = true;
     while(true) {
-        if (metal::all(loop_bound == uint2(0u))) { break; }
-        loop_bound -= uint2(loop_bound.y == 0u, 1u);
         if (!loop_init) {
             int _e13 = i_2;
             i_2 = as_type<int>(as_type<uint>(_e13) + as_type<uint>(1));
         }
         loop_init = false;
+        metal::uint2 _e22 = loop_bound_2;
+        if (metal::all(_e22 == metal::uint2(0u))) {
+            break;
+        }
+        loop_bound_2 = _e22 - metal::uint2((_e22.y == 0u) ? 1u : 0u, 1u);
         int _e4 = i_2;
         if (_e4 < 64) {
         } else {
@@ -148,13 +152,21 @@ kernel void main_(
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
     type_1 private_arr = {};
-    if (index == 0u) {
-        wg = {};
-    }
-    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     type_14 local = type_14 {};
     uint i = 0u;
     uint whole = 3u;
+    metal::uint2 loop_bound = {};
+    uint zero_init_index = {};
+    zero_init_index = index;
+    while(true) {
+        uint _e78 = zero_init_index;
+        if (_e78 >= 64u) {
+            break;
+        }
+        wg.inner[_e78] = 0u;
+        zero_init_index = _e78 + 1u;
+    }
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     store(buf.a, index);
     store(arr[index], 1u);
     uint _e10 = load_add(buf.b.inner[1], 2u);
@@ -165,16 +177,19 @@ kernel void main_(
     arr[1] = static_cast<uint>(_e22);
     uint _e28 = classify(arr[3]);
     arr[2] = _e28;
-    uint2 loop_bound_1 = uint2(4294967295u);
+    loop_bound = metal::uint2(4294967295u);
     bool loop_init_1 = true;
     while(true) {
-        if (metal::all(loop_bound_1 == uint2(0u))) { break; }
-        loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
         if (!loop_init_1) {
             uint _e39 = i;
             i = _e39 + 1u;
         }
         loop_init_1 = false;
+        metal::uint2 _e65 = loop_bound;
+        if (metal::all(_e65 == metal::uint2(0u))) {
+            break;
+        }
+        loop_bound = _e65 - metal::uint2((_e65.y == 0u) ? 1u : 0u, 1u);
         uint _e33 = i;
         if (_e33 < 2u) {
         } else {
@@ -212,39 +227,43 @@ fragment fragOutput frag(
     uint i_1 = {};
     float local_1 = {};
     bool local_2 = {};
+    metal::uint2 loop_bound_1 = {};
     switch(0) {
         default: {
             i_1 = 0u;
             local_2 = false;
-            uint2 loop_bound_2 = uint2(4294967295u);
+            loop_bound_1 = metal::uint2(4294967295u);
             bool loop_init_2 = true;
             while(true) {
-                if (metal::all(loop_bound_2 == uint2(0u))) { break; }
-                loop_bound_2 -= uint2(loop_bound_2.y == 0u, 1u);
                 if (!loop_init_2) {
-                    uint _e14 = i_1;
-                    i_1 = _e14 + 1u;
+                    uint _e28 = i_1;
+                    i_1 = _e28 + 1u;
                 }
                 loop_init_2 = false;
-                uint _e2 = i_1;
-                if (_e2 < (1 + (_buffer_sizes.size2 - 0 - 4) / 4)) {
+                metal::uint2 _e4 = loop_bound_1;
+                if (metal::all(_e4 == metal::uint2(0u))) {
+                    break;
+                }
+                loop_bound_1 = _e4 - metal::uint2((_e4.y == 0u) ? 1u : 0u, 1u);
+                uint _e16 = i_1;
+                if (_e16 < (1 + (_buffer_sizes.size2 - 0 - 4) / 4)) {
                 } else {
                     break;
                 }
                 {
-                    uint _e5 = i_1;
-                    float _e7 = lut[_e5];
-                    if (_e7 > 0.0) {
-                        uint _e10 = i_1;
-                        float _e12 = lut[_e10];
-                        local_1 = _e12;
+                    uint _e19 = i_1;
+                    float _e21 = lut[_e19];
+                    if (_e21 > 0.0) {
+                        uint _e24 = i_1;
+                        float _e26 = lut[_e24];
+                        local_1 = _e26;
                         local_2 = true;
                         break;
                     }
                 }
             }
-            bool _e17 = local_2;
-            if (_e17) {
+            bool _e31 = local_2;
+            if (_e31) {
                 break;
             }
             local_1 = 0.0;
@@ -252,6 +271,6 @@ fragment fragOutput frag(
         }
     }
     float v_2 = local_1;
-    metal::float4 _e23 = t.sample(s, uv);
-    return fragOutput { _e23 * v_2 };
+    metal::float4 _e37 = t.sample(s, uv);
+    return fragOutput { _e37 * v_2 };
 }

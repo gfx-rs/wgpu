@@ -6,15 +6,9 @@ shared int _8[128];
 void main()
 {
     uint _22 = 0u;
-    uvec2 _39 = uvec2(4294967295u);
     _22 = gl_LocalInvocationIndex;
     for (;;)
     {
-        if (all(equal(uvec2(0u), _39)))
-        {
-            break;
-        }
-        _39 -= uvec2(uint(_39.y == 0u), 1u);
         if (_22 >= 128u)
         {
             break;
@@ -25,9 +19,9 @@ void main()
     }
     barrier();
     barrier();
-    int _61 = _8[gl_WorkGroupID.x];
+    int _42 = _8[gl_WorkGroupID.x];
     barrier();
-    if (_61 > 10)
+    if (_42 > 10)
     {
         barrier();
         return;

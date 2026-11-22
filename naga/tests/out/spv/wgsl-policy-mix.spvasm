@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 149
+; Bound: 132
 OpCapability Shader
 OpCapability ImageQuery
 OpExtension "SPV_KHR_storage_buffer_storage_class"
@@ -66,7 +66,6 @@ OpName %53 "in_function"
 OpName %102 "local_invocation_index"
 OpName %105 "main"
 OpName %115 "zero_init_index"
-OpName %129 "loop_bound"
 OpDecorate %6 ArrayStride 16
 OpMemberDecorate %9 0 Offset 0
 OpDecorate %10 ArrayStride 16
@@ -153,13 +152,7 @@ OpDecorate %102 BuiltIn LocalInvocationIndex
 %114 = OpConstant  %18  4
 %116 = OpTypePointer Function %8
 %117 = OpConstantNull  %8
-%123 = OpTypeVector %8 2
-%124 = OpTypePointer Function %123
-%125 = OpTypeVector %67 2
-%126 = OpConstantComposite  %123  %42 %42
-%127 = OpConstant  %8  4294967295
-%128 = OpConstantComposite  %123  %127 %127
-%147 = OpConstant  %8  264
+%130 = OpConstant  %8  264
 %39 = OpFunction  %5  None %40
 %36 = OpFunctionParameter  %19
 %37 = OpFunctionParameter  %18
@@ -218,7 +211,6 @@ OpFunctionEnd
 %105 = OpFunction  %2  None %106
 %101 = OpLabel
 %115 = OpVariable  %116  Function %117
-%129 = OpVariable  %124  Function %128
 %104 = OpLoad  %8  %102
 %107 = OpAccessChain  %41  %22 %42
 %108 = OpAccessChain  %44  %25 %42
@@ -231,49 +223,35 @@ OpBranch %119
 %119 = OpLabel
 OpLine %3 1 1
 OpLoopMerge %120 %122 None
-OpBranch %130
-%130 = OpLabel
-%131 = OpLoad  %123  %129
-%132 = OpIEqual  %125  %126 %131
-%133 = OpAll  %67  %132
-OpSelectionMerge %134 None
-OpBranchConditional %133 %120 %134
-%134 = OpLabel
-%135 = OpCompositeExtract  %8  %131 1
-%136 = OpIEqual  %67  %135 %42
-%137 = OpSelect  %8  %136 %96 %42
-%138 = OpCompositeConstruct  %123  %137 %96
-%139 = OpISub  %123  %131 %138
-OpStore %129 %139
 OpBranch %121
 %121 = OpLabel
 OpLine %3 1 1
-%140 = OpLoad  %8  %115
-%141 = OpUGreaterThanEqual  %67  %140 %15
+%123 = OpLoad  %8  %115
+%124 = OpUGreaterThanEqual  %67  %123 %15
 OpLine %3 1 1
-OpSelectionMerge %142 None
-OpBranchConditional %141 %143 %142
-%143 = OpLabel
+OpSelectionMerge %125 None
+OpBranchConditional %124 %126 %125
+%126 = OpLabel
 OpBranch %120
-%142 = OpLabel
+%125 = OpLabel
 OpLine %3 1 1
 OpLine %3 1 1
-%144 = OpExtInst  %8  %1 UMin %140 %82
-%145 = OpAccessChain  %81  %30 %144
-OpStore %145 %48
+%127 = OpExtInst  %8  %1 UMin %123 %82
+%128 = OpAccessChain  %81  %30 %127
+OpStore %128 %48
 OpLine %3 1 1
-%146 = OpIAdd  %8  %140 %96
+%129 = OpIAdd  %8  %123 %96
 OpLine %3 1 1
-OpStore %115 %146
+OpStore %115 %129
 OpBranch %122
 %122 = OpLabel
 OpBranch %119
 %120 = OpLabel
 OpLine %3 1 1
-OpControlBarrier %21 %21 %147
+OpControlBarrier %21 %21 %130
 OpLine %3 37 19
 OpLine %3 37 19
 OpLine %3 37 5
-%148 = OpFunctionCall  %5  %39 %112 %113 %114
+%131 = OpFunctionCall  %5  %39 %112 %113 %114
 OpReturn
 OpFunctionEnd

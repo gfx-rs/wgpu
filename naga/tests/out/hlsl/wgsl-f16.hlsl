@@ -111,18 +111,27 @@ ByteAddressBuffer input_arrays : register(t2);
 RWByteAddressBuffer output : register(u3);
 RWByteAddressBuffer output_arrays : register(u4);
 
+LayoutTest ZeroValueLayoutTest() {
+    return (LayoutTest)0;
+}
+
 typedef half ret_Constructarray2_half_[2];
 ret_Constructarray2_half_ Constructarray2_half_(half arg0, half arg1) {
     half ret[2] = { arg0, arg1 };
     return ret;
 }
 
-half f16_function(half x)
+[numthreads(1, 1, 1)]
+void main()
 {
+    half x = (half)0;
     LayoutTest l = (LayoutTest)0;
-    half val = 15.203125h;
+    half val = (half)0;
+    half local = (half)0;
 
-    half phony = private_variable;
+    x = 2.0h;
+    l = ZeroValueLayoutTest();
+    val = 15.203125h;
     half _e3 = val;
     val = (_e3 + -33344.0h);
     half _e6 = val;
@@ -275,14 +284,11 @@ half f16_function(half x)
     half _e237 = val;
     val = (_e237 + 1.0h);
     half2 _e242 = input_uniform.val_f16_2_;
-    float2 float_vec2_ = float2(_e242);
-    output.Store(16, half2(float_vec2_));
+    output.Store(16, half2(float2(_e242)));
     half3 _e249 = input_uniform.val_f16_3_;
-    float3 float_vec3_ = float3(_e249);
-    output.Store(24, half3(float_vec3_));
+    output.Store(24, half3(float3(_e249)));
     half4 _e256 = input_uniform.val_f16_4_;
-    float4 float_vec4_ = float4(_e256);
-    output.Store(32, half4(float_vec4_));
+    output.Store(32, half4(float4(_e256)));
     half2 _e265 = input_uniform.val_mat2x2_0_;
     half2 _e267 = input_uniform.val_mat2x2_1_;
     {
@@ -365,13 +371,8 @@ half f16_function(half x)
         output.Store(200+24, _value2[3]);
     }
     half _e369 = val;
-    return _e369;
-}
-
-[numthreads(1, 1, 1)]
-void main()
-{
-    const half _e3 = f16_function(2.0h);
-    output.Store(40, _e3);
+    local = _e369;
+    half _e371 = local;
+    output.Store(40, _e371);
     return;
 }

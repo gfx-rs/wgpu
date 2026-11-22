@@ -30,7 +30,6 @@ uint _28(uint _30, uint _31)
 void main()
 {
     uint _56 = 0u;
-    uvec2 _76 = uvec2(4294967295u);
     if (gl_LocalInvocationIndex < 3u)
     {
         _20[gl_LocalInvocationIndex] = 0u;
@@ -39,11 +38,6 @@ void main()
     _56 = gl_LocalInvocationIndex;
     for (;;)
     {
-        if (all(equal(uvec2(0u), _76)))
-        {
-            break;
-        }
-        _76 -= uvec2(uint(_76.y == 0u), 1u);
         if (_56 >= 20u)
         {
             break;
@@ -63,11 +57,11 @@ void main()
         _18 = 0u;
     }
     barrier();
-    uint _135 = atomicAdd(_26[0u]._m1, uint(clamp((((float(_20[_28(gl_LocalInvocationIndex, 3u)]) + _22[gl_LocalInvocationIndex].x) + _24[_28(gl_LocalInvocationIndex, 5u)][_28(gl_LocalInvocationIndex, 4u)]) + _26[_28(gl_LocalInvocationIndex, 2u)]._m0.x) + _26[_28(gl_LocalInvocationIndex, 2u)]._m2[_28(gl_LocalInvocationIndex, 4u)], 0.0, 4294967040.0)));
+    uint _118 = atomicAdd(_26[0u]._m1, uint(clamp((((float(_20[_28(gl_LocalInvocationIndex, 3u)]) + _22[gl_LocalInvocationIndex].x) + _24[_28(gl_LocalInvocationIndex, 5u)][_28(gl_LocalInvocationIndex, 4u)]) + _26[_28(gl_LocalInvocationIndex, 2u)]._m0.x) + _26[_28(gl_LocalInvocationIndex, 2u)]._m2[_28(gl_LocalInvocationIndex, 4u)], 0.0, 4294967040.0)));
     if (gl_LocalInvocationIndex == 0u)
     {
-        uint _144 = atomicAdd(_26[1u]._m1, 0u);
-        _18 = _144;
+        uint _127 = atomicAdd(_26[1u]._m1, 0u);
+        _18 = _127;
         return;
     }
     else

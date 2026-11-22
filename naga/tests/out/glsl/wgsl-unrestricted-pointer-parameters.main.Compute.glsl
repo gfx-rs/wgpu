@@ -45,11 +45,6 @@ uint not_inlined(inout uint p_3) {
 }
 
 void main() {
-    if (gl_LocalInvocationID == uvec3(0u)) {
-        wg = uint[64](0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
-    }
-    memoryBarrierShared();
-    barrier();
     uint index = gl_LocalInvocationIndex;
     uint local[2] = uint[2](0u, 0u);
     uint i = 0u;
@@ -67,66 +62,78 @@ void main() {
     uint local_5 = 0u;
     bool local_6 = false;
     bool c = false;
+    uint zero_init_index = 0u;
+    zero_init_index = index;
+    while(true) {
+        uint _e2 = zero_init_index;
+        if ((_e2 >= 64u)) {
+            break;
+        }
+        wg[_e2] = 0u;
+        zero_init_index = (_e2 + 1u);
+    }
+    memoryBarrierShared();
+    barrier();
     v = index;
-    uint _e3 = v;
-    _group_0_binding_0_cs.a = _e3;
+    uint _e11 = v;
+    _group_0_binding_0_cs.a = _e11;
     v_1 = 1u;
-    uint _e8 = v_1;
-    _group_0_binding_1_cs[index] = _e8;
+    uint _e16 = v_1;
+    _group_0_binding_1_cs[index] = _e16;
     v_2 = 2u;
-    uint _e13 = v_2;
-    uint _e14 = _group_0_binding_0_cs.b[1];
-    _group_0_binding_0_cs.b[1] = (_e14 + _e13);
-    local_1 = _e14;
-    uint _e17 = local_1;
+    uint _e21 = v_2;
+    uint _e22 = _group_0_binding_0_cs.b[1];
+    _group_0_binding_0_cs.b[1] = (_e22 + _e21);
+    local_1 = _e22;
+    uint _e25 = local_1;
     v_3 = 3u;
-    uint _e22 = v_3;
-    uint _e23 = _group_0_binding_0_cs.b[2];
-    _group_0_binding_0_cs.b[2] = (_e23 + _e22);
-    local_2 = _e23;
-    uint _e26 = local_2;
-    uint x = (_e17 + _e26);
+    uint _e30 = v_3;
+    uint _e31 = _group_0_binding_0_cs.b[2];
+    _group_0_binding_0_cs.b[2] = (_e31 + _e30);
+    local_2 = _e31;
+    uint _e34 = local_2;
+    uint x = (_e25 + _e34);
     _group_0_binding_1_cs[0] = x;
     needle = index;
-    uint _e33 = needle;
+    uint _e41 = needle;
     do {
         i_1 = 0;
         local_4 = false;
         bool loop_init = true;
         while(true) {
             if (!loop_init) {
-                int _e45 = i_1;
-                i_1 = (_e45 + 1);
+                int _e53 = i_1;
+                i_1 = (_e53 + 1);
             }
             loop_init = false;
-            int _e35 = i_1;
-            if ((_e35 < 64)) {
+            int _e43 = i_1;
+            if ((_e43 < 64)) {
             } else {
                 break;
             }
             {
-                int _e39 = i_1;
-                uint _e41 = wg[_e39];
-                if ((_e41 == _e33)) {
-                    int _e43 = i_1;
-                    local_3 = _e43;
+                int _e47 = i_1;
+                uint _e49 = wg[_e47];
+                if ((_e49 == _e41)) {
+                    int _e51 = i_1;
+                    local_3 = _e51;
                     local_4 = true;
                     break;
                 }
             }
         }
-        bool _e48 = local_4;
-        if (_e48) {
+        bool _e56 = local_4;
+        if (_e56) {
             break;
         }
         local_3 = -1;
     } while(false);
-    int _e50 = local_3;
-    _group_0_binding_1_cs[1] = uint(_e50);
+    int _e58 = local_3;
+    _group_0_binding_1_cs[1] = uint(_e58);
     do {
         local_6 = false;
-        uint _e56 = _group_0_binding_1_cs[3];
-        switch(_e56) {
+        uint _e64 = _group_0_binding_1_cs[3];
+        switch(_e64) {
             case 0u: {
                 local_5 = 10u;
                 local_6 = true;
@@ -142,44 +149,44 @@ void main() {
                 break;
             }
         }
-        bool _e58 = local_6;
-        if (_e58) {
+        bool _e66 = local_6;
+        if (_e66) {
             break;
         }
         local_5 = 20u;
     } while(false);
-    uint _e60 = local_5;
-    _group_0_binding_1_cs[2] = _e60;
+    uint _e68 = local_5;
+    _group_0_binding_1_cs[2] = _e68;
     bool loop_init_1 = true;
     while(true) {
         if (!loop_init_1) {
-            uint _e69 = i;
-            i = (_e69 + 1u);
+            uint _e77 = i;
+            i = (_e77 + 1u);
         }
         loop_init_1 = false;
-        uint _e62 = i;
-        if ((_e62 < 2u)) {
+        uint _e70 = i;
+        if ((_e70 < 2u)) {
         } else {
             break;
         }
         {
-            uint _e66 = i;
-            bump_twice(local[_e66]);
+            uint _e74 = i;
+            bump_twice(local[_e74]);
         }
     }
     set_private(private_arr[1]);
     c = (index == 0u);
-    bool _e78 = c;
+    bool _e86 = c;
     do {
-        if (_e78) {
+        if (_e86) {
             break;
         }
         _group_0_binding_1_cs[4] = 5u;
     } while(false);
-    uint _e82 = local[0];
-    uint _e85 = private_arr[1];
-    uint _e87 = not_inlined(whole);
-    _group_0_binding_1_cs[5] = ((_e82 + _e85) + _e87);
+    uint _e90 = local[0];
+    uint _e93 = private_arr[1];
+    uint _e95 = not_inlined(whole);
+    _group_0_binding_1_cs[5] = ((_e90 + _e93) + _e95);
     return;
 }
 

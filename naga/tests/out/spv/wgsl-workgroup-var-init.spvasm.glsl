@@ -28,16 +28,9 @@ uint naga_mod(uint lhs, uint rhs)
 void main()
 {
     uint zero_init_index = 0u;
-    uvec2 loop_bound = uvec2(4294967295u);
-    uvec2 loop_bound_1 = uvec2(4294967295u);
     zero_init_index = gl_LocalInvocationIndex;
     for (;;)
     {
-        if (all(equal(uvec2(0u), loop_bound)))
-        {
-            break;
-        }
-        loop_bound -= uvec2(uint(loop_bound.y == 0u), 1u);
         if (zero_init_index >= 512u)
         {
             break;
@@ -49,11 +42,6 @@ void main()
     zero_init_index = gl_LocalInvocationIndex;
     for (;;)
     {
-        if (all(equal(uvec2(0u), loop_bound_1)))
-        {
-            break;
-        }
-        loop_bound_1 -= uvec2(uint(loop_bound_1.y == 0u), 1u);
         if (zero_init_index >= 64u)
         {
             break;

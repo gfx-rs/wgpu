@@ -64,10 +64,7 @@ kernel void main_(
     type_6 in_private = {};
     uint zero_init_index = {};
     zero_init_index = local_invocation_index;
-    uint2 loop_bound = uint2(4294967295u);
     while(true) {
-        if (metal::all(loop_bound == uint2(0u))) { break; }
-        loop_bound -= uint2(loop_bound.y == 0u, 1u);
         uint _e10 = zero_init_index;
         if (_e10 >= 30u) {
             break;

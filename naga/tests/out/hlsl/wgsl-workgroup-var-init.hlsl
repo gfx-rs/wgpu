@@ -21,10 +21,7 @@ void main(uint local_invocation_index : SV_GroupIndex)
     uint zero_init_index = (uint)0;
 
     zero_init_index = local_invocation_index;
-    uint2 loop_bound = uint2(4294967295u, 4294967295u);
     while(true) {
-        if (all(loop_bound == uint2(0u, 0u))) { break; }
-        loop_bound -= uint2(loop_bound.y == 0u, 1u);
         uint _e8 = zero_init_index;
         if ((_e8 >= 512u)) {
             break;
@@ -33,10 +30,7 @@ void main(uint local_invocation_index : SV_GroupIndex)
         zero_init_index = (_e8 + 1u);
     }
     zero_init_index = local_invocation_index;
-    uint2 loop_bound_1 = uint2(4294967295u, 4294967295u);
     while(true) {
-        if (all(loop_bound_1 == uint2(0u, 0u))) { break; }
-        loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
         uint _e18 = zero_init_index;
         if ((_e18 >= 64u)) {
             break;

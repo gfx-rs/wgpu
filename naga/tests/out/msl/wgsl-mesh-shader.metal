@@ -160,10 +160,7 @@ void _ms_main(
 ) {
     uint zero_init_index = {};
     zero_init_index = local_invocation_index_2;
-    uint2 loop_bound = uint2(4294967295u);
     while(true) {
-        if (metal::all(loop_bound == uint2(0u))) { break; }
-        loop_bound -= uint2(loop_bound.y == 0u, 1u);
         uint _e101 = zero_init_index;
         if (_e101 >= 3u) {
             break;
@@ -245,10 +242,7 @@ void _ms_no_ts(
 ) {
     uint zero_init_index_1 = {};
     zero_init_index_1 = local_invocation_index_3;
-    uint2 loop_bound_1 = uint2(4294967295u);
     while(true) {
-        if (metal::all(loop_bound_1 == uint2(0u))) { break; }
-        loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
         uint _e88 = zero_init_index_1;
         if (_e88 >= 3u) {
             break;
@@ -326,10 +320,7 @@ void _ms_divergent(
 ) {
     uint zero_init_index_2 = {};
     zero_init_index_2 = local_invocation_index_4;
-    uint2 loop_bound_2 = uint2(4294967295u);
     while(true) {
-        if (metal::all(loop_bound_2 == uint2(0u))) { break; }
-        loop_bound_2 -= uint2(loop_bound_2.y == 0u, 1u);
         uint _e92 = zero_init_index_2;
         if (_e92 >= 3u) {
             break;

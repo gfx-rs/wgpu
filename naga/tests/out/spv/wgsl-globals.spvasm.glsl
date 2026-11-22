@@ -76,11 +76,22 @@ void _59()
 
 void main()
 {
-    float _110 = 1.0;
-    bool _112 = true;
+    float _115 = 1.0;
+    bool _117 = true;
+    uint _119 = 0u;
+    _119 = gl_LocalInvocationIndex;
+    for (;;)
+    {
+        if (_119 >= 10u)
+        {
+            break;
+        }
+        _28[_119] = 0.0;
+        _119++;
+        continue;
+    }
     if (gl_LocalInvocationIndex == 0u)
     {
-        _28 = float[](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
         _30 = 0u;
     }
     barrier();
