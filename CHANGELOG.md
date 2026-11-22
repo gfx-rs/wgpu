@@ -297,6 +297,10 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fixed some cases where `Adapter::get_texture_format_features` and `TextureFormat::guaranteed_format_features` did not match the validation applied by `create_texture`. By @andyleiserson in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
 - `STORAGE_BINDING` usage is no longer allowed for multi-planar textures. It was previously accepted, but was untested, and likely broken. By @andyleiserson in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
 - Make `wgpu-core` build with `--no-default-features` by fixing the logic in `wgpu_core::lock`. By @jimblandy in [#10972](https://github.com/gfx-rs/wgpu/pull/10972).
+- `TextureFormat::guaranteed_format_features` no longer reports multisample support for 16-bit normalized formats, which can't be render attachments. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
+- `TextureFormat::P010` now reports `TEXTURE_FORMAT_16BIT_NORM` from `required_features()`, which its plane formats require. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
+- Fixed a panic when using an `Rgb9e5Ufloat` color attachment, which some adapters allow with `TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
+- `TextureFormat::guaranteed_format_features` no longer includes `TEXTURE_BINDING` for `R64Uint`, which Metal and some Vulkan drivers can't sample. Use `TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` to sample it where supported. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
 
 #### naga
 
@@ -321,6 +325,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix ambiguous `metal::select` calls in the Metal backend's division/remainder zero guards for 64-bit integers: the guards now emit `L`/`uL` suffixed literals (e.g. `metal::select(rhs, 1uL, rhs == 0uL)`) so MSL generated for `i64`/`u64` `/` and `%` compiles. By @Statesman-forge in [#10278](https://github.com/gfx-rs/wgpu/pull/10278).
 - In the MSL backend, `subgroupBallot` now keeps lanes 32-63, which were lost on GPUs with 64-wide SIMD groups (AMD GPUs on macOS). By @ErkoRisthein in [#10797](https://github.com/gfx-rs/wgpu/pull/10797).
 - Report a WGSL error instead of panicking when the condition of a `const_assert` is a composite value, such as `const_assert(vec2i());`. By @MilosLord in [#10897](https://github.com/gfx-rs/wgpu/pull/10897).
+- Fixed MSL and GLSL output for `textureAtomic*` on arrayed storage textures, which dropped or misplaced the array index. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
 
 #### Validation
 
@@ -377,6 +382,9 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Polyfill workgroup zero init in mesh and task shaders on AMD's proprietary driver, which fails with `VK_ERROR_INITIALIZATION_FAILED` when they use `OpVariable` initializers. By @apollo-2006 in [#10692](https://github.com/gfx-rs/wgpu/pull/10692).
 - Fix a fence data race between submitting and polling on devices without timeline semaphores. By @JasperDeSutter in [#10960](https://github.com/gfx-rs/wgpu/pull/10960).
 - Fix pass timestamp queries on Vulkan sometimes reporting a duration of almost zero for a render or compute pass, when the GPU was busy with other work. By @kikijiki in [#10837](https://github.com/gfx-rs/wgpu/pull/10837).
+- Stop reporting multisample support for formats that can't be render attachments. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
+- Only report `STORAGE_ATOMIC` for `R32Uint`, `R32Sint` and `R64Uint` storage images, the formats shaders can use atomically. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
+- Stop reporting read-only and read-write storage access for `Bgra8Unorm`, which would need `shaderStorageImageReadWithoutFormat`. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
 
 #### Metal
 
@@ -391,6 +399,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix a crash when creating a declared alternate sRGB view of a render-attachment-only surface with Metal API Validation enabled. By @jinleili in [#10280](https://github.com/gfx-rs/wgpu/pull/10280).
 - To avoid rendering failures in new windows (see [#9430](https://github.com/gfx-rs/wgpu/issues/9430)), do not return `SurfaceStatus::Occluded` from `Surface::get_current_texture` when it is called for a window that hasn't been visible yet. By @tronical in [#10302](https://github.com/gfx-rs/wgpu/pull/10302).
 - Skip the render ICB probe on Macs with Tier 1 argument buffers, such as Haswell and Broadwell Intel GPUs. Compiling its kernel crashed the Metal shader compiler, which stalled device creation for about 10 seconds. By @ErkoRisthein in [#10927](https://github.com/gfx-rs/wgpu/pull/10927).
+- Fixed a Metal validation error when creating an sRGB view of an ETC2 texture. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
 
 #### GLES
 
@@ -404,6 +413,9 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix negative argument for `atomicSub` yielding incorrect GLSL. By @ErichDonGubler in [#9924](https://github.com/gfx-rs/wgpu/pull/9924).
 - Fixed `copy_texture_to_texture()` copying only the first depth slice when the copy extent had a depth greater than 1, so copies between 3D textures silently lost every slice after the first. Copies with a nonzero source z also read the wrong slice. By @AlexEgger2Build in [#10004](https://github.com/gfx-rs/wgpu/pull/10004).
 - Set a sampler's maximum anisotropy with `glSamplerParameterf` instead of `glSamplerParameteri`. Chromium's validating command decoder, which Android WebView still uses, rejects the integer call with `GL_INVALID_ENUM`, so anisotropic filtering was silently disabled under WebGL2 there. By @Jaltaire in [#10874](https://github.com/gfx-rs/wgpu/pull/10874).
+- Stop advertising `TEXTURE_COMPRESSION_BC_SLICED_3D`, since BC formats are 2D-only in GL. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
+- Fixed creating multisampled textures with usages other than render attachment, which used the `GL_TEXTURE_2D` target instead of `GL_TEXTURE_2D_MULTISAMPLE`. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
+- Fixed `copy_texture_to_texture` for compressed, multisampled and depth/stencil textures. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
 
 #### WebGPU
 

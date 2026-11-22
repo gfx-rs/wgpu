@@ -1291,12 +1291,14 @@ impl crate::Device for super::Device {
 
             unsafe { gl.bind_texture(target, Some(raw)) };
             //Note: this has to be done before defining the storage!
+            // Multisample textures have no sampler state.
+            let sampleable = target != glow::TEXTURE_2D_MULTISAMPLE;
             match desc.format.sample_type(None, Some(self.shared.features)) {
                 Some(
                     wgt::TextureSampleType::Float { filterable: false }
                     | wgt::TextureSampleType::Uint
                     | wgt::TextureSampleType::Sint,
-                ) => {
+                ) if sampleable => {
                     // reset default filtering mode
                     unsafe {
                         gl.tex_parameter_i32(target, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32)
@@ -1791,7 +1793,11 @@ impl crate::Device for super::Device {
                     let sampler = desc.samplers[entry.resource_index as usize];
                     super::RawBinding::Sampler(sampler.raw)
                 }
-                wgt::BindingType::Texture { view_dimension, .. } => {
+                wgt::BindingType::Texture {
+                    view_dimension,
+                    multisampled,
+                    ..
+                } => {
                     let view = desc.textures[entry.resource_index as usize].view;
                     if view.array_layers.start != 0 {
                         log::error!("Unable to create a sampled texture binding for non-zero array layer.\n{}",
@@ -1803,7 +1809,11 @@ impl crate::Device for super::Device {
                     // validated at the core layer.
                     debug_assert_eq!(
                         target,
-                        super::Texture::target_for_view_dimension(view_dimension)
+                        if multisampled {
+                            glow::TEXTURE_2D_MULTISAMPLE
+                        } else {
+                            super::Texture::target_for_view_dimension(view_dimension)
+                        }
                     );
 
                     super::RawBinding::Texture {
