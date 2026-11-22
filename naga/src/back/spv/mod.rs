@@ -956,6 +956,7 @@ pub struct Writer {
     force_loop_bounding: bool,
     use_storage_input_output_16: bool,
     emit_int_div_checks: bool,
+    passes: crate::back::PassOptions,
     void_type: Word,
     tuple_of_u32s_ty_id: Option<Word>,
     //TODO: convert most of these into vectors, addressable by handle indices
@@ -1131,6 +1132,9 @@ pub struct Options<'a> {
     /// implementation-defined results when the divisor is zero. Appropriate
     /// for compute shaders where the developer guarantees non-zero divisors.
     pub emit_int_div_checks: bool,
+
+    /// Options for the IR passes the backend runs before writing the module.
+    pub passes: crate::back::PassOptions,
 }
 
 impl Default for Options<'_> {
@@ -1157,6 +1161,7 @@ impl Default for Options<'_> {
             task_dispatch_limits: None,
             mesh_shader_primitive_indices_clamp: true,
             emit_int_div_checks: true,
+            passes: Default::default(),
         }
     }
 }

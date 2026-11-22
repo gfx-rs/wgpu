@@ -74,7 +74,10 @@ fn resources_by_binding() {
     assert_eq!(sampled.sampler, Some(resource(1, 1, "samp")));
     assert_eq!(sampled.dim, ImageDimension::D2);
     assert!(!sampled.arrayed);
-    assert!(matches!(sampled.class, ImageClass::Sampled { multi: false, .. }));
+    assert!(matches!(
+        sampled.class,
+        ImageClass::Sampled { multi: false, .. }
+    ));
 
     let storage = reflection
         .texture_mapping

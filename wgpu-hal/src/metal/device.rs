@@ -229,6 +229,7 @@ impl super::Device {
                     },
                     inline_samplers: Default::default(),
                     spirv_cross_compatibility: false,
+                    passes: Default::default(),
                     fake_missing_bindings: false,
                     per_entry_point_map: naga::back::msl::EntryPointResourceMap::from([(
                         stage.entry_point.to_owned(),
