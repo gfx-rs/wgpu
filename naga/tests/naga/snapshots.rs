@@ -195,7 +195,7 @@ Note: this is an issue with snapshot configuration, not code. If you added a new
     }
 
     if targets.contains(Targets::WGSL) {
-        write_output_wgsl(input, module, &info, &params.wgsl);
+        write_output_wgsl(input, module, &params.wgsl);
     }
 }
 
@@ -519,17 +519,28 @@ fn write_output_hlsl(
         .unwrap();
 }
 
-fn write_output_wgsl(
-    input: &Input,
-    module: &naga::Module,
-    info: &naga::valid::ModuleInfo,
-    params: &WgslOutParameters,
-) {
+fn write_output_wgsl(input: &Input, module: &naga::Module, params: &WgslOutParameters) {
     use naga::back::wgsl;
 
     println!("generating WGSL");
 
-    let string = wgsl::write_string(module, info, params.into()).expect("WGSL write failed");
+    let string = wgsl::write_string(module, &params.into()).expect("WGSL write failed");
+
+    if !params.unrestricted_pointer_parameters {
+        let output_module = naga::front::wgsl::parse_str(&string).unwrap_or_else(|err| {
+            panic!(
+                "WGSL output does not parse:\n{}",
+                err.emit_to_string(&string)
+            )
+        });
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
+        )
+        .validate(&output_module)
+        .expect("WGSL output does not validate");
+        crate::inline::assert_no_unrestricted_pointer_parameters(&output_module);
+    }
 
     input.write_output_file("wgsl", "wgsl", string, DIR_OUT);
 }

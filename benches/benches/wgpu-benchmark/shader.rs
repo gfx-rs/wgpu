@@ -352,11 +352,8 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
         for input in &inputs.inner {
             if input.options.targets.unwrap().contains(Targets::WGSL) {
                 let mut writer =
-                    naga::back::wgsl::Writer::new(&mut string, (&input.options.wgsl).into());
-                let _ = writer.write(
-                    input.module.as_ref().unwrap(),
-                    input.module_info.as_ref().unwrap(),
-                );
+                    naga::back::wgsl::Writer::new(&mut string, &(&input.options.wgsl).into());
+                let _ = writer.write(input.module.as_ref().unwrap());
                 string.clear();
             }
         }

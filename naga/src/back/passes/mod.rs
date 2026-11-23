@@ -4,8 +4,9 @@ IR passes that backends run on a module before writing it.
 Each backend calls `run` on the module it is given, which the caller may pass
 by reference or by value. The caller decides which entry points the module
 contains, must replace its overrides with constants first, for example with
-[`process_overrides`](crate::back::pipeline_constants::process_overrides), and
-must have validated it. Backends don't take a [`ModuleInfo`]: `run` validates
+[`process_overrides`](crate::back::pipeline_constants::process_overrides)
+(except for the WGSL backend, which writes overrides), and must have
+validated it. Backends don't take a [`ModuleInfo`]: `run` validates
 the module after the passes and returns its info.
 
 A pass that changes a borrowed module works on a copy; an owned module is
@@ -33,7 +34,7 @@ The passes are:
   their loads to assemble the value from the words.
 */
 #![cfg_attr(
-    not(any(glsl_out, hlsl_out, msl_out, spv_out)),
+    not(any(glsl_out, hlsl_out, msl_out, spv_out, wgsl_out)),
     allow(
         dead_code,
         reason = "shared helpers can be dead if none of the enabled backends need it"
@@ -75,7 +76,7 @@ pub enum PassError {
 
 /// Options for the IR passes a backend runs before writing a module.
 ///
-/// The SPIR-V, HLSL, MSL and GLSL backends' `Options` each hold one.
+/// The SPIR-V, HLSL, MSL, GLSL and WGSL backends' `Options` each hold one.
 #[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]

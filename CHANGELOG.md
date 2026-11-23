@@ -193,6 +193,8 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - `naga::compact::compact` now accepts functions whose expression arenas contain forward references (an expression referring to a later one), and renumbers the function's expressions so that every expression precedes its users. It also accepts functions that call later functions, and moves callees before their callers. This lets passes that rewrite a module append expressions and functions freely and run compaction afterwards. Modules without forward references are compacted exactly as before. By @Inner-Daemons in [#10409](https://github.com/gfx-rs/wgpu/pull/10409).
 - The SPIR-V, HLSL, MSL and GLSL backends no longer take a `ModuleInfo`: their `write` functions (and `spv::write_vec`, `msl::write_string`) validate the module themselves after running their passes. Callers must still validate the module first, for example with `process_overrides`. The module can be passed as `&Module` or by value; pass a `Cow` from `process_overrides` as `&*module` or by value. By @Inner-Daemons in [#10409](https://github.com/gfx-rs/wgpu/pull/10409).
 - The SPIR-V, HLSL, MSL and GLSL backends' `Options` have a new `passes: naga::back::PassOptions` field. Set `PassOptions::compact` to remove everything the entry points don't use before writing, so output doesn't depend on unused items. It is off by default. By @Inner-Daemons in [#10409](https://github.com/gfx-rs/wgpu/pull/10409).
+- The WGSL backend's `Writer::write` and `write_string` no longer take a `ModuleInfo`; they validate the module themselves, and accept it by reference or by value. `Writer::new` and `write_string` take a new `naga::back::wgsl::Options` instead of `WriterFlags`. By @Inner-Daemons in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
+- Added `naga::back::wgsl::Options::unrestricted_pointer_parameters`, on by default. If turned off, the WGSL backend inlines the calls that need the `unrestricted_pointer_parameters` language extension, so the output is valid for consumers without it. `naga-cli` has the matching `--no-unrestricted-pointer-parameters` flag. `Options::passes` is the `PassOptions` the other backends have. By @Inner-Daemons in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
 
 #### Hal
 
@@ -233,6 +235,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 - Add `Device::import_external_texture` to bind a `GPUExternalTexture` sampled from an `HTMLVideoElement` or WebCodecs `VideoFrame`, without a copy. By @AdrianEddy in [#9936](https://github.com/gfx-rs/wgpu/pull/9936).
 - The `subgroups` feature (and any other features added in the future) will now be reported by the WebGPU backend, if reported by the underlying WebGPU implementation. By @andyleiserson in [#10265](https://github.com/gfx-rs/wgpu/pull/10265).
+- Shaders given as Naga IR, SPIR-V or GLSL are translated to WGSL that doesn't need the `unrestricted_pointer_parameters` language extension if the browser doesn't support it. By @Inner-Daemons in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
 
 #### deno_webgpu
 

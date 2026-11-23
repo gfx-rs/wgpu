@@ -1,0 +1,4 @@
+targets = "WGSL"
+
+[wgsl]
+unrestricted_pointer_parameters = false

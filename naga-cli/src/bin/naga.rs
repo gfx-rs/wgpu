@@ -82,6 +82,15 @@ struct Args {
     #[argh(option)]
     metal_version: Option<MslVersionArg>,
 
+    /// when writing WGSL, don't rely on the `unrestricted_pointer_parameters`
+    /// language extension: inline calls to functions with pointer parameters
+    /// outside the `function` and `private` address spaces, and calls with
+    /// pointer arguments that refer to part of a variable, like `&a[i]`.
+    ///
+    /// Use this for WGSL consumers that don't support the extension.
+    #[argh(switch)]
+    no_unrestricted_pointer_parameters: bool,
+
     /// if the selected frontends/backends support coordinate space conversions,
     /// disable them
     #[argh(switch)]
@@ -103,7 +112,7 @@ struct Args {
     ///
     /// Output files will reflect the compacted IR. If you want to see the IR as
     /// it was before compaction, use the `--before-compaction` option. The
-    /// SPIR-V, MSL, HLSL and GLSL backends also compact the module after their
+    /// SPIR-V, MSL, HLSL, GLSL and WGSL backends also compact the module after their
     /// own passes.
     ///
     /// Even when this option is not active, compaction may still occur as part
@@ -416,6 +425,7 @@ struct Parameters<'a> {
     msl: naga::back::msl::Options,
     glsl: naga::back::glsl::Options,
     hlsl: naga::back::hlsl::Options,
+    wgsl: naga::back::wgsl::Options,
     input_kind: Option<InputKind>,
     shader_stage: Option<ShaderStage>,
     defines: FastHashMap<String, String>,
@@ -588,6 +598,8 @@ fn run() -> anyhow::Result<()> {
     params.msl.passes = passes;
     params.glsl.passes = passes;
     params.hlsl.passes = passes;
+    params.wgsl.passes = passes;
+    params.wgsl.unrestricted_pointer_parameters = !args.no_unrestricted_pointer_parameters;
 
     if args.bulk_validate {
         return bulk_validate(&args, &params);
@@ -1007,15 +1019,15 @@ fn write_output(
         "wgsl" => {
             use naga::back::wgsl;
 
-            let wgsl = wgsl::write_string(
-                module,
-                info.as_ref().ok_or(CliError(
+            if info.is_none() {
+                return Err(CliError(
                     "Generating wgsl output requires validation to \
                      succeed, and it failed in a previous step",
-                ))?,
-                wgsl::WriterFlags::empty(),
-            )
-            .unwrap_pretty();
+                )
+                .into());
+            }
+
+            let wgsl = wgsl::write_string(module, &params.wgsl).unwrap_pretty();
             fs::write(output_path, wgsl)?;
         }
         other => {

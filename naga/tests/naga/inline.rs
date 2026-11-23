@@ -43,6 +43,84 @@ fn has_call(block: &naga::Block) -> bool {
     })
 }
 
+fn for_each_call(
+    block: &naga::Block,
+    f: &mut impl FnMut(naga::Handle<naga::Function>, &[naga::Handle<naga::Expression>]),
+) {
+    for statement in block.iter() {
+        match *statement {
+            Statement::Call {
+                function,
+                ref arguments,
+                ..
+            } => f(function, arguments),
+            Statement::Block(ref block) => for_each_call(block, f),
+            Statement::If {
+                ref accept,
+                ref reject,
+                ..
+            } => {
+                for_each_call(accept, f);
+                for_each_call(reject, f);
+            }
+            Statement::Switch { ref cases, .. } => {
+                for case in cases {
+                    for_each_call(&case.body, f);
+                }
+            }
+            Statement::Loop {
+                ref body,
+                ref continuing,
+                ..
+            } => {
+                for_each_call(body, f);
+                for_each_call(continuing, f);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Panic if `module` needs the `unrestricted_pointer_parameters` language
+/// extension: a function takes a pointer outside the `function` and `private`
+/// address spaces, or a call passes a pointer to part of a variable.
+pub fn assert_no_unrestricted_pointer_parameters(module: &Module) {
+    use naga::{AddressSpace, Expression, TypeInner};
+
+    let functions = module
+        .functions
+        .iter()
+        .map(|(_, function)| function)
+        .chain(module.entry_points.iter().map(|ep| &ep.function));
+    for function in functions {
+        let name = function.name.as_deref().unwrap_or("<unnamed>");
+        for argument in &function.arguments {
+            if let TypeInner::Pointer { space, .. } = module.types[argument.ty].inner {
+                assert!(
+                    matches!(space, AddressSpace::Function | AddressSpace::Private),
+                    "`{name}` has a pointer parameter in {space:?}"
+                );
+            }
+        }
+        for_each_call(&function.body, &mut |callee, arguments| {
+            let parameters = &module.functions[callee].arguments;
+            for (parameter, &argument) in parameters.iter().zip(arguments) {
+                if module.types[parameter.ty].inner.pointer_space().is_some() {
+                    assert!(
+                        matches!(
+                            function.expressions[argument],
+                            Expression::LocalVariable(_)
+                                | Expression::GlobalVariable(_)
+                                | Expression::FunctionArgument(_)
+                        ),
+                        "`{name}` passes a pointer to part of a variable"
+                    );
+                }
+            }
+        });
+    }
+}
+
 const STORAGE_POINTER: &str = "
     @group(0) @binding(0) var<storage, read_write> buf: array<u32, 4>;
 
@@ -494,4 +572,84 @@ fn requires_unrestricted_pointer_parameters_is_optional() {
     let with = outputs(&with);
     assert!(!with.is_empty(), "no backends enabled");
     assert_eq!(with, outputs(&without));
+}
+
+#[cfg(wgsl_out)]
+fn write_wgsl(module: &Module, unrestricted_pointer_parameters: bool) -> String {
+    naga::back::wgsl::write_string(
+        module,
+        &naga::back::wgsl::Options {
+            unrestricted_pointer_parameters,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+}
+
+/// The WGSL backend inlines the calls that need the extension only if asked to.
+#[cfg(wgsl_out)]
+#[test]
+fn wgsl_inlines_what_it_needs() {
+    for source in [
+        STORAGE_POINTER,
+        IMMEDIATE_POINTER,
+        SUB_OBJECT_ARGUMENT,
+        RUNTIME_SIZED_POINTER,
+        BINDING_ARRAY,
+    ] {
+        let (module, _) = parse(source);
+
+        let kept = write_wgsl(&module, true);
+        assert!(kept.contains("fn "), "{kept}");
+        let kept_module = naga::front::wgsl::parse_str(&kept).unwrap();
+        assert!(!kept_module.functions.is_empty(), "{kept}");
+
+        let inlined = write_wgsl(&module, false);
+        let inlined_module = naga::front::wgsl::parse_str(&inlined)
+            .unwrap_or_else(|err| panic!("{}\n{inlined}", err.emit_to_string(&inlined)));
+        Validator::new(ValidationFlags::all(), Capabilities::all())
+            .validate(&inlined_module)
+            .unwrap();
+        assert_no_unrestricted_pointer_parameters(&inlined_module);
+    }
+}
+
+#[cfg(wgsl_out)]
+#[test]
+fn wgsl_without_calls_to_inline_is_unchanged() {
+    let (module, _) = parse(
+        "
+        fn store(p: ptr<function, u32>) {
+            *p = 1u;
+        }
+
+        @compute @workgroup_size(1)
+        fn main() {
+            var a = 0u;
+            store(&a);
+        }
+        ",
+    );
+    assert_eq!(write_wgsl(&module, true), write_wgsl(&module, false));
+}
+
+#[cfg(wgsl_out)]
+#[test]
+fn wgsl_compact_option() {
+    let (module, _) = parse(
+        "
+        fn unused() {}
+
+        @compute @workgroup_size(1)
+        fn main() {}
+        ",
+    );
+    let options = |compact| naga::back::wgsl::Options {
+        passes: naga::back::PassOptions { compact },
+        ..Default::default()
+    };
+    let kept = naga::back::wgsl::write_string(&module, &options(false)).unwrap();
+    let compacted = naga::back::wgsl::write_string(&module, &options(true)).unwrap();
+    assert!(kept.contains("fn unused"), "{kept}");
+    assert!(!compacted.contains("fn unused"), "{compacted}");
 }

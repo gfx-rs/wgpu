@@ -26,6 +26,10 @@ pub enum Error {
     Unimplemented(String), // TODO: Error used only during development
     #[error("Unsupported relational function: {0:?}")]
     UnsupportedRelationalFunction(crate::RelationalFunction),
+    #[error(transparent)]
+    Pass(#[from] crate::back::passes::PassError),
+    #[error("function `{0}` has pointer parameters or arguments that must be inlined by `naga::inline::process`")]
+    NeedsInline(String),
     #[error("Unsupported {kind}: {value}")]
     Unsupported {
         /// What kind of unsupported thing this is: interpolation, builtin, etc.
@@ -62,13 +66,43 @@ where
     }
 }
 
-pub fn write_string(
-    module: &crate::Module,
-    info: &crate::valid::ModuleInfo,
-    flags: WriterFlags,
+/// Configuration used for the [`Writer`].
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default))]
+pub struct Options {
+    /// Configuration flags for the writer.
+    pub flags: WriterFlags,
+    /// Whether the consumer of the output supports the WGSL
+    /// `unrestricted_pointer_parameters` language extension.
+    ///
+    /// If `true`, the output may pass pointers in the `storage`, `uniform`,
+    /// `workgroup`, `immediate` and `task_payload` address spaces to
+    /// functions, and pointers to part of a variable like `&a[i]`.
+    ///
+    /// If `false`, the backend inlines the calls that need the extension.
+    pub unrestricted_pointer_parameters: bool,
+    /// Options for the IR passes the backend runs before writing the module.
+    pub passes: crate::back::PassOptions,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            flags: WriterFlags::empty(),
+            unrestricted_pointer_parameters: true,
+            passes: Default::default(),
+        }
+    }
+}
+
+pub fn write_string<'m>(
+    module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
+    options: &Options,
 ) -> Result<String, Error> {
-    let mut w = Writer::new(String::new(), flags);
-    w.write(module, info)?;
+    let mut w = Writer::new(String::new(), options);
+    w.write(module)?;
     let output = w.finish();
     Ok(output)
 }
