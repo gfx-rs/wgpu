@@ -17,8 +17,12 @@ pub use error::{Error, ErrorKind, ExpectedToken, ParseErrors};
 pub use token::TokenValue;
 
 use alloc::{string::String, vec::Vec};
+use core::ops::Range;
 
-use crate::{proc::Layouter, FastHashMap, FastHashSet, Handle, Module, ShaderStage, Span, Type};
+use crate::{
+    arena::HandleVec, proc::Layouter, FastHashMap, FastHashSet, Function, Handle, Module,
+    ShaderStage, Span, Type,
+};
 use ast::{EntryArg, FunctionDeclaration, GlobalLookup};
 use parser::ParsingContext;
 
@@ -168,6 +172,14 @@ pub struct Frontend {
     meta: ShaderMetadata,
 
     lookup_function: FastHashMap<String, FunctionDeclaration>,
+    /// Callee and call-site span of non-const user function calls, in lowering order.
+    ///
+    /// Includes calls later removed by `Block::cull`, as well as calls in global
+    /// initializers (which lie outside every `function_calls` range).
+    call_edges: Vec<(Handle<Function>, Span)>,
+    /// Slice range in `call_edges` for each function, indexed in lockstep with
+    /// `Module::functions` (`0..0` for prototypes until defined).
+    function_calls: HandleVec<Function, Range<usize>>,
     lookup_type: FastHashMap<String, Handle<Type>>,
 
     global_variables: Vec<(String, GlobalLookup)>,
@@ -184,6 +196,8 @@ impl Frontend {
         self.meta.reset(stage);
 
         self.lookup_function.clear();
+        self.call_edges.clear();
+        self.function_calls.clear();
         self.lookup_type.clear();
         self.global_variables.clear();
         self.entry_args.clear();

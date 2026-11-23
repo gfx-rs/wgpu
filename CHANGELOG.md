@@ -321,6 +321,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix ambiguous `metal::select` calls in the Metal backend's division/remainder zero guards for 64-bit integers: the guards now emit `L`/`uL` suffixed literals (e.g. `metal::select(rhs, 1uL, rhs == 0uL)`) so MSL generated for `i64`/`u64` `/` and `%` compiles. By @Statesman-forge in [#10278](https://github.com/gfx-rs/wgpu/pull/10278).
 - In the MSL backend, `subgroupBallot` now keeps lanes 32-63, which were lost on GPUs with 64-wide SIMD groups (AMD GPUs on macOS). By @ErkoRisthein in [#10797](https://github.com/gfx-rs/wgpu/pull/10797).
 - Report a WGSL error instead of panicking when the condition of a `const_assert` is a composite value, such as `const_assert(vec2i());`. By @MilosLord in [#10897](https://github.com/gfx-rs/wgpu/pull/10897).
+- Topologically sort `Module::functions` and reject recursive calls (including static recursion in unreachable code) in the GLSL frontend (`glsl-in`), so valid shaders whose caller prototypes precede callee definitions validate cleanly and recursive shaders report a GLSL semantic error instead of the validator panicking or reporting an IR handle error. By @a1x-an in [#11088](https://github.com/gfx-rs/wgpu/pull/11088).
 
 #### Validation
 
