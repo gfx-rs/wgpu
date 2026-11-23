@@ -188,6 +188,7 @@ impl<'source> ParsingContext<'source> {
                 if let FunctionKind::Call(handle) = decl.kind {
                     if decl.defined && decl.parameters.is_empty() {
                         frontend.add_entry_point(handle, ctx)?;
+                        frontend.reorder_functions(&mut module)?;
                         return Ok(module);
                     }
                 }

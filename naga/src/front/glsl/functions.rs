@@ -4,7 +4,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use core::iter;
+use core::{iter, ops::Range};
 
 use super::{
     ast::*,
@@ -15,9 +15,9 @@ use super::{
     Frontend, Result,
 };
 use crate::{
-    front::glsl::types::type_power, proc::ensure_block_returns, AddressSpace, Block, EntryPoint,
-    Expression, Function, FunctionArgument, FunctionResult, Handle, Literal, LocalVariable, Scalar,
-    ScalarKind, Span, Statement, StructMember, Type, TypeInner,
+    arena::HandleVec, front::glsl::types::type_power, proc::ensure_block_returns, AddressSpace,
+    Block, EntryPoint, Expression, Function, FunctionArgument, FunctionResult, Handle, Literal,
+    LocalVariable, Scalar, ScalarKind, Span, Statement, StructMember, Type, TypeInner,
 };
 
 /// Struct detailing a store operation that must happen after a function call
@@ -824,6 +824,12 @@ impl Frontend {
                     None
                 };
 
+                // Record before `Block::cull` drops unreachable statements; ignore
+                // temporary `is_const` contexts (e.g. array sizes or layout qualifiers)
+                // nested inside a function body.
+                if !ctx.is_const {
+                    self.call_edges.push((function, meta));
+                }
                 ctx.body.push(
                     Statement::Call {
                         function,
@@ -1028,6 +1034,7 @@ impl Frontend {
         mut ctx: Context,
         name: String,
         result: Option<FunctionResult>,
+        calls: Range<usize>,
         meta: Span,
     ) {
         ensure_block_returns(&mut ctx.body);
@@ -1094,9 +1101,13 @@ impl Frontend {
             decl.defined = true;
             decl.parameters_info = parameters_info;
             match decl.kind {
-                FunctionKind::Call(handle) => *module.functions.get_mut(handle) = function,
+                FunctionKind::Call(handle) => {
+                    *module.functions.get_mut(handle) = function;
+                    self.function_calls[handle] = calls;
+                }
                 FunctionKind::Macro(_) => {
                     let handle = module.functions.append(function, meta);
+                    self.function_calls.insert(handle, calls);
                     decl.kind = FunctionKind::Call(handle)
                 }
             }
@@ -1104,6 +1115,7 @@ impl Frontend {
         }
 
         let handle = module.functions.append(function, meta);
+        self.function_calls.insert(handle, calls);
         declaration.overloads.push(Overload {
             parameters,
             parameters_info,
@@ -1173,6 +1185,7 @@ impl Frontend {
         }
 
         let handle = module.functions.append(function, meta);
+        self.function_calls.insert(handle, 0..0);
         declaration.overloads.push(Overload {
             parameters,
             parameters_info,
@@ -1379,6 +1392,105 @@ impl Frontend {
             task_payload: None,
             incoming_ray_payload: None,
         });
+
+        Ok(())
+    }
+
+    /// Topologically sort `module.functions` so every callee precedes its callers,
+    /// rejecting static call cycles across the whole unit (GLSL 4.60 §6.1.1).
+    ///
+    /// A prototype reserves its handle in `module.functions` before the functions it
+    /// calls are declared, so declaration order can place a caller ahead of its callee.
+    /// Remaps all `Handle<Function>` references in `module.functions` and
+    /// `module.entry_points`, so this must run after [`Self::add_entry_point`].
+    /// `self.lookup_function`, `self.call_edges`, and `self.function_calls` keep
+    /// pre-reorder handles until [`Self::reset`] clears them on reuse.
+    pub(crate) fn reorder_functions(&self, module: &mut crate::Module) -> Result<()> {
+        let n = module.functions.len();
+        debug_assert_eq!(self.function_calls.len(), n);
+        if self.call_edges.is_empty() {
+            return Ok(());
+        }
+
+        // Every cycle has an edge with `callee >= caller`; without such edges the
+        // arena is already acyclic and topologically sorted.
+        let needs_reorder = module.functions.iter().any(|(caller, _)| {
+            self.call_edges[self.function_calls[caller].clone()]
+                .iter()
+                .any(|&(callee, _)| callee >= caller)
+        });
+        if !needs_reorder {
+            return Ok(());
+        }
+
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        enum VisitState {
+            Unvisited,
+            Visiting,
+            Visited,
+        }
+
+        let mut state = HandleVec::new();
+        state.resize(n, VisitState::Unvisited);
+        let mut postorder = Vec::with_capacity(n);
+        let mut dfs_stack: Vec<(Handle<Function>, usize)> = Vec::new();
+
+        for (start, _) in module.functions.iter() {
+            if state[start] != VisitState::Unvisited {
+                continue;
+            }
+            state[start] = VisitState::Visiting;
+            dfs_stack.push((start, self.function_calls[start].start));
+
+            while let Some(&mut (curr, ref mut edge_idx)) = dfs_stack.last_mut() {
+                if *edge_idx < self.function_calls[curr].end {
+                    let (callee, call_span) = self.call_edges[*edge_idx];
+                    *edge_idx += 1;
+                    match state[callee] {
+                        VisitState::Unvisited => {
+                            state[callee] = VisitState::Visiting;
+                            dfs_stack.push((callee, self.function_calls[callee].start));
+                        }
+                        VisitState::Visiting => {
+                            let name = module.functions[callee].name.as_deref().unwrap_or_default();
+                            return Err(Error {
+                                kind: ErrorKind::SemanticError(
+                                    format!("Recursive call to '{name}'").into(),
+                                ),
+                                meta: call_span,
+                            });
+                        }
+                        VisitState::Visited => {}
+                    }
+                } else {
+                    state[curr] = VisitState::Visited;
+                    postorder.push(curr);
+                    dfs_stack.pop();
+                }
+            }
+        }
+
+        // DFS postorder over caller -> callee edges places every callee before its callers.
+        let mut old_functions = module.functions.take();
+        let mut remap = HandleVec::new();
+        remap.resize(n, None);
+        for old_handle in postorder {
+            let span = old_functions.get_span(old_handle);
+            let fun = core::mem::take(&mut old_functions[old_handle]);
+            let new_handle = module.functions.append(fun, span);
+            remap[old_handle] = Some(new_handle);
+        }
+
+        let remap_handle = |handle: &mut Handle<Function>| {
+            *handle = remap[*handle].expect("all functions are visited in postorder");
+        };
+
+        for (_, fun) in module.functions.iter_mut() {
+            remap_function_calls(fun, remap_handle);
+        }
+        for ep in module.entry_points.iter_mut() {
+            remap_function_calls(&mut ep.function, remap_handle);
+        }
 
         Ok(())
     }
@@ -1619,4 +1731,70 @@ fn builtin_required_variations<'a>(args: impl Iterator<Item = &'a TypeInner>) ->
     }
 
     variations
+}
+
+/// Remap `Function` handles in `fun`. `fun.expressions` is scanned directly
+/// rather than via `Statement::Call::result` because `Block::cull` drops
+/// unreachable `Statement::Call`s while leaving their `Expression::CallResult`s
+/// in the arena.
+fn remap_function_calls(fun: &mut Function, remap_handle: impl Fn(&mut Handle<Function>)) {
+    for (_, expr) in fun.expressions.iter_mut() {
+        if let Expression::CallResult(ref mut function) = *expr {
+            remap_handle(function);
+        }
+    }
+
+    let mut stack = vec![&mut fun.body];
+    while let Some(block) = stack.pop() {
+        for stmt in block.iter_mut() {
+            match *stmt {
+                Statement::Call {
+                    ref mut function, ..
+                } => remap_handle(function),
+                Statement::Block(ref mut sub) => stack.push(sub),
+                Statement::If {
+                    ref mut accept,
+                    ref mut reject,
+                    ..
+                } => {
+                    stack.push(accept);
+                    stack.push(reject);
+                }
+                Statement::Switch { ref mut cases, .. } => {
+                    for case in cases.iter_mut() {
+                        stack.push(&mut case.body);
+                    }
+                }
+                Statement::Loop {
+                    ref mut body,
+                    ref mut continuing,
+                    ..
+                } => {
+                    stack.push(body);
+                    stack.push(continuing);
+                }
+                Statement::Emit(_)
+                | Statement::Break
+                | Statement::Continue
+                | Statement::Return { .. }
+                | Statement::Kill
+                | Statement::ControlBarrier(_)
+                | Statement::MemoryBarrier(_)
+                | Statement::Store { .. }
+                | Statement::ImageStore { .. }
+                | Statement::Atomic { .. }
+                | Statement::ImageAtomic { .. }
+                | Statement::WorkGroupUniformLoad { .. }
+                | Statement::RayQuery { .. }
+                | Statement::RayPipelineFunction(_)
+                | Statement::HitObject { .. }
+                | Statement::SubgroupBallot { .. }
+                | Statement::SubgroupGather { .. }
+                | Statement::SubgroupCollectiveOperation { .. }
+                | Statement::SubgroupBallotFindBit { .. }
+                | Statement::CooperativeStore { .. }
+                | Statement::DebugPrintf { .. } => {}
+            }
+        }
+    }
 }

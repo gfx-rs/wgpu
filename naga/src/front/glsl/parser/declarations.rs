@@ -352,6 +352,8 @@ impl ParsingContext<'_> {
                                     // as you can see by the guard this branch
                                     // only happens if external is also true
 
+                                    let calls_start = frontend.call_edges.len();
+
                                     // parse the body
                                     self.parse_compound_statement(
                                         token.meta,
@@ -361,7 +363,8 @@ impl ParsingContext<'_> {
                                         false,
                                     )?;
 
-                                    frontend.add_function(context, name, result, meta);
+                                    let calls = calls_start..frontend.call_edges.len();
+                                    frontend.add_function(context, name, result, calls, meta);
 
                                     Ok(Some(meta))
                                 }

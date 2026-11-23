@@ -860,3 +860,147 @@ fn expressions() {
         )
         .unwrap();
 }
+
+#[test]
+fn function_call_order_and_recursion() {
+    use crate::valid::{Capabilities, ValidationFlags, Validator};
+
+    let mut frontend = Frontend::default();
+
+    // Caller prototype declared before callee definition (`void` return).
+    let void_proto = frontend
+        .parse(
+            &Options::from(ShaderStage::Compute),
+            r#"
+        #version 450
+        void caller();
+        void callee() {}
+        void caller() { callee(); }
+        void main() { caller(); }
+        "#,
+        )
+        .expect("valid forward void prototype should parse");
+    Validator::new(ValidationFlags::all(), Capabilities::all())
+        .validate(&void_proto)
+        .expect("reordered void prototype module should validate");
+
+    // Diamond call DAG with value-returning prototypes, nested control-flow calls
+    // (`if`, `switch`, `for`, nested block), global initializer call, and `main` prototype.
+    let diamond = frontend
+        .parse(
+            &Options::from(ShaderStage::Compute),
+            r#"
+        #version 450
+        void main();
+        int a(int x);
+        int b(int x);
+        int c(int x);
+        int g = a(2);
+        int d(int x) { return x + 1; }
+        int b(int x) {
+            if (x > 0) {
+                switch (x) {
+                    case 1:
+                        return d(x);
+                    default:
+                        break;
+                }
+            }
+            return 0;
+        }
+        int c(int x) {
+            int acc = 0;
+            for (int i = 0; i < 2; i = d(i)) {
+                {
+                    acc += d(i);
+                }
+            }
+            return acc;
+        }
+        int a(int x) { return b(x) + c(x); }
+        void main() {
+            int r = a(g);
+        }
+        "#,
+        )
+        .expect("valid diamond prototype DAG should parse");
+    Validator::new(ValidationFlags::all(), Capabilities::all())
+        .validate(&diamond)
+        .expect("reordered diamond prototype module should validate");
+
+    // An unreachable call after `return` is culled from `fun.body` by `Block::cull`,
+    // while its `Expression::CallResult` stays in `fun.expressions` and must still
+    // satisfy `callee < caller`. `BLOCKS` is disabled because `glsl-in` leaves that
+    // `CallResult` unvisited (`FunctionError::UnvisitedExpression`).
+    let culled_forward = frontend
+        .parse(
+            &Options::from(ShaderStage::Compute),
+            r#"
+        #version 450
+        int caller();
+        int callee() { return 1; }
+        int caller() { return 0; return callee(); }
+        void main() { int x = caller(); }
+        "#,
+        )
+        .expect("valid forward call after return should parse");
+    let flags = ValidationFlags::all() ^ ValidationFlags::BLOCKS;
+    Validator::new(flags, Capabilities::all())
+        .validate(&culled_forward)
+        .expect("culled forward call module should validate");
+
+    // Static recursion (GLSL §6.1.1): lowering order in `for` header vs body,
+    // unreachable calls after `return` (`void` and value-returning), reachable and
+    // unreachable mutual recursion, and recursive `main`.
+    let recursive_cases = [
+        (
+            "#version 450\nvoid a(int x);\nvoid a(int x) { for (int i = 0; i < 1; a(1)) { a(2); } }\nvoid main() { a(0); }\n",
+            "Recursive call to 'a'",
+            "a(1)",
+        ),
+        (
+            "#version 450\nvoid a();\nvoid a() { return; a(); }\nvoid main() {}\n",
+            "Recursive call to 'a'",
+            "a()",
+        ),
+        (
+            "#version 450\nint a(int x);\nint a(int x) { return 1; return a(2); }\nvoid main() { int r = a(0); }\n",
+            "Recursive call to 'a'",
+            "a(2)",
+        ),
+        (
+            "#version 450\nint b(int x);\nint a(int x) { return b(1); }\nint b(int x) { return a(2); }\nvoid main() { int r = a(0); }\n",
+            "Recursive call to 'b'",
+            "b(1)",
+        ),
+        (
+            "#version 450\nvoid b(int x);\nvoid a(int x) { b(1); }\nvoid b(int x) { a(2); }\nvoid main() {}\n",
+            "Recursive call to 'b'",
+            "b(1)",
+        ),
+        (
+            "#version 450\nvoid main();\nvoid main() { main(); }\n",
+            "Recursive call to 'main'",
+            "main()",
+        ),
+    ];
+
+    for (source, expected_msg, expected_call) in recursive_cases {
+        // The call site is the last occurrence of `expected_call` in each `source`.
+        let start = source.rfind(expected_call).unwrap();
+        let expected_span = Span::new(start as u32, (start + expected_call.len()) as u32);
+        let errs = frontend
+            .parse(&Options::from(ShaderStage::Compute), source)
+            .expect_err("recursive GLSL shader should be rejected");
+        assert_eq!(
+            errs,
+            ParseErrors {
+                errors: vec![Error {
+                    kind: ErrorKind::SemanticError(expected_msg.into()),
+                    meta: expected_span,
+                }],
+            },
+            "{source}"
+        );
+    }
+}
