@@ -113,6 +113,9 @@ OpDecorate %41 DescriptorSet 0
 OpDecorate %41 Binding 4
 OpDecorate %42 Block
 OpMemberDecorate %42 0 Offset 0
+OpDecorate %363 FPRoundingMode RTE
+OpDecorate %369 FPRoundingMode RTE
+OpDecorate %375 FPRoundingMode RTE
 %2 = OpTypeVoid
 %3 = OpTypeFloat 16
 %4 = OpTypeInt 32 0

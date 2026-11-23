@@ -278,6 +278,62 @@ impl Writer {
 }
 
 impl BlockContext<'_> {
+    /// Returns `true` when storing `value` to `pointer` emits a single-use
+    /// `OpFConvert` into `f16` in `StorageBuffer` that can be decorated with
+    /// `FPRoundingMode RTE`.
+    ///
+    /// Without an explicit rounding mode, Vulkan leaves `OpFConvert` rounding
+    /// implementation-defined (e.g. `RTZ` on NVIDIA, `RTE` on Mesa/Intel). Unlike
+    /// `OpExecutionMode RoundingModeRTE`, `Decoration::FPRoundingMode` needs no
+    /// `SPV_KHR_float_controls` capability or device-feature gate
+    /// (`SPV_KHR_16bit_storage` pre-1.3, core since SPIR-V 1.3;
+    /// `VUID-StandaloneSpirv-FPRoundingMode-04675`), provided SPIR-V's standalone
+    /// rule (§2.16.2) holds: it decorates a width-only conversion whose sole use
+    /// is the `Object` operand of `OpStore` into `StorageBuffer`,
+    /// `PhysicalStorageBuffer`, `Uniform`, or `Output`.
+    ///
+    /// Non-obvious backend invariants relied on below:
+    /// - `fun_info[value].ref_count == 1` guarantees this `OpStore` is the only
+    ///   SPIR-V use (`let` in `named_expressions` neither increments `ref_count`
+    ///   nor emits `OpName`, and `DEBUG` only adds `OpLine`); decorating here
+    ///   rather than at `Statement::Emit` also skips `Discarded` dead-tail stores;
+    /// - [`Self::write_as_expression`] emits a fresh `OpFConvert` only for
+    ///   `F32 | F64` scalars/vectors (`F16` aliases the source ID and `Matrix`
+    ///   wraps column converts in `OpCompositeConstruct`);
+    /// - both `Ready` and `Conditional` (`ReadZeroSkipWrite`) non-atomic
+    ///   [`AddressSpace::Storage`] paths emit a single `OpStore`; entry-point
+    ///   `Output` stores are lowered in `Writer::write_entry_point_return`.
+    ///
+    /// [`AddressSpace::Storage`]: crate::AddressSpace::Storage
+    fn is_f16_narrowing_storage_store(
+        &self,
+        pointer: Handle<crate::Expression>,
+        value: Handle<crate::Expression>,
+    ) -> bool {
+        let crate::Expression::As {
+            expr,
+            target: crate::Scalar::F16,
+        } = self.ir_function.expressions[value]
+        else {
+            return false;
+        };
+        if self.fun_info[value].ref_count != 1 {
+            return false;
+        }
+        let pointer_ty = self.fun_info[pointer].ty.inner_with(&self.ir_module.types);
+        matches!(
+            *self.fun_info[expr].ty.inner_with(&self.ir_module.types),
+            crate::TypeInner::Scalar(crate::Scalar::F32 | crate::Scalar::F64)
+                | crate::TypeInner::Vector {
+                    scalar: crate::Scalar::F32 | crate::Scalar::F64,
+                    ..
+                }
+        ) && matches!(
+            pointer_ty.pointer_space(),
+            Some(crate::AddressSpace::Storage { .. })
+        ) && !pointer_ty.is_atomic_pointer(&self.ir_module.types)
+    }
+
     /// Generates code to ensure that a loop is bounded. Should be called immediately
     /// after adding the OpLoopMerge instruction to `block`. This function will
     /// [`consume()`](crate::back::spv::Function::consume) `block` and append its
@@ -3897,11 +3953,16 @@ impl BlockContext<'_> {
                 }
                 Statement::Store { pointer, value } => {
                     let value_id = self.cached[value];
-                    match self.write_access_chain(
-                        pointer,
-                        &mut block,
-                        AccessTypeAdjustment::None,
-                    )? {
+                    let access =
+                        self.write_access_chain(pointer, &mut block, AccessTypeAdjustment::None)?;
+                    if self.is_f16_narrowing_storage_store(pointer, value) {
+                        self.writer.decorate(
+                            value_id,
+                            spirv::Decoration::FPRoundingMode,
+                            &[spirv::FPRoundingMode::RTE as Word],
+                        );
+                    }
+                    match access {
                         ExpressionPointer::Ready { pointer_id } => {
                             let atomic_space = match *self.fun_info[pointer]
                                 .ty
