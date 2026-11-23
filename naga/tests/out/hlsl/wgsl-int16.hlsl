@@ -10,16 +10,21 @@ struct UniformCompatible {
     int val_i32_;
     float val_f32_;
     uint16_t val_u16_;
+    uint16_t _pad4_0;
     uint16_t2 val_u16_2_;
     int _pad5_0;
     uint16_t3 val_u16_3_;
+    uint16_t _pad6_0;
     uint16_t4 val_u16_4_;
     int16_t val_i16_;
+    uint16_t _pad8_0;
     int16_t2 val_i16_2_;
     int16_t3 val_i16_3_;
+    uint16_t _pad10_0;
     int16_t4 val_i16_4_;
     uint16_t final_value;
-    int _end_pad_0;
+    uint16_t _end_pad_0;
+    int _end_pad_1;
 };
 
 struct StorageCompatible {

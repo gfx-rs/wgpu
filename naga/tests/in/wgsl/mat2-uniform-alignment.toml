@@ -1,1 +1,1 @@
-targets = "SPIRV"
+targets = "GLSL | SPIRV"

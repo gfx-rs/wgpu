@@ -347,7 +347,7 @@ impl super::Device {
                     _ => None,
                 }
                 .transpose()?;
-                let (module, info) = naga::back::pipeline_constants::process_overrides(
+                let (module, _) = naga::back::pipeline_constants::process_overrides(
                     &naga_shader.module,
                     &naga_shader.info,
                     Some((naga_stage, stage.entry_point)),
@@ -369,9 +369,8 @@ impl super::Device {
                         hlsl::Writer::new(&mut source, naga_options, &pipeline_options);
 
                     profiling::scope!("naga::back::hlsl::write");
-                    let mut reflection_info = writer
-                        .write(&module, &info, frag_ep.as_ref())
-                        .map_err(|e| {
+                    let mut reflection_info =
+                        writer.write(&*module, frag_ep.as_ref()).map_err(|e| {
                             crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}"))
                         })?;
 
@@ -1580,6 +1579,7 @@ impl crate::Device for super::Device {
                 }),
                 mesh_shader_primitive_indices_clamp: true,
                 ray_query_initialization_tracking: true,
+                passes: Default::default(),
             },
         })
     }

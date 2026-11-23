@@ -13,30 +13,30 @@ struct Outer
     Inner i;
 };
 
-struct std140_Inner
+struct Inner_std140
 {
-    vec2 m1_col0;
-    vec2 m1_col1;
-    vec2 m2_col0;
-    vec2 m2_col1;
-    vec2 m2_col2;
-    vec2 m2_col3;
+    vec2 m1_0;
+    vec2 m1_1;
+    vec2 m2_0;
+    vec2 m2_1;
+    vec2 m2_2;
+    vec2 m2_3;
 };
 
-struct std140_Outer
+struct Outer_std140
 {
     vec4 a;
-    std140_Inner i;
+    Inner_std140 i;
 };
 
 layout(set = 0, binding = 0, std140) uniform u1
 {
-    std140_Inner _m0;
+    Inner_std140 _m0;
 } u1_1;
 
 layout(set = 0, binding = 1, std140) uniform u2
 {
-    std140_Outer _m0;
+    Outer_std140 _m0;
 } u2_1;
 
 layout(set = 0, binding = 2, std430) buffer o
@@ -46,7 +46,7 @@ layout(set = 0, binding = 2, std430) buffer o
 
 void main()
 {
-    mat4x2 _60 = mat4x2(u2_1._m0.i.m2_col0, u2_1._m0.i.m2_col1, u2_1._m0.i.m2_col2, u2_1._m0.i.m2_col3);
-    o_1._m0[0u] = (((_60[0].x + _60[1].x) + _60[2].x) + _60[3].x) + mat2(u1_1._m0.m1_col0, u1_1._m0.m1_col1)[0].x;
+    mat4x2 _55 = mat4x2(u2_1._m0.i.m2_0, u2_1._m0.i.m2_1, u2_1._m0.i.m2_2, u2_1._m0.i.m2_3);
+    o_1._m0[0u] = (((_55[0].x + _55[1].x) + _55[2].x) + _55[3].x) + mat2(u1_1._m0.m1_0, u1_1._m0.m1_1)[0].x;
 }
 

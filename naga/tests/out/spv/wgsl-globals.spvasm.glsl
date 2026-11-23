@@ -7,14 +7,14 @@ struct _9
     float _m1;
 };
 
-struct _25
+struct _23
 {
     vec2 _m0;
     vec2 _m1;
     vec2 _m2;
 };
 
-struct _26
+struct _24
 {
     vec2 _m0;
     vec2 _m1;
@@ -22,87 +22,77 @@ struct _26
     vec2 _m3;
 };
 
-layout(set = 0, binding = 1, std430) buffer _35_34
+layout(set = 0, binding = 1, std430) buffer _33_32
 {
     _9 _m0;
-} _34;
+} _32;
 
-layout(set = 0, binding = 2, std430) readonly buffer _38_37
+layout(set = 0, binding = 2, std430) readonly buffer _36_35
 {
     vec2 _m0[];
-} _37;
+} _35;
 
-layout(set = 0, binding = 3, std140) uniform _41_40
+layout(set = 0, binding = 3, std140) uniform _39_38
 {
     vec4 _m0[20];
-} _40;
+} _38;
 
-layout(set = 0, binding = 4, std140) uniform _44_43
+layout(set = 0, binding = 4, std140) uniform _42_41
 {
     vec3 _m0;
-} _43;
+} _41;
 
-layout(set = 0, binding = 5, std140) uniform _47_46
+layout(set = 0, binding = 5, std140) uniform _45_44
 {
-    _25 _m0;
-} _46;
+    _23 _m0;
+} _44;
 
-layout(set = 0, binding = 6, std140) uniform _50_49
+layout(set = 0, binding = 6, std140) uniform _48_47
 {
     mat2x4 _m0[2][2];
-} _49;
+} _47;
 
-layout(set = 0, binding = 7, std140) uniform _53_52
+layout(set = 0, binding = 7, std140) uniform _51_50
 {
-    _26 _m0[2][2];
-} _52;
+    _24 _m0[2][2];
+} _50;
 
-shared float _30[10];
-shared uint _32;
+shared float _28[10];
+shared uint _30;
 
-void _57(vec3 _56)
+void _55(vec3 _54)
 {
 }
 
-void _61()
+void _59()
 {
-    int _72 = 1;
-    _34._m0._m0 = vec3(1.0);
-    _34._m0._m0.x = 1.0;
-    _34._m0._m0.x = 2.0;
-    _34._m0._m0[_72] = 3.0;
-    _57(_34._m0._m0);
-}
-
-mat4x2 _96(_26 _98)
-{
-    return mat4x2(_98._m0, _98._m1, _98._m2, _98._m3);
-}
-
-mat3x2 _105(_25 _107)
-{
-    return mat3x2(_107._m0, _107._m1, _107._m2);
+    int _70 = 1;
+    _32._m0._m0 = vec3(1.0);
+    _32._m0._m0.x = 1.0;
+    _32._m0._m0.x = 2.0;
+    _32._m0._m0[_70] = 3.0;
+    _55(_32._m0._m0);
 }
 
 void main()
 {
-    float _131 = 1.0;
-    bool _133 = true;
+    float _110 = 1.0;
+    bool _112 = true;
     if (gl_LocalInvocationIndex == 0u)
     {
-        _30 = float[](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
-        _32 = 0u;
+        _28 = float[](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+        _30 = 0u;
     }
     barrier();
-    _61();
-    _30[7u] = (_96(_52._m0[0u][0u]) * _49._m0[0u][0u][0u]).x;
-    _30[6u] = (_105(_46._m0) * _43._m0).x;
-    _30[5u] = _37._m0[1u].y;
-    _30[4u] = _40._m0[0u].w;
-    _30[3u] = _34._m0._m1;
-    _30[2u] = _34._m0._m0.x;
-    _34._m0._m1 = 4.0;
-    _30[1u] = float(uint(_37._m0.length()));
-    atomicExchange(_32, 2u);
+    _59();
+    _28[7u] = (mat4x2(_50._m0[0u][0u]._m0, _50._m0[0u][0u]._m1, _50._m0[0u][0u]._m2, _50._m0[0u][0u]._m3) * _47._m0[0u][0u][0u]).x;
+    _28[6u] = (mat3x2(_44._m0._m0, _44._m0._m1, _44._m0._m2) * _41._m0).x;
+    _28[5u] = _35._m0[1u].y;
+    _28[4u] = _38._m0[0u].w;
+    _28[3u] = _32._m0._m1;
+    _28[2u] = _32._m0._m0.x;
+    _32._m0._m1 = 4.0;
+    _28[1u] = float(uint(_35._m0.length()));
+    atomicExchange(_30, 2u);
 }
 

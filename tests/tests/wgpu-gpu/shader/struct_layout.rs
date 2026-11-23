@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use wgpu::{Backends, DownlevelFlags, Features, Limits};
+use wgpu::{DownlevelFlags, Features, Limits};
 
 use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest, MAX_BUFFER_SIZE};
 use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
@@ -14,14 +14,13 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         STORAGE_INPUT_INT64,
         IMMEDIATES_INPUT_INT64,
         UNIFORM_INPUT_F16,
+        IMMEDIATES_INPUT_F16,
         STORAGE_INPUT_F16,
         UNIFORM_INPUT_I16,
         STORAGE_INPUT_I16,
     ]);
 }
 
-// Note that some specific subtests are marked as failing on GL due to
-// https://github.com/gfx-rs/wgpu/issues/4371.
 #[apply(gpu_test!)]
 static UNIFORM_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
@@ -200,75 +199,50 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                 }
             }
 
-            // https://github.com/gfx-rs/wgpu/issues/4371
-            let failures = if storage_type == InputStorageType::Uniform && rows == 2 {
-                Backends::GL
-            } else {
-                Backends::empty()
-            };
+            tests.push(ShaderTest::new(
+                format!("{ty} - direct, static index"),
+                input_members.clone(),
+                direct_static,
+                &input_values,
+                &output_values,
+            ));
+            tests.push(ShaderTest::new(
+                format!("{ty} - direct, dynamic index"),
+                input_members.clone(),
+                direct_dynamic,
+                &input_values,
+                &output_values,
+            ));
 
-            tests.push(
-                ShaderTest::new(
-                    format!("{ty} - direct, static index"),
-                    input_members.clone(),
-                    direct_static,
-                    &input_values,
-                    &output_values,
-                )
-                .failures(failures),
-            );
-            tests.push(
-                ShaderTest::new(
-                    format!("{ty} - direct, dynamic index"),
-                    input_members.clone(),
-                    direct_dynamic,
-                    &input_values,
-                    &output_values,
-                )
-                .failures(failures),
-            );
+            tests.push(ShaderTest::new(
+                format!("{ty} - vector loaded, static index"),
+                input_members.clone(),
+                vector_loaded_static,
+                &input_values,
+                &output_values,
+            ));
+            tests.push(ShaderTest::new(
+                format!("{ty} - vector loaded, dynamic index"),
+                input_members.clone(),
+                vector_loaded_dynamic,
+                &input_values,
+                &output_values,
+            ));
 
-            tests.push(
-                ShaderTest::new(
-                    format!("{ty} - vector loaded, static index"),
-                    input_members.clone(),
-                    vector_loaded_static,
-                    &input_values,
-                    &output_values,
-                )
-                .failures(failures),
-            );
-            tests.push(
-                ShaderTest::new(
-                    format!("{ty} - vector loaded, dynamic index"),
-                    input_members.clone(),
-                    vector_loaded_dynamic,
-                    &input_values,
-                    &output_values,
-                )
-                .failures(failures),
-            );
-
-            tests.push(
-                ShaderTest::new(
-                    format!("{ty} - fully loaded, static index"),
-                    input_members.clone(),
-                    fully_loaded_static,
-                    &input_values,
-                    &output_values,
-                )
-                .failures(failures),
-            );
-            tests.push(
-                ShaderTest::new(
-                    format!("{ty} - fully loaded, dynamic index"),
-                    input_members.clone(),
-                    fully_loaded_dynamic,
-                    &input_values,
-                    &output_values,
-                )
-                .failures(failures),
-            );
+            tests.push(ShaderTest::new(
+                format!("{ty} - fully loaded, static index"),
+                input_members.clone(),
+                fully_loaded_static,
+                &input_values,
+                &output_values,
+            ));
+            tests.push(ShaderTest::new(
+                format!("{ty} - fully loaded, dynamic index"),
+                input_members.clone(),
+                fully_loaded_dynamic,
+                &input_values,
+                &output_values,
+            ));
         }
     }
 
@@ -386,75 +360,50 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                     }
                 }
 
-                // https://github.com/gfx-rs/wgpu/issues/4371
-                let failures = if storage_type == InputStorageType::Uniform && rows == 2 {
-                    Backends::GL
-                } else {
-                    Backends::empty()
-                };
+                tests.push(ShaderTest::new(
+                    format!("{ty} - direct, static index"),
+                    input_members.clone(),
+                    direct_static,
+                    &input_values,
+                    &output_values,
+                ));
+                tests.push(ShaderTest::new(
+                    format!("{ty} - direct, dynamic index"),
+                    input_members.clone(),
+                    direct_dynamic,
+                    &input_values,
+                    &output_values,
+                ));
 
-                tests.push(
-                    ShaderTest::new(
-                        format!("{ty} - direct, static index"),
-                        input_members.clone(),
-                        direct_static,
-                        &input_values,
-                        &output_values,
-                    )
-                    .failures(failures),
-                );
-                tests.push(
-                    ShaderTest::new(
-                        format!("{ty} - direct, dynamic index"),
-                        input_members.clone(),
-                        direct_dynamic,
-                        &input_values,
-                        &output_values,
-                    )
-                    .failures(failures),
-                );
+                tests.push(ShaderTest::new(
+                    format!("{ty} - vector loaded, static index"),
+                    input_members.clone(),
+                    vector_loaded_static,
+                    &input_values,
+                    &output_values,
+                ));
+                tests.push(ShaderTest::new(
+                    format!("{ty} - vector loaded, dynamic index"),
+                    input_members.clone(),
+                    vector_loaded_dynamic,
+                    &input_values,
+                    &output_values,
+                ));
 
-                tests.push(
-                    ShaderTest::new(
-                        format!("{ty} - vector loaded, static index"),
-                        input_members.clone(),
-                        vector_loaded_static,
-                        &input_values,
-                        &output_values,
-                    )
-                    .failures(failures),
-                );
-                tests.push(
-                    ShaderTest::new(
-                        format!("{ty} - vector loaded, dynamic index"),
-                        input_members.clone(),
-                        vector_loaded_dynamic,
-                        &input_values,
-                        &output_values,
-                    )
-                    .failures(failures),
-                );
-
-                tests.push(
-                    ShaderTest::new(
-                        format!("{ty} - matrix loaded, static index"),
-                        input_members.clone(),
-                        matrix_loaded_static,
-                        &input_values,
-                        &output_values,
-                    )
-                    .failures(failures),
-                );
-                tests.push(
-                    ShaderTest::new(
-                        format!("{ty} - matrix loaded, dynamic index"),
-                        input_members.clone(),
-                        matrix_loaded_dynamic,
-                        &input_values,
-                        &output_values,
-                    )
-                    .failures(failures),
-                );
+                tests.push(ShaderTest::new(
+                    format!("{ty} - matrix loaded, static index"),
+                    input_members.clone(),
+                    matrix_loaded_static,
+                    &input_values,
+                    &output_values,
+                ));
+                tests.push(ShaderTest::new(
+                    format!("{ty} - matrix loaded, dynamic index"),
+                    input_members.clone(),
+                    matrix_loaded_dynamic,
+                    &input_values,
+                    &output_values,
+                ));
             }
         }
     }
@@ -477,20 +426,83 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
             output[6] = bitcast<u32>(input.f);
         ",
         );
+        tests.push(ShaderTest::new(
+            String::from("MatCx2 followed by other members"),
+            members,
+            direct,
+            &input_values,
+            &[0, 1, 2, 3, 4, 5, 6],
+        ));
+    }
+
+    // MatCx2 in a nested struct and in an array of structs, accessed and loaded
+    // at every level. https://github.com/gfx-rs/wgpu/issues/4371
+    if !no_array_types {
+        let header = String::from("struct Inner { m: mat3x2<f32>, f: f32 }");
+        let members = String::from("inner: Inner, arr: array<Inner, 2>,");
+        let body = String::from(
+            "\
+            var i = 1u;
+            var j = 2u;
+            output[0] = bitcast<u32>(input.inner.m[2].y);
+            output[1] = bitcast<u32>(input.inner.f);
+            output[2] = bitcast<u32>(input.arr[1].m[0].x);
+            output[3] = bitcast<u32>(input.arr[i].m[j].y);
+            output[4] = bitcast<u32>(input.arr[i].f);
+            let loaded_column = input.arr[0].m[j];
+            output[5] = bitcast<u32>(loaded_column.x);
+            output[6] = bitcast<u32>(loaded_column.y);
+            let loaded_element = input.arr[1];
+            output[7] = bitcast<u32>(loaded_element.m[1].x);
+            output[8] = bitcast<u32>(loaded_element.f);
+            let loaded_array = input.arr;
+            output[9] = bitcast<u32>(loaded_array[0].m[2].x);
+            output[10] = bitcast<u32>(loaded_array[i].m[0].y);
+            let loaded_matrix = input.inner.m;
+            output[11] = bitcast<u32>(loaded_matrix[1].y);
+        ",
+        );
         tests.push(
             ShaderTest::new(
-                String::from("MatCx2 followed by other members"),
+                String::from("MatCx2 in nested struct and array of structs"),
                 members,
-                direct,
+                body,
                 &input_values,
-                &[0, 1, 2, 3, 4, 5, 6],
+                &[5u32, 6, 16, 21, 22, 12, 13, 18, 22, 12, 17, 3],
             )
-            // https://github.com/gfx-rs/wgpu/issues/4371
-            .failures(if storage_type == InputStorageType::Uniform {
-                Backends::GL
-            } else {
-                Backends::empty()
-            }),
+            .header(header),
+        );
+    }
+
+    // The binding is exactly as large as the struct, so a backend that lays out
+    // the matrix with a larger stride reads past its end.
+    // https://github.com/gfx-rs/wgpu/issues/4611
+    if !no_array_types {
+        let header =
+            String::from("struct Transform { transform: mat3x2<f32>, _pad1: u32, _pad2: u32 }");
+        let members = String::from("transforms: array<Transform, 4>,");
+        let body = String::from(
+            "\
+            var i = 3u;
+            output[0] = bitcast<u32>(input.transforms[3].transform[2].y);
+            output[1] = bitcast<u32>(input.transforms[i].transform[1].x);
+            let loaded_transform = input.transforms[1];
+            output[2] = bitcast<u32>(loaded_transform.transform[0].y);
+            output[3] = loaded_transform._pad2;
+            let loaded_array = input.transforms;
+            output[4] = bitcast<u32>(loaded_array[2].transform[2].x);
+            output[5] = loaded_array[i]._pad1;
+        ",
+        );
+        tests.push(
+            ShaderTest::new(
+                String::from("array of structs with MatCx2 filling the binding"),
+                members,
+                body,
+                &input_values,
+                &[29u32, 26, 9, 15, 20, 30],
+            )
+            .header(header),
         );
     }
 
@@ -878,7 +890,26 @@ static UNIFORM_INPUT_F16: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| {
         shader_input_output_test(
             ctx,
-            InputStorageType::Storage,
+            InputStorageType::Uniform,
+            create_16bit_struct_layout_test(),
+        )
+    });
+
+#[apply(gpu_test!)]
+static IMMEDIATES_INPUT_F16: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::SHADER_F16 | Features::IMMEDIATES)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits {
+                max_immediate_size: MAX_BUFFER_SIZE as u32,
+                ..Limits::downlevel_defaults()
+            }),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::Immediate,
             create_16bit_struct_layout_test(),
         )
     });

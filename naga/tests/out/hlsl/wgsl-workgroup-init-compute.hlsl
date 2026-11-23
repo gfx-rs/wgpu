@@ -1,30 +1,9 @@
-typedef struct { float2 _0; float2 _1; } __mat2x2_f32;
-float2 __get_col_of_mat2x2_f32(__mat2x2_f32 mat, uint idx) {
-    switch(idx) {
-    case 0: { return mat._0; }
-    case 1: { return mat._1; }
-    default: { return (float2)0; }
-    }
-}
-void __set_col_of_mat2x2_f32(__mat2x2_f32 mat, uint idx, float2 value) {
-    switch(idx) {
-    case 0: { mat._0 = value; break; }
-    case 1: { mat._1 = value; break; }
-    }
-}
-void __set_el_of_mat2x2_f32(__mat2x2_f32 mat, uint idx, uint vec_idx, float value) {
-    switch(idx) {
-    case 0: { mat._0[vec_idx] = value; break; }
-    case 1: { mat._1[vec_idx] = value; break; }
-    }
-}
-
 struct Inner {
     float4 values[5][3];
     uint atoms[19];
     int _pad2_0;
-    float2 matrix__0; float2 matrix__1; float2 matrix__2;
-    __mat2x2_f32 matrices[3];
+    row_major float3x2 matrix_;
+    row_major float2x2 matrices[3];
     int _end_pad_0;
     int _end_pad_1;
 };
@@ -46,32 +25,6 @@ groupshared uint3 vector_;
 groupshared float2x3 matrix_;
 RWByteAddressBuffer output : register(u0);
 
-float3x2 GetMatmatrix_OnInner(Inner obj) {
-    return float3x2(obj.matrix__0, obj.matrix__1, obj.matrix__2);
-}
-
-void SetMatmatrix_OnInner(Inner obj, float3x2 mat) {
-    obj.matrix__0 = mat[0];
-    obj.matrix__1 = mat[1];
-    obj.matrix__2 = mat[2];
-}
-
-void SetMatVecmatrix_OnInner(Inner obj, float2 vec, uint mat_idx) {
-    switch(mat_idx) {
-    case 0: { obj.matrix__0 = vec; break; }
-    case 1: { obj.matrix__1 = vec; break; }
-    case 2: { obj.matrix__2 = vec; break; }
-    }
-}
-
-void SetMatScalarmatrix_OnInner(Inner obj, float scalar, uint mat_idx, uint vec_idx) {
-    switch(mat_idx) {
-    case 0: { obj.matrix__0[vec_idx] = scalar; break; }
-    case 1: { obj.matrix__1[vec_idx] = scalar; break; }
-    case 2: { obj.matrix__2[vec_idx] = scalar; break; }
-    }
-}
-
 [numthreads(8, 2, 1)]
 void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
 {
@@ -91,32 +44,22 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
     [loop]
     for (uint zero_flat_index_3 = zero_flat_index; zero_flat_index_3 < 3u; zero_flat_index_3 += 16u) {
         uint zero_index = zero_flat_index_3;
-        data[zero_index].matrix__0 = (float2)0;
+        data[zero_index].matrix_ = (float3x2)0;
     }
     [loop]
-    for (uint zero_flat_index_4 = zero_flat_index; zero_flat_index_4 < 3u; zero_flat_index_4 += 16u) {
-        uint zero_index = zero_flat_index_4;
-        data[zero_index].matrix__1 = (float2)0;
+    for (uint zero_flat_index_4 = zero_flat_index; zero_flat_index_4 < 9u; zero_flat_index_4 += 16u) {
+        uint zero_index = zero_flat_index_4 / 3u;
+        uint zero_index_4 = zero_flat_index_4 % 3u;
+        data[zero_index].matrices[zero_index_4] = (float2x2)0;
     }
     [loop]
-    for (uint zero_flat_index_5 = zero_flat_index; zero_flat_index_5 < 3u; zero_flat_index_5 += 16u) {
-        uint zero_index = zero_flat_index_5;
-        data[zero_index].matrix__2 = (float2)0;
-    }
-    [loop]
-    for (uint zero_flat_index_6 = zero_flat_index; zero_flat_index_6 < 9u; zero_flat_index_6 += 16u) {
-        uint zero_index = zero_flat_index_6 / 3u;
-        uint zero_index_4 = zero_flat_index_6 % 3u;
-        data[zero_index].matrices[zero_index_4] = (__mat2x2_f32)0;
-    }
-    [loop]
-    for (uint zero_flat_index_7 = zero_flat_index; zero_flat_index_7 < 37u; zero_flat_index_7 += 16u) {
-        uint zero_index_5 = zero_flat_index_7;
+    for (uint zero_flat_index_5 = zero_flat_index; zero_flat_index_5 < 37u; zero_flat_index_5 += 16u) {
+        uint zero_index_5 = zero_flat_index_5;
         dynamic[zero_index_5] = (uint)0;
     }
     [loop]
-    for (uint zero_flat_index_8 = zero_flat_index; zero_flat_index_8 < 37u; zero_flat_index_8 += 16u) {
-        uint zero_index_6 = zero_flat_index_8;
+    for (uint zero_flat_index_6 = zero_flat_index; zero_flat_index_6 < 37u; zero_flat_index_6 += 16u) {
+        uint zero_index_6 = zero_flat_index_6;
         floats[zero_index_6] = (float)0;
     }
     if (zero_flat_index == 0) {
@@ -282,17 +225,17 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
                     bool _e119 = ok;
                     uint _e121 = i;
                     uint _e124 = j_2;
-                    float2 _e126 = GetMatmatrix_OnInner(data[min(uint(_e121), 2u)])[min(uint(_e124), 2u)];
+                    float2 _e126 = data[min(uint(_e121), 2u)].matrix_[min(uint(_e124), 2u)];
                     ok = (_e119 & all((_e126 == (0.0).xx)));
                     bool _e132 = ok;
                     uint _e134 = i;
                     uint _e137 = j_2;
-                    float2 _e140 = data[min(uint(_e134), 2u)].matrices[min(uint(_e137), 2u)]._0;
+                    float2 _e140 = data[min(uint(_e134), 2u)].matrices[min(uint(_e137), 2u)][0];
                     ok = (_e132 & all((_e140 == (0.0).xx)));
                     bool _e146 = ok;
                     uint _e148 = i;
                     uint _e151 = j_2;
-                    float2 _e154 = data[min(uint(_e148), 2u)].matrices[min(uint(_e151), 2u)]._1;
+                    float2 _e154 = data[min(uint(_e148), 2u)].matrices[min(uint(_e151), 2u)][1];
                     ok = (_e146 & all((_e154 == (0.0).xx)));
                 }
             }

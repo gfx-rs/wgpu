@@ -3155,3 +3155,16 @@ pub struct Module {
     /// Doc comments.
     pub doc_comments: Option<Box<DocComments>>,
 }
+
+/// Lets a function take a module either by reference or by value.
+impl<'a> From<&'a Module> for alloc::borrow::Cow<'a, Module> {
+    fn from(module: &'a Module) -> Self {
+        Self::Borrowed(module)
+    }
+}
+
+impl From<Module> for alloc::borrow::Cow<'_, Module> {
+    fn from(module: Module) -> Self {
+        Self::Owned(module)
+    }
+}
