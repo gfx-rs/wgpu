@@ -167,6 +167,7 @@ impl TimestampNormalizer {
                 module: alloc::borrow::Cow::Owned(module),
                 info,
                 debug_source: None,
+                overrides_resolved: false,
             });
             let hal_desc = hal::ShaderModuleDescriptor {
                 label: hal_label(

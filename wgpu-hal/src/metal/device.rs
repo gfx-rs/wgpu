@@ -195,15 +195,11 @@ impl super::Device {
         match stage.module.source {
             ShaderModuleSource::Naga(ref naga_shader) => {
                 let stage_bit = map_naga_stage(naga_stage);
-                let (module, module_info) = naga::back::pipeline_constants::process_overrides(
-                    &naga_shader.module,
-                    &naga_shader.info,
-                    Some((naga_stage, stage.entry_point)),
-                    stage.constants,
-                )
-                .map_err(|e| {
-                    crate::PipelineError::PipelineConstants(stage_bit, format!("MSL: {e:?}"))
-                })?;
+                let (module, module_info) = naga_shader
+                    .process_overrides((naga_stage, stage.entry_point), stage.constants)
+                    .map_err(|e| {
+                        crate::PipelineError::PipelineConstants(stage_bit, format!("MSL: {e:?}"))
+                    })?;
 
                 let ep_resources = &layout.per_stage_map[naga_stage];
 
@@ -233,6 +229,7 @@ impl super::Device {
                     },
                     inline_samplers: Default::default(),
                     spirv_cross_compatibility: false,
+                    passes: Default::default(),
                     fake_missing_bindings: false,
                     per_entry_point_map: naga::back::msl::EntryPointResourceMap::from([(
                         stage.entry_point.to_owned(),
@@ -279,13 +276,10 @@ impl super::Device {
                     binding_array_length_map: layout.binding_array_length_map.clone(),
                 };
 
-                let (source, info) = naga::back::msl::write_string(
-                    &module,
-                    &module_info,
-                    &options,
-                    &pipeline_options,
-                )
-                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {e:?}")))?;
+                let (source, info) =
+                    naga::back::msl::write_string(&*module, &options, &pipeline_options).map_err(
+                        |e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {e:?}")),
+                    )?;
 
                 log::debug!(
                     "Naga generated shader for entry point '{ep}' and stage {naga_stage:?}\n{source}",

@@ -5,10 +5,16 @@ groupshared int arr_i32_[128];
 [numthreads(4, 1, 1)]
 void test_workgroupUniformLoad(uint3 workgroup_id : SV_GroupID, uint local_invocation_index : SV_GroupIndex)
 {
-    [loop]
-    for (uint zero_flat_index = local_invocation_index; zero_flat_index < 128u; zero_flat_index += 4u) {
-        uint zero_index = zero_flat_index;
-        arr_i32_[zero_index] = (int)0;
+    uint zero_init_index = (uint)0;
+
+    zero_init_index = local_invocation_index;
+    while(true) {
+        uint _e11 = zero_init_index;
+        if ((_e11 >= 128u)) {
+            break;
+        }
+        arr_i32_[min(uint(_e11), 127u)] = int(0);
+        zero_init_index = (_e11 + 4u);
     }
     GroupMemoryBarrierWithGroupSync();
     GroupMemoryBarrierWithGroupSync();

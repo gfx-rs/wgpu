@@ -2742,6 +2742,7 @@ impl Device {
                     module,
                     info,
                     debug_source,
+                    overrides_resolved: false,
                 },
                 runtime_checks: desc.runtime_checks,
             }),

@@ -25,6 +25,8 @@ struct MeshOutput {
     char _pad4[8];
 };
 
+struct ms_mainInput {
+};
 struct ms_mainVertexOutput {
     metal::float4 position [[position]];
 };
@@ -32,11 +34,23 @@ struct ms_mainPrimitiveOutput {
     uint index [[primitive_id]];
 };
 void _ms_main(
-  uint __local_invocation_index
+  uint local_invocation_index
 , threadgroup MeshOutput& mesh_output
 ) {
-    if (__local_invocation_index == 0u) {
-        mesh_output = {};
+    uint zero_init_index = {};
+    zero_init_index = local_invocation_index;
+    while(true) {
+        uint _e50 = zero_init_index;
+        if (_e50 >= 3u) {
+            break;
+        }
+        mesh_output.vertices.inner[_e50] = VertexOutput {};
+        zero_init_index = _e50 + 1u;
+    }
+    mesh_output.primitives.inner[local_invocation_index] = PrimitiveOutput {};
+    if (local_invocation_index == 0u) {
+        mesh_output.vertex_count = 0u;
+        mesh_output.primitive_count = 0u;
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     mesh_output.vertex_count = 3u;
@@ -51,17 +65,17 @@ void _ms_main(
 
 [[mesh]] void ms_main(
   metal::mesh<ms_mainVertexOutput, ms_mainPrimitiveOutput, 3, 1, metal::topology::triangle> meshOutput
-, uint __local_invocation_index [[thread_index_in_threadgroup]]
+, uint local_invocation_index [[thread_index_in_threadgroup]]
 ) {
     threadgroup MeshOutput mesh_output;
-    _ms_main(__local_invocation_index, mesh_output);
+    _ms_main(local_invocation_index, mesh_output);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    for(uint vertexIndex = __local_invocation_index; vertexIndex < metal::min(mesh_output.vertex_count, 3u); vertexIndex += 1) {
+    for(uint vertexIndex = local_invocation_index; vertexIndex < metal::min(mesh_output.vertex_count, 3u); vertexIndex += 1) {
         ms_mainVertexOutput vertex_;
         vertex_.position = mesh_output.vertices.inner[vertexIndex].position;
         meshOutput.set_vertex(vertexIndex, vertex_);
     }
-    for(uint primitiveIndex = __local_invocation_index; primitiveIndex < metal::min(mesh_output.primitive_count, 1u); primitiveIndex += 1) {
+    for(uint primitiveIndex = local_invocation_index; primitiveIndex < metal::min(mesh_output.primitive_count, 1u); primitiveIndex += 1) {
         ms_mainPrimitiveOutput primitive;
         meshOutput.set_index(primitiveIndex * 3 + 0, mesh_output.primitives.inner[primitiveIndex].indices.x);
         meshOutput.set_index(primitiveIndex * 3 + 1, mesh_output.primitives.inner[primitiveIndex].indices.y);
@@ -69,7 +83,7 @@ void _ms_main(
         primitive.index = mesh_output.primitives.inner[primitiveIndex].index;
         meshOutput.set_primitive(primitiveIndex, primitive);
     }
-    if (__local_invocation_index == 0u) {
+    if (local_invocation_index == 0u) {
         meshOutput.set_primitive_count(metal::min(mesh_output.primitive_count, 1u));
     }
 }

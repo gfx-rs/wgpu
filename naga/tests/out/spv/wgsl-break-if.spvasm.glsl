@@ -1,34 +1,36 @@
 #version 460
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-void _6()
+void _7()
 {
-    uvec2 _22 = uvec2(4294967295u);
+    uvec2 _15 = uvec2(0u);
+    _15 = uvec2(4294967295u);
     do
     {
-        if (all(equal(uvec2(0u), _22)))
+        if (all(equal(_15, uvec2(0u))))
         {
             break;
         }
-        _22 -= uvec2(uint(_22.y == 0u), 1u);
+        _15 -= uvec2(uint(_15.y == 0u), 1u);
     } while (!true);
 }
 
-void _35(bool _34)
+void _36(bool _35)
 {
-    bool _37 = false;
-    bool _40 = false;
-    uvec2 _47 = uvec2(4294967295u);
+    bool _38 = false;
+    bool _41 = false;
+    uvec2 _43 = uvec2(0u);
+    _43 = uvec2(4294967295u);
     for (;;)
     {
-        if (all(equal(uvec2(0u), _47)))
+        if (all(equal(_43, uvec2(0u))))
         {
             break;
         }
-        _47 -= uvec2(uint(_47.y == 0u), 1u);
-        _37 = _34;
-        _40 = _34 != _37;
-        if (_34 == _40)
+        _43 -= uvec2(uint(_43.y == 0u), 1u);
+        _38 = _35;
+        _41 = _35 != _38;
+        if (_35 == _41)
         {
             break;
         }
@@ -39,43 +41,45 @@ void _35(bool _34)
     }
 }
 
-void _64(bool _63)
+void _66(bool _65)
 {
-    bool _65 = false;
     bool _67 = false;
-    uvec2 _74 = uvec2(4294967295u);
+    bool _69 = false;
+    uvec2 _71 = uvec2(0u);
+    _71 = uvec2(4294967295u);
     do
     {
-        if (all(equal(uvec2(0u), _74)))
+        if (all(equal(_71, uvec2(0u))))
         {
             break;
         }
-        _74 -= uvec2(uint(_74.y == 0u), 1u);
-        _65 = _63;
-        _67 = _63 != _65;
-    } while (!(_63 == _67));
+        _71 -= uvec2(uint(_71.y == 0u), 1u);
+        _67 = _65;
+        _69 = _65 != _67;
+    } while (!(_65 == _69));
 }
 
-void _90()
+void _93()
 {
-    uint _92 = 0u;
-    uvec2 _99 = uvec2(4294967295u);
+    uint _95 = 0u;
+    uvec2 _97 = uvec2(0u);
+    _97 = uvec2(4294967295u);
     do
     {
-        if (all(equal(uvec2(0u), _99)))
+        if (all(equal(_97, uvec2(0u))))
         {
             break;
         }
-        _99 -= uvec2(uint(_99.y == 0u), 1u);
-        _92++;
-    } while (!(_92 == 5u));
+        _97 -= uvec2(uint(_97.y == 0u), 1u);
+        _95++;
+    } while (!(_95 == 5u));
 }
 
 void main()
 {
-    _6();
-    _35(false);
-    _64(false);
-    _90();
+    _7();
+    _36(false);
+    _66(false);
+    _93();
 }
 

@@ -9,6 +9,17 @@ struct FooStruct {
     vec3 v3_;
     float v1_;
 };
+struct mat3x2f32_std140_ {
+    vec2 c_0_;
+    vec2 c_1_;
+    vec2 c_2_;
+};
+struct mat4x2f32_std140_ {
+    vec2 c_0_;
+    vec2 c_1_;
+    vec2 c_2_;
+    vec2 c_3_;
+};
 const bool Foo_1 = true;
 
 shared float wg[10];
@@ -23,11 +34,11 @@ layout(std140) uniform type_8_block_2Compute { vec4 _group_0_binding_3_cs[20]; }
 
 layout(std140) uniform type_4_block_3Compute { vec3 _group_0_binding_4_cs; };
 
-layout(std140) uniform type_9_block_4Compute { mat3x2 _group_0_binding_5_cs; };
+layout(std140) uniform mat3x2f32_std140_block_4Compute { mat3x2f32_std140_ _group_0_binding_5_cs; };
 
 layout(std140) uniform type_12_block_5Compute { mat2x4 _group_0_binding_6_cs[2][2]; };
 
-layout(std140) uniform type_15_block_6Compute { mat4x2 _group_0_binding_7_cs[2][2]; };
+layout(std140) uniform type_17_block_6Compute { mat4x2f32_std140_ _group_0_binding_7_cs[2][2]; };
 
 
 void test_msl_packed_vec3_as_arg(vec3 arg) {
@@ -53,29 +64,44 @@ void test_msl_packed_vec3_() {
 }
 
 void main() {
-    if (gl_LocalInvocationID == uvec3(0u)) {
-        wg = float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    uint local_invocation_index = gl_LocalInvocationIndex;
+    float Foo = 1.0;
+    bool at = true;
+    uint zero_init_index = 0u;
+    zero_init_index = local_invocation_index;
+    while(true) {
+        uint _e2 = zero_init_index;
+        if ((_e2 >= 10u)) {
+            break;
+        }
+        wg[_e2] = 0.0;
+        zero_init_index = (_e2 + 1u);
+    }
+    if ((local_invocation_index == 0u)) {
         at_1 = 0u;
     }
     memoryBarrierShared();
     barrier();
-    float Foo = 1.0;
-    bool at = true;
     test_msl_packed_vec3_();
-    mat4x2 _e5 = _group_0_binding_7_cs[0][0];
-    vec4 _e10 = _group_0_binding_6_cs[0][0][0];
-    wg[7] = (_e5 * _e10).x;
-    mat3x2 _e16 = _group_0_binding_5_cs;
-    vec3 _e18 = _group_0_binding_4_cs;
-    wg[6] = (_e16 * _e18).x;
-    float _e26 = _group_0_binding_2_cs[1].y;
-    wg[5] = _e26;
-    float _e32 = _group_0_binding_3_cs[0].w;
-    wg[4] = _e32;
-    float _e37 = _group_0_binding_1_cs.v1_;
-    wg[3] = _e37;
-    float _e43 = _group_0_binding_1_cs.v3_.x;
-    wg[2] = _e43;
+    vec2 _e17 = _group_0_binding_7_cs[0][0].c_0_;
+    vec2 _e19 = _group_0_binding_7_cs[0][0].c_1_;
+    vec2 _e21 = _group_0_binding_7_cs[0][0].c_2_;
+    vec2 _e23 = _group_0_binding_7_cs[0][0].c_3_;
+    vec4 _e29 = _group_0_binding_6_cs[0][0][0];
+    wg[7] = (mat4x2(_e17, _e19, _e21, _e23) * _e29).x;
+    vec2 _e36 = _group_0_binding_5_cs.c_0_;
+    vec2 _e38 = _group_0_binding_5_cs.c_1_;
+    vec2 _e40 = _group_0_binding_5_cs.c_2_;
+    vec3 _e43 = _group_0_binding_4_cs;
+    wg[6] = (mat3x2(_e36, _e38, _e40) * _e43).x;
+    float _e51 = _group_0_binding_2_cs[1].y;
+    wg[5] = _e51;
+    float _e57 = _group_0_binding_3_cs[0].w;
+    wg[4] = _e57;
+    float _e62 = _group_0_binding_1_cs.v1_;
+    wg[3] = _e62;
+    float _e68 = _group_0_binding_1_cs.v3_.x;
+    wg[2] = _e68;
     _group_0_binding_1_cs.v1_ = 4.0;
     wg[1] = float(uint(_group_0_binding_2_cs.length()));
     atomicExchange(at_1, 2u);

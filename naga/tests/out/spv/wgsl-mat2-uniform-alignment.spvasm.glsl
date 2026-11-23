@@ -19,11 +19,6 @@ layout(set = 0, binding = 0, std140) uniform _10_9
     _8 _m0;
 } _9;
 
-_7 _12(_8 _14)
-{
-    return _7(_14._m0, mat2(_14._m1, _14._m2));
-}
-
 void main()
 {
 }

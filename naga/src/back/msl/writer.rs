@@ -253,6 +253,7 @@ impl Display for TypeContext<'_> {
             crate::TypeInner::Pointer { base, space } => {
                 let sub = Self {
                     handle: base,
+                    access: crate::StorageAccess::empty(),
                     first_time: false,
                     ..*self
                 };
@@ -260,7 +261,15 @@ impl Display for TypeContext<'_> {
                     Some(name) => name,
                     None => return Ok(()),
                 };
-                write!(out, "{space_name} {sub}&")
+                // `access` is only set for function parameters.
+                let constness = if self.access == crate::StorageAccess::LOAD
+                    && space.needs_access_qualifier()
+                {
+                    " const"
+                } else {
+                    ""
+                };
+                write!(out, "{space_name} {sub}{constness}&")
             }
             crate::TypeInner::ValuePointer {
                 size,
@@ -868,8 +877,6 @@ pub(super) struct ExpressionContext<'a> {
     /// accesses. These may need to be cached in temporary variables. See
     /// `index::find_checked_indexes` for details.
     pub(super) guarded_indices: HandleSet<crate::Expression>,
-    /// See [`Writer::gen_force_bounded_loop_statements`] for details.
-    pub(super) force_loop_bounding: bool,
     /// Whether to emit safety checks for integer division/modulo.
     emit_int_div_checks: bool,
     pub(super) ray_query_initialization_tracking: bool,
@@ -1041,134 +1048,6 @@ impl<W: Write> Writer<W> {
     // See https://github.com/rust-lang/rust-clippy/issues/4979.
     pub fn finish(self) -> W {
         self.out
-    }
-
-    /// Generates statements to be inserted immediately before and at the very
-    /// start of the body of each loop, to defeat MSL infinite loop reasoning.
-    /// The 0th item of the returned tuple should be inserted immediately prior
-    /// to the loop and the 1st item should be inserted at the very start of
-    /// the loop body.
-    ///
-    /// # What is this trying to solve?
-    ///
-    /// In Metal Shading Language, an infinite loop has undefined behavior.
-    /// (This rule is inherited from C++14.) This means that, if the MSL
-    /// compiler determines that a given loop will never exit, it may assume
-    /// that it is never reached. It may thus assume that any conditions
-    /// sufficient to cause the loop to be reached must be false. Like many
-    /// optimizing compilers, MSL uses this kind of analysis to establish limits
-    /// on the range of values variables involved in those conditions might
-    /// hold.
-    ///
-    /// For example, suppose the MSL compiler sees the code:
-    ///
-    /// ```ignore
-    /// if (i >= 10) {
-    ///     while (true) { }
-    /// }
-    /// ```
-    ///
-    /// It will recognize that the `while` loop will never terminate, conclude
-    /// that it must be unreachable, and thus infer that, if this code is
-    /// reached, then `i < 10` at that point.
-    ///
-    /// Now suppose that, at some point where `i` has the same value as above,
-    /// the compiler sees the code:
-    ///
-    /// ```ignore
-    /// if (i < 10) {
-    ///     a[i] = 1;
-    /// }
-    /// ```
-    ///
-    /// Because the compiler is confident that `i < 10`, it will make the
-    /// assignment to `a[i]` unconditional, rewriting this code as, simply:
-    ///
-    /// ```ignore
-    /// a[i] = 1;
-    /// ```
-    ///
-    /// If that `if` condition was injected by Naga to implement a bounds check,
-    /// the MSL compiler's optimizations could allow out-of-bounds array
-    /// accesses to occur.
-    ///
-    /// Naga cannot feasibly anticipate whether the MSL compiler will determine
-    /// that a loop is infinite, so an attacker could craft a Naga module
-    /// containing an infinite loop protected by conditions that cause the Metal
-    /// compiler to remove bounds checks that Naga injected elsewhere in the
-    /// function.
-    ///
-    /// This rewrite could occur even if the conditional assignment appears
-    /// *before* the `while` loop, as long as `i < 10` by the time the loop is
-    /// reached. This would allow the attacker to save the results of
-    /// unauthorized reads somewhere accessible before entering the infinite
-    /// loop. But even worse, the MSL compiler has been observed to simply
-    /// delete the infinite loop entirely, so that even code dominated by the
-    /// loop becomes reachable. This would make the attack even more flexible,
-    /// since shaders that would appear to never terminate would actually exit
-    /// nicely, after having stolen data from elsewhere in the GPU address
-    /// space.
-    ///
-    /// To avoid UB, Naga must persuade the MSL compiler that no loop Naga
-    /// generates is infinite. One approach would be to add inline assembly to
-    /// each loop that is annotated as potentially branching out of the loop,
-    /// but which in fact generates no instructions. Unfortunately, inline
-    /// assembly is not handled correctly by some Metal device drivers.
-    ///
-    /// A previously used approach was to add the following code to the bottom
-    /// of every loop:
-    ///
-    /// ```ignore
-    /// if (volatile bool unpredictable = false; unpredictable)
-    ///     break;
-    /// ```
-    ///
-    /// Although the `if` condition will always be false in any real execution,
-    /// the `volatile` qualifier prevents the compiler from assuming this. Thus,
-    /// it must assume that the `break` might be reached, and hence that the
-    /// loop is not unbounded. This prevents the range analysis impact described
-    /// above. Unfortunately this prevented the compiler from making important,
-    /// and safe, optimizations such as loop unrolling and was observed to
-    /// significantly hurt performance.
-    ///
-    /// Our current approach declares a counter before every loop and
-    /// increments it every iteration, breaking after 2^64 iterations:
-    ///
-    /// ```ignore
-    /// uint2 loop_bound = uint2(0);
-    /// while (true) {
-    ///   if (metal::all(loop_bound == uint2(4294967295))) { break; }
-    ///   loop_bound += uint2(loop_bound.y == 4294967295, 1);
-    /// }
-    /// ```
-    ///
-    /// This convinces the compiler that the loop is finite and therefore may
-    /// execute, whilst at the same time allowing optimizations such as loop
-    /// unrolling. Furthermore the 64-bit counter is large enough it seems
-    /// implausible that it would affect the execution of any shader.
-    ///
-    /// This approach is also used by Chromium WebGPU's Dawn shader compiler:
-    /// <https://dawn.googlesource.com/dawn/+/d9e2d1f718678ebee0728b999830576c410cce0a/src/tint/lang/core/ir/transform/prevent_infinite_loops.cc>
-    fn gen_force_bounded_loop_statements(
-        &mut self,
-        level: back::Level,
-        context: &StatementContext,
-    ) -> Option<(String, String)> {
-        if !context.expression.force_loop_bounding {
-            return None;
-        }
-
-        let loop_bound_name = self.namer.call("loop_bound");
-        // Count down from u32::MAX rather than up from 0 to avoid hang on
-        // certain Intel drivers. See <https://github.com/gfx-rs/wgpu/issues/7319>.
-        let decl = format!("{level}uint2 {loop_bound_name} = uint2({}u);", u32::MAX);
-        let level = level.next();
-        let break_and_inc = format!(
-            "{level}if ({NAMESPACE}::all({loop_bound_name} == uint2(0u))) {{ break; }}
-{level}{loop_bound_name} -= uint2({loop_bound_name}.y == 0u, 1u);"
-        );
-
-        Some((decl, break_and_inc))
     }
 
     fn put_call_parameters(
@@ -4338,8 +4217,6 @@ impl<W: Write> Writer<W> {
                     ref continuing,
                     break_if,
                 } => {
-                    let force_loop_bound_statements =
-                        self.gen_force_bounded_loop_statements(level, context);
                     let gate_name = (!continuing.is_empty() || break_if.is_some())
                         .then(|| self.namer.call("loop_init"));
 
@@ -4351,17 +4228,11 @@ impl<W: Write> Writer<W> {
                         )?;
                     }
 
-                    if let Some((ref decl, _)) = force_loop_bound_statements {
-                        writeln!(self.out, "{decl}")?;
-                    }
                     if let Some(ref gate_name) = gate_name {
                         writeln!(self.out, "{level}bool {gate_name} = true;")?;
                     }
 
                     writeln!(self.out, "{level}while(true) {{",)?;
-                    if let Some((_, ref break_and_inc)) = force_loop_bound_statements {
-                        writeln!(self.out, "{break_and_inc}")?;
-                    }
                     if let Some(ref gate_name) = gate_name {
                         let lif = level.next();
                         let lcontinuing = lif.next();
@@ -4407,7 +4278,9 @@ impl<W: Write> Writer<W> {
                 | crate::Statement::MemoryBarrier(flags) => {
                     self.write_barrier(flags, level)?;
                 }
-                crate::Statement::Store { pointer, value } => {
+                // Metal can only store to atomic types with an atomic store.
+                crate::Statement::Store { pointer, value }
+                | crate::Statement::NonAtomicStore { pointer, value } => {
                     self.put_store(pointer, value, level, context)?
                 }
                 crate::Statement::ImageStore {
@@ -4830,13 +4703,29 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    pub fn write(
+    pub fn write<'m>(
         &mut self,
-        module: &crate::Module,
-        info: &valid::ModuleInfo,
+        module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
+        let (module, info) = back::passes::run(
+            module.into(),
+            &back::passes::Passes {
+                inline: crate::inline::InlineStrategy::OnlyNeeded(crate::inline::InlineTarget::Msl),
+                loop_bounding: options.force_loop_bounding,
+                uniform_matrix_layout: false,
+                immediate_words: false,
+                workgroup_zero_init: options.zero_initialize_workgroup_memory,
+                ..options.passes.into()
+            },
+        )?;
+        let (module, info) = (&*module, &info);
+        if let Some(name) =
+            crate::inline::find_needs_inline(module, crate::inline::InlineTarget::Msl)
+        {
+            return Err(Error::NeedsInline(name));
+        }
         self.emit_int_div_checks = options.emit_int_div_checks;
         self.names.clear();
         self.namer.reset(
@@ -7329,6 +7218,11 @@ template <typename A>
                             class: crate::ImageClass::Storage { access, .. },
                             ..
                         } => access,
+                        // The argument may be a read-only global, so the
+                        // parameter must be `const` unless it is written.
+                        crate::TypeInner::Pointer { .. } if !fun_info.writes_argument(index) => {
+                            crate::StorageAccess::LOAD
+                        }
                         _ => crate::StorageAccess::empty(),
                     },
                     first_time: false,
@@ -7386,7 +7280,6 @@ template <typename A>
                     module,
                     mod_info,
                     pipeline_options,
-                    force_loop_bounding: options.force_loop_bounding,
                     emit_int_div_checks: options.emit_int_div_checks,
                     ray_query_initialization_tracking: options.ray_query_initialization_tracking,
                 },
@@ -7925,13 +7818,8 @@ template <typename A>
                 });
             }
 
-            let need_workgroup_variables_initialization =
-                self.need_workgroup_variables_initialization(options, ep, module, fun_info);
-
             if local_invocation_index.is_none()
-                && (need_workgroup_variables_initialization
-                    || ep.stage == crate::ShaderStage::Task
-                    || ep.stage == crate::ShaderStage::Mesh)
+                && (ep.stage == crate::ShaderStage::Task || ep.stage == crate::ShaderStage::Mesh)
             {
                 args.push(EntryPointArgument {
                     ty_name: "uint".to_string(),
@@ -8511,16 +8399,6 @@ template <typename A>
                 }
             }
 
-            if need_workgroup_variables_initialization {
-                self.write_workgroup_variables_initialization(
-                    module,
-                    mod_info,
-                    fun_info,
-                    local_invocation_index,
-                    ep.stage,
-                )?;
-            }
-
             // Now take the arguments that we gathered into structs, and the
             // structs that we flattened into arguments, and emit local
             // variables with initializers that put everything back the way the
@@ -8632,7 +8510,6 @@ template <typename A>
                     module,
                     mod_info,
                     pipeline_options,
-                    force_loop_bounding: options.force_loop_bounding,
                     emit_int_div_checks: options.emit_int_div_checks,
                     ray_query_initialization_tracking: options.ray_query_initialization_tracking,
                 },
@@ -8718,210 +8595,6 @@ template <typename A>
             )?;
         }
         Ok(())
-    }
-}
-
-/// Initializing workgroup variables is more tricky for Metal because we have to deal
-/// with atomics at the type-level (which don't have a copy constructor).
-mod workgroup_mem_init {
-    use crate::EntryPoint;
-
-    use super::*;
-
-    enum Access {
-        GlobalVariable(Handle<crate::GlobalVariable>),
-        StructMember(Handle<crate::Type>, u32),
-        Array(usize),
-    }
-
-    impl Access {
-        fn write<W: Write>(
-            &self,
-            writer: &mut W,
-            names: &FastHashMap<NameKey, String>,
-        ) -> Result<(), core::fmt::Error> {
-            match *self {
-                Access::GlobalVariable(handle) => {
-                    write!(writer, "{}", names[&NameKey::GlobalVariable(handle)])
-                }
-                Access::StructMember(handle, index) => {
-                    write!(writer, ".{}", names[&NameKey::StructMember(handle, index)])
-                }
-                Access::Array(depth) => write!(writer, ".{WRAPPED_ARRAY_FIELD}[__i{depth}]"),
-            }
-        }
-    }
-
-    struct AccessStack {
-        stack: Vec<Access>,
-        array_depth: usize,
-    }
-
-    impl AccessStack {
-        const fn new() -> Self {
-            Self {
-                stack: Vec::new(),
-                array_depth: 0,
-            }
-        }
-
-        fn enter_array<R>(&mut self, cb: impl FnOnce(&mut Self, usize) -> R) -> R {
-            let array_depth = self.array_depth;
-            self.stack.push(Access::Array(array_depth));
-            self.array_depth += 1;
-            let res = cb(self, array_depth);
-            self.stack.pop();
-            self.array_depth -= 1;
-            res
-        }
-
-        fn enter<R>(&mut self, new: Access, cb: impl FnOnce(&mut Self) -> R) -> R {
-            self.stack.push(new);
-            let res = cb(self);
-            self.stack.pop();
-            res
-        }
-
-        fn write<W: Write>(
-            &self,
-            writer: &mut W,
-            names: &FastHashMap<NameKey, String>,
-        ) -> Result<(), core::fmt::Error> {
-            for next in self.stack.iter() {
-                next.write(writer, names)?;
-            }
-            Ok(())
-        }
-    }
-
-    impl<W: Write> Writer<W> {
-        pub(super) fn need_workgroup_variables_initialization(
-            &mut self,
-            options: &Options,
-            ep: &EntryPoint,
-            module: &crate::Module,
-            fun_info: &valid::FunctionInfo,
-        ) -> bool {
-            let is_task = ep.stage == crate::ShaderStage::Task;
-            options.zero_initialize_workgroup_memory
-                && ep.stage.compute_like()
-                && module.global_variables.iter().any(|(handle, var)| {
-                    let is_right_address_space = var.space == crate::AddressSpace::WorkGroup
-                        || (var.space == crate::AddressSpace::TaskPayload && is_task);
-                    !fun_info[handle].is_empty() && is_right_address_space
-                })
-        }
-
-        pub fn write_workgroup_variables_initialization(
-            &mut self,
-            module: &crate::Module,
-            module_info: &valid::ModuleInfo,
-            fun_info: &valid::FunctionInfo,
-            local_invocation_index: Option<&NameKey>,
-            stage: crate::ShaderStage,
-        ) -> BackendResult {
-            let level = back::Level(1);
-
-            writeln!(
-                self.out,
-                "{}if ({} == 0u) {{",
-                level,
-                local_invocation_index
-                    .map(|name_key| self.names[name_key].as_str())
-                    .unwrap_or("__local_invocation_index"),
-            )?;
-
-            let mut access_stack = AccessStack::new();
-
-            let is_task = stage == crate::ShaderStage::Task;
-            let vars = module.global_variables.iter().filter(|&(handle, var)| {
-                let is_right_address_space = var.space == crate::AddressSpace::WorkGroup
-                    || (var.space == crate::AddressSpace::TaskPayload && is_task);
-                !fun_info[handle].is_empty() && is_right_address_space
-            });
-
-            for (handle, var) in vars {
-                access_stack.enter(Access::GlobalVariable(handle), |access_stack| {
-                    self.write_workgroup_variable_initialization(
-                        module,
-                        module_info,
-                        var.ty,
-                        access_stack,
-                        level.next(),
-                    )
-                })?;
-            }
-
-            writeln!(self.out, "{level}}}")?;
-            self.write_barrier(crate::Barrier::WORK_GROUP, level)
-        }
-
-        fn write_workgroup_variable_initialization(
-            &mut self,
-            module: &crate::Module,
-            module_info: &valid::ModuleInfo,
-            ty: Handle<crate::Type>,
-            access_stack: &mut AccessStack,
-            level: back::Level,
-        ) -> BackendResult {
-            if module_info[ty].contains(valid::TypeFlags::CONSTRUCTIBLE) {
-                write!(self.out, "{level}")?;
-                access_stack.write(&mut self.out, &self.names)?;
-                writeln!(self.out, " = {{}};")?;
-            } else {
-                match module.types[ty].inner {
-                    crate::TypeInner::Atomic { .. } => {
-                        write!(
-                            self.out,
-                            "{level}{NAMESPACE}::atomic_store_explicit({ATOMIC_REFERENCE}"
-                        )?;
-                        access_stack.write(&mut self.out, &self.names)?;
-                        writeln!(self.out, ", 0, {NAMESPACE}::memory_order_relaxed);")?;
-                    }
-                    crate::TypeInner::Array { base, size, .. } => {
-                        let count = match size.resolve(module.to_ctx())? {
-                            proc::IndexableLength::Known(count) => count,
-                            proc::IndexableLength::Dynamic => unreachable!(),
-                        };
-
-                        access_stack.enter_array(|access_stack, array_depth| {
-                            writeln!(
-                                self.out,
-                                "{level}for (int __i{array_depth} = 0; __i{array_depth} < {count}; __i{array_depth}++) {{"
-                            )?;
-                            self.write_workgroup_variable_initialization(
-                                module,
-                                module_info,
-                                base,
-                                access_stack,
-                                level.next(),
-                            )?;
-                            writeln!(self.out, "{level}}}")?;
-                            BackendResult::Ok(())
-                        })?;
-                    }
-                    crate::TypeInner::Struct { ref members, .. } => {
-                        for (index, member) in members.iter().enumerate() {
-                            access_stack.enter(
-                                Access::StructMember(ty, index as u32),
-                                |access_stack| {
-                                    self.write_workgroup_variable_initialization(
-                                        module,
-                                        module_info,
-                                        member.ty,
-                                        access_stack,
-                                        level,
-                                    )
-                                },
-                            )?;
-                        }
-                    }
-                    _ => unreachable!(),
-                }
-            }
-
-            Ok(())
-        }
     }
 }
 

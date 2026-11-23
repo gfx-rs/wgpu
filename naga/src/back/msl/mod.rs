@@ -75,7 +75,7 @@ use alloc::{
 };
 use core::fmt::{Error as FmtError, Write};
 
-use crate::{arena::Handle, back::TaskDispatchLimits, ir, proc::index, valid::ModuleInfo};
+use crate::{arena::Handle, back::TaskDispatchLimits, ir, proc::index};
 
 mod hoist;
 mod keywords;
@@ -205,6 +205,10 @@ enum ResolvedInterpolation {
 pub enum Error {
     #[error(transparent)]
     Format(#[from] FmtError),
+    #[error(transparent)]
+    Pass(#[from] crate::back::passes::PassError),
+    #[error("function `{0}` has pointer parameters or arguments that must be inlined by `naga::inline::process`")]
+    NeedsInline(String),
     #[error("bind target {0:?} is empty")]
     UnimplementedBindTarget(BindTarget),
     #[error("composing of {0:?} is not implemented yet")]
@@ -332,6 +336,8 @@ pub struct Options {
     pub emit_int_div_checks: bool,
     /// Whether to validate ray query calls
     pub ray_query_initialization_tracking: bool,
+    /// Options for the IR passes the backend runs before writing the module.
+    pub passes: crate::back::PassOptions,
 }
 
 impl Default for Options {
@@ -349,6 +355,7 @@ impl Default for Options {
             mesh_shader_primitive_indices_clamp: true,
             ray_query_initialization_tracking: true,
             emit_int_div_checks: true,
+            passes: Default::default(),
         }
     }
 }
@@ -835,14 +842,13 @@ pub struct TranslationInfo {
     pub entry_point_names: Vec<Result<String, EntryPointError>>,
 }
 
-pub fn write_string(
-    module: &crate::Module,
-    info: &ModuleInfo,
+pub fn write_string<'m>(
+    module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
     options: &Options,
     pipeline_options: &PipelineOptions,
 ) -> Result<(String, TranslationInfo), Error> {
     let mut w = Writer::new(String::new());
-    let info = w.write(module, info, options, pipeline_options)?;
+    let info = w.write(module, options, pipeline_options)?;
     Ok((w.finish(), info))
 }
 

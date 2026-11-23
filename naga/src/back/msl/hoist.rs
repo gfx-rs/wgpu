@@ -164,6 +164,7 @@ fn definitions(
             | St::ControlBarrier(_)
             | St::MemoryBarrier(_)
             | St::Store { .. }
+            | St::NonAtomicStore { .. }
             | St::ImageStore { .. }
             | St::ImageAtomic { .. }
             | St::RayPipelineFunction(_)

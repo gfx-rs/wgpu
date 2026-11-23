@@ -20,6 +20,7 @@ constant float o = 2.0;
     metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> rq = {};
     uint naga_query_init_tracker_for_rq = 0u;
     float naga_query_tmax_tracker_for_rq = 0.0;
+    metal::uint2 loop_bound = {};
     RayDesc desc = RayDesc {4u, 255u, 34.0, 38.0, metal::float3(46.0), metal::float3(58.0, 62.0, 74.0)};
     {
         RayDesc desc = desc;
@@ -48,16 +49,19 @@ constant float o = 2.0;
             naga_query_tmax_tracker_for_rq = desc.tmax;
         }
     }
-    uint2 loop_bound = uint2(4294967295u);
+    loop_bound = metal::uint2(4294967295u);
     while(true) {
-        if (metal::all(loop_bound == uint2(0u))) { break; }
-        loop_bound -= uint2(loop_bound.y == 0u, 1u);
-        bool _e31 = false;
-        if (((naga_query_init_tracker_for_rq & 1) == 1) && !((naga_query_init_tracker_for_rq & 4) == 4)) {
-            _e31 = rq.next();
-            naga_query_init_tracker_for_rq = naga_query_init_tracker_for_rq | (_e31 ? 2: 6);
+        metal::uint2 _e20 = loop_bound;
+        if (metal::all(_e20 == metal::uint2(0u))) {
+            break;
         }
-        if (_e31) {
+        loop_bound = _e20 - metal::uint2((_e20.y == 0u) ? 1u : 0u, 1u);
+        bool _e13 = false;
+        if (((naga_query_init_tracker_for_rq & 1) == 1) && !((naga_query_init_tracker_for_rq & 4) == 4)) {
+            _e13 = rq.next();
+            naga_query_init_tracker_for_rq = naga_query_init_tracker_for_rq | (_e13 ? 2: 6);
+        }
+        if (_e13) {
         } else {
             break;
         }

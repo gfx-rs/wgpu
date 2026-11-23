@@ -1,5 +1,5 @@
 // Test handling of N-by-2 matrices.
-// See the doc comments on `naga::back::hlsl` and `naga::back::spv` for details.
+// See the uniform matrix layout pass in `naga::back::passes` for details.
 //
 // There are additional tests in `access.wgsl`.
 //

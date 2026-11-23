@@ -82,6 +82,15 @@ struct Args {
     #[argh(option)]
     metal_version: Option<MslVersionArg>,
 
+    /// when writing WGSL, don't rely on the `unrestricted_pointer_parameters`
+    /// language extension: inline calls to functions with pointer parameters
+    /// outside the `function` and `private` address spaces, and calls with
+    /// pointer arguments that refer to part of a variable, like `&a[i]`.
+    ///
+    /// Use this for WGSL consumers that don't support the extension.
+    #[argh(switch)]
+    no_unrestricted_pointer_parameters: bool,
+
     /// if the selected frontends/backends support coordinate space conversions,
     /// disable them
     #[argh(switch)]
@@ -102,7 +111,9 @@ struct Args {
     /// compact the module's IR and revalidate.
     ///
     /// Output files will reflect the compacted IR. If you want to see the IR as
-    /// it was before compaction, use the `--before-compaction` option.
+    /// it was before compaction, use the `--before-compaction` option. The
+    /// SPIR-V, MSL, HLSL, GLSL and WGSL backends also compact the module after their
+    /// own passes.
     ///
     /// Even when this option is not active, compaction may still occur as part
     /// of override processing.
@@ -414,6 +425,7 @@ struct Parameters<'a> {
     msl: naga::back::msl::Options,
     glsl: naga::back::glsl::Options,
     hlsl: naga::back::hlsl::Options,
+    wgsl: naga::back::wgsl::Options,
     input_kind: Option<InputKind>,
     shader_stage: Option<ShaderStage>,
     defines: FastHashMap<String, String>,
@@ -579,6 +591,15 @@ fn run() -> anyhow::Result<()> {
     params.msl.task_dispatch_limits = args.task_limits.0;
     params.hlsl.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
     params.hlsl.task_dispatch_limits = args.task_limits.0;
+    let passes = naga::back::PassOptions {
+        compact: args.compact,
+    };
+    params.spv_out.passes = passes;
+    params.msl.passes = passes;
+    params.glsl.passes = passes;
+    params.hlsl.passes = passes;
+    params.wgsl.passes = passes;
+    params.wgsl.unrestricted_pointer_parameters = !args.no_unrestricted_pointer_parameters;
 
     if args.bulk_validate {
         return bulk_validate(&args, &params);
@@ -870,7 +891,7 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) = naga::back::pipeline_constants::process_overrides(
+            let (module, _) = naga::back::pipeline_constants::process_overrides(
                 module,
                 info,
                 entry_point.filter(|_| params.compact),
@@ -879,8 +900,7 @@ fn write_output(
             .unwrap_pretty();
 
             let pipeline_options = msl::PipelineOptions::default();
-            let (msl, _) =
-                msl::write_string(&module, &info, &options, &pipeline_options).unwrap_pretty();
+            let (msl, _) = msl::write_string(&*module, &options, &pipeline_options).unwrap_pretty();
             fs::write(output_path, msl)?;
         }
         "spv" => {
@@ -896,7 +916,7 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) = naga::back::pipeline_constants::process_overrides(
+            let (module, _) = naga::back::pipeline_constants::process_overrides(
                 module,
                 info,
                 entry_point.filter(|_| params.compact),
@@ -904,7 +924,7 @@ fn write_output(
             )
             .unwrap_pretty();
 
-            let spv = spv::write_vec(&module, &info, &params.spv_out, pipeline_options.as_ref())
+            let spv = spv::write_vec(&*module, &params.spv_out, pipeline_options.as_ref())
                 .unwrap_pretty();
             let bytes = spv
                 .iter()
@@ -950,7 +970,7 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) = naga::back::pipeline_constants::process_overrides(
+            let (module, _) = naga::back::pipeline_constants::process_overrides(
                 module,
                 info,
                 entry_point.filter(|_| params.compact),
@@ -961,14 +981,11 @@ fn write_output(
             let mut buffer = String::new();
             let mut writer = glsl::Writer::new(
                 &mut buffer,
-                &module,
-                &info,
                 &params.glsl,
                 &pipeline_options,
                 params.bounds_check_policies,
-            )
-            .unwrap_pretty();
-            writer.write()?;
+            );
+            writer.write(&*module).unwrap_pretty();
             fs::write(output_path, buffer)?;
         }
         "dot" => {
@@ -985,7 +1002,7 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) = naga::back::pipeline_constants::process_overrides(
+            let (module, _) = naga::back::pipeline_constants::process_overrides(
                 module,
                 info,
                 entry_point.filter(|_| params.compact),
@@ -996,21 +1013,21 @@ fn write_output(
             let mut buffer = String::new();
             let pipeline_options = Default::default();
             let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl, &pipeline_options);
-            writer.write(&module, &info, None).unwrap_pretty();
+            writer.write(&*module, None).unwrap_pretty();
             fs::write(output_path, buffer)?;
         }
         "wgsl" => {
             use naga::back::wgsl;
 
-            let wgsl = wgsl::write_string(
-                module,
-                info.as_ref().ok_or(CliError(
+            if info.is_none() {
+                return Err(CliError(
                     "Generating wgsl output requires validation to \
                      succeed, and it failed in a previous step",
-                ))?,
-                wgsl::WriterFlags::empty(),
-            )
-            .unwrap_pretty();
+                )
+                .into());
+            }
+
+            let wgsl = wgsl::write_string(module, &params.wgsl).unwrap_pretty();
             fs::write(output_path, wgsl)?;
         }
         other => {

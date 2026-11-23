@@ -53,9 +53,17 @@ vec4 mock_function(ivec2 c, int i, int l)
 
 void main()
 {
-    if (gl_LocalInvocationIndex == 0u)
+    uint zero_init_index = 0u;
+    zero_init_index = gl_LocalInvocationIndex;
+    for (;;)
     {
-        in_workgroup = float[](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+        if (zero_init_index >= 30u)
+        {
+            break;
+        }
+        in_workgroup[min(zero_init_index, 29u)] = 0.0;
+        zero_init_index++;
+        continue;
     }
     barrier();
 }

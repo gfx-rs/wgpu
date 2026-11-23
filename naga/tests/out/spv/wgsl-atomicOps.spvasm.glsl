@@ -40,11 +40,12 @@ shared _7 _25;
 
 void main()
 {
+    _23[gl_LocalInvocationIndex] = 0;
+    _25._m1[gl_LocalInvocationIndex] = 0;
     if (gl_LocalInvocationIndex == 0u)
     {
         _21 = 0u;
-        _23 = int[](0, 0);
-        _25 = _7(0u, int[](0, 0));
+        _25._m0 = 0u;
     }
     barrier();
     atomicExchange(_12._m0, 1u);

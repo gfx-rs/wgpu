@@ -18,13 +18,15 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters {
         required_features: wgpu::Features::SUBGROUP,
         required_limits: wgpu::Limits::downlevel_defaults(),
-        // Expect metal to fail on tests involving operations in divergent control flow
+        // Expect metal and KosmicKrisp to fail on tests involving operations in divergent
+        // control flow
         // <https://github.com/gfx-rs/wgpu/issues/10019>
         //
         // Newlines are included in the panic message to ensure that _additional_ failures
         // are not matched against.
         failures: [
             wgpu_test::FailureCase::molten_vk(),
+            wgpu_test::FailureCase::kosmic_krisp(),
             wgpu_test::FailureCase::backend(wgpu::Backends::METAL),
         ]
         .into_iter()

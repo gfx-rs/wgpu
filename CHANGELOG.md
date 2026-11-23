@@ -178,13 +178,23 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Added `Queue` getter on `Device`. By @sagudev in [#10895](https://github.com/gfx-rs/wgpu/pull/10895).
 - Add `Queue::present_with_damage`, which takes the regions that changed since the last present as a hint for the compositor. Implemented for Vulkan (`VK_KHR_incremental_present`) and EGL (`EGL_KHR_swap_buffers_with_damage` / `EGL_EXT_swap_buffers_with_damage`); ignored elsewhere. Adds `wgpu::Rect`, moved from `wgpu_core::command::Rect`. By @sauliusvl in [#10152](https://github.com/gfx-rs/wgpu/pull/10152).
 
+- Support the WGSL `unrestricted_pointer_parameters` language extension: functions may take pointers in the `storage`, `uniform`, `workgroup`, `immediate` and `task_payload` address spaces. Where a backend cannot express such a call, or a pointer argument to part of a variable like `&a[i]`, the call is inlined. By @Inner-Daemons in [#10355](https://github.com/gfx-rs/wgpu/pull/10355).
+- Functions may take `binding_array`s of textures and samplers as parameters. Calls to them are inlined. By @Inner-Daemons in [#10355](https://github.com/gfx-rs/wgpu/pull/10355).
+
 #### Naga
 
+- Added `naga::inline`, which replaces the calls a given backend cannot express with the body of the called function. By @Inner-Daemons in [#10355](https://github.com/gfx-rs/wgpu/pull/10355).
+- The HLSL backend now inlines every function call, and writes only entry points. By @Inner-Daemons in [#10355](https://github.com/gfx-rs/wgpu/pull/10355).
 - Add `@builtin(hit_barycentrics)`, a `vec2<f32>` readable in `@any_hit` and `@closest_hit` ray tracing pipeline shaders, holding two of the barycentric coordinates of the hit point on the triangle (the third is `1.0 - x - y`). Currently only supported with the SPIR-V backend. By @JMS55 in [#10193](https://github.com/gfx-rs/wgpu/pull/10193).
 - Add the `wgpu_ray_tracing_invocation_reorder` WGSL enable-extension and the matching `Capabilities::RAY_TRACING_INVOCATION_REORDER`, exposing hit objects and shader invocation reordering. It provides the `hit_object` type, which records the result of a ray traversal without running any hit or miss shader, various `hitObject*` built-in functions, and `reorderThread`, which reorders invocations of a `@ray_generation` shader to improve coherence. Currently only supported with the SPIR-V backend. Enable it with `Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER`, which also requires `Features::EXPERIMENTAL_RAY_TRACING_PIPELINES` and is supported on Vulkan with [VK_EXT_ray_tracing_invocation_reorder](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_ray_tracing_invocation_reorder.html). `reorderThread` may be a no-op. Check whether `Adapter::ray_tracing_invocation_reorder_mode` reports `RayTracingInvocationReorderMode::Reorder` to see if invocations will be reordered. By @JMS55 in [#10311](https://github.com/gfx-rs/wgpu/pull/10311) and [#10871](https://github.com/gfx-rs/wgpu/pull/10871).
 - Support WGSL `bitcast` between `vec2<f16>` and 32-bit scalars, between `vec4<f16>` and `vec2` of 32-bit scalars, between `f16` and `i16`/`u16` (with `wgpu_int16`), and the corresponding SPIR-V `OpBitcast`s. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
 - Support SPIR-V's `OpGroupNonUniformBallotFindLSB`/`MSB` and GLSL's `subgroupBallotFindLSB`/`MSB` with the new `Statement::SubgroupBallotFindBit`. HLSL, MSL, and WGSL output use a polyfill. The GLSL frontend now also accepts `gl_SubgroupSize` and `gl_SubgroupInvocationID`. By @nazar-pc in [#9966](https://github.com/gfx-rs/wgpu/pull/9966).
 - Parse `NonSemantic.DebugPrintf` instructions in SPIR-V shaders. By @evilpie in [#10561](https://github.com/gfx-rs/wgpu/pull/10561).
+- `naga::compact::compact` now accepts functions whose expression arenas contain forward references (an expression referring to a later one), and renumbers the function's expressions so that every expression precedes its users. It also accepts functions that call later functions, and moves callees before their callers. This lets passes that rewrite a module append expressions and functions freely and run compaction afterwards. Modules without forward references are compacted exactly as before. By @Inner-Daemons in [#10409](https://github.com/gfx-rs/wgpu/pull/10409).
+- The SPIR-V, HLSL, MSL and GLSL backends no longer take a `ModuleInfo`: their `write` functions (and `spv::write_vec`, `msl::write_string`) validate the module themselves after running their passes. Callers must still validate the module first, for example with `process_overrides`. The module can be passed as `&Module` or by value; pass a `Cow` from `process_overrides` as `&*module` or by value. By @Inner-Daemons in [#10409](https://github.com/gfx-rs/wgpu/pull/10409).
+- The SPIR-V, HLSL, MSL and GLSL backends' `Options` have a new `passes: naga::back::PassOptions` field. Set `PassOptions::compact` to remove everything the entry points don't use before writing, so output doesn't depend on unused items. It is off by default. By @Inner-Daemons in [#10409](https://github.com/gfx-rs/wgpu/pull/10409).
+- The WGSL backend's `Writer::write` and `write_string` no longer take a `ModuleInfo`; they validate the module themselves, and accept it by reference or by value. `Writer::new` and `write_string` take a new `naga::back::wgsl::Options` instead of `WriterFlags`. By @Inner-Daemons in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
+- Added `naga::back::wgsl::Options::unrestricted_pointer_parameters`, on by default. If turned off, the WGSL backend inlines the calls that need the `unrestricted_pointer_parameters` language extension, so the output is valid for consumers without it. `naga-cli` has the matching `--no-unrestricted-pointer-parameters` flag. `Options::passes` is the `PassOptions` the other backends have. By @Inner-Daemons in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
 
 #### Hal
 
@@ -225,6 +235,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 - Add `Device::import_external_texture` to bind a `GPUExternalTexture` sampled from an `HTMLVideoElement` or WebCodecs `VideoFrame`, without a copy. By @AdrianEddy in [#9936](https://github.com/gfx-rs/wgpu/pull/9936).
 - The `subgroups` feature (and any other features added in the future) will now be reported by the WebGPU backend, if reported by the underlying WebGPU implementation. By @andyleiserson in [#10265](https://github.com/gfx-rs/wgpu/pull/10265).
+- Shaders given as Naga IR, SPIR-V or GLSL are translated to WGSL that doesn't need the `unrestricted_pointer_parameters` language extension if the browser doesn't support it. By @Inner-Daemons in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
 
 #### deno_webgpu
 
@@ -254,15 +265,21 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 #### naga
 
+- The SPIR-V, HLSL, GLSL and MSL backends inline the calls they cannot express themselves, and return a new `NeedsInline` error if a call is left that they cannot write. The SPIR-V writer previously emitted invalid SPIR-V for pointer arguments to part of a variable. `FunctionError::InvalidArgumentPointerSpace` was removed. By @Inner-Daemons in [#10355](https://github.com/gfx-rs/wgpu/pull/10355).
 - `naga::valid::ValidationError` is now always returned boxed, to avoid `clippy::large_result_err` warning. By @beicause in [#9612](https://github.com/gfx-rs/wgpu/pull/9612)
 - Added `naga::valid::Capabilities::LINEAR_INTERPOLATION`, which is now required in order to use `@interpolate(linear)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - The GLSL backend's `MissingFeatures` error now names the GLSL version that lacks the features, e.g. `GLSL 300 es doesn't support the required feature(s): NOPERSPECTIVE_QUALIFIER`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - Bit reinterpretation is now represented in the Naga IR by the new `naga::ir::Expression::Bitcast`, which names its result type. `naga::ir::Expression::As` now only converts, and its `kind` and `convert` fields are replaced by `target: Scalar`. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
+- The GLSL backend's `Writer` API now matches the other backends: `Writer::new(out, options, pipeline_options, policies)` no longer takes the module and cannot fail, and `Writer::write(module, info)` takes the module and returns all errors. By @inner-daemons in [#11045](https://github.com/gfx-rs/wgpu/pull/11045).
+- The GLSL backend's `ReflectionInfo` now reports resources by binding instead of `Handle<GlobalVariable>`, so it stays valid if the module is compacted before writing. `uniforms` is now a `Vec<BufferMapping>`, and `TextureMapping` carries a `GlobalResource` (binding and name) for the texture and sampler, plus the image's type. By @inner-daemons in [#11079](https://github.com/gfx-rs/wgpu/pull/11079).
+- The GLSL backend now gives uniform blocks that contain `matCx2<f32>` matrices the std140-compatible type names `*_std140_*`, so their block names change, e.g. `S_block_0Fragment` becomes `S_std140_block_0Fragment`. Code that hard-codes GLSL uniform block names needs updating. By @inner-daemons in [#11070](https://github.com/gfx-rs/wgpu/pull/11070).
+- The SPIR-V, HLSL and MSL backends' `force_loop_bounding` option now runs one shared IR pass instead of each backend's own loop counter. The counter is the same, but SPIR-V now resets it before each loop instead of once per function, and on HLSL and MSL it is checked after a loop's `continuing` block instead of before. By @inner-daemons in #TODO.
 
 #### Hal
 
 - `TextureDescriptor` has a new field `texture_binding_view_dimension`. It must be `Some` on devices without `DownlevelFlags::ARBITRARY_BINDING_VIEW_DIMENSIONS` (the GLES backend allocates the texture's GL target from it), and is ignored otherwise. By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - `hal::Queue::present` gained a `damage_rects: &[wgt::Rect<u32>]` parameter. The rects must be non-empty and within the surface. Pass an empty slice for the previous behavior. By @sauliusvl in [#10152](https://github.com/gfx-rs/wgpu/pull/10152).
+- `wgpu_hal::NagaShader` has a new `overrides_resolved` field. Set it to `true` only for a module already processed with `process_overrides`, and use empty stage constants with it, so hal doesn't process it again. By @inner-daemons in [#11075](https://github.com/gfx-rs/wgpu/pull/11075).
 
 #### Metal
 
@@ -300,6 +317,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 #### naga
 
+- HLSL: stores to `matCx2` members of structs that are not in a storage buffer, and to their columns and elements, are no longer lost. By @inner-daemons in [#11058](https://github.com/gfx-rs/wgpu/pull/11058).
 - Reject unsigned integer arguments to WGSL `sign()` during Naga validation instead of allowing them to reach and panic in the SPIR-V backend. By @notferdon in [#10451](https://github.com/gfx-rs/wgpu/pull/10451).
 - Declare `LocalInvocationIndex` only once in SPIR-V mesh shader entry points that don't take `local_invocation_index` as an argument. Previously these shaders were invalid SPIR-V. By @apollo-2006 in [#10497](https://github.com/gfx-rs/wgpu/pull/10497).
 - Fix panics when shader `var<immediate>` size is larger than 256 bytes. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
@@ -321,6 +339,9 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fix ambiguous `metal::select` calls in the Metal backend's division/remainder zero guards for 64-bit integers: the guards now emit `L`/`uL` suffixed literals (e.g. `metal::select(rhs, 1uL, rhs == 0uL)`) so MSL generated for `i64`/`u64` `/` and `%` compiles. By @Statesman-forge in [#10278](https://github.com/gfx-rs/wgpu/pull/10278).
 - In the MSL backend, `subgroupBallot` now keeps lanes 32-63, which were lost on GPUs with 64-wide SIMD groups (AMD GPUs on macOS). By @ErkoRisthein in [#10797](https://github.com/gfx-rs/wgpu/pull/10797).
 - Report a WGSL error instead of panicking when the condition of a `const_assert` is a composite value, such as `const_assert(vec2i());`. By @MilosLord in [#10897](https://github.com/gfx-rs/wgpu/pull/10897).
+- Fix the layout of `matCx2<f32>` in GLSL uniform buffers ([#4371](https://github.com/gfx-rs/wgpu/issues/4371)) and of `matCx3<f16>` and `matCx4<f16>` in SPIR-V and HLSL uniform buffers ([#10083](https://github.com/gfx-rs/wgpu/issues/10083)). The HLSL backend also now pads `f16` and `i16` scalars and vectors in uniform buffers to their correct offsets. By @inner-daemons in [#11070](https://github.com/gfx-rs/wgpu/pull/11070).
+- The SPIR-V backend now stores immediates that contain `f16` values as 32-bit words, so they work on Vulkan devices without `storagePushConstant16` ([#10083](https://github.com/gfx-rs/wgpu/issues/10083)). By @inner-daemons in [#11070](https://github.com/gfx-rs/wgpu/pull/11070).
+- Fix the HLSL backend losing whole-matrix stores to `matCx2` members of function-space structs ([#10658](https://github.com/gfx-rs/wgpu/issues/10658)), and generating invalid HLSL when a pointer to such a member is passed to a function ([#7415](https://github.com/gfx-rs/wgpu/issues/7415)). By @inner-daemons in [#11070](https://github.com/gfx-rs/wgpu/pull/11070).
 
 #### Validation
 
@@ -414,6 +435,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 ### Performance
 
+- naga: Workgroup memory is now zero initialized by all invocations of a workgroup instead of only the first, on every backend. Arrays are flattened and their elements are spread over the invocations, which also avoids large aggregate assignments that DXC is slow to optimize. This is done by a shared IR pass that the SPIR-V, HLSL, MSL and GLSL backends run before writing. Atomics are zeroed with plain stores where the target allows it, using the new `naga::ir::Statement::NonAtomicStore`. By @inner-daemons in [#11046](https://github.com/gfx-rs/wgpu/pull/11046).
 - GLES: `Queue::submit` no longer resets GL state for command buffers that record no commands (e.g. the internal transit and pre-pass encoders), removing two full reset sequences (about 20 GL calls) per frame for a typical single-pass WebGL2 renderer. By @chinqan in [#10913](https://github.com/gfx-rs/wgpu/pull/10913).
 - Added explicit `Send` and `Sync` implementations to key `wgpu` types so that the compiler can do less work checking those bounds. If you previously added a `#![recursion_limit = ...]` attribute to your crate due to overflow errors involving `wgpu` types, you may now be able to remove it. By @kpreid in [#10177](https://github.com/gfx-rs/wgpu/pull/10177).
 - `Queue::write_buffer`, `Queue::write_texture` and buffer unmaps no longer record a separate barrier before each copy. The transitions for a whole batch of queue writes are now coalesced into a single barrier recorded ahead of the batch's copies, so a frame that updates N buffers costs one barrier instead of N. By @JMS55 in [#10319](https://github.com/gfx-rs/wgpu/pull/10319).

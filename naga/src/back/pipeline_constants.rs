@@ -795,6 +795,10 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
         Statement::Store {
             ref mut pointer,
             ref mut value,
+        }
+        | Statement::NonAtomicStore {
+            ref mut pointer,
+            ref mut value,
         } => {
             adjust(pointer);
             adjust(value);

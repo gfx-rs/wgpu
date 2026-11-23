@@ -78,16 +78,21 @@ kernel void test_atomic_compare_exchange_i32_(
     uint i = 0u;
     int old = {};
     bool exchanged = {};
-    uint2 loop_bound = uint2(4294967295u);
+    metal::uint2 loop_bound = {};
+    metal::uint2 loop_bound_1 = {};
+    loop_bound = metal::uint2(4294967295u);
     bool loop_init = true;
     while(true) {
-        if (metal::all(loop_bound == uint2(0u))) { break; }
-        loop_bound -= uint2(loop_bound.y == 0u, 1u);
         if (!loop_init) {
             uint _e27 = i;
             i = _e27 + 1u;
         }
         loop_init = false;
+        metal::uint2 _e50 = loop_bound;
+        if (metal::all(_e50 == metal::uint2(0u))) {
+            break;
+        }
+        loop_bound = _e50 - metal::uint2((_e50.y == 0u) ? 1u : 0u, 1u);
         uint _e2 = i;
         if (_e2 < SIZE) {
         } else {
@@ -98,10 +103,13 @@ kernel void test_atomic_compare_exchange_i32_(
             int _e8 = metal::atomic_load_explicit(&arr_i32_.inner[_e6], metal::memory_order_relaxed);
             old = _e8;
             exchanged = false;
-            uint2 loop_bound_1 = uint2(4294967295u);
+            loop_bound_1 = metal::uint2(4294967295u);
             while(true) {
-                if (metal::all(loop_bound_1 == uint2(0u))) { break; }
-                loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
+                metal::uint2 _e35 = loop_bound_1;
+                if (metal::all(_e35 == metal::uint2(0u))) {
+                    break;
+                }
+                loop_bound_1 = _e35 - metal::uint2((_e35.y == 0u) ? 1u : 0u, 1u);
                 bool _e12 = exchanged;
                 if (!(_e12)) {
                 } else {
@@ -129,16 +137,21 @@ kernel void test_atomic_compare_exchange_u32_(
     uint i_1 = 0u;
     uint old_1 = {};
     bool exchanged_1 = {};
-    uint2 loop_bound_2 = uint2(4294967295u);
+    metal::uint2 loop_bound_2 = {};
+    metal::uint2 loop_bound_3 = {};
+    loop_bound_2 = metal::uint2(4294967295u);
     bool loop_init_1 = true;
     while(true) {
-        if (metal::all(loop_bound_2 == uint2(0u))) { break; }
-        loop_bound_2 -= uint2(loop_bound_2.y == 0u, 1u);
         if (!loop_init_1) {
             uint _e27 = i_1;
             i_1 = _e27 + 1u;
         }
         loop_init_1 = false;
+        metal::uint2 _e50 = loop_bound_2;
+        if (metal::all(_e50 == metal::uint2(0u))) {
+            break;
+        }
+        loop_bound_2 = _e50 - metal::uint2((_e50.y == 0u) ? 1u : 0u, 1u);
         uint _e2 = i_1;
         if (_e2 < SIZE) {
         } else {
@@ -149,10 +162,13 @@ kernel void test_atomic_compare_exchange_u32_(
             uint _e8 = metal::atomic_load_explicit(&arr_u32_.inner[_e6], metal::memory_order_relaxed);
             old_1 = _e8;
             exchanged_1 = false;
-            uint2 loop_bound_3 = uint2(4294967295u);
+            loop_bound_3 = metal::uint2(4294967295u);
             while(true) {
-                if (metal::all(loop_bound_3 == uint2(0u))) { break; }
-                loop_bound_3 -= uint2(loop_bound_3.y == 0u, 1u);
+                metal::uint2 _e35 = loop_bound_3;
+                if (metal::all(_e35 == metal::uint2(0u))) {
+                    break;
+                }
+                loop_bound_3 = _e35 - metal::uint2((_e35.y == 0u) ? 1u : 0u, 1u);
                 bool _e12 = exchanged_1;
                 if (!(_e12)) {
                 } else {

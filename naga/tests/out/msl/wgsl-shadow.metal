@@ -99,17 +99,21 @@ fragment fs_mainOutput fs_main(
     const VertexOutput in = { proj_position, varyings_1.world_normal, varyings_1.world_position };
     metal::float3 color = c_ambient;
     uint i = 0u;
+    metal::uint2 loop_bound = {};
     metal::float3 normal_1 = metal::normalize(in.world_normal);
-    uint2 loop_bound = uint2(4294967295u);
+    loop_bound = metal::uint2(4294967295u);
     bool loop_init = true;
     while(true) {
-        if (metal::all(loop_bound == uint2(0u))) { break; }
-        loop_bound -= uint2(loop_bound.y == 0u, 1u);
         if (!loop_init) {
             uint _e40 = i;
             i = _e40 + 1u;
         }
         loop_init = false;
+        metal::uint2 _e55 = loop_bound;
+        if (metal::all(_e55 == metal::uint2(0u))) {
+            break;
+        }
+        loop_bound = _e55 - metal::uint2((_e55.y == 0u) ? 1u : 0u, 1u);
         uint _e7 = i;
         uint _e11 = u_globals.num_lights.x;
         if (_e7 < metal::min(_e11, c_max_lights)) {
@@ -152,17 +156,21 @@ fragment fs_main_without_storageOutput fs_main_without_storage(
     const VertexOutput in_1 = { proj_position_1, varyings_2.world_normal, varyings_2.world_position };
     metal::float3 color_1 = c_ambient;
     uint i_1 = 0u;
+    metal::uint2 loop_bound_1 = {};
     metal::float3 normal_2 = metal::normalize(in_1.world_normal);
-    uint2 loop_bound_1 = uint2(4294967295u);
+    loop_bound_1 = metal::uint2(4294967295u);
     bool loop_init_1 = true;
     while(true) {
-        if (metal::all(loop_bound_1 == uint2(0u))) { break; }
-        loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
         if (!loop_init_1) {
             uint _e40 = i_1;
             i_1 = _e40 + 1u;
         }
         loop_init_1 = false;
+        metal::uint2 _e55 = loop_bound_1;
+        if (metal::all(_e55 == metal::uint2(0u))) {
+            break;
+        }
+        loop_bound_1 = _e55 - metal::uint2((_e55.y == 0u) ? 1u : 0u, 1u);
         uint _e7 = i_1;
         uint _e11 = u_globals.num_lights.x;
         if (_e7 < metal::min(_e11, c_max_lights)) {

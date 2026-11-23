@@ -35,15 +35,6 @@ struct VertexOutput_main {
     float4 gl_Position : SV_Position;
 };
 
-void main_1()
-{
-    float2 _e6 = a_uv_1;
-    v_uv = _e6;
-    float2 _e7 = a_pos_1;
-    unnamed.gl_Position = float4(_e7.x, _e7.y, 0.0, 1.0);
-    return;
-}
-
 VertexOutput ConstructVertexOutput(float2 arg0, float4 arg1) {
     VertexOutput ret = (VertexOutput)0;
     ret.member = arg0;
@@ -55,7 +46,10 @@ VertexOutput_main main(float2 a_uv : LOC1, float2 a_pos : LOC0)
 {
     a_uv_1 = a_uv;
     a_pos_1 = a_pos;
-    main_1();
+    float2 _e16 = a_uv_1;
+    v_uv = _e16;
+    float2 _e17 = a_pos_1;
+    unnamed.gl_Position = float4(_e17.x, _e17.y, 0.0, 1.0);
     float2 _e7 = v_uv;
     float4 _e8 = unnamed.gl_Position;
     const VertexOutput vertexoutput = ConstructVertexOutput(_e7, _e8);

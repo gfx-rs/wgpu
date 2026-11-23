@@ -1,0 +1,5 @@
+capabilities = "SHADER_FLOAT16"
+targets = "HLSL | SPIRV"
+
+[hlsl]
+shader_model = "V6_2"

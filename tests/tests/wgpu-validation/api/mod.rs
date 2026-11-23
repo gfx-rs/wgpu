@@ -17,3 +17,4 @@ mod ray_tracing_pipeline;
 mod render_bundle;
 mod render_pipeline;
 mod texture;
+mod unrestricted_pointer_parameters;

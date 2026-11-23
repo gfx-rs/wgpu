@@ -16,7 +16,7 @@ use crate::{
         wgsl::{address_space_str, ToWgsl, TryToWgsl},
     },
     proc::{self, NameKey},
-    valid, Handle, Module, ShaderStage, TypeInner,
+    Handle, Module, ShaderStage, TypeInner,
 };
 
 /// Shorthand result used internally by the backend
@@ -81,7 +81,7 @@ bitflags::bitflags! {
 #[expect(missing_debug_implementations, reason = "would be way too verbose?")]
 pub struct Writer<W> {
     out: W,
-    flags: WriterFlags,
+    options: super::Options,
     names: crate::FastHashMap<NameKey, String>,
     namer: proc::Namer,
     named_expressions: crate::NamedExpressions,
@@ -89,10 +89,10 @@ pub struct Writer<W> {
 }
 
 impl<W: Write> Writer<W> {
-    pub fn new(out: W, flags: WriterFlags) -> Self {
+    pub fn new(out: W, options: &super::Options) -> Self {
         Writer {
             out,
-            flags,
+            options: *options,
             names: crate::FastHashMap::default(),
             namer: proc::Namer::default(),
             named_expressions: crate::NamedExpressions::default(),
@@ -140,7 +140,37 @@ impl<W: Write> Writer<W> {
             || Some(ty) == module.special_types.external_texture_transfer_function
     }
 
-    pub fn write(&mut self, module: &Module, info: &valid::ModuleInfo) -> BackendResult {
+    /// Write `module` as WGSL.
+    ///
+    /// The module is validated first, and is changed according to
+    /// [`Options::passes`] and [`Options::unrestricted_pointer_parameters`].
+    ///
+    /// [`Options::passes`]: super::Options::passes
+    /// [`Options::unrestricted_pointer_parameters`]: super::Options::unrestricted_pointer_parameters
+    pub fn write<'m>(
+        &mut self,
+        module: impl Into<alloc::borrow::Cow<'m, Module>>,
+    ) -> BackendResult {
+        let inline = if self.options.unrestricted_pointer_parameters {
+            crate::inline::InlineStrategy::Never
+        } else {
+            crate::inline::InlineStrategy::OnlyNeeded(crate::inline::InlineTarget::Wgsl)
+        };
+        let (module, info) = back::passes::run(
+            module.into(),
+            &back::passes::Passes {
+                inline,
+                ..self.options.passes.into()
+            },
+        )?;
+        let (module, info) = (&*module, &info);
+        if !self.options.unrestricted_pointer_parameters {
+            if let Some(name) =
+                crate::inline::find_needs_inline(module, crate::inline::InlineTarget::Wgsl)
+            {
+                return Err(Error::NeedsInline(name));
+            }
+        }
         self.reset(module);
 
         // Write all `enable` declarations
@@ -843,7 +873,8 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{level}")?;
                 writeln!(self.out, "discard;")?
             }
-            Statement::Store { pointer, value } => {
+            // WGSL can only store to an atomic with `atomicStore`.
+            Statement::Store { pointer, value } | Statement::NonAtomicStore { pointer, value } => {
                 write!(self.out, "{level}")?;
 
                 let is_atomic_pointer = func_ctx
@@ -1421,7 +1452,7 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         // Write variable name
         write!(self.out, "let {name}")?;
-        if self.flags.contains(WriterFlags::EXPLICIT_TYPES) {
+        if self.options.flags.contains(WriterFlags::EXPLICIT_TYPES) {
             write!(self.out, ": ")?;
             // Write variable type
             self.write_type_resolution(module, &func_ctx.info[handle].ty)?;

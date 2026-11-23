@@ -76,7 +76,7 @@ impl FunctionTracer<'_> {
                     St::Return { value: Some(value) } => {
                         self.expressions_used.insert(value);
                     }
-                    St::Store { pointer, value } => {
+                    St::Store { pointer, value } | St::NonAtomicStore { pointer, value } => {
                         self.expressions_used.insert(pointer);
                         self.expressions_used.insert(value);
                     }
@@ -328,9 +328,12 @@ impl FunctionMap {
             for stmt in last {
                 use crate::Statement as St;
                 match *stmt {
-                    St::Emit(ref mut range) => {
-                        self.expressions.adjust_range(range, &function.expressions);
-                    }
+                    St::Emit(ref mut range) => match self.reorder {
+                        Some(ref reorder) => {
+                            reorder.adjust_range(range, &function.expressions);
+                        }
+                        None => self.expressions.adjust_range(range, &function.expressions),
+                    },
                     St::Block(ref mut block) => worklist.push(block),
                     St::If {
                         ref mut condition,
@@ -365,6 +368,10 @@ impl FunctionMap {
                         value: Some(ref mut value),
                     } => adjust(value),
                     St::Store {
+                        ref mut pointer,
+                        ref mut value,
+                    }
+                    | St::NonAtomicStore {
                         ref mut pointer,
                         ref mut value,
                     } => {

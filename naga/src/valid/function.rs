@@ -114,12 +114,6 @@ pub enum FunctionError {
     InvalidArgumentType { index: usize, name: String },
     #[error("The function's given return type cannot be returned from functions")]
     NonConstructibleReturnType,
-    #[error("Argument '{name}' at index {index} is a pointer of space {space:?}, which can't be passed into functions.")]
-    InvalidArgumentPointerSpace {
-        index: usize,
-        name: String,
-        space: crate::AddressSpace,
-    },
     #[error("The `break` is used outside of a `loop` or `switch` context")]
     BreakOutsideOfLoopOrSwitch,
     #[error("The `continue` is used outside of a `loop` context")]
@@ -1200,6 +1194,36 @@ impl super::Validator {
                         }
                     }
                 }
+                S::NonAtomicStore { pointer, value } => {
+                    let pointer_ty = context.resolve_pointer_type(pointer);
+                    if !matches!(
+                        pointer_ty.pointer_space(),
+                        Some(AddressSpace::WorkGroup | AddressSpace::TaskPayload)
+                    ) {
+                        return Err(
+                            FunctionError::InvalidStorePointer(pointer).with_span_static(
+                                context.expressions.get_span(pointer),
+                                "non-atomic stores must write workgroup or task payload memory",
+                            ),
+                        );
+                    }
+                    let value_tr = context.resolve_type(value, &self.valid_expression_set)?;
+                    let value_ty = value_tr.inner_with(context.types);
+                    let pointer_base_tr = pointer_ty.pointer_base_type();
+                    let good = match pointer_base_tr
+                        .as_ref()
+                        .map(|ty| ty.inner_with(context.types))
+                    {
+                        Some(&Ti::Atomic(scalar)) => *value_ty == Ti::Scalar(scalar),
+                        _ => false,
+                    };
+                    if !good {
+                        return Err(FunctionError::InvalidStoreTypes { pointer, value }
+                            .with_span()
+                            .with_handle(pointer, context.expressions)
+                            .with_handle(value, context.expressions));
+                    }
+                }
                 S::ImageStore {
                     image,
                     coordinate,
@@ -2225,17 +2249,6 @@ impl super::Validator {
         }
 
         for (index, argument) in fun.arguments.iter().enumerate() {
-            match module.types[argument.ty].inner.pointer_space() {
-                Some(crate::AddressSpace::Private | crate::AddressSpace::Function) | None => {}
-                Some(other) => {
-                    return Err(FunctionError::InvalidArgumentPointerSpace {
-                        index,
-                        name: argument.name.clone().unwrap_or_default(),
-                        space: other,
-                    }
-                    .with_span_handle(argument.ty, &module.types))
-                }
-            }
             // Check for the least informative error last.
             if !self.types[argument.ty.index()]
                 .flags

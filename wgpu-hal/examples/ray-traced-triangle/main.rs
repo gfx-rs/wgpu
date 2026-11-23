@@ -381,6 +381,7 @@ impl<A: hal::Api> Example<A> {
                 module: Cow::Owned(module),
                 info,
                 debug_source: None,
+                overrides_resolved: false,
             }
         };
         let shader_desc = hal::ShaderModuleDescriptor {

@@ -54,48 +54,16 @@ as the translation of WGSL's `m[i]`:
   translate WGSL `m * v` and `v * m` to HLSL by simply reversing the
   arguments to `mul`.
 
-## Padding in two-row matrices
+## Matrices with narrow columns
 
-An HLSL `row_major floatKx2` matrix has padding between its rows that
-the WGSL `matKx2<f32>` matrix it represents does not. HLSL stores all
-matrix rows [aligned on 16-byte boundaries][16bb], whereas WGSL says
-that the columns of a `matKx2<f32>` need only be [aligned as required
-for `vec2<f32>`][ilov], which is [eight-byte alignment][8bb].
-
-To compensate for this, any time a `matKx2<f32>` appears in a WGSL
-`uniform` value or as part of a struct/array, we actually emit `K`
-separate `float2` members, and assemble/disassemble the matrix from its
-columns (in WGSL; rows in HLSL) upon load and store.
-
-For example, the following WGSL struct type:
-
-```ignore
-struct Baz {
-        m: mat3x2<f32>,
-}
-```
-
-is rendered as the HLSL struct type:
-
-```ignore
-struct Baz {
-    float2 m_0; float2 m_1; float2 m_2;
-};
-```
-
-The `wrapped_struct_matrix` functions in `help.rs` generate HLSL
-helper functions to access such members, converting between the stored
-form and the HLSL matrix types appropriately. For example, for reading
-the member `m` of the `Baz` struct above, we emit:
-
-```ignore
-float3x2 GetMatmOnBaz(Baz obj) {
-    return float3x2(obj.m_0, obj.m_1, obj.m_2);
-}
-```
-
-We also emit an analogous `Set` function, as well as functions for
-accessing individual columns by dynamic index.
+HLSL places each row of a matrix in a `cbuffer` [on a 16-byte boundary][16bb],
+whereas WGSL aligns the columns of `matCx2<f32>` and of `f16` matrices
+[as required for their vector type][8bb]. Before writing HLSL, the backend runs
+a pass that rewrites `uniform` globals containing such matrices to use
+equivalent types made of vectors, so the writer itself needs no special
+handling. The exception is the external texture params `cbuffer`, which the
+pass does not see: the writer declares the `mat3x2` members of its struct as
+separate `float2` columns.
 
 ## Layout of values in `immediate` buffers
 
@@ -575,6 +543,8 @@ pub struct Options {
     /// if set, ray queries will get a variable to track their state to prevent
     /// misuse.
     pub ray_query_initialization_tracking: bool,
+    /// Options for the IR passes the backend runs before writing the module.
+    pub passes: back::PassOptions,
 }
 
 impl Default for Options {
@@ -595,6 +565,7 @@ impl Default for Options {
             task_dispatch_limits: None,
             mesh_shader_primitive_indices_clamp: true,
             ray_query_initialization_tracking: true,
+            passes: Default::default(),
         }
     }
 }
@@ -676,12 +647,16 @@ pub struct PipelineOptions {
 pub enum Error {
     #[error(transparent)]
     IoError(#[from] FmtError),
+    #[error(transparent)]
+    Pass(#[from] back::passes::PassError),
     #[error("A scalar with an unsupported width was requested: {0:?}")]
     UnsupportedScalar(crate::Scalar),
     #[error("{0}")]
     Unimplemented(String), // TODO: Error used only during development
     #[error("{0}")]
     Custom(String),
+    #[error("function `{0}` has pointer parameters or arguments that must be inlined by `naga::inline::process`")]
+    NeedsInline(String),
     #[error("overrides should not be present at this stage")]
     Override,
     #[error(transparent)]
@@ -701,8 +676,6 @@ enum WrappedType {
     ImageLoad(help::WrappedImageLoad),
     ImageLoadScalar(crate::Scalar),
     Constructor(help::WrappedConstructor),
-    StructMatrixAccess(help::WrappedStructMatrixAccess),
-    MatCx2(help::WrappedMatCx2),
     Math(help::WrappedMath),
     UnaryOp(help::WrappedUnaryOp),
     BinaryOp(help::WrappedBinaryOp),
@@ -778,6 +751,8 @@ pub struct Writer<'a, W> {
     written_committed_intersection: bool,
     written_candidate_intersection: bool,
     continue_ctx: back::continue_forward::ContinueCtx,
+    /// Whether the statement being written is a `switch` that ends a loop body.
+    switch_ends_loop_body: bool,
 
     /// A reference to some part of a global variable, lowered to a series of
     /// byte offset calculations.
@@ -798,9 +773,6 @@ pub struct Writer<'a, W> {
     /// [`AccessIndex`]: crate::Expression::AccessIndex
     temp_access_chain: Vec<storage::SubAccess>,
     need_bake_expressions: back::NeedBakeExpressions,
-
-    function_task_payload_var:
-        crate::FastHashMap<Handle<crate::Function>, Handle<crate::GlobalVariable>>,
 
     /// The name of the raw `uint4` array that backs each [`Immediate`] global.
     ///

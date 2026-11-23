@@ -59,8 +59,10 @@ void test_msl_packed_vec3_(
     return;
 }
 
+struct main_Input {
+};
 kernel void main_(
-  uint __local_invocation_index [[thread_index_in_threadgroup]]
+  uint local_invocation_index [[thread_index_in_threadgroup]]
 , threadgroup type_2& wg
 , threadgroup metal::atomic_uint& at_1
 , device FooStruct& alignment [[user(fake0)]]
@@ -72,13 +74,22 @@ kernel void main_(
 , constant type_15& global_nested_arrays_of_matrices_4x2_ [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
-    if (__local_invocation_index == 0u) {
-        wg = {};
-        metal::atomic_store_explicit(&at_1, 0, metal::memory_order_relaxed);
-    }
-    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     float Foo = 1.0;
     bool at = true;
+    uint zero_init_index = {};
+    zero_init_index = local_invocation_index;
+    while(true) {
+        uint _e60 = zero_init_index;
+        if (_e60 >= 10u) {
+            break;
+        }
+        wg.inner[_e60] = 0.0;
+        zero_init_index = _e60 + 1u;
+    }
+    if (local_invocation_index == 0u) {
+        metal::atomic_store_explicit(&at_1, 0u, metal::memory_order_relaxed);
+    }
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     test_msl_packed_vec3_(alignment);
     metal::float4x2 _e5 = global_nested_arrays_of_matrices_4x2_.inner[0].inner[0];
     metal::float4 _e10 = global_nested_arrays_of_matrices_2x4_.inner[0].inner[0][0];

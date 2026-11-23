@@ -182,20 +182,35 @@ impl SpirvOutParameters {
             mesh_shader_primitive_indices_clamp: shared_info.mesh_output_validation,
             trace_ray_argument_validation: true,
             emit_int_div_checks: self.emit_int_div_checks,
+            passes: Default::default(),
         }
     }
 }
 
-#[derive(Debug, Default, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 #[serde(default)]
 pub struct WgslOutParameters {
     pub explicit_types: bool,
+    pub unrestricted_pointer_parameters: bool,
 }
-impl From<&WgslOutParameters> for naga::back::wgsl::WriterFlags {
+impl Default for WgslOutParameters {
+    fn default() -> Self {
+        Self {
+            explicit_types: false,
+            unrestricted_pointer_parameters: true,
+        }
+    }
+}
+impl From<&WgslOutParameters> for naga::back::wgsl::Options {
     fn from(value: &WgslOutParameters) -> Self {
-        let mut flags = Self::empty();
-        flags.set(Self::EXPLICIT_TYPES, value.explicit_types);
-        flags
+        use naga::back::wgsl::WriterFlags;
+        let mut flags = WriterFlags::empty();
+        flags.set(WriterFlags::EXPLICIT_TYPES, value.explicit_types);
+        Self {
+            flags,
+            unrestricted_pointer_parameters: value.unrestricted_pointer_parameters,
+            passes: Default::default(),
+        }
     }
 }
 

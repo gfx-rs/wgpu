@@ -1224,6 +1224,10 @@ struct CachedProperties {
     features: OnceCell<crate::Features>,
     limits: OnceCell<crate::Limits>,
     adapter_info: OnceCell<crate::AdapterInfo>,
+    /// Whether the browser supports the WGSL `unrestricted_pointer_parameters`
+    /// language extension.
+    #[cfg(naga)]
+    unrestricted_pointer_parameters: OnceCell<bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -2038,6 +2042,29 @@ fn naga_to_source_location(value: crate::naga::SourceLocation) -> wgt::SourceLoc
     }
 }
 
+#[cfg(naga)]
+impl WebDevice {
+    /// Whether the browser accepts WGSL that needs the
+    /// `unrestricted_pointer_parameters` language extension.
+    ///
+    /// If the browser's features can't be read, assume it doesn't, which makes
+    /// naga inline the calls that need it.
+    fn supports_unrestricted_pointer_parameters(&self) -> bool {
+        *self
+            .cached_properties
+            .unrestricted_pointer_parameters
+            .get_or_init(|| {
+                get_browser_gpu_property()
+                    .ok()
+                    .flatten()
+                    .is_some_and(|gpu| {
+                        gpu.wgsl_language_features()
+                            .has("unrestricted_pointer_parameters")
+                    })
+            })
+    }
+}
+
 impl dispatch::DeviceInterface for WebDevice {
     fn features(&self) -> crate::Features {
         *self
@@ -2074,6 +2101,8 @@ impl dispatch::DeviceInterface for WebDevice {
         desc: crate::ShaderModuleDescriptor<'_>,
         _shader_runtime_checks: crate::ShaderRuntimeChecks,
     ) -> dispatch::DispatchShaderModule {
+        #[cfg(naga)]
+        let unrestricted_pointer_parameters = self.supports_unrestricted_pointer_parameters();
         let shader_module_result = match desc.source {
             #[cfg(feature = "spirv")]
             crate::ShaderSource::SpirV(ref spv) => {
@@ -2095,7 +2124,13 @@ impl dispatch::DeviceInterface for WebDevice {
                         })
                     })
                     .and_then(|spv_module| {
-                        validate_transformed_shader_module(&spv_module, "", &desc).map(|v| {
+                        validate_transformed_shader_module(
+                            &spv_module,
+                            "",
+                            &desc,
+                            unrestricted_pointer_parameters,
+                        )
+                        .map(|v| {
                             (
                                 v,
                                 WebShaderCompilationInfo::Transformed {
@@ -2132,7 +2167,13 @@ impl dispatch::DeviceInterface for WebDevice {
                         })
                     })
                     .and_then(|glsl_module| {
-                        validate_transformed_shader_module(&glsl_module, shader, &desc).map(|v| {
+                        validate_transformed_shader_module(
+                            &glsl_module,
+                            shader,
+                            &desc,
+                            unrestricted_pointer_parameters,
+                        )
+                        .map(|v| {
                             (
                                 v,
                                 WebShaderCompilationInfo::Transformed {
@@ -2153,16 +2194,20 @@ impl dispatch::DeviceInterface for WebDevice {
                 ))
             }
             #[cfg(feature = "naga-ir")]
-            crate::ShaderSource::Naga(ref module) => {
-                validate_transformed_shader_module(module, "", &desc).map(|v| {
-                    (
-                        v,
-                        WebShaderCompilationInfo::Transformed {
-                            compilation_info: crate::CompilationInfo { messages: vec![] },
-                        },
-                    )
-                })
-            }
+            crate::ShaderSource::Naga(ref module) => validate_transformed_shader_module(
+                module,
+                "",
+                &desc,
+                unrestricted_pointer_parameters,
+            )
+            .map(|v| {
+                (
+                    v,
+                    WebShaderCompilationInfo::Transformed {
+                        compilation_info: crate::CompilationInfo { messages: vec![] },
+                    },
+                )
+            }),
             crate::ShaderSource::Dummy(_) => {
                 panic!("found `ShaderSource::Dummy`")
             }
@@ -2173,11 +2218,12 @@ impl dispatch::DeviceInterface for WebDevice {
             module: &naga::Module,
             source: &str,
             desc: &crate::ShaderModuleDescriptor<'_>,
+            unrestricted_pointer_parameters: bool,
         ) -> Result<webgpu_sys::GpuShaderModuleDescriptor, crate::CompilationInfo> {
             use naga::{back, valid};
             let mut validator =
                 valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all());
-            let module_info = validator.validate(module).map_err(|err| {
+            validator.validate(module).map_err(|err| {
                 naga_to_compilation_info(naga::error::ShaderError {
                     source: source.to_string(),
                     label: desc.label.map(|s| s.to_string()),
@@ -2185,8 +2231,11 @@ impl dispatch::DeviceInterface for WebDevice {
                 })
             })?;
 
-            let writer_flags = naga::back::wgsl::WriterFlags::empty();
-            let wgsl_text = back::wgsl::write_string(module, &module_info, writer_flags).unwrap();
+            let options = back::wgsl::Options {
+                unrestricted_pointer_parameters,
+                ..Default::default()
+            };
+            let wgsl_text = back::wgsl::write_string(module, &options).unwrap();
             Ok(webgpu_sys::GpuShaderModuleDescriptor::new(
                 wgsl_text.as_str(),
             ))

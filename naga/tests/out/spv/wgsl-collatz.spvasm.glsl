@@ -20,11 +20,12 @@ uint collatz_iterations(uint n_base)
 {
     uint n = 0u;
     uint i = 0u;
-    uvec2 loop_bound = uvec2(4294967295u);
+    uvec2 loop_bound = uvec2(0u);
     n = n_base;
+    loop_bound = uvec2(4294967295u);
     for (;;)
     {
-        if (all(equal(uvec2(0u), loop_bound)))
+        if (all(equal(loop_bound, uvec2(0u))))
         {
             break;
         }

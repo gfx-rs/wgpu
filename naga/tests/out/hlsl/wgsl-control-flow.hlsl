@@ -1,104 +1,135 @@
-void control_flow()
-{
-    int pos = (int)0;
-
-    DeviceMemoryBarrierWithGroupSync();
-    GroupMemoryBarrierWithGroupSync();
-    DeviceMemoryBarrierWithGroupSync();
-    do {
-        pos = int(1);
-    } while(false);
-    int _e3 = pos;
-    switch(_e3) {
-        case 1: {
-            pos = int(0);
-            break;
-        }
-        case 2: {
-            pos = int(1);
-            break;
-        }
-        case 3:
-        case 4: {
-            pos = int(2);
-            break;
-        }
-        case 5: {
-            pos = int(3);
-            break;
-        }
-        default:
-        case 6: {
-            pos = int(4);
-            break;
-        }
-    }
-    switch(0u) {
-        case 0u: {
-            break;
-        }
-        default: {
-            break;
-        }
-    }
-    int _e10 = pos;
-    switch(_e10) {
-        case 1: {
-            pos = int(0);
-            break;
-        }
-        case 2: {
-            pos = int(1);
-            break;
-        }
-        case 3: {
-            pos = int(2);
-            break;
-        }
-        case 4: {
-            break;
-        }
-        default: {
-            pos = int(3);
-            break;
-        }
-    }
-    int _e15 = pos;
-    switch(_e15) {
-        case 1: {
-            pos = int(0);
-            return;
-        }
-        case 2: {
-            pos = int(1);
-            return;
-        }
-        case 3:
-        case 4: {
-            pos = int(2);
-            return;
-        }
-        case 5:
-        case 6: {
-            pos = int(3);
-            return;
-        }
-        default: {
-            pos = int(4);
-            return;
-        }
-    }
+int ZeroValueint() {
+    return (int)0;
 }
 
-void switch_default_break(int i)
+[numthreads(1, 1, 1)]
+void main()
 {
+    int pos = (int)0;
+    bool local = (bool)0;
+    int i = (int)0;
+    bool local_1 = (bool)0;
+    bool local_2 = (bool)0;
+    int x = (int)0;
+    int x_1 = (int)0;
+    int y = (int)0;
+    int z = (int)0;
+    int x_2 = (int)0;
+    int y_1 = (int)0;
+    int z_1 = (int)0;
+    int w = (int)0;
+    int pos_1 = (int)0;
+    uint2 loop_bound = (uint2)0;
+    uint2 loop_bound_1 = (uint2)0;
+    uint2 loop_bound_2 = (uint2)0;
+    uint2 loop_bound_3 = (uint2)0;
+    uint2 loop_bound_4 = (uint2)0;
+    uint2 loop_bound_5 = (uint2)0;
+
+    do {
+        pos = ZeroValueint();
+        local = false;
+        DeviceMemoryBarrierWithGroupSync();
+        GroupMemoryBarrierWithGroupSync();
+        DeviceMemoryBarrierWithGroupSync();
+        do {
+            pos = int(1);
+        } while(false);
+        int _e12 = pos;
+        switch(_e12) {
+            case 1: {
+                pos = int(0);
+                break;
+            }
+            case 2: {
+                pos = int(1);
+                break;
+            }
+            case 3:
+            case 4: {
+                pos = int(2);
+                break;
+            }
+            case 5: {
+                pos = int(3);
+                break;
+            }
+            default:
+            case 6: {
+                pos = int(4);
+                break;
+            }
+        }
+        switch(0u) {
+            case 0u: {
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+        int _e19 = pos;
+        switch(_e19) {
+            case 1: {
+                pos = int(0);
+                break;
+            }
+            case 2: {
+                pos = int(1);
+                break;
+            }
+            case 3: {
+                pos = int(2);
+                break;
+            }
+            case 4: {
+                break;
+            }
+            default: {
+                pos = int(3);
+                break;
+            }
+        }
+        int _e24 = pos;
+        switch(_e24) {
+            case 1: {
+                pos = int(0);
+                local = true;
+                break;
+            }
+            case 2: {
+                pos = int(1);
+                local = true;
+                break;
+            }
+            case 3:
+            case 4: {
+                pos = int(2);
+                local = true;
+                break;
+            }
+            case 5:
+            case 6: {
+                pos = int(3);
+                local = true;
+                break;
+            }
+            default: {
+                pos = int(4);
+                local = true;
+                break;
+            }
+        }
+        bool _e35 = local;
+        if (_e35) {
+            break;
+        }
+    } while(false);
+    i = int(1);
+    int _e38 = i;
     do {
         break;
     } while(false);
-}
-
-void switch_case_break()
-{
     switch(int(0)) {
         case 0: {
             break;
@@ -107,61 +138,75 @@ void switch_case_break()
             break;
         }
     }
-    return;
-}
-
-void switch_selector_type_conversion()
-{
-    switch(0u) {
-        case 0u: {
+    do {
+        local_1 = false;
+        switch(0u) {
+            case 0u: {
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+        switch(0u) {
+            case 0u: {
+                local_1 = true;
+                break;
+            }
+            default: {
+                local_1 = true;
+                break;
+            }
+        }
+        bool _e45 = local_1;
+        if (_e45) {
             break;
         }
-        default: {
+    } while(false);
+    do {
+        local_2 = false;
+        switch(int(0)) {
+            case 0: {
+                local_2 = true;
+                break;
+            }
+            case 1: {
+                local_2 = true;
+                break;
+            }
+            case 2: {
+                local_2 = true;
+                break;
+            }
+            case 3: {
+                local_2 = true;
+                break;
+            }
+            case 4: {
+                local_2 = true;
+                break;
+            }
+            default: {
+                local_2 = true;
+                break;
+            }
+        }
+        bool _e51 = local_2;
+        if (_e51) {
             break;
         }
-    }
-    switch(0u) {
-        case 0u: {
-            return;
-        }
-        default: {
-            return;
-        }
-    }
-}
-
-void switch_const_expr_case_selectors()
-{
-    switch(int(0)) {
-        case 0: {
-            return;
-        }
-        case 1: {
-            return;
-        }
-        case 2: {
-            return;
-        }
-        case 3: {
-            return;
-        }
-        case 4: {
-            return;
-        }
-        default: {
-            return;
-        }
-    }
-}
-
-void loop_switch_continue(int x)
-{
-    uint2 loop_bound = uint2(4294967295u, 4294967295u);
+    } while(false);
+    x = int(1);
+    int _e54 = x;
+    loop_bound = (4294967295u).xx;
     while(true) {
-        if (all(loop_bound == uint2(0u, 0u))) { break; }
-        loop_bound -= uint2(loop_bound.y == 0u, 1u);
+        uint2 _e79 = loop_bound;
+        if (all((_e79 == (0u).xx))) {
+            break;
+        }
+        loop_bound = (_e79 - uint2(((_e79.y == 0u) ? 1u : 0u), 1u));
         bool should_continue = false;
-        switch(x) {
+        switch(_e54) {
             case 1: {
                 should_continue = true;
                 break;
@@ -170,38 +215,42 @@ void loop_switch_continue(int x)
                 break;
             }
         }
-        if (should_continue) {
-            continue;
-        }
     }
-    return;
-}
-
-void loop_switch_continue_nesting(int x_1, int y, int z)
-{
-    uint2 loop_bound_1 = uint2(4294967295u, 4294967295u);
+    x_1 = int(1);
+    int _e56 = x_1;
+    y = int(2);
+    int _e58 = y;
+    z = int(3);
+    int _e60 = z;
+    loop_bound_1 = (4294967295u).xx;
     while(true) {
-        if (all(loop_bound_1 == uint2(0u, 0u))) { break; }
-        loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
+        uint2 _e109 = loop_bound_1;
+        if (all((_e109 == (0u).xx))) {
+            break;
+        }
+        loop_bound_1 = (_e109 - uint2(((_e109.y == 0u) ? 1u : 0u), 1u));
         bool should_continue_1 = false;
-        switch(x_1) {
+        switch(_e56) {
             case 1: {
                 should_continue_1 = true;
                 break;
             }
             case 2: {
-                switch(y) {
+                switch(_e58) {
                     case 1: {
                         should_continue_1 = true;
                         break;
                     }
                     default: {
-                        uint2 loop_bound_2 = uint2(4294967295u, 4294967295u);
+                        loop_bound_2 = (4294967295u).xx;
                         while(true) {
-                            if (all(loop_bound_2 == uint2(0u, 0u))) { break; }
-                            loop_bound_2 -= uint2(loop_bound_2.y == 0u, 1u);
+                            uint2 _e94 = loop_bound_2;
+                            if (all((_e94 == (0u).xx))) {
+                                break;
+                            }
+                            loop_bound_2 = (_e94 - uint2(((_e94.y == 0u) ? 1u : 0u), 1u));
                             bool should_continue_2 = false;
-                            switch(z) {
+                            switch(_e60) {
                                 case 1: {
                                     should_continue_2 = true;
                                     break;
@@ -209,9 +258,6 @@ void loop_switch_continue_nesting(int x_1, int y, int z)
                                 default: {
                                     break;
                                 }
-                            }
-                            if (should_continue_2) {
-                                continue;
                             }
                         }
                         break;
@@ -234,14 +280,14 @@ void loop_switch_continue_nesting(int x_1, int y, int z)
             should_continue_3 = true;
             break;
         } while(false);
-        if (should_continue_3) {
-            continue;
-        }
     }
-    uint2 loop_bound_3 = uint2(4294967295u, 4294967295u);
+    loop_bound_3 = (4294967295u).xx;
     while(true) {
-        if (all(loop_bound_3 == uint2(0u, 0u))) { break; }
-        loop_bound_3 -= uint2(loop_bound_3.y == 0u, 1u);
+        uint2 _e124 = loop_bound_3;
+        if (all((_e124 == (0u).xx))) {
+            break;
+        }
+        loop_bound_3 = (_e124 - uint2(((_e124.y == 0u) ? 1u : 0u), 1u));
         bool should_continue_4 = false;
         do {
             do {
@@ -252,23 +298,24 @@ void loop_switch_continue_nesting(int x_1, int y, int z)
                 break;
             }
         } while(false);
-        if (should_continue_4) {
-            continue;
-        }
     }
-    return;
-}
-
-void loop_switch_omit_continue_variable_checks(int x_2, int y_1, int z_1, int w)
-{
-    int pos_1 = int(0);
-
-    uint2 loop_bound_4 = uint2(4294967295u, 4294967295u);
+    x_2 = int(1);
+    int _e62 = x_2;
+    y_1 = int(2);
+    int _e64 = y_1;
+    z_1 = int(3);
+    int _e66 = z_1;
+    w = int(4);
+    pos_1 = int(0);
+    loop_bound_4 = (4294967295u).xx;
     while(true) {
-        if (all(loop_bound_4 == uint2(0u, 0u))) { break; }
-        loop_bound_4 -= uint2(loop_bound_4.y == 0u, 1u);
+        uint2 _e139 = loop_bound_4;
+        if (all((_e139 == (0u).xx))) {
+            break;
+        }
+        loop_bound_4 = (_e139 - uint2(((_e139.y == 0u) ? 1u : 0u), 1u));
         bool should_continue_5 = false;
-        switch(x_2) {
+        switch(_e62) {
             case 1: {
                 pos_1 = int(1);
                 break;
@@ -278,23 +325,26 @@ void loop_switch_omit_continue_variable_checks(int x_2, int y_1, int z_1, int w)
             }
         }
     }
-    uint2 loop_bound_5 = uint2(4294967295u, 4294967295u);
+    loop_bound_5 = (4294967295u).xx;
     while(true) {
-        if (all(loop_bound_5 == uint2(0u, 0u))) { break; }
-        loop_bound_5 -= uint2(loop_bound_5.y == 0u, 1u);
+        uint2 _e154 = loop_bound_5;
+        if (all((_e154 == (0u).xx))) {
+            break;
+        }
+        loop_bound_5 = (_e154 - uint2(((_e154.y == 0u) ? 1u : 0u), 1u));
         bool should_continue_6 = false;
-        switch(x_2) {
+        switch(_e62) {
             case 1: {
                 break;
             }
             case 2: {
-                switch(y_1) {
+                switch(_e64) {
                     case 1: {
                         should_continue_6 = true;
                         break;
                     }
                     default: {
-                        switch(z_1) {
+                        switch(_e66) {
                             case 1: {
                                 pos_1 = int(2);
                                 break;
@@ -315,23 +365,6 @@ void loop_switch_omit_continue_variable_checks(int x_2, int y_1, int z_1, int w)
                 break;
             }
         }
-        if (should_continue_6) {
-            continue;
-        }
     }
-    return;
-}
-
-[numthreads(1, 1, 1)]
-void main()
-{
-    control_flow();
-    switch_default_break(int(1));
-    switch_case_break();
-    switch_selector_type_conversion();
-    switch_const_expr_case_selectors();
-    loop_switch_continue(int(1));
-    loop_switch_continue_nesting(int(1), int(2), int(3));
-    loop_switch_omit_continue_variable_checks(int(1), int(2), int(3), int(4));
     return;
 }

@@ -714,7 +714,7 @@ fn no_flat_first_in_glsl() {
     } = DummyInterpolationShader::new(naga::Interpolation::Flat, Some(naga::Sampling::First));
 
     let mut validator = naga::valid::Validator::new(Default::default(), Default::default());
-    let module_info = validator.validate(&module).unwrap();
+    validator.validate(&module).unwrap();
 
     let options = Default::default();
     let pipeline_options = naga::back::glsl::PipelineOptions {
@@ -724,15 +724,12 @@ fn no_flat_first_in_glsl() {
     };
     let mut glsl_writer = naga::back::glsl::Writer::new(
         String::new(),
-        &module,
-        &module_info,
         &options,
         &pipeline_options,
         Default::default(),
-    )
-    .unwrap();
+    );
 
-    let err = glsl_writer.write().expect_err(&format!(
+    let err = glsl_writer.write(&module).expect_err(&format!(
         "`{interpolate_attr}` should fail backend validation"
     ));
 
@@ -754,7 +751,7 @@ fn no_linear_interpolation_in_glsl_es() {
     } = DummyInterpolationShader::new(naga::Interpolation::Linear, None);
 
     let mut validator = naga::valid::Validator::new(Default::default(), valid::Capabilities::all());
-    let module_info = validator.validate(&module).unwrap();
+    validator.validate(&module).unwrap();
 
     let options = naga::back::glsl::Options {
         version: naga::back::glsl::Version::Embedded {
@@ -770,12 +767,11 @@ fn no_linear_interpolation_in_glsl_es() {
     };
     let err = naga::back::glsl::Writer::new(
         String::new(),
-        &module,
-        &module_info,
         &options,
         &pipeline_options,
         Default::default(),
     )
+    .write(&module)
     .err()
     .unwrap_or_else(|| {
         panic!("`{interpolate_attr}` should fail backend validation on GLSL ES");
@@ -2178,11 +2174,11 @@ fn write_spv_with_entry_point_name_len(name_len: usize) -> Vec<u32> {
     let source = format!("@compute @workgroup_size(1) fn {name}() {{}}");
 
     let module = naga::front::wgsl::parse_str(&source).unwrap();
-    let info = naga::valid::Validator::new(Default::default(), Default::default())
+    naga::valid::Validator::new(Default::default(), Default::default())
         .validate(&module)
         .unwrap();
 
-    naga::back::spv::write_vec(&module, &info, &Default::default(), None).unwrap()
+    naga::back::spv::write_vec(&module, &Default::default(), None).unwrap()
 }
 
 /// Ensure we behave when entry-point name is at its limit.
@@ -2199,4 +2195,81 @@ fn spv_longest_entry_point_name() {
 )]
 fn spv_entry_point_name_too_long() {
     write_spv_with_entry_point_name_len(LONGEST_SPV_ENTRY_POINT_NAME_LEN + 1);
+}
+
+/// Replace the first statement of `source`'s entry point, a `Store`, with a
+/// `NonAtomicStore`, and validate the result.
+fn validate_non_atomic_store(
+    source: &str,
+) -> Result<ModuleInfo, Box<naga::valid::ValidationError>> {
+    let mut module = naga::front::wgsl::parse_str(source).unwrap();
+    let body = &mut module.entry_points[0].function.body;
+    let index = body
+        .iter()
+        .position(|s| matches!(*s, ir::Statement::Store { .. }))
+        .unwrap();
+    let ir::Statement::Store { pointer, value } = body[index] else {
+        unreachable!()
+    };
+    body[index] = ir::Statement::NonAtomicStore { pointer, value };
+    valid::Validator::new(ValidationFlags::all(), Capabilities::all())
+        .validate(&module)
+        .map_err(|e| Box::new(e.into_inner()))
+}
+
+#[test]
+fn non_atomic_store() {
+    // Workgroup atomics are fine.
+    validate_non_atomic_store(
+        "
+        var<workgroup> a: atomic<u32>;
+        @compute @workgroup_size(1)
+        fn main() { atomicStore(&a, 0u); }
+        ",
+    )
+    .unwrap();
+
+    // Other address spaces are not.
+    let error = validate_non_atomic_store(
+        "
+        @group(0) @binding(0) var<storage, read_write> a: atomic<u32>;
+        @compute @workgroup_size(1)
+        fn main() { atomicStore(&a, 0u); }
+        ",
+    )
+    .unwrap_err();
+    assert!(
+        matches!(
+            *error,
+            naga::valid::ValidationError::EntryPoint {
+                source: naga::valid::EntryPointError::Function(
+                    naga::valid::FunctionError::InvalidStorePointer(_)
+                ),
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+
+    // Neither are non-atomic pointees.
+    let error = validate_non_atomic_store(
+        "
+        var<workgroup> a: u32;
+        @compute @workgroup_size(1)
+        fn main() { a = 0u; }
+        ",
+    )
+    .unwrap_err();
+    assert!(
+        matches!(
+            *error,
+            naga::valid::ValidationError::EntryPoint {
+                source: naga::valid::EntryPointError::Function(
+                    naga::valid::FunctionError::InvalidStoreTypes { .. }
+                ),
+                ..
+            }
+        ),
+        "{error:?}"
+    );
 }

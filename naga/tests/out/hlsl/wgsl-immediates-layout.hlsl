@@ -20,7 +20,7 @@ struct NestedAfterVec3_ {
 struct Mixed {
     int s;
     int _pad1_0;
-    float2 m_0; float2 m_1; float2 m_2;
+    row_major float3x2 m;
     Inner inner;
     int _pad3_0;
     int _pad3_1;
@@ -68,9 +68,7 @@ NestedAfterVec3_ ConstructNestedAfterVec3_(uint3 arg0, Inner arg1, uint arg2) {
 Mixed ConstructMixed(int arg0, float3x2 arg1, Inner arg2, float4x3 arg3, int4 arg4, float arg5) {
     Mixed ret = (Mixed)0;
     ret.s = arg0;
-    ret.m_0 = arg1[0];
-    ret.m_1 = arg1[1];
-    ret.m_2 = arg1[2];
+    ret.m = arg1;
     ret.inner = arg2;
     ret.m4_ = arg3;
     ret.v4_ = arg4;
@@ -78,12 +76,6 @@ Mixed ConstructMixed(int arg0, float3x2 arg1, Inner arg2, float4x3 arg3, int4 ar
     return ret;
 }
 
-
-uint read_nested_after_vec3_()
-{
-    uint _e3 = nested_after_vec3_.inner.b;
-    return _e3;
-}
 
 [numthreads(1, 1, 1)]
 void scalar_then_struct()
@@ -104,41 +96,19 @@ void scalar_then_struct()
 void vec3_then_struct()
 {
     nested_after_vec3_ = ConstructNestedAfterVec3_(uint3(asuint(nested_after_vec3_raw[0].x), asuint(nested_after_vec3_raw[0].y), asuint(nested_after_vec3_raw[0].z)), ConstructInner(asuint(nested_after_vec3_raw[0].w), asuint(nested_after_vec3_raw[1].x)), asuint(nested_after_vec3_raw[1].y));
+    uint local = (uint)0;
+
     uint _e5 = nested_after_vec3_.v.z;
     out_.Store(0, asuint(_e5));
     uint _e11 = nested_after_vec3_.inner.a;
     out_.Store(4, asuint(_e11));
-    const uint _e14 = read_nested_after_vec3_();
-    out_.Store(8, asuint(_e14));
-    uint _e19 = nested_after_vec3_.y;
-    out_.Store(12, asuint(_e19));
+    uint _e17 = nested_after_vec3_.inner.b;
+    local = _e17;
+    uint _e19 = local;
+    out_.Store(8, asuint(_e19));
+    uint _e24 = nested_after_vec3_.y;
+    out_.Store(12, asuint(_e24));
     return;
-}
-
-float3x2 GetMatmOnMixed(Mixed obj) {
-    return float3x2(obj.m_0, obj.m_1, obj.m_2);
-}
-
-void SetMatmOnMixed(Mixed obj, float3x2 mat) {
-    obj.m_0 = mat[0];
-    obj.m_1 = mat[1];
-    obj.m_2 = mat[2];
-}
-
-void SetMatVecmOnMixed(Mixed obj, float2 vec, uint mat_idx) {
-    switch(mat_idx) {
-    case 0: { obj.m_0 = vec; break; }
-    case 1: { obj.m_1 = vec; break; }
-    case 2: { obj.m_2 = vec; break; }
-    }
-}
-
-void SetMatScalarmOnMixed(Mixed obj, float scalar, uint mat_idx, uint vec_idx) {
-    switch(mat_idx) {
-    case 0: { obj.m_0[vec_idx] = scalar; break; }
-    case 1: { obj.m_1[vec_idx] = scalar; break; }
-    case 2: { obj.m_2[vec_idx] = scalar; break; }
-    }
 }
 
 [numthreads(1, 1, 1)]
@@ -147,7 +117,7 @@ void matrices_and_vectors()
     mixed = ConstructMixed(asint(mixed_raw[0].x), float3x2(float2(asfloat(mixed_raw[0].z), asfloat(mixed_raw[0].w)), float2(asfloat(mixed_raw[1].x), asfloat(mixed_raw[1].y)), float2(asfloat(mixed_raw[1].z), asfloat(mixed_raw[1].w))), ConstructInner(asuint(mixed_raw[2].x), asuint(mixed_raw[2].y)), float4x3(float3(asfloat(mixed_raw[3].x), asfloat(mixed_raw[3].y), asfloat(mixed_raw[3].z)), float3(asfloat(mixed_raw[4].x), asfloat(mixed_raw[4].y), asfloat(mixed_raw[4].z)), float3(asfloat(mixed_raw[5].x), asfloat(mixed_raw[5].y), asfloat(mixed_raw[5].z)), float3(asfloat(mixed_raw[6].x), asfloat(mixed_raw[6].y), asfloat(mixed_raw[6].z))), int4(asint(mixed_raw[7].x), asint(mixed_raw[7].y), asint(mixed_raw[7].z), asint(mixed_raw[7].w)), asfloat(mixed_raw[8].x));
     int _e4 = mixed.s;
     out_.Store(0, asuint(asuint(_e4)));
-    float _e12 = GetMatmOnMixed(mixed)[1].y;
+    float _e12 = mixed.m[1].y;
     out_.Store(4, asuint(asuint(_e12)));
     uint _e19 = mixed.inner.b;
     out_.Store(8, asuint(_e19));

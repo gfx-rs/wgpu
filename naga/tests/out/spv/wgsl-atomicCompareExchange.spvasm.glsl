@@ -16,56 +16,58 @@ struct _11
     bool _m1;
 };
 
-layout(set = 0, binding = 0, std430) buffer _13_12
+layout(set = 0, binding = 0, std430) buffer _14_13
 {
     int _m0[128];
-} _12;
+} _13;
 
-layout(set = 0, binding = 1, std430) buffer _16_15
+layout(set = 0, binding = 1, std430) buffer _17_16
 {
     uint _m0[128];
-} _15;
+} _16;
 
 void main()
 {
-    uint _27 = 0u;
-    int _29 = 0;
-    bool _32 = false;
-    uvec2 _46 = uvec2(4294967295u);
-    uvec2 _72 = uvec2(4294967295u);
+    uvec2 _42 = uvec2(0u);
+    int _33 = 0;
+    uvec2 _39 = uvec2(0u);
+    uint _31 = 0u;
+    bool _36 = false;
+    _39 = uvec2(4294967295u);
     for (;;)
     {
-        if (all(equal(uvec2(0u), _46)))
+        if (all(equal(_39, uvec2(0u))))
         {
             break;
         }
-        _46 -= uvec2(uint(_46.y == 0u), 1u);
-        if (!(_27 < 128u))
+        _39 -= uvec2(uint(_39.y == 0u), 1u);
+        if (!(_31 < 128u))
         {
             break;
         }
-        int _66 = atomicAdd(_12._m0[_27], 0);
-        _29 = _66;
-        _32 = false;
+        int _69 = atomicAdd(_13._m0[_31], 0);
+        _33 = _69;
+        _36 = false;
+        _42 = uvec2(4294967295u);
         for (;;)
         {
-            if (all(equal(uvec2(0u), _72)))
+            if (all(equal(_42, uvec2(0u))))
             {
                 break;
             }
-            _72 -= uvec2(uint(_72.y == 0u), 1u);
-            if (!(!_32))
+            _42 -= uvec2(uint(_42.y == 0u), 1u);
+            if (!(!_36))
             {
                 break;
             }
-            int _94 = _29;
-            int _97 = atomicCompSwap(_12._m0[_27], _94, floatBitsToInt(intBitsToFloat(_29) + 1.0));
-            _10 _95 = _10(_97, _97 == _94);
-            _29 = _95._m0;
-            _32 = _95._m1;
+            int _96 = _33;
+            int _99 = atomicCompSwap(_13._m0[_31], _96, floatBitsToInt(intBitsToFloat(_33) + 1.0));
+            _10 _97 = _10(_99, _99 == _96);
+            _33 = _97._m0;
+            _36 = _97._m1;
             continue;
         }
-        _27++;
+        _31++;
         continue;
     }
 }
@@ -89,56 +91,58 @@ struct _11
     bool _m1;
 };
 
-layout(set = 0, binding = 0, std430) buffer _13_12
+layout(set = 0, binding = 0, std430) buffer _14_13
 {
     int _m0[128];
-} _12;
+} _13;
 
-layout(set = 0, binding = 1, std430) buffer _16_15
+layout(set = 0, binding = 1, std430) buffer _17_16
 {
     uint _m0[128];
-} _15;
+} _16;
 
 void main()
 {
-    uint _107 = 0u;
-    uint _108 = 0u;
-    bool _110 = false;
-    uvec2 _117 = uvec2(4294967295u);
-    uvec2 _142 = uvec2(4294967295u);
+    uvec2 _116 = uvec2(0u);
+    uint _110 = 0u;
+    uvec2 _114 = uvec2(0u);
+    uint _109 = 0u;
+    bool _112 = false;
+    _114 = uvec2(4294967295u);
     for (;;)
     {
-        if (all(equal(uvec2(0u), _117)))
+        if (all(equal(_114, uvec2(0u))))
         {
             break;
         }
-        _117 -= uvec2(uint(_117.y == 0u), 1u);
-        if (!(_107 < 128u))
+        _114 -= uvec2(uint(_114.y == 0u), 1u);
+        if (!(_109 < 128u))
         {
             break;
         }
-        uint _137 = atomicAdd(_15._m0[_107], 0u);
-        _108 = _137;
-        _110 = false;
+        uint _142 = atomicAdd(_16._m0[_109], 0u);
+        _110 = _142;
+        _112 = false;
+        _116 = uvec2(4294967295u);
         for (;;)
         {
-            if (all(equal(uvec2(0u), _142)))
+            if (all(equal(_116, uvec2(0u))))
             {
                 break;
             }
-            _142 -= uvec2(uint(_142.y == 0u), 1u);
-            if (!(!_110))
+            _116 -= uvec2(uint(_116.y == 0u), 1u);
+            if (!(!_112))
             {
                 break;
             }
-            uint _164 = _108;
-            uint _167 = atomicCompSwap(_15._m0[_107], _164, floatBitsToUint(uintBitsToFloat(_108) + 1.0));
-            _11 _165 = _11(_167, _167 == _164);
-            _108 = _165._m0;
-            _110 = _165._m1;
+            uint _168 = _110;
+            uint _171 = atomicCompSwap(_16._m0[_109], _168, floatBitsToUint(uintBitsToFloat(_110) + 1.0));
+            _11 _169 = _11(_171, _171 == _168);
+            _110 = _169._m0;
+            _112 = _169._m1;
             continue;
         }
-        _107++;
+        _109++;
         continue;
     }
 }

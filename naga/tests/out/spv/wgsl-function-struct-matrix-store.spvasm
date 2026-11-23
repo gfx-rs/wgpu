@@ -1,0 +1,69 @@
+; SPIR-V
+; Version: 1.1
+; Generator: rspirv
+; Bound: 46
+OpCapability Shader
+OpExtension "SPV_KHR_storage_buffer_storage_class"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %14 "main"
+OpExecutionMode %14 LocalSize 1 1 1
+OpMemberDecorate %6 0 Offset 0
+OpMemberDecorate %6 1 Offset 8
+OpMemberDecorate %6 1 ColMajor
+OpMemberDecorate %6 1 MatrixStride 8
+OpDecorate %7 ArrayStride 4
+OpDecorate %10 DescriptorSet 0
+OpDecorate %10 Binding 0
+OpDecorate %11 Block
+OpMemberDecorate %11 0 Offset 0
+%2 = OpTypeVoid
+%3 = OpTypeFloat 32
+%5 = OpTypeVector %3 2
+%4 = OpTypeMatrix %5 3
+%6 = OpTypeStruct %3 %4
+%9 = OpTypeInt 32 0
+%8 = OpConstant  %9  4
+%7 = OpTypeArray %3 %8
+%11 = OpTypeStruct %7
+%12 = OpTypePointer StorageBuffer %11
+%10 = OpVariable  %12  StorageBuffer
+%15 = OpTypeFunction %2
+%16 = OpTypePointer StorageBuffer %7
+%17 = OpConstant  %9  0
+%19 = OpConstant  %3  1
+%20 = OpConstant  %3  2
+%21 = OpConstant  %3  3
+%22 = OpConstant  %3  4
+%23 = OpConstant  %3  5
+%24 = OpConstant  %3  6
+%25 = OpConstantComposite  %5  %19 %20
+%26 = OpConstantComposite  %5  %21 %22
+%27 = OpConstantComposite  %5  %23 %24
+%28 = OpConstantComposite  %4  %25 %26 %27
+%30 = OpTypePointer Function %6
+%31 = OpConstantNull  %6
+%33 = OpTypePointer Function %4
+%34 = OpConstant  %9  1
+%36 = OpTypePointer StorageBuffer %3
+%37 = OpTypePointer Function %5
+%38 = OpTypePointer Function %3
+%42 = OpConstant  %9  2
+%14 = OpFunction  %2  None %15
+%13 = OpLabel
+%29 = OpVariable  %30  Function %31
+%18 = OpAccessChain  %16  %10 %17
+OpBranch %32
+%32 = OpLabel
+%35 = OpAccessChain  %33  %29 %34
+OpStore %35 %28
+%39 = OpAccessChain  %38  %29 %34 %17 %17
+%40 = OpLoad  %3  %39
+%41 = OpAccessChain  %36  %18 %17
+OpStore %41 %40
+%43 = OpAccessChain  %38  %29 %34 %42 %34
+%44 = OpLoad  %3  %43
+%45 = OpAccessChain  %36  %18 %34
+OpStore %45 %44
+OpReturn
+OpFunctionEnd

@@ -30,6 +30,20 @@ struct Outer {
     Inner om_nom_nom;
     uint thing;
 };
+struct Baz_std140_ {
+    vec2 m_0_;
+    vec2 m_1_;
+    vec2 m_2_;
+};
+struct mat4x2f32_std140_ {
+    vec2 c_0_;
+    vec2 c_1_;
+    vec2 c_2_;
+    vec2 c_3_;
+};
+struct MatCx2InArray_std140_ {
+    mat4x2f32_std140_ am[2];
+};
 layout(std430) buffer Bar_block_0Fragment {
     mat4x3 _matrix;
     mat2x2 matrix_array[2];
@@ -42,6 +56,10 @@ layout(std430) buffer Bar_block_0Fragment {
 layout(std430) buffer type_13_block_1Fragment { ivec2 _group_0_binding_2_fs; };
 
 layout(location = 0) out vec4 _fs2p_location0;
+
+mat4x2[2] convert_std140_0_(mat4x2f32_std140_ v[2]) {
+    return mat4x2[2](mat4x2(v[0].c_0_, v[0].c_1_, v[0].c_2_, v[0].c_3_), mat4x2(v[1].c_0_, v[1].c_1_, v[1].c_2_, v[1].c_3_));
+}
 
 float read_from_private(inout float foo_1) {
     float _e1 = foo_1;

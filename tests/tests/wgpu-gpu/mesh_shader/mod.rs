@@ -19,6 +19,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
         MESH_MULTI_DRAW_INDIRECT_COUNT,
         MESH_PIPELINE_BASIC_MESH_NO_DRAW,
         MESH_PIPELINE_BASIC_TASK_MESH_FRAG_NO_DRAW,
+        MESH_TASK_PAYLOAD_POINTER_PARAMETERS,
     ]);
 }
 
@@ -553,4 +554,88 @@ pub static MESH_MULTI_DRAW_INDIRECT_COUNT: GpuTestConfiguration =
                 divergent: false,
             },
         );
+    });
+
+/// Write and read the task payload through pointer parameters. The primitive is
+/// culled unless the mesh shader reads back what the task shader wrote.
+#[apply(gpu_test!)]
+pub static MESH_TASK_PAYLOAD_POINTER_PARAMETERS: GpuTestConfiguration =
+    default_gpu_test_config(DrawType::Standard).run_async(|ctx| async move {
+        let device = &ctx.device;
+        let shader = device.create_shader_module(wgpu::include_wgsl!("task_payload_pointer.wgsl"));
+        let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
+            label: None,
+            layout: None,
+            task: Some(wgpu::TaskState {
+                module: &shader,
+                entry_point: Some("ts_main"),
+                compilation_options: Default::default(),
+            }),
+            mesh: wgpu::MeshState {
+                module: &shader,
+                entry_point: Some("ms_main"),
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: wgpu::TextureFormat::Rgba8Unorm,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: Default::default(),
+            depth_stencil: None,
+            multisample: Default::default(),
+            multiview: None,
+            cache: None,
+        });
+
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: 4,
+                height: 4,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+            texture_binding_view_dimension: None,
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let readback = ReadbackBuffers::new(device, &texture);
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            pass.set_pipeline(&pipeline);
+            pass.draw_mesh_tasks(1, 1, 1);
+        }
+        readback.copy_from(device, &mut encoder, &texture);
+        ctx.queue.submit([encoder.finish()]);
+
+        readback
+            .assert_buffer_contents(&ctx, &[255, 0, 255, 255].repeat(16))
+            .await;
     });

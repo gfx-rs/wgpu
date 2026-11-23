@@ -1,6 +1,7 @@
 pub(crate) mod expressions;
 pub(crate) mod functions;
 mod handle_set_map;
+mod reorder;
 mod statements;
 mod types;
 
@@ -12,9 +13,23 @@ use crate::{
     ir,
 };
 use handle_set_map::HandleMap;
+pub use reorder::ReorderError;
+
+type Index = crate::non_max_u32::NonMaxU32;
 
 #[cfg(test)]
 use alloc::{format, string::ToString};
+
+/// Functions and global variables that compaction removes even when it keeps
+/// unused items.
+///
+/// A pass that makes an item unused, and must not have the backend write it,
+/// adds it here. Nothing in the module may still refer to these items.
+#[derive(Default)]
+pub(crate) struct Dropped {
+    pub functions: HandleSet<crate::Function>,
+    pub globals: HandleSet<crate::GlobalVariable>,
+}
 
 /// Configuration option for [`compact`]. See [`compact`] for details.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,7 +70,24 @@ impl From<KeepUnused> for bool {
 ///     - named expressions
 ///
 /// After removing items according to the rules above, all handles in the
-/// remaining objects are adjusted as necessary. When `KeepUnused` is `Yes`, the
+/// remaining objects are adjusted as necessary.
+///
+/// Compaction preserves the order of the objects it retains, with two
+/// exceptions, which let passes that rewrite a module append to its arenas:
+///
+/// - A function's or entry point's expression arena may contain *forward
+///   references*: expressions that refer to later expressions, which
+///   [`Function::expressions`] otherwise forbids. As long as the function's
+///   statements are valid (in particular, every expression is [`Emit`]ted
+///   before it is used), compaction renumbers that function's expressions so
+///   that every expression precedes its users. Global expressions may not
+///   contain forward references.
+///
+/// - A function may call a later function. Compaction moves functions so that
+///   every function comes after the functions it calls, keeping their order
+///   otherwise.
+///
+/// When `KeepUnused` is `Yes`, the
 /// resulting module should have all the named objects (except abstract-typed
 /// constants) present in the original, and those objects should be functionally
 /// identical. When `KeepUnused` is `No`, the resulting module should have the
@@ -64,8 +96,27 @@ impl From<KeepUnused> for bool {
 ///
 /// # Panics
 ///
-/// If `module` would not pass validation, this may panic.
+/// If `module` would not pass validation for any reason other than forward
+/// references in function expression arenas and calls to later functions,
+/// this may panic. It panics if forward references break the rule described in
+/// [`ReorderError`].
+///
+/// [`Function::expressions`]: crate::Function::expressions
+/// [`Emit`]: crate::Statement::Emit
 pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
+    try_compact(module, keep_unused, &Dropped::default())
+        .expect("forward references must be in an order compaction can fix");
+}
+
+/// Like [`compact`], but return an error instead of panicking if a function's
+/// forward references can't be put in order. `module` is unchanged then.
+///
+/// Remove the items in `dropped` even if `keep_unused` is `Yes`.
+pub(crate) fn try_compact(
+    module: &mut crate::Module,
+    keep_unused: KeepUnused,
+    dropped: &Dropped,
+) -> Result<(), ReorderError> {
     // The trickiest part of compaction is determining what is used and what is
     // not. Once we have computed that correctly, it's easy enough to call
     // `retain_mut` on each arena, drop unused elements, and fix up the handles
@@ -93,6 +144,12 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     // Thus, if the present element has not been marked as used, then it is
     // definitely unused, and compaction can remove it. Otherwise, the element
     // is used and must be retained, so we must mark everything it refers to.
+    //
+    // Function expression arenas are the exception: they may contain forward
+    // references (see this function's documentation). `ExpressionTracer` notes
+    // any expressions that the back-to-front pass would miss and traces them
+    // afterwards, and `FunctionMap` then chooses a new order for the
+    // function's expressions; see `reorder`.
     //
     // The final step is to mark the global expressions and types, which must be
     // traversed simultaneously; see `ModuleTracer::type_expression_tandem`'s
@@ -175,9 +232,9 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
 
             let mut used = module_tracer.as_function(&e.function);
             used.trace();
-            FunctionMap::from(used)
+            FunctionMap::new(used)
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Observe which types, constant expressions, constants, and expressions
     // each function uses, and produce maps for each function from
@@ -188,12 +245,12 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     // to a function not already identified as used, adds the called function
     // to both `functions_used` and `functions_pending`.
     //
-    // Called functions are required to appear before their callers in the
-    // functions arena (recursion is disallowed). We have already traced the
-    // entry point(s) and added any functions called directly by the entry
-    // point(s) to `functions_pending`. We proceed by repeatedly tracing the
-    // last function in `functions_pending`. By an inductive argument, any
-    // functions after the last function in `functions_pending` must be unused.
+    // We have already traced the entry point(s) and added any functions called
+    // directly by the entry point(s) to `functions_pending`. We proceed by
+    // tracing functions from `functions_pending` until it is empty. Each
+    // function is added to it at most once, the first time it is found to be
+    // used, so each is traced at most once, whatever the order of the
+    // functions arena.
     //
     // When `KeepUnused` is active, we simply mark all functions as pending,
     // and then trace all of them.
@@ -202,13 +259,17 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     if keep_unused.into() {
         module_tracer.functions_used.add_all();
         module_tracer.functions_pending.add_all();
+        for handle in dropped.functions.iter() {
+            module_tracer.functions_used.remove(handle);
+            module_tracer.functions_pending.remove(handle);
+        }
     }
     while let Some(handle) = module_tracer.functions_pending.pop() {
         let function = &module.functions[handle];
         log::trace!("tracing function {function:?}");
         let mut function_tracer = module_tracer.as_function(function);
         function_tracer.trace();
-        function_maps.insert(handle, FunctionMap::from(function_tracer));
+        function_maps.insert(handle, FunctionMap::new(function_tracer)?);
     }
 
     // We treat all special types as used by definition.
@@ -218,6 +279,9 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     log::trace!("tracing global variables");
     if keep_unused.into() {
         module_tracer.global_variables_used.add_all();
+        for handle in dropped.globals.iter() {
+            module_tracer.global_variables_used.remove(handle);
+        }
     }
     for global in module_tracer.global_variables_used.iter() {
         log::trace!("tracing global {:?}", module.global_variables[global].name);
@@ -268,7 +332,15 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     // produce maps from the `Handle`s that appear in `module` now to
     // the corresponding `Handle`s that will refer to the same items
     // in the compacted module.
-    let module_map = ModuleMap::from(module_tracer);
+    let mut module_map = ModuleMap::from(module_tracer);
+    let function_order = call_order(module, &function_maps);
+    if let Some(ref order) = function_order {
+        let mut functions = HandleMap::all_unused(module.functions.len());
+        for (index, &handle) in order.iter().enumerate() {
+            functions.insert(handle, Index::new(index as u32).unwrap());
+        }
+        module_map.functions = functions;
+    }
 
     // Drop unused types from the type arena.
     //
@@ -364,16 +436,35 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     let mut reused_named_expressions = crate::NamedExpressions::default();
 
     // Drop unused functions. Compact and adjust used functions.
-    module.functions.retain_mut(|handle, function| {
-        if let Some(map) = function_maps.get(handle) {
-            log::trace!("retaining and compacting function {:?}", function.name);
-            map.compact(function, &module_map, &mut reused_named_expressions);
-            true
-        } else {
-            log::trace!("dropping function {:?}", function.name);
-            false
+    match function_order {
+        None => module.functions.retain_mut(|handle, function| {
+            if let Some(map) = function_maps.get(handle) {
+                log::trace!("retaining and compacting function {:?}", function.name);
+                map.compact(function, &module_map, &mut reused_named_expressions);
+                true
+            } else {
+                log::trace!("dropping function {:?}", function.name);
+                false
+            }
+        }),
+        Some(order) => {
+            log::trace!("reordering functions");
+            let mut old: Vec<Option<_>> = module
+                .functions
+                .drain()
+                .map(|(_, function, span)| Some((function, span)))
+                .collect();
+            for handle in order {
+                let (mut function, span) = old[handle.index()].take().unwrap();
+                function_maps.get(handle).unwrap().compact(
+                    &mut function,
+                    &module_map,
+                    &mut reused_named_expressions,
+                );
+                module.functions.append(function, span);
+            }
         }
-    });
+    }
 
     // Compact each entry point.
     for (entry, map) in module.entry_points.iter_mut().zip(entry_point_maps.iter()) {
@@ -405,6 +496,54 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
             }
         }
     }
+
+    Ok(())
+}
+
+/// Return the used functions of `module` in an order in which every function
+/// comes after the functions it calls, or `None` if their current order
+/// already does.
+///
+/// Functions keep their current relative order where the calls allow it.
+fn call_order(
+    module: &crate::Module,
+    function_maps: &HandleMap<crate::Function, FunctionMap>,
+) -> Option<Vec<arena::Handle<crate::Function>>> {
+    let callees = |handle| &function_maps.get(handle).unwrap().callees;
+    let used = || {
+        module
+            .functions
+            .iter()
+            .map(|(handle, _)| handle)
+            .filter(|&handle| function_maps.get(handle).is_some())
+    };
+    if used().all(|handle| callees(handle).iter().all(|&callee| callee < handle)) {
+        return None;
+    }
+
+    let mut order = Vec::new();
+    let mut visited = HandleSet::for_arena(&module.functions);
+    // Each entry is a function and the index of the next callee to visit.
+    let mut stack = Vec::new();
+    for root in used() {
+        if visited.insert(root) {
+            stack.push((root, 0));
+        }
+        while let Some(&mut (handle, ref mut next)) = stack.last_mut() {
+            if let Some(&callee) = callees(handle).get(*next) {
+                *next += 1;
+                // A function visited already is either placed, or one of its
+                // callers on the stack, which a valid module cannot have.
+                if visited.insert(callee) {
+                    stack.push((callee, 0));
+                }
+            } else {
+                stack.pop();
+                order.push(handle);
+            }
+        }
+    }
+    Some(order)
 }
 
 pub(crate) struct ModuleTracer<'module> {
@@ -420,6 +559,12 @@ pub(crate) struct ModuleTracer<'module> {
     constants_used: HandleSet<crate::Constant>,
     overrides_used: HandleSet<crate::Override>,
     global_expressions_used: HandleSet<crate::Expression>,
+
+    /// Forward references among global expressions. A valid module has none,
+    /// and since global expressions are traced on demand rather than by
+    /// `trace_expressions`, none can be detected; this only exists to satisfy
+    /// `ExpressionTracer`.
+    global_forward_refs: expressions::ForwardRefs,
 }
 
 impl<'module> ModuleTracer<'module> {
@@ -433,6 +578,7 @@ impl<'module> ModuleTracer<'module> {
             constants_used: HandleSet::for_arena(&module.constants),
             overrides_used: HandleSet::for_arena(&module.overrides),
             global_expressions_used: HandleSet::for_arena(&module.global_expressions),
+            global_forward_refs: Default::default(),
         }
     }
 
@@ -553,6 +699,8 @@ impl<'module> ModuleTracer<'module> {
             expressions_used: &mut self.global_expressions_used,
             overrides_used: &mut self.overrides_used,
             global_expressions_used: None,
+            visited_from: usize::MAX,
+            forward_refs: &mut self.global_forward_refs,
         }
     }
 
@@ -572,6 +720,8 @@ impl<'module> ModuleTracer<'module> {
             overrides_used: &mut self.overrides_used,
             global_expressions_used: &mut self.global_expressions_used,
             expressions_used: HandleSet::for_arena(&function.expressions),
+            forward_refs: Default::default(),
+            callees: Vec::new(),
         }
     }
 }
@@ -690,14 +840,13 @@ impl ModuleMap {
 
 struct FunctionMap {
     expressions: HandleMap<crate::Expression>,
-}
 
-impl From<FunctionTracer<'_>> for FunctionMap {
-    fn from(used: FunctionTracer) -> Self {
-        FunctionMap {
-            expressions: HandleMap::from_set(used.expressions_used),
-        }
-    }
+    /// The new order of the function's expressions, if compaction has to
+    /// reorder them to eliminate forward references. See [`reorder`].
+    reorder: Option<reorder::Reorder>,
+
+    /// The functions this function calls.
+    callees: Vec<arena::Handle<crate::Function>>,
 }
 
 #[test]
@@ -1303,4 +1452,47 @@ fn unnamed_override_type() {
     assert!(validator.validate(&module).is_ok());
     compact(&mut module, KeepUnused::Yes);
     assert!(validator.validate(&module).is_ok());
+}
+
+/// A global in [`Dropped`] is removed even with [`KeepUnused::Yes`], and later
+/// globals' handles are adjusted.
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn dropped_global_is_removed() {
+    let mut module = crate::front::wgsl::parse_str(
+        "
+        var<private> kept: f32;
+        var<private> dropped: f32;
+        var<private> after: f32;
+        @compute @workgroup_size(1)
+        fn main() { after = 1.0; }
+        ",
+    )
+    .unwrap();
+    let dropped = module
+        .global_variables
+        .iter()
+        .find(|&(_, global)| global.name.as_deref() == Some("dropped"))
+        .unwrap()
+        .0;
+    let mut globals = HandleSet::for_arena(&module.global_variables);
+    globals.insert(dropped);
+    let set = Dropped {
+        globals,
+        ..Dropped::default()
+    };
+
+    try_compact(&mut module, KeepUnused::Yes, &set).unwrap();
+
+    let names: Vec<_> = module
+        .global_variables
+        .iter()
+        .map(|(_, global)| global.name.clone().unwrap())
+        .collect();
+    assert_eq!(names, ["kept", "after"]);
+    let mut validator = crate::valid::Validator::new(
+        crate::valid::ValidationFlags::all(),
+        crate::valid::Capabilities::all(),
+    );
+    validator.validate(&module).unwrap();
 }

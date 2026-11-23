@@ -352,11 +352,8 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
         for input in &inputs.inner {
             if input.options.targets.unwrap().contains(Targets::WGSL) {
                 let mut writer =
-                    naga::back::wgsl::Writer::new(&mut string, (&input.options.wgsl).into());
-                let _ = writer.write(
-                    input.module.as_ref().unwrap(),
-                    input.module_info.as_ref().unwrap(),
-                );
+                    naga::back::wgsl::Writer::new(&mut string, &(&input.options.wgsl).into());
+                let _ = writer.write(input.module.as_ref().unwrap());
                 string.clear();
             }
         }
@@ -377,13 +374,7 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
                 }
                 let opt = input.options.spv.to_options(&shared_info, None);
                 if writer.set_options(&opt).is_ok() {
-                    let _ = writer.write(
-                        input.module.as_ref().unwrap(),
-                        input.module_info.as_ref().unwrap(),
-                        None,
-                        &None,
-                        &mut data,
-                    );
+                    let _ = writer.write(input.module.as_ref().unwrap(), None, &None, &mut data);
                     data.clear();
                 }
             }
@@ -412,7 +403,6 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
                         };
                         let _ = writer.write(
                             input.module.as_ref().unwrap(),
-                            input.module_info.as_ref().unwrap(),
                             Some(&pipeline_options),
                             &None,
                             &mut data,
@@ -431,12 +421,7 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
             if input.options.targets.unwrap().contains(Targets::METAL) {
                 let pipeline_options = naga::back::msl::PipelineOptions::default();
                 let mut writer = naga::back::msl::Writer::new(&mut string);
-                let _ = writer.write(
-                    input.module.as_ref().unwrap(),
-                    input.module_info.as_ref().unwrap(),
-                    &options,
-                    &pipeline_options,
-                );
+                let _ = writer.write(input.module.as_ref().unwrap(), &options, &pipeline_options);
                 string.clear();
             }
         }
@@ -450,11 +435,7 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
                 let pipeline_options = Default::default();
                 let mut writer =
                     naga::back::hlsl::Writer::new(&mut string, &options, &pipeline_options);
-                let _ = writer.write(
-                    input.module.as_ref().unwrap(),
-                    input.module_info.as_ref().unwrap(),
-                    None,
-                );
+                let _ = writer.write(input.module.as_ref().unwrap(), None);
                 string.clear();
             }
         }
@@ -472,13 +453,13 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
                 writer_flags: naga::back::glsl::WriterFlags::empty(),
                 binding_map: Default::default(),
                 zero_initialize_workgroup_memory: true,
+                passes: Default::default(),
             };
             for input in &inputs.inner {
                 if !input.options.targets.unwrap().contains(Targets::GLSL) {
                     continue;
                 }
                 let module = input.module.as_ref().unwrap();
-                let info = input.module_info.as_ref().unwrap();
                 for ep in module.entry_points.iter() {
                     let pipeline_options = naga::back::glsl::PipelineOptions {
                         shader_stage: ep.stage,
@@ -486,16 +467,13 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
                         multiview: None,
                     };
 
-                    if let Ok(mut writer) = naga::back::glsl::Writer::new(
+                    let _ = naga::back::glsl::Writer::new(
                         &mut string,
-                        module,
-                        info,
                         &options,
                         &pipeline_options,
                         naga::proc::BoundsCheckPolicies::default(),
-                    ) {
-                        let _ = writer.write();
-                    }
+                    )
+                    .write(module);
 
                     string.clear();
                 }

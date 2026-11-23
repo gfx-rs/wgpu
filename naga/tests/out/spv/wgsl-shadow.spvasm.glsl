@@ -60,10 +60,10 @@ layout(location = 1) out vec4 world_position;
 void main()
 {
     VertexOutput _out = VertexOutput(vec4(0.0), vec3(0.0), vec4(0.0));
-    vec4 _102 = u_entity_1._m0.world * vec4(position);
+    vec4 _103 = u_entity_1._m0.world * vec4(position);
     _out.world_normal = mat3(u_entity_1._m0.world[0].xyz, u_entity_1._m0.world[1].xyz, u_entity_1._m0.world[2].xyz) * vec3(normal.xyz);
-    _out.world_position = _102;
-    _out.proj_position = u_globals_1._m0.view_proj * _102;
+    _out.world_position = _103;
+    _out.proj_position = u_globals_1._m0.view_proj * _103;
     gl_Position = _out.proj_position;
     gl_Position.y = -gl_Position.y;
     world_normal = _out.world_normal;
@@ -127,7 +127,7 @@ layout(set = 0, binding = 3) uniform samplerShadow sampler_shadow;
 
 layout(location = 0) in vec3 world_normal;
 layout(location = 1) in vec4 world_position;
-layout(location = 0) out vec4 _142;
+layout(location = 0) out vec4 _143;
 
 float fetch_shadow(uint light_id, vec4 homogeneous_coords)
 {
@@ -135,20 +135,21 @@ float fetch_shadow(uint light_id, vec4 homogeneous_coords)
     {
         return 1.0;
     }
-    float _61 = 1.0 / homogeneous_coords.w;
-    return textureGrad(sampler2DArrayShadow(t_shadow, sampler_shadow), vec4(vec3(((homogeneous_coords.xy * vec2(0.5, -0.5)) * _61) + vec2(0.5), float(int(light_id))), homogeneous_coords.z * _61), vec2(0.0), vec2(0.0));
+    float _62 = 1.0 / homogeneous_coords.w;
+    return textureGrad(sampler2DArrayShadow(t_shadow, sampler_shadow), vec4(vec3(((homogeneous_coords.xy * vec2(0.5, -0.5)) * _62) + vec2(0.5), float(int(light_id))), homogeneous_coords.z * _62), vec2(0.0), vec2(0.0));
 }
 
 void main()
 {
     vec3 color = vec3(0.0500000007450580596923828125);
     uint i = 0u;
-    uvec2 loop_bound = uvec2(4294967295u);
-    VertexOutput _133 = VertexOutput(gl_FragCoord, world_normal, world_position);
-    vec3 _155 = normalize(_133.world_normal);
+    uvec2 loop_bound = uvec2(0u);
+    VertexOutput _134 = VertexOutput(gl_FragCoord, world_normal, world_position);
+    vec3 _162 = normalize(_134.world_normal);
+    loop_bound = uvec2(4294967295u);
     for (;;)
     {
-        if (all(equal(uvec2(0u), loop_bound)))
+        if (all(equal(loop_bound, uvec2(0u))))
         {
             break;
         }
@@ -157,11 +158,11 @@ void main()
         {
             break;
         }
-        color += (s_lights_1._m0[i].color.xyz * (fetch_shadow(i, s_lights_1._m0[i].proj * _133.world_position) * max(0.0, dot(_155, normalize(s_lights_1._m0[i].pos.xyz - _133.world_position.xyz)))));
+        color += (s_lights_1._m0[i].color.xyz * (fetch_shadow(i, s_lights_1._m0[i].proj * _134.world_position) * max(0.0, dot(_162, normalize(s_lights_1._m0[i].pos.xyz - _134.world_position.xyz)))));
         i++;
         continue;
     }
-    _142 = vec4(color, 1.0) * u_entity_1._m0.color;
+    _143 = vec4(color, 1.0) * u_entity_1._m0.color;
 }
 
 
@@ -221,7 +222,7 @@ layout(set = 0, binding = 3) uniform samplerShadow sampler_shadow;
 
 layout(location = 0) in vec3 world_normal;
 layout(location = 1) in vec4 world_position;
-layout(location = 0) out vec4 _227;
+layout(location = 0) out vec4 _228;
 
 float fetch_shadow(uint light_id, vec4 homogeneous_coords)
 {
@@ -229,20 +230,21 @@ float fetch_shadow(uint light_id, vec4 homogeneous_coords)
     {
         return 1.0;
     }
-    float _61 = 1.0 / homogeneous_coords.w;
-    return textureGrad(sampler2DArrayShadow(t_shadow, sampler_shadow), vec4(vec3(((homogeneous_coords.xy * vec2(0.5, -0.5)) * _61) + vec2(0.5), float(int(light_id))), homogeneous_coords.z * _61), vec2(0.0), vec2(0.0));
+    float _62 = 1.0 / homogeneous_coords.w;
+    return textureGrad(sampler2DArrayShadow(t_shadow, sampler_shadow), vec4(vec3(((homogeneous_coords.xy * vec2(0.5, -0.5)) * _62) + vec2(0.5), float(int(light_id))), homogeneous_coords.z * _62), vec2(0.0), vec2(0.0));
 }
 
 void main()
 {
     vec3 color = vec3(0.0500000007450580596923828125);
     uint i = 0u;
-    uvec2 loop_bound = uvec2(4294967295u);
-    VertexOutput _220 = VertexOutput(gl_FragCoord, world_normal, world_position);
-    vec3 _239 = normalize(_220.world_normal);
+    uvec2 loop_bound = uvec2(0u);
+    VertexOutput _221 = VertexOutput(gl_FragCoord, world_normal, world_position);
+    vec3 _242 = normalize(_221.world_normal);
+    loop_bound = uvec2(4294967295u);
     for (;;)
     {
-        if (all(equal(uvec2(0u), loop_bound)))
+        if (all(equal(loop_bound, uvec2(0u))))
         {
             break;
         }
@@ -251,10 +253,10 @@ void main()
         {
             break;
         }
-        color += (u_lights_1._m0[i].color.xyz * (fetch_shadow(i, u_lights_1._m0[i].proj * _220.world_position) * max(0.0, dot(_239, normalize(u_lights_1._m0[i].pos.xyz - _220.world_position.xyz)))));
+        color += (u_lights_1._m0[i].color.xyz * (fetch_shadow(i, u_lights_1._m0[i].proj * _221.world_position) * max(0.0, dot(_242, normalize(u_lights_1._m0[i].pos.xyz - _221.world_position.xyz)))));
         i++;
         continue;
     }
-    _227 = vec4(color, 1.0) * u_entity_1._m0.color;
+    _228 = vec4(color, 1.0) * u_entity_1._m0.color;
 }
 

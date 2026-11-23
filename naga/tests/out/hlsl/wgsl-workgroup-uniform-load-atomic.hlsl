@@ -10,25 +10,19 @@ groupshared AtomicStruct wg_struct;
 [numthreads(64, 1, 1)]
 void test_atomic_workgroup_uniform_load(uint3 workgroup_id : SV_GroupID, uint3 local_id : SV_GroupThreadID, uint local_invocation_index : SV_GroupIndex)
 {
-    if (local_invocation_index == 0) {
-        wg_scalar = (uint)0;
-    }
-    if (local_invocation_index == 0) {
-        wg_signed = (int)0;
-    }
-    if (local_invocation_index == 0) {
-        wg_struct.atomic_scalar = (uint)0;
-    }
-    [loop]
-    for (uint zero_flat_index = local_invocation_index; zero_flat_index < 2u; zero_flat_index += 64u) {
-        uint zero_index = zero_flat_index;
-        wg_struct.atomic_arr[zero_index] = (int)0;
-    }
-    GroupMemoryBarrierWithGroupSync();
     bool local = (bool)0;
     bool local_1 = (bool)0;
     bool local_2 = (bool)0;
 
+    if ((local_invocation_index < 2u)) {
+        wg_struct.atomic_arr[min(uint(local_invocation_index), 1u)] = int(0);
+    }
+    if ((local_invocation_index == 0u)) {
+        wg_scalar = 0u;
+        wg_signed = int(0);
+        wg_struct.atomic_scalar = 0u;
+    }
+    GroupMemoryBarrierWithGroupSync();
     uint active_tile_index = (workgroup_id.x + (workgroup_id.y * 32768u));
     uint _e11; InterlockedOr(wg_scalar, uint((active_tile_index >= 64u)), _e11);
     int _e14; InterlockedAdd(wg_signed, int(1), _e14);
