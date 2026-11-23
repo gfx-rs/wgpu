@@ -46,7 +46,7 @@ vertex main_Output main_(
 ) {
     metal::float2 v_uv = {};
     metal::float2 a_uv_1 = {};
-    gl_PerVertex unnamed = gl_PerVertex {metal::float4(0.0, 0.0, 0.0, 1.0), 1.0, type_3 {}, type_3 {}};
+    gl_PerVertex unnamed = gl_PerVertex {metal::float4(0.0, 0.0, 0.0, 1.0), 1.0, type_3 {}, type_3 {}, {0, 0, 0, 0}};
     metal::float2 a_pos_1 = {};
     const auto a_uv = varyings.a_uv;
     const auto a_pos = varyings.a_pos;
@@ -55,6 +55,6 @@ vertex main_Output main_(
     main_1(v_uv, a_uv_1, unnamed, a_pos_1);
     metal::float2 _e7 = v_uv;
     metal::float4 _e8 = unnamed.gl_Position;
-    const auto _tmp = VertexOutput {_e7, {}, _e8};
+    const auto _tmp = VertexOutput {_e7, {0, 0, 0, 0, 0, 0, 0, 0}, _e8};
     return main_Output { _tmp.member, _tmp.gl_Position };
 }
