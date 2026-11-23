@@ -185,9 +185,6 @@ bitflags::bitflags! {
         const SHADER_FLOAT16 = 1 << 26;
         /// Support for [`ImageClass::External`]
         const TEXTURE_EXTERNAL = 1 << 27;
-        /// Support for `quantizeToF16`, `pack2x16float`, and `unpack2x16float`, which store
-        /// `f16`-precision values in `f32`s.
-        const SHADER_FLOAT16_IN_FLOAT32 = 1 << 28;
         /// Support for fragment shader barycentric coordinates.
         const SHADER_BARYCENTRICS = 1 << 29;
         /// Support for task shaders, mesh shaders, and per-primitive fragment inputs
@@ -226,6 +223,14 @@ bitflags::bitflags! {
         const LINEAR_INTERPOLATION = 1 << 44;
         /// Support for `debugPrintf`.
         const DEBUG_PRINTF = 1 << 45;
+        /// Support for ray tracing invocation reordering: the `hit_object` type,
+        /// the `hitObject*` built-in functions, and `reorderThread`.
+        ///
+        /// Only useful together with [`Capabilities::RAY_TRACING_PIPELINE`], since
+        /// hit objects exist only in ray tracing pipeline stages.
+        const RAY_TRACING_INVOCATION_REORDER = 1 << 46;
+
+        // Free flag slot at 1 << 28
     }
 }
 
@@ -241,6 +246,7 @@ impl Capabilities {
             Self::DUAL_SOURCE_BLENDING => Some(Ext::DualSourceBlending),
             // NOTE: `SHADER_FLOAT16_IN_FLOAT32` _does not_ require the `f16` extension
             Self::SHADER_FLOAT16 => Some(Ext::F16),
+            Self::FLOAT64 => Some(Ext::WgpuF64),
             Self::SHADER_INT16 => Some(Ext::WgpuInt16),
             Self::CLIP_DISTANCES => Some(Ext::ClipDistances),
             Self::MESH_SHADER => Some(Ext::WgpuMeshShader),
@@ -248,6 +254,7 @@ impl Capabilities {
             Self::RAY_HIT_VERTEX_POSITION => Some(Ext::WgpuRayQueryVertexReturn),
             Self::COOPERATIVE_MATRIX => Some(Ext::WgpuCooperativeMatrix),
             Self::RAY_TRACING_PIPELINE => Some(Ext::WgpuRayTracingPipeline),
+            Self::RAY_TRACING_INVOCATION_REORDER => Some(Ext::WgpuRayTracingInvocationReorder),
             Self::PER_VERTEX => Some(Ext::WgpuPerVertex),
             Self::BUFFER_BINDING_ARRAY
             | Self::BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
@@ -555,6 +562,7 @@ impl crate::TypeInner {
             | Self::Sampler { .. }
             | Self::AccelerationStructure { .. }
             | Self::RayQuery { .. }
+            | Self::HitObject
             | Self::BindingArray { .. } => false,
         }
     }
@@ -667,6 +675,8 @@ impl Validator {
         self.valid_expression_list.clear();
         self.valid_expression_set.clear();
         self.override_ids.clear();
+        self.trace_rays_vertex_return = TraceRayVertexReturnState::NoTraceRays;
+        self.trace_rays_payload_type = None;
     }
 
     fn validate_constant(

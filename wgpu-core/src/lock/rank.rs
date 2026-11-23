@@ -108,6 +108,7 @@ define_lock_ranks! {
     // Non-leaf ranks, in topological order.
     rank INSTANCE_DEVICES "InstanceDevices" followed by {
         DEVICE_SNATCHABLE_LOCK,
+        DEVICE_COMMAND_INDICES,
         QUEUE_PENDING_WRITES,
         DEVICE_TRACKERS,
         QUEUE_LIFE_TRACKER,
@@ -124,6 +125,7 @@ define_lock_ranks! {
     // We do not expect all of these to be exercised in CI.
     rank SURFACE_PRESENTATION "Surface::presentation" followed by {
         DEVICE_SNATCHABLE_LOCK,
+        DEVICE_COMMAND_INDICES,
         QUEUE_PENDING_WRITES,
         DEVICE_TRACKERS,
         QUEUE_LIFE_TRACKER,
@@ -177,6 +179,8 @@ define_lock_ranks! {
         TEXTURE_INITIALIZATION_STATUS,
         TLAS_BUILT_INDEX,
         TLAS_DEPENDENCIES,
+        TLAS_MAX_INTERSECTION_IDX,
+        TLAS_REQUIRED_INTERSECTION_TYPES,
     }
     rank COMMAND_BUFFER_DATA "CommandBuffer::data" followed by {
         BUFFER_MAP_STATE,
@@ -250,6 +254,8 @@ define_lock_ranks! {
     rank TEXTURE_CLEAR_MODE "Texture::clear_mode" followed by { }
     rank TEXTURE_INITIALIZATION_STATUS "Texture::initialization_status" followed by { }
     rank TEXTURE_VIEWS "Texture::views" followed by { }
+    rank TLAS_MAX_INTERSECTION_IDX "Tlas::max_intersection_index" followed by { }
+    rank TLAS_REQUIRED_INTERSECTION_TYPES "Tlas::required_intersection_types" followed by { }
 
     #[cfg(test)]
     rank PAWN "pawn" followed by { ROOK, BISHOP }

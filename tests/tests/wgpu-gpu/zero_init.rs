@@ -78,6 +78,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH32FLOAT_STENCIL8,
         DYNAMIC_OFFSET_BUFFER_BINDING_INIT,
         ZERO_INIT_MULTIPLANAR_TEXTURE,
+        ZERO_INIT_MULTIPLANAR_RENDER_ATTACHMENT,
         COPY_TEXTURE_TO_BUFFER_3D_SOURCE_ORIGIN_Z_UNINIT,
         COPY_TEXTURE_TO_TEXTURE_3D_SOURCE_ORIGIN_Z_UNINIT,
         COPY_BUFFER_TO_TEXTURE_3D_DEST_ORIGIN_Z_PARTIAL,
@@ -88,6 +89,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         VERTEX_BUFFER_TAIL_INIT_MAP_WRITE_MAPPED_AT_CREATION,
         COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_ROW_PADDING_INIT,
         COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_IMAGE_PADDING_INIT,
+        MARK_UNINITIALIZED_ZEROES_TEXTURE,
         MARK_EXTERNALLY_INITIALIZED_SKIPS_LAZY_CLEAR,
         ZERO_SIZE_VERTEX_BINDING_AT_END,
         ZERO_SIZE_VERTEX_BINDING_AT_BEGINNING,
@@ -306,6 +308,7 @@ impl TextureSpec {
                 | TextureUsages::RENDER_ATTACHMENT
                 | extra_usages,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     }
 }
@@ -1580,6 +1583,7 @@ static WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH24PLUS_STENCIL8: GpuTestCo
                     | TextureUsages::COPY_SRC
                     | TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
 
             let stencil_bytes_per_row = size.width;
@@ -1856,6 +1860,7 @@ async fn check_write_aspect_leaves_other_uninit(
         format,
         usage: TextureUsages::COPY_DST | TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let write_bytes_per_row = write.size.width * write.bpp;
@@ -2128,6 +2133,7 @@ static ZERO_INIT_MULTIPLANAR_TEXTURE: GpuTestConfiguration = GpuTestConfiguratio
             format: wgt::TextureFormat::NV12,
             usage: wgt::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let buffer = ctx.device.create_buffer(&wgt::BufferDescriptor {
             label: None,
@@ -2166,6 +2172,74 @@ static ZERO_INIT_MULTIPLANAR_TEXTURE: GpuTestConfiguration = GpuTestConfiguratio
             .unwrap();
         assert!(buffer.get_mapped_range(..).unwrap().iter().all(|e| *e == 0));
     });
+
+// Multi-planar textures with `RENDER_ATTACHMENT` are cleared with render passes rather than
+// buffer copies. Use multiple layers so that every (layer, plane) clear view must be selected
+// correctly. (Vulkan does not allow multiple mip levels for these formats.)
+//
+// TODO(https://github.com/gfx-rs/wgpu/issues/8122): With `tier1-texture-formats`, the
+// 16-bit norm formats should be renderable, but they currently are not.
+#[apply(gpu_test!)]
+static ZERO_INIT_MULTIPLANAR_RENDER_ATTACHMENT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::TEXTURE_FORMAT_NV12)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| async move {
+        check_multiplanar_render_attachment_zero_init(&ctx, TextureFormat::NV12).await;
+        // TODO(https://github.com/gfx-rs/wgpu/issues/8122): Add P010 (see above)
+    });
+
+async fn check_multiplanar_render_attachment_zero_init(
+    ctx: &TestingContext,
+    format: TextureFormat,
+) {
+    const LAYERS: u32 = 2;
+    let texture = ctx.device.create_texture(&TextureDescriptor {
+        label: Some("multi-planar render attachment zero-init test"),
+        // Non-square so a width/height swap is caught.
+        size: Extent3d {
+            width: 256,
+            height: 192,
+            depth_or_array_layers: LAYERS,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format,
+        usage: TextureUsages::COPY_SRC | TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+        texture_binding_view_dimension: None,
+    });
+
+    let readback_buffers = ReadbackBuffers::new(&ctx.device, &texture);
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor { label: None });
+    readback_buffers.copy_from(&ctx.device, &mut encoder, &texture);
+    ctx.queue.submit(Some(encoder.finish()));
+
+    for plane in 0..format.planes().unwrap() {
+        let aspect = TextureAspect::from_plane(plane).unwrap();
+        let data = readback_buffers.retrieve(ctx, aspect).await;
+        for layer in 0..LAYERS {
+            let subresource = data.subresource(0, layer);
+            let nonzero = subresource.iter().position(|&b| b != 0);
+            assert!(
+                nonzero.is_none(),
+                "{:?} of {:?} at layer {} read back non-zero from never-written memory; \
+                 first non-zero byte at offset {} = 0x{:02x}",
+                aspect,
+                format,
+                layer,
+                nonzero.unwrap(),
+                subresource[nonzero.unwrap()],
+            );
+        }
+    }
+}
+
 // Tests of initialization of 3D textures.
 //
 // Init tracking only operates on array layers, not on depth/volume slices
@@ -2225,6 +2299,7 @@ fn create_3d_texture(ctx: &TestingContext, label: &str, depth: u32) -> Texture {
         format: TextureFormat::R8Uint,
         usage: TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     })
 }
 
@@ -2600,6 +2675,7 @@ async fn check_vertex_buffer_tail_init(
         format: TextureFormat::Rgba8UnormSrgb,
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let output_view = output_texture.create_view(&Default::default());
 
@@ -2841,6 +2917,7 @@ async fn test_copy_texture_to_buffer_padding_init(
         format,
         usage: TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let readback = ctx.device.create_buffer(&BufferDescriptor {
@@ -2919,6 +2996,88 @@ static MARK_EXTERNALLY_INITIALIZED_SKIPS_LAZY_CLEAR: GpuTestConfiguration =
             }
         });
 
+/// Initializes a texture with sentinel data (0xAB)
+/// and then marks it as uninitialized and asserts zero-initialization behavior.
+#[apply(gpu_test!)]
+static MARK_UNINITIALIZED_ZEROES_TEXTURE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().skip(FailureCase::backend(Backends::BROWSER_WEBGPU)))
+    .run_async(|ctx| async move {
+        let size = Extent3d {
+            width: 16,
+            height: 16,
+            depth_or_array_layers: 2,
+        };
+        let texture = ctx.device.create_texture(&TextureDescriptor {
+            label: Some("mark_uninitialized target"),
+            size,
+            mip_level_count: 2,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Rgba8Unorm,
+            usage: TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
+            view_formats: &[],
+            texture_binding_view_dimension: None,
+        });
+
+        for mip_level in 0..2 {
+            let mip_size = Extent3d {
+                width: size.width >> mip_level,
+                height: size.height >> mip_level,
+                depth_or_array_layers: size.depth_or_array_layers,
+            };
+            let bytes_per_row = mip_size.width * 4;
+            let data = vec![
+                0xAB;
+                (bytes_per_row * mip_size.height * mip_size.depth_or_array_layers)
+                    as usize
+            ];
+            ctx.queue.write_texture(
+                TexelCopyTextureInfo {
+                    texture: &texture,
+                    mip_level,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                &data,
+                TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(bytes_per_row),
+                    rows_per_image: Some(mip_size.height),
+                },
+                mip_size,
+            );
+        }
+        ctx.queue.submit([]);
+
+        let readback = ReadbackBuffers::new(&ctx.device, &texture);
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor { label: None });
+        readback.copy_from(&ctx.device, &mut encoder, &texture);
+        ctx.queue.submit([encoder.finish()]);
+        let initial_data = readback.retrieve(&ctx, TextureAspect::All).await;
+        assert!(
+            initial_data.all().iter().all(|&byte| byte == 0xAB),
+            "texture setup did not write the expected sentinel data",
+        );
+
+        texture
+            .as_core()
+            .expect("test requires the wgpu-core backend")
+            .mark_uninitialized();
+
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor { label: None });
+        readback.copy_from(&ctx.device, &mut encoder, &texture);
+        ctx.queue.submit([encoder.finish()]);
+
+        assert!(
+            readback.are_zero(&ctx).await,
+            "texture marked uninitialized was not lazily zero-initialized before being read",
+        );
+    });
+
 #[cfg(any(
     target_os = "windows",
     target_os = "linux",
@@ -2962,6 +3121,7 @@ async fn check_mark_externally_initialized_case<A: hal::Api>(ctx: &TestingContex
         format: TextureFormat::Rgba8Unorm,
         usage: TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     // Write a non-zero pattern into the texture through its raw hal handle, entirely
@@ -3304,6 +3464,7 @@ async fn check_zero_size_binding(ctx: &TestingContext, case: ZeroBindingCase) {
         format: TextureFormat::Rgba8UnormSrgb,
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let output_view = output_texture.create_view(&Default::default());
 
@@ -3534,6 +3695,7 @@ async fn check_zero_size_index_binding_not_at_end(ctx: &TestingContext) {
         format: TextureFormat::Rgba8UnormSrgb,
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let output_view = output_texture.create_view(&Default::default());
 

@@ -136,6 +136,7 @@ fn definitions(
             }
             | St::WorkGroupUniformLoad { result, .. }
             | St::SubgroupBallot { result, .. }
+            | St::SubgroupBallotFindBit { result, .. }
             | St::SubgroupGather { result, .. }
             | St::SubgroupCollectiveOperation { result, .. } => {
                 defined.insert(result);
@@ -166,6 +167,7 @@ fn definitions(
             | St::ImageStore { .. }
             | St::ImageAtomic { .. }
             | St::RayPipelineFunction(_)
+            | St::HitObject { .. }
             | St::CooperativeStore { .. }
             | St::DebugPrintf { .. } => {}
         }
@@ -259,6 +261,7 @@ pub(super) const fn is_statement_result(expression: &crate::Expression) -> bool 
         | Ex::ArrayLength(_)
         | Ex::RayQueryVertexPositions { .. }
         | Ex::RayQueryGetIntersection { .. }
+        | Ex::HitObjectQuery { .. }
         | Ex::CooperativeLoad { .. }
         | Ex::CooperativeMultiplyAdd { .. } => false,
     }

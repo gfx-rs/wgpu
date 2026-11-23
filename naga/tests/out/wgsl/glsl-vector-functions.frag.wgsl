@@ -1,3 +1,5 @@
+enable wgpu_f64;
+
 fn ftest(a: vec4<f32>, b: vec4<f32>) {
     var a_1: vec4<f32>;
     var b_1: vec4<f32>;

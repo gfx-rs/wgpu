@@ -30,64 +30,67 @@ mod webgpu_impl {
     //!
     //! Bitmask feature encoding is not defined by the WebGPU specification, and the values
     //! are subject to change.
-    #![allow(missing_docs)]
+    #![allow(missing_docs, reason = "these constants are internal encoding details")]
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_DEPTH_CLIP_CONTROL: u64 = 1 << 0;
+    pub const WEBGPU_FEATURE_CORE_FEATURES_AND_LIMITS: u64 = 1 << 0;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_DEPTH32FLOAT_STENCIL8: u64 = 1 << 1;
+    pub const WEBGPU_FEATURE_DEPTH_CLIP_CONTROL: u64 = 1 << 1;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC: u64 = 1 << 2;
+    pub const WEBGPU_FEATURE_DEPTH32FLOAT_STENCIL8: u64 = 1 << 2;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC_SLICED_3D: u64 = 1 << 3;
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC: u64 = 1 << 3;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ETC2: u64 = 1 << 4;
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC_SLICED_3D: u64 = 1 << 4;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC: u64 = 1 << 5;
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ETC2: u64 = 1 << 5;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC_SLICED_3D: u64 = 1 << 6;
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC: u64 = 1 << 6;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TIMESTAMP_QUERY: u64 = 1 << 7;
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC_SLICED_3D: u64 = 1 << 7;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE: u64 = 1 << 8;
+    pub const WEBGPU_FEATURE_TIMESTAMP_QUERY: u64 = 1 << 8;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_SHADER_F16: u64 = 1 << 9;
+    pub const WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE: u64 = 1 << 9;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_RG11B10UFLOAT_RENDERABLE: u64 = 1 << 10;
+    pub const WEBGPU_FEATURE_SHADER_F16: u64 = 1 << 10;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_BGRA8UNORM_STORAGE: u64 = 1 << 11;
+    pub const WEBGPU_FEATURE_RG11B10UFLOAT_RENDERABLE: u64 = 1 << 11;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_FLOAT32_FILTERABLE: u64 = 1 << 12;
+    pub const WEBGPU_FEATURE_BGRA8UNORM_STORAGE: u64 = 1 << 12;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_FLOAT32_BLENDABLE: u64 = 1 << 13;
+    pub const WEBGPU_FEATURE_FLOAT32_FILTERABLE: u64 = 1 << 13;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_DUAL_SOURCE_BLENDING: u64 = 1 << 14;
+    pub const WEBGPU_FEATURE_FLOAT32_BLENDABLE: u64 = 1 << 14;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_CLIP_DISTANCES: u64 = 1 << 15;
+    pub const WEBGPU_FEATURE_DUAL_SOURCE_BLENDING: u64 = 1 << 15;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_IMMEDIATES: u64 = 1 << 16;
+    pub const WEBGPU_FEATURE_CLIP_DISTANCES: u64 = 1 << 16;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_PRIMITIVE_INDEX: u64 = 1 << 17;
+    pub const WEBGPU_FEATURE_IMMEDIATES: u64 = 1 << 17;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPONENT_SWIZZLE: u64 = 1 << 18;
+    pub const WEBGPU_FEATURE_PRIMITIVE_INDEX: u64 = 1 << 18;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_TEXTURE_COMPONENT_SWIZZLE: u64 = 1 << 19;
 }
 
 /// Prefer `From<(FeaturesWGPU, FeaturesWebGPU)>` instead, which protects against swapping
@@ -684,7 +687,31 @@ features! {
         #[name("wgpu-ray-tracing-pipelines")]
         const EXPERIMENTAL_RAY_TRACING_PIPELINES = 1 << 24;
 
-        // Bit 25 is available.
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
+        /// major bugs in it and are expected to be subject to breaking changes, suggestions
+        /// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040)
+        ///
+        /// Allows ray tracing pipeline shaders to use the `hit_object` type, the `hitObject*`
+        /// built-in functions, and `reorderThread`. Reordering lets the hardware group
+        /// invocations by the shader they are about to run, which improves coherence.
+        ///
+        /// Requires [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`], and
+        /// `enable wgpu_ray_tracing_invocation_reorder;` in WGSL shaders.
+        ///
+        /// `reorderThread` may have no effect. If
+        /// [`Adapter::ray_tracing_invocation_reorder_mode`] returns
+        /// [`RayTracingInvocationReorderMode::Reorder`], the implementation reports that it is
+        /// likely to reorder invocations.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with [VK_EXT_ray_tracing_invocation_reorder](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_ray_tracing_invocation_reorder.html))
+        ///
+        /// This is a native only feature.
+        ///
+        #[doc = link_to_wgpu_docs!(["`Adapter::ray_tracing_invocation_reorder_mode`"]: "struct.Adapter.html#method.ray_tracing_invocation_reorder_mode")]
+        /// [`RayTracingInvocationReorderMode::Reorder`]: crate::RayTracingInvocationReorderMode::Reorder
+        #[name("wgpu-ray-tracing-invocation-reorder")]
+        const EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER = 1 << 25;
 
         /// Enables multiview render passes and `builtin(view_index)` in vertex/mesh shaders.
         ///
@@ -721,6 +748,7 @@ features! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
+        /// - Metal (simulated)
         ///
         /// This is a native only feature.
         ///
@@ -732,6 +760,7 @@ features! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
+        /// - Metal
         ///
         /// This is a native only feature.
         ///
@@ -923,7 +952,7 @@ features! {
         /// Supported platforms:
         /// - Vulkan (with VK_EXT_shader_image_atomic_int64)
         /// - DX12 (with SM 6.6+)
-        /// - Metal (with MSL 3.1+)
+        /// - Metal (with MSL 3.1+; Apple8 on macOS or Apple9+)
         ///
         /// This is a native only feature.
         #[name("wgpu-texture-int64-atomic")]
@@ -1192,6 +1221,14 @@ features! {
     #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct FeaturesWebGPU features_webgpu {
         // API:
+
+        /// Core features and limits that are guaranteed to be supported by all WebGPU specification-compliant adapters.
+        /// This feature is always enabled on adapters for which [`crate::DownlevelCapabilities::is_webgpu_compliant`] returns `true`.
+        ///
+        /// This is a web and native feature.
+        #[name("core-features-and-limits")]
+        #[web(allow)]
+        const CORE_FEATURES_AND_LIMITS = WEBGPU_FEATURE_CORE_FEATURES_AND_LIMITS;
 
         /// By default, polygon depth is clipped to 0-1 range before/during rasterization.
         /// Anything outside of that range is rejected, and respective fragments are not touched.
@@ -1582,7 +1619,8 @@ impl Features {
                     | FeaturesWGPU::EXPERIMENTAL_RAY_QUERY.bits()
                     | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
                     | FeaturesWGPU::EXPERIMENTAL_COOPERATIVE_MATRIX.bits()
-                    | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_PIPELINES.bits(),
+                    | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_PIPELINES.bits()
+                    | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER.bits(),
             ),
             FeaturesWebGPU::empty(),
         )

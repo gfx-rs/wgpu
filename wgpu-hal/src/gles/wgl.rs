@@ -10,15 +10,12 @@ use core::{
     ptr,
     time::Duration,
 };
-use std::{
-    sync::mpsc::{sync_channel, SyncSender},
-    thread,
-};
+use std::{sync::mpsc::sync_channel, thread};
 
 use glow::HasContext;
 use glutin_wgl_sys::wgl_extra::{
     Wgl, CONTEXT_CORE_PROFILE_BIT_ARB, CONTEXT_DEBUG_BIT_ARB, CONTEXT_FLAGS_ARB,
-    CONTEXT_PROFILE_MASK_ARB,
+    CONTEXT_MAJOR_VERSION_ARB, CONTEXT_MINOR_VERSION_ARB, CONTEXT_PROFILE_MASK_ARB,
 };
 use hashbrown::HashSet;
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
@@ -345,15 +342,31 @@ fn get_global_window_class() -> Result<CString, crate::InstanceError> {
 
 struct InstanceDevice {
     dc: Gdi::HDC,
+    window: Foundation::HWND,
+}
 
-    /// This is used to keep the thread owning `dc` alive until this struct is dropped.
-    _tx: SyncSender<()>,
+/// Posted to the hidden window to stop its thread.
+const INSTANCE_THREAD_SHUTDOWN: u32 = WindowsAndMessaging::WM_APP;
+
+impl Drop for InstanceDevice {
+    fn drop(&mut self) {
+        if let Err(e) = unsafe {
+            WindowsAndMessaging::PostMessageA(
+                Some(self.window),
+                INSTANCE_THREAD_SHUTDOWN,
+                Foundation::WPARAM::default(),
+                Foundation::LPARAM::default(),
+            )
+        } {
+            log::error!("failed to request instance thread shutdown: {e}");
+        }
+    }
 }
 
 fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
     #[derive(Clone, Copy)]
     // TODO: We can get these SendSync definitions in the upstream metadata if this is the case
-    struct SendDc(Gdi::HDC);
+    struct SendDc(Gdi::HDC, Foundation::HWND);
     unsafe impl Sync for SendDc {}
     unsafe impl Send for SendDc {}
 
@@ -370,7 +383,6 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
 
     let window_class = get_global_window_class()?;
 
-    let (drop_tx, drop_rx) = sync_channel(0);
     let (setup_tx, setup_rx) = sync_channel(0);
 
     // We spawn a thread which owns the hidden window for this instance.
@@ -429,9 +441,30 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
 
             match setup {
                 Ok((_window, dc)) => {
-                    setup_tx.send(Ok(SendDc(dc.device))).unwrap();
-                    // Wait for the shutdown event to free the window and device context handle.
-                    drop_rx.recv().ok();
+                    setup_tx.send(Ok(SendDc(dc.device, dc.window))).unwrap();
+                    // Pump messages so that input-language broadcasts are not blocked.
+                    loop {
+                        let mut message = unsafe { mem::zeroed::<WindowsAndMessaging::MSG>() };
+                        match unsafe {
+                            WindowsAndMessaging::GetMessageA(&mut message, None, 0, 0).0
+                        } {
+                            -1 => {
+                                log::error!(
+                                    "failed to retrieve instance thread message: {}",
+                                    Error::from_thread()
+                                );
+                            }
+                            0 => log::warn!("ignoring WM_QUIT on instance thread"),
+                            _ if message.hwnd == dc.window
+                                && message.message == INSTANCE_THREAD_SHUTDOWN =>
+                            {
+                                break
+                            }
+                            _ => {
+                                unsafe { WindowsAndMessaging::DispatchMessageA(&message) };
+                            }
+                        }
+                    }
                 }
                 Err(err) => {
                     setup_tx.send(Err(err)).unwrap();
@@ -442,9 +475,9 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
             crate::InstanceError::with_source(String::from("unable to create instance thread"), e)
         })?;
 
-    let dc = setup_rx.recv().unwrap()?.0;
+    let SendDc(dc, window) = setup_rx.recv().unwrap()?;
 
-    Ok(InstanceDevice { dc, _tx: drop_tx })
+    Ok(InstanceDevice { dc, window })
 }
 
 impl crate::Instance for Instance {
@@ -464,12 +497,16 @@ impl crate::Instance for Instance {
         let device = create_instance_device()?;
         let dc = device.dc;
 
-        let context = unsafe { OpenGL::wglCreateContext(dc) }.map_err(|e| {
-            crate::InstanceError::with_source(
-                String::from("unable to create initial OpenGL context"),
-                e,
-            )
-        })?;
+        // Some drivers (e.g. the Parallels WDDM driver) fail the first `wglCreateContext` of a
+        // process and grant the next one, so try twice before giving up on the backend.
+        let context = unsafe { OpenGL::wglCreateContext(dc) }
+            .or_else(|_| unsafe { OpenGL::wglCreateContext(dc) })
+            .map_err(|e| {
+                crate::InstanceError::with_source(
+                    String::from("unable to create initial OpenGL context"),
+                    e,
+                )
+            })?;
         let context = WglContext { context };
         context.make_current(dc).map_err(|e| {
             crate::InstanceError::with_source(
@@ -485,19 +522,53 @@ impl crate::Instance for Instance {
             && extra.CreateContextAttribsARB.is_loaded();
 
         let context = if can_use_profile {
-            let attributes = [
-                CONTEXT_PROFILE_MASK_ARB as c_int,
-                CONTEXT_CORE_PROFILE_BIT_ARB as c_int,
-                CONTEXT_FLAGS_ARB as c_int,
-                if desc.flags.contains(InstanceFlags::DEBUG) {
-                    CONTEXT_DEBUG_BIT_ARB as c_int
-                } else {
-                    0
-                },
-                0, // End of list
+            let flags = if desc.flags.contains(InstanceFlags::DEBUG) {
+                CONTEXT_DEBUG_BIT_ARB as c_int
+            } else {
+                0
+            };
+            // Ask for an explicit version. Without one the requested version is 1.0, the
+            // profile mask is ignored below 3.2, and any context compatible with 1.0 is a valid
+            // answer: some drivers (e.g. the Parallels WDDM driver) then return a 2.1 context,
+            // which is below the 3.3 we need. Take the newest core version the driver grants,
+            // and only fall back to the version-less request if it grants none of them.
+            const VERSIONS: [(c_int, c_int); 8] = [
+                (4, 6),
+                (4, 5),
+                (4, 4),
+                (4, 3),
+                (4, 2),
+                (4, 1),
+                (4, 0),
+                (3, 3),
             ];
-            let context =
-                unsafe { extra.CreateContextAttribsARB(dc.0, ptr::null(), attributes.as_ptr()) };
+            let versioned = VERSIONS.iter().find_map(|&(major, minor)| {
+                let attributes = [
+                    CONTEXT_MAJOR_VERSION_ARB as c_int,
+                    major,
+                    CONTEXT_MINOR_VERSION_ARB as c_int,
+                    minor,
+                    CONTEXT_PROFILE_MASK_ARB as c_int,
+                    CONTEXT_CORE_PROFILE_BIT_ARB as c_int,
+                    CONTEXT_FLAGS_ARB as c_int,
+                    flags,
+                    0, // End of list
+                ];
+                let context = unsafe {
+                    extra.CreateContextAttribsARB(dc.0, ptr::null(), attributes.as_ptr())
+                };
+                (!context.is_null()).then_some(context)
+            });
+            let context = versioned.unwrap_or_else(|| {
+                let attributes = [
+                    CONTEXT_PROFILE_MASK_ARB as c_int,
+                    CONTEXT_CORE_PROFILE_BIT_ARB as c_int,
+                    CONTEXT_FLAGS_ARB as c_int,
+                    flags,
+                    0, // End of list
+                ];
+                unsafe { extra.CreateContextAttribsARB(dc.0, ptr::null(), attributes.as_ptr()) }
+            });
             if context.is_null() {
                 return Err(crate::InstanceError::with_source(
                     String::from("unable to create OpenGL context"),
@@ -686,6 +757,7 @@ impl Surface {
         &self,
         _suf_texture: super::Texture,
         context: &AdapterContext,
+        _damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), crate::SurfaceError> {
         let swapchain = self.swapchain.read();
         let sc = swapchain.as_ref().unwrap();

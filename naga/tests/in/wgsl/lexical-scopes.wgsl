@@ -53,6 +53,18 @@ fn switchLexicalScope(a: i32) {
     let test = a == 2;
 }
 
+fn continuingLexicalScope(a: i32) {
+    loop {
+        let a = 2.0;
+        continuing {
+            let b: f32 = a;
+            let a = true;
+            break if a;
+        }
+    }
+    let test: i32 = a;
+}
+
 @compute @workgroup_size(1)
 fn main() {
     blockLexicalScope(false);
@@ -61,4 +73,5 @@ fn main() {
     forLexicalScope(1.);
     whileLexicalScope(1);
     switchLexicalScope(1);
+    continuingLexicalScope(1);
 }

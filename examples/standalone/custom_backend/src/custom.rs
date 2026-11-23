@@ -84,6 +84,10 @@ impl AdapterInterface for CustomAdapter {
         Vec::new()
     }
 
+    fn ray_tracing_invocation_reorder_mode(&self) -> wgpu::RayTracingInvocationReorderMode {
+        wgpu::RayTracingInvocationReorderMode::None
+    }
+
     fn is_surface_supported(&self, _surface: &DispatchSurface) -> bool {
         unimplemented!()
     }
@@ -128,7 +132,15 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
+    fn is_surface_supported(&self, _surface: &DispatchSurface) -> bool {
+        unimplemented!()
+    }
+
     fn adapter_info(&self) -> wgpu::AdapterInfo {
+        unimplemented!()
+    }
+
+    fn queue(&self) -> DispatchQueue {
         unimplemented!()
     }
 
@@ -189,6 +201,13 @@ impl DeviceInterface for CustomDevice {
     ) -> wgpu::custom::DispatchComputePipeline {
         let module = desc.module.as_custom::<CustomShaderModule>().unwrap();
         wgpu::custom::DispatchComputePipeline::custom(CustomComputePipeline(module.0.clone()))
+    }
+
+    fn create_ray_tracing_pipeline(
+        &self,
+        _desc: &wgpu::RayTracingPipelineDescriptor<'_>,
+    ) -> wgpu::custom::DispatchRayTracingPipeline {
+        unimplemented!()
     }
 
     unsafe fn create_pipeline_cache(

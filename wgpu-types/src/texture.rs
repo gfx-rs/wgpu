@@ -119,7 +119,11 @@ impl TextureViewDimension {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum TextureAspect {
-    /// Depth, Stencil, and Color.
+    /// All applicable aspects
+    ///
+    /// For formats with a single aspect (including regular color formats), this means that
+    /// aspect. For combined depth+stencil formats, this means both the depth and stencil
+    /// aspects. For multi-planar formats, this means all planes.
     #[custom(default)]
     All,
     /// Stencil.
@@ -629,6 +633,11 @@ pub struct TextureDescriptor<L, V> {
     ///
     /// Note: currently, only the srgb-ness is allowed to change. (ex: `Rgba8Unorm` texture + `Rgba8UnormSrgb` view)
     pub view_formats: V,
+    /// For devices without [`ARBITRARY_BINDING_VIEW_DIMENSIONS`](crate::DownlevelFlags::ARBITRARY_BINDING_VIEW_DIMENSIONS):
+    /// views of this texture used as bindings must have this as their `dimension`. Pass it
+    /// explicitly, or pass `None` to have it inferred from the texture's dimension and layer count.
+    /// Otherwise it is ignored.
+    pub texture_binding_view_dimension: Option<TextureViewDimension>,
 }
 
 impl<L, V> TextureDescriptor<L, V> {
@@ -647,6 +656,7 @@ impl<L, V> TextureDescriptor<L, V> {
             format: self.format,
             usage: self.usage,
             view_formats: self.view_formats.clone(),
+            texture_binding_view_dimension: self.texture_binding_view_dimension,
         }
     }
 
@@ -666,6 +676,7 @@ impl<L, V> TextureDescriptor<L, V> {
             format: self.format,
             usage: self.usage,
             view_formats: v_fun(&self.view_formats),
+            texture_binding_view_dimension: self.texture_binding_view_dimension,
         }
     }
 
@@ -688,6 +699,7 @@ impl<L, V> TextureDescriptor<L, V> {
     ///   format: wgpu::TextureFormat::Rgba8Sint,
     ///   usage: wgpu::TextureUsages::empty(),
     ///   view_formats: &[],
+    ///   texture_binding_view_dimension: None,
     /// };
     ///
     /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));
@@ -708,25 +720,55 @@ impl<L, V> TextureDescriptor<L, V> {
         Some(self.size.mip_level_size(level, self.dimension))
     }
 
-    /// Computes the render extent of this texture.
+    /// Computes the [render extent] of this texture.
     ///
     /// This is a low-level helper exported for use by wgpu-core.
     ///
-    /// <https://gpuweb.github.io/gpuweb/#abstract-opdef-compute-render-extent>
-    ///
     /// # Panics
     ///
-    /// If the mip level is out of range.
+    /// - If the mip level is out of range.
+    /// - If `self` is a multi-planar format and `plane` does not specify a valid plane.
+    /// - If `self` is a single-plane format and a `plane` is specified.
+    ///
+    /// [render extent]: https://gpuweb.github.io/gpuweb/#abstract-opdef-compute-render-extent
     #[doc(hidden)]
     #[must_use]
     pub fn compute_render_extent(&self, mip_level: u32, plane: Option<u32>) -> Extent3d {
+        // Rendering never targets more than one mip level, array layer, volume slice, or
+        // texture plane. The two-dimensional render extent is the full plane.
+        Extent3d {
+            depth_or_array_layers: 1,
+            ..self.plane_size(mip_level, plane)
+        }
+    }
+
+    /// Computes the size of the indicated plane of this texture.
+    ///
+    /// This is a low-level helper used by [`compute_render_extent`], and exported for use
+    /// by texture copy validation in wgpu-core.
+    ///
+    /// # Panics
+    ///
+    /// - If the mip level is out of range.
+    /// - If `self` is a multi-planar format and `plane` does not specify a valid plane.
+    /// - If `self` is a single-plane format and a `plane` is specified.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn plane_size(&self, mip_level: u32, plane: Option<u32>) -> Extent3d {
+        // This ought to be a panic condition within `subsampling_factors`, but it is a
+        // documented public function, and did not previously panic in this case.
+        assert_eq!(plane.is_some(), self.format.is_multi_planar_format());
+
         let Extent3d {
             width,
             height,
-            depth_or_array_layers: _,
+            depth_or_array_layers,
         } = self.mip_level_size(mip_level).expect("invalid mip level");
 
         let (w_subsampling, h_subsampling) = self.format.subsampling_factors(plane);
+
+        debug_assert!(width % w_subsampling == 0);
+        debug_assert!(height % h_subsampling == 0);
 
         let width = width / w_subsampling;
         let height = height / h_subsampling;
@@ -734,7 +776,7 @@ impl<L, V> TextureDescriptor<L, V> {
         Extent3d {
             width,
             height,
-            depth_or_array_layers: 1,
+            depth_or_array_layers,
         }
     }
 
@@ -762,6 +804,25 @@ impl<L, V> TextureDescriptor<L, V> {
                 ),
             )
         })
+    }
+
+    /// Infer the view dimension from a given descriptor.
+    ///
+    /// This is used when ARBITRARY_BINDING_VIEW_DIMENSIONS is not set.
+    /// See <https://gpuweb.github.io/gpuweb/#dom-gpudevice-createtexture>
+    #[must_use]
+    pub fn default_view_dimension(&self) -> TextureViewDimension {
+        match self.dimension {
+            TextureDimension::D1 => TextureViewDimension::D1,
+            TextureDimension::D2 => {
+                if self.array_layer_count() == 1 {
+                    TextureViewDimension::D2
+                } else {
+                    TextureViewDimension::D2Array
+                }
+            }
+            TextureDimension::D3 => TextureViewDimension::D3,
+        }
     }
 }
 

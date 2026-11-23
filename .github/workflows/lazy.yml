@@ -19,7 +19,7 @@ concurrency:
 jobs:
   parse-dota2:
     name: "Validate Shaders: Dota2"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions: {}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -29,7 +29,7 @@ jobs:
       - run: mkdir naga/data
 
       - name: Download shaders
-        run: curl https://user.fm/files/v2-5573e18b9f03f42c6ae53c392083da35/dota2-shaders.zip -o naga/data/all.zip
+        run: curl -L --fail --retry 5 --retry-all-errors https://user.fm/files/v2-5573e18b9f03f42c6ae53c392083da35/dota2-shaders.zip -o naga/data/all.zip
 
       - name: Unpack shaders
         run: |
@@ -48,7 +48,7 @@ jobs:
 
   parse-vulkan-tutorial-shaders:
     name: "Validate Shaders: Sascha Willems Vulkan Tutorial"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions: {}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -86,7 +86,7 @@ jobs:
 
   dneto0_spirv-samples:
     name: "Validate Shaders: dneto0 spirv-samples"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions: {}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

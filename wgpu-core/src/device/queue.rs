@@ -20,9 +20,9 @@ use crate::device::trace::{Action, IntoTrace};
 use crate::{
     api_log,
     command::{
-        extract_texture_selector, validate_linear_texture_data, validate_texture_buffer_copy,
+        validate_linear_texture_data, validate_texture_buffer_copy,
         validate_texture_copy_dst_format, validate_texture_copy_range, ClearError,
-        CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopySide,
+        CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopyRange, CopySide,
         TransferError,
     },
     device::{DeviceError, QueueDescriptor, WaitIdleError},
@@ -30,6 +30,7 @@ use crate::{
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     lock::{rank, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
     ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError},
+    ray_tracing_pipeline,
     resource::{
         Blas, BlasCompactState, BlasDescriptor, BlasState, Buffer, BufferAccessError,
         BufferMapState, DestroyedBuffer, DestroyedQuerySet, DestroyedResourceError,
@@ -276,12 +277,21 @@ impl Drop for Queue {
 
         // On Vulkan, pending presents are not tracked by fences.
         // wait_for_idle covers both fence-tracked submissions and pending presents.
-        match unsafe { self.raw.wait_for_idle() } {
+        let result = {
+            // Synchronizes with surfaces being configured on other threads.
+            let _command_indices = self.device.command_indices.write();
+            unsafe { self.raw.wait_for_idle() }
+        };
+        match result {
             Ok(()) => {}
             Err(hal::DeviceError::Lost) => {
                 self.device.handle_hal_error(hal::DeviceError::Lost);
             }
             Err(e) => {
+                log::error!("Unexpected error while waiting for queue idle on drop: {e:?}");
+                #[cfg(feature = "std")]
+                std::process::abort();
+                #[cfg(not(feature = "std"))]
                 panic!("Unexpected error while waiting for queue idle on drop: {e:?}");
             }
         }
@@ -351,6 +361,9 @@ pub(crate) struct EncoderInFlight {
     pub(crate) pending_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
     /// These are the BLASes that have been tracked by `PendingWrites`.
     pub(crate) pending_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
+    /// These are the shader binding data buffers that have been tracked by `PendingWrites`.
+    /// Only need to keep these live while the writes wait.
+    _pending_shader_binding_data: Vec<Arc<ray_tracing_pipeline::ShaderBindingData>>,
 }
 
 /// A private command encoder for writes made directly on the device
@@ -393,6 +406,9 @@ pub(crate) struct PendingWrites {
     dst_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
     dst_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
     copied_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
+    /// Buffers of shader binding data that have been written to when creating their
+    /// ray tracing pipelines.
+    written_shader_binding_data: Vec<Arc<ray_tracing_pipeline::ShaderBindingData>>,
     instance_flags: wgt::InstanceFlags,
 
     /// Staging buffers that are the source of a copy recorded in
@@ -444,6 +460,7 @@ impl PendingWrites {
             instance_flags,
             hoisted_staging_buffers: Vec::new(),
             hoisted_buffer_barriers: Vec::new(),
+            written_shader_binding_data: Vec::new(),
         }
     }
 
@@ -460,6 +477,10 @@ impl PendingWrites {
     pub fn insert_blas(&mut self, blas: &Arc<Blas>) {
         self.copied_blas_s
             .insert(blas.tracker_index(), blas.clone());
+    }
+
+    pub fn use_shader_binding_data(&mut self, sbd: &Arc<ray_tracing_pipeline::ShaderBindingData>) {
+        self.written_shader_binding_data.push(sbd.clone())
     }
 
     pub fn contains_buffer(&self, buffer: &Arc<Buffer>) -> bool {
@@ -604,6 +625,7 @@ impl PendingWrites {
             let pending_buffers = mem::take(&mut self.dst_buffers);
             let pending_textures = mem::take(&mut self.dst_textures);
             let pending_blas_s = mem::take(&mut self.copied_blas_s);
+            let pending_shader_binding_data = mem::take(&mut self.written_shader_binding_data);
 
             let cmd_buf = unsafe { self.command_encoder.end_encoding() }
                 .map_err(|e| device.handle_hal_error(e))?;
@@ -630,6 +652,7 @@ impl PendingWrites {
                 pending_buffers,
                 pending_textures,
                 pending_blas_s,
+                _pending_shader_binding_data: pending_shader_binding_data,
             };
 
             let staging_buffers = self.record_hoisted_barriers(&mut encoder, snatch_guard)?;
@@ -642,6 +665,7 @@ impl PendingWrites {
             self.dst_buffers.clear();
             self.dst_textures.clear();
             self.copied_blas_s.clear();
+            self.written_shader_binding_data.clear();
             Ok(None)
         }
     }
@@ -1121,10 +1145,12 @@ impl Queue {
 
         // Note: Doing the copy range validation early is important because ensures that the
         // dimensions are not going to cause overflow in other parts of the validation.
-        let (hal_copy_size, array_layer_count) =
-            validate_texture_copy_range(&destination, &dst.desc, CopySide::Destination, size)?;
-
-        let (selector, dst_base) = extract_texture_selector(&destination, size, &dst)?;
+        let CopyRange {
+            hal_copy_extent,
+            hal_base: dst_base,
+            array_layer_count,
+            selector,
+        } = validate_texture_copy_range(&destination, &dst.desc, CopySide::Destination, size)?;
 
         validate_texture_copy_dst_format(dst.desc.format, destination.aspect)?;
 
@@ -1298,7 +1324,7 @@ impl Queue {
                         rows_per_image: Some(rows_per_image),
                     },
                     texture_base,
-                    size: hal_copy_size,
+                    size: hal_copy_extent,
                 }
             })
             .collect::<Vec<_>>();
@@ -1410,6 +1436,7 @@ impl Queue {
                 texture_size: src_width,
                 dimension: crate::resource::TextureErrorDimension::X,
                 side: CopySide::Source,
+                plane: None,
             }
             .into());
         }
@@ -1420,6 +1447,7 @@ impl Queue {
                 texture_size: src_height,
                 dimension: crate::resource::TextureErrorDimension::Y,
                 side: CopySide::Source,
+                plane: None,
             }
             .into());
         }
@@ -1430,16 +1458,22 @@ impl Queue {
                 texture_size: 1,
                 dimension: crate::resource::TextureErrorDimension::Z,
                 side: CopySide::Source,
+                plane: None,
             }
             .into());
         }
 
         // Note: Doing the copy range validation early is important because ensures that the
         // dimensions are not going to cause overflow in other parts of the validation.
-        let (hal_copy_size, _) =
-            validate_texture_copy_range(&destination, &dst.desc, CopySide::Destination, &size)?;
+        let CopyRange {
+            hal_copy_extent,
+            hal_base: dst_base,
+            array_layer_count: _,
+            selector,
+        } = validate_texture_copy_range(&destination, &dst.desc, CopySide::Destination, &size)?;
 
-        let (selector, dst_base) = extract_texture_selector(&destination, &size, &dst)?;
+        // Ensured by is_valid_external_image_copy_dst_texture_format.
+        assert!(dst_base.aspect == hal::FormatAspects::COLOR);
 
         let snatch_guard = self.device.snatchable_lock.read();
 
@@ -1514,7 +1548,7 @@ impl Queue {
                 aspect: hal::FormatAspects::COLOR,
             },
             dst_base,
-            size: hal_copy_size,
+            size: hal_copy_extent,
         };
 
         let mut trackers = self.device.trackers.lock();
@@ -1830,6 +1864,7 @@ impl Queue {
                         pending_buffers: FastHashMap::default(),
                         pending_textures: FastHashMap::default(),
                         pending_blas_s: FastHashMap::default(),
+                        _pending_shader_binding_data: Vec::new(),
                     });
                 }
             }
@@ -2148,8 +2183,7 @@ impl Queue {
 
         self.device.check_is_valid()?;
 
-        self.device
-            .require_features(wgpu_types::Features::EXPERIMENTAL_RAY_QUERY)?;
+        self.device.require_acceleration_structures()?;
 
         blas.check_is_valid()?;
         self.same_device_as(blas.as_ref())?;

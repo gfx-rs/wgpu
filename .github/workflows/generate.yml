@@ -29,7 +29,7 @@ jobs:
 
     timeout-minutes: 5
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     name: "Discover Standalone Examples"
 
@@ -58,7 +58,7 @@ jobs:
 
     timeout-minutes: 5
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     needs: discover-standalone-examples
 
@@ -98,7 +98,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Install `cargo-generate`
-        uses: taiki-e/install-action@b80e2bb2635f28eb98b9fce1e2f0887e1535c6b2 # v2.90.0
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
         with:
           tool: cargo-generate
 

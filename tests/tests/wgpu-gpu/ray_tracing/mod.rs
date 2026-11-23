@@ -16,6 +16,7 @@ mod as_build;
 mod as_create;
 mod as_use_after_free;
 mod limits;
+mod pipelines;
 mod scene;
 mod shader;
 
@@ -27,6 +28,7 @@ pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
     limits::all_tests(tests);
     scene::all_tests(tests);
     shader::all_tests(tests);
+    pipelines::all_tests(tests);
 }
 
 fn acceleration_structure_limits() -> wgpu::Limits {
@@ -47,9 +49,24 @@ impl AsBuildContext {
         additional_blas_flags: AccelerationStructureFlags,
         additional_tlas_flags: AccelerationStructureFlags,
     ) -> Self {
+        Self::with_vertices(
+            ctx,
+            [[0.0; 3]; 3],
+            additional_blas_flags,
+            additional_tlas_flags,
+        )
+    }
+
+    /// Like [`Self::new`], but the BLAS holds a triangle with the given vertices.
+    pub fn with_vertices(
+        ctx: &TestingContext,
+        triangle: [[f32; 3]; 3],
+        additional_blas_flags: AccelerationStructureFlags,
+        additional_tlas_flags: AccelerationStructureFlags,
+    ) -> Self {
         let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
             label: None,
-            contents: &[0; mem::size_of::<[[f32; 3]; 3]>()],
+            contents: bytemuck::cast_slice(&triangle),
             usage: BufferUsages::BLAS_INPUT,
         });
 
@@ -79,12 +96,7 @@ impl AsBuildContext {
             update_mode: AccelerationStructureUpdateMode::Build,
         });
 
-        tlas[0] = Some(TlasInstance::new(
-            &blas,
-            [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
-            0,
-            0xFF,
-        ));
+        tlas[0] = Some(TlasInstance::from_blas_untransformed(&blas));
 
         Self {
             vertices,

@@ -184,6 +184,7 @@ pub fn map_vk_color_space(color_space: vk::ColorSpaceKHR) -> Option<wgt::Surface
     use wgt::SurfaceColorSpace as Scs;
     Some(match color_space {
         vk::ColorSpaceKHR::SRGB_NONLINEAR => Scs::Srgb,
+        vk::ColorSpaceKHR::PASS_THROUGH_EXT => Scs::PassThrough,
         vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT => Scs::ExtendedSrgbLinear,
         vk::ColorSpaceKHR::EXTENDED_SRGB_NONLINEAR_EXT => Scs::ExtendedSrgb,
         vk::ColorSpaceKHR::DISPLAY_P3_NONLINEAR_EXT => Scs::DisplayP3,
@@ -198,6 +199,7 @@ pub fn map_surface_color_space(color_space: wgt::SurfaceColorSpace) -> vk::Color
     match color_space {
         Scs::Auto => unreachable!("wgpu-core resolves `Auto` before configuring the surface"),
         Scs::Srgb => vk::ColorSpaceKHR::SRGB_NONLINEAR,
+        Scs::PassThrough => vk::ColorSpaceKHR::PASS_THROUGH_EXT,
         Scs::ExtendedSrgbLinear => vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT,
         Scs::ExtendedSrgb => vk::ColorSpaceKHR::EXTENDED_SRGB_NONLINEAR_EXT,
         Scs::DisplayP3 => vk::ColorSpaceKHR::DISPLAY_P3_NONLINEAR_EXT,
@@ -263,6 +265,24 @@ pub fn derive_image_layout(usage: wgt::TextureUses, format: wgt::TextureFormat) 
             }
         }
     }
+}
+
+pub fn map_damage_rects(damage_rects: &[wgt::Rect<u32>]) -> Vec<vk::RectLayerKHR> {
+    damage_rects
+        .iter()
+        .map(|rect| {
+            vk::RectLayerKHR::default()
+                .offset(vk::Offset2D {
+                    x: rect.x as i32,
+                    y: rect.y as i32,
+                })
+                .extent(vk::Extent2D {
+                    width: rect.w,
+                    height: rect.h,
+                })
+                .layer(0)
+        })
+        .collect()
 }
 
 pub fn map_queue_family(family: crate::QueueFamily) -> u32 {
@@ -704,6 +724,10 @@ pub fn map_buffer_usage_to_barrier(
     if usage.contains(wgt::BufferUses::ACCELERATION_STRUCTURE_QUERY) {
         stages |= vk::PipelineStageFlags::TRANSFER;
         access |= vk::AccessFlags::TRANSFER_WRITE;
+    }
+    if usage.contains(wgt::BufferUses::RAY_TRACING_PIPELINE_SHADER_DATA) {
+        stages |= vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR;
+        access |= vk::AccessFlags::SHADER_READ;
     }
 
     (stages, access)
@@ -1181,6 +1205,7 @@ mod tests {
             vk::ColorSpaceKHR::DISPLAY_P3_NONLINEAR_EXT,
             vk::ColorSpaceKHR::HDR10_ST2084_EXT,
             vk::ColorSpaceKHR::HDR10_HLG_EXT,
+            vk::ColorSpaceKHR::PASS_THROUGH_EXT,
         ] {
             let mapped = map_vk_color_space(vk_color_space).unwrap();
             assert_eq!(map_surface_color_space(mapped), vk_color_space);
@@ -1192,7 +1217,6 @@ mod tests {
         for vk_color_space in [
             vk::ColorSpaceKHR::BT2020_LINEAR_EXT,
             vk::ColorSpaceKHR::DOLBYVISION_EXT,
-            vk::ColorSpaceKHR::PASS_THROUGH_EXT,
             vk::ColorSpaceKHR::ADOBERGB_NONLINEAR_EXT,
         ] {
             assert!(map_vk_color_space(vk_color_space).is_none());

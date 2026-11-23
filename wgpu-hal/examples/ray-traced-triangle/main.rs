@@ -673,6 +673,7 @@ impl<A: hal::Api> Example<A> {
             usage: wgpu_types::TextureUses::STORAGE_READ_WRITE | wgpu_types::TextureUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::empty(),
             view_formats: vec![wgpu_types::TextureFormat::Rgba8Unorm],
+            texture_binding_view_dimension: Some(wgpu_types::TextureViewDimension::D2),
         };
         let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
 
@@ -1065,7 +1066,7 @@ impl<A: hal::Api> Example<A> {
                     (&mut ctx.fence, ctx.fence_value),
                 )
                 .unwrap();
-            self.queue.present(&self.surface, surface_tex).unwrap();
+            self.queue.present(&self.surface, surface_tex, &[]).unwrap();
             ctx.used_cmd_bufs.push(cmd_buf);
             ctx.used_views.push(surface_tex_view);
         };

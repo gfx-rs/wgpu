@@ -45,22 +45,18 @@ static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration
             max_multiview_view_count: 4,
             ..Limits::defaults()
         },
-        failures: {
-            let mut failures = Vec::new();
+        failures: vec![
             // https://github.com/gfx-rs/wgpu/issues/9620
-            failures.push(FailureCase::lvp_poison_memory(
+            FailureCase::lvp_poison_memory(
                 "assertion `left == right` failed: Expected 0\n  \
                  left: Some(128)\n \
                  right: None",
-            ));
-            // https://github.com/gfx-rs/wgpu/issues/9184 and https://github.com/gfx-rs/wgpu/issues/9187
-            failures.extend(FailureCase::mac_vulkan().into_iter().map(|case| {
-                case.panic(
-                    "assertion `left == right` failed: Expected 0\n  left: Some(255)\n right: None",
-                )
-            }));
-            failures
-        },
+            ),
+            // https://github.com/gfx-rs/wgpu/issues/9184
+            FailureCase::molten_vk().panic(
+                "assertion `left == right` failed: Expected 0\n  left: Some(255)\n right: None",
+            ),
+        ],
         ..Default::default()
     })
     .run_async(|ctx| run_test(ctx, 0b1001, 1));
@@ -134,6 +130,7 @@ async fn run_test(ctx: TestingContext, layer_mask: u32, sample_count: u32) {
         format: wgpu::TextureFormat::R8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     };
     let texture = ctx.device.create_texture(&texture_desc);
     let texture_view_desc = wgpu::TextureViewDescriptor {

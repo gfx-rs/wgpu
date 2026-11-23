@@ -188,6 +188,7 @@ pub const CAPABILITIES: crate::Capabilities = {
             shader_model: wgt::ShaderModel::Sm5,
         },
         cooperative_matrix_properties: Vec::new(),
+        ray_tracing_invocation_reorder_mode: wgt::RayTracingInvocationReorderMode::None,
     }
 };
 
@@ -283,6 +284,7 @@ impl crate::Queue for Context {
         &self,
         surface: &Context,
         texture: Resource,
+        _damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), crate::SurfaceError> {
         Ok(())
     }

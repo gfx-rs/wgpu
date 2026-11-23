@@ -422,6 +422,7 @@ pub enum TypeGenerator {
     BindingArray,
     AccelerationStructure,
     RayQuery,
+    HitObject,
     CooperativeMatrix {
         columns: crate::CooperativeSize,
         rows: crate::CooperativeSize,
@@ -558,6 +559,8 @@ pub fn map_predeclared_type(
         "acceleration_structure" => TypeGenerator::AccelerationStructure.into(),
         // ray query
         "ray_query" => TypeGenerator::RayQuery.into(),
+        // hit object
+        "hit_object" => TypeGenerator::HitObject.into(),
         // cooperative matrix
         "coop_mat8x8" => TypeGenerator::CooperativeMatrix {
             columns: crate::CooperativeSize::Eight,
@@ -576,6 +579,9 @@ pub fn map_predeclared_type(
         PredeclaredType::TypeInner(ref ty) if ty.scalar() == Some(Sc::F16) => {
             Some(&[ImplementedEnableExtension::F16])
         }
+        PredeclaredType::TypeInner(ref ty) if ty.scalar() == Some(Sc::F64) => {
+            Some(&[ImplementedEnableExtension::WgpuF64])
+        }
         PredeclaredType::TypeInner(ref ty) if matches!(ty.scalar(), Some(s) if s == Sc::I16 || s == Sc::U16) => {
             Some(&[ImplementedEnableExtension::WgpuInt16])
         }
@@ -586,6 +592,9 @@ pub fn map_predeclared_type(
             ImplementedEnableExtension::WgpuRayQuery,
             ImplementedEnableExtension::WgpuRayTracingPipeline,
         ]),
+        PredeclaredType::TypeGenerator(TypeGenerator::HitObject) => {
+            Some(&[ImplementedEnableExtension::WgpuRayTracingInvocationReorder])
+        }
         PredeclaredType::TypeGenerator(TypeGenerator::CooperativeMatrix { .. }) => {
             Some(&[ImplementedEnableExtension::WgpuCooperativeMatrix])
         }
