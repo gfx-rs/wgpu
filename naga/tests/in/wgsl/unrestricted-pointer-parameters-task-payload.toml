@@ -1,5 +1,6 @@
 capabilities = "MESH_SHADER"
-targets = "WGSL | SPIRV | HLSL | METAL"
+# DXC crashes copying a task payload that contains an array, so no HLSL
+targets = "WGSL | SPIRV | METAL"
 
 [spv]
 version = [1, 4]
@@ -7,6 +8,3 @@ capabilities = ["MeshShadingEXT"]
 
 [msl]
 lang_version = [3, 0]
-
-[hlsl]
-shader_model = "V6_5"
