@@ -27,6 +27,10 @@ fn request_device_returns_device_with_core_features_and_limits() {
     }))
     .unwrap();
 
-    assert_eq!(device.limits(), Limits::default());
+    let mut default_limits = Limits::default();
+    default_limits.zero_native_only();
+    default_limits = default_limits.or_better_values_from(&Limits::downlevel_webgl2_defaults());
+
+    assert_eq!(device.limits(), default_limits);
     assert_eq!(device.features(), Features::CORE_FEATURES_AND_LIMITS);
 }

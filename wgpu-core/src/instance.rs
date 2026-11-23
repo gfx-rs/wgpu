@@ -1305,7 +1305,9 @@ impl Adapter {
             .contains(wgt::Features::CORE_FEATURES_AND_LIMITS)
         {
             *features |= wgt::Features::CORE_FEATURES_AND_LIMITS;
-            *limits = wgt::Limits::defaults().or_better_values_from(limits);
+            let mut default_limits = wgt::Limits::defaults();
+            default_limits.zero_native_only();
+            *limits = default_limits.or_better_values_from(limits);
         } else {
             // here we should apply compatibility mode default limits
             // but we do not implement compatibility yet: https://github.com/gfx-rs/wgpu/issues/8124
