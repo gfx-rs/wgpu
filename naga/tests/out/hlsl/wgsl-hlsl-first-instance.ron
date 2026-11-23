@@ -1,0 +1,24 @@
+(
+    vertex:[
+        (
+            entry_point:"copy_struct_members",
+            target_profile:"vs_5_1",
+        ),
+        (
+            entry_point:"pass_struct_to_function",
+            target_profile:"vs_5_1",
+        ),
+        (
+            entry_point:"copy_parameters",
+            target_profile:"vs_5_1",
+        ),
+    ],
+    fragment:[
+    ],
+    compute:[
+    ],
+    task:[
+    ],
+    mesh:[
+    ],
+)

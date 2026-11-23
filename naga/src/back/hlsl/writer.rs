@@ -931,6 +931,35 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.write_interface_struct(module, (stage, Io::Output), struct_name, None, fake_members)
     }
 
+    /// Whether a vertex entry point declares a `vertex_index` or `instance_index` input, which
+    /// must be offset by the draw's first vertex or instance.
+    fn has_offset_builtin(
+        &self,
+        module: &Module,
+        func: &crate::Function,
+        stage: ShaderStage,
+    ) -> bool {
+        let is_offset = |binding: &Option<crate::Binding>| {
+            matches!(
+                binding,
+                Some(crate::Binding::BuiltIn(
+                    crate::BuiltIn::VertexIndex | crate::BuiltIn::InstanceIndex
+                ))
+            )
+        };
+        self.options.special_constants_binding.is_some()
+            && stage == ShaderStage::Vertex
+            && func
+                .arguments
+                .iter()
+                .any(|arg| match module.types[arg.ty].inner {
+                    TypeInner::Struct { ref members, .. } => {
+                        members.iter().any(|member| is_offset(&member.binding))
+                    }
+                    _ => is_offset(&arg.binding),
+                })
+    }
+
     /// Writes special interface structures for an entry point. The special structures have
     /// all the fields flattened into them and sorted by binding. They are needed to emulate
     /// subgroup built-ins and to make the interfaces between VS outputs and FS inputs match.
@@ -949,7 +978,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     || func
                         .arguments
                         .iter()
-                        .any(|arg| is_subgroup_builtin_binding(&arg.binding)))
+                        .any(|arg| is_subgroup_builtin_binding(&arg.binding))
+                    || self.has_offset_builtin(module, func, stage))
             {
                 Some(self.with_early_depth_test(ep.early_depth_test, |this| {
                     this.write_ep_input_struct(module, func, stage, ep_name)
@@ -1011,6 +1041,26 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     ep_input.arg_name,
                     // When writing SubgroupId, we always guarantee that local_invocation_index_name is written
                     ep_input.local_invocation_index_name.as_ref().unwrap()
+                )?;
+            }
+            Some(crate::Binding::BuiltIn(crate::BuiltIn::VertexIndex))
+                if ep.stage == ShaderStage::Vertex
+                    && self.options.special_constants_binding.is_some() =>
+            {
+                write!(
+                    self.out,
+                    "({SPECIAL_CBUF_VAR}.{SPECIAL_FIRST_VERTEX} + {}.{})",
+                    ep_input.arg_name, fake_member.name
+                )?;
+            }
+            Some(crate::Binding::BuiltIn(crate::BuiltIn::InstanceIndex))
+                if ep.stage == ShaderStage::Vertex
+                    && self.options.special_constants_binding.is_some() =>
+            {
+                write!(
+                    self.out,
+                    "({SPECIAL_CBUF_VAR}.{SPECIAL_FIRST_INSTANCE} + {}.{})",
+                    ep_input.arg_name, fake_member.name
                 )?;
             }
             // WGSL's fragment `position.w` is 1/w of the clip position, D3D's `SV_Position.w` is w.
@@ -4040,36 +4090,26 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         use crate::Expression;
 
-        // Handle the special semantics of vertex_index/instance_index
+        // `first_vertex` and `first_instance` are added once, where the entry point's arguments
+        // are initialized (see `write_ep_argument_initialization`), not at each use.
         let ff_input = if self.options.special_constants_binding.is_some() {
             func_ctx.is_fixed_function_input(expr, module)
         } else {
             None
         };
-        let closing_bracket = match ff_input {
-            Some(crate::BuiltIn::VertexIndex) => {
-                write!(self.out, "({SPECIAL_CBUF_VAR}.{SPECIAL_FIRST_VERTEX} + ")?;
-                ")"
-            }
-            Some(crate::BuiltIn::InstanceIndex) => {
-                write!(self.out, "({SPECIAL_CBUF_VAR}.{SPECIAL_FIRST_INSTANCE} + ",)?;
-                ")"
-            }
-            Some(crate::BuiltIn::NumWorkGroups) => {
-                // Note: despite their names (`FIRST_VERTEX` and `FIRST_INSTANCE`),
-                // in compute shaders the special constants contain the number
-                // of workgroups, which we are using here.
-                write!(
-                    self.out,
-                    "uint3({SPECIAL_CBUF_VAR}.{SPECIAL_FIRST_VERTEX}, {SPECIAL_CBUF_VAR}.{SPECIAL_FIRST_INSTANCE}, {SPECIAL_CBUF_VAR}.{SPECIAL_OTHER})",
-                )?;
-                return Ok(());
-            }
-            _ => "",
-        };
+        if let Some(crate::BuiltIn::NumWorkGroups) = ff_input {
+            // Note: despite their names (`FIRST_VERTEX` and `FIRST_INSTANCE`),
+            // in compute shaders the special constants contain the number
+            // of workgroups, which we are using here.
+            write!(
+                self.out,
+                "uint3({SPECIAL_CBUF_VAR}.{SPECIAL_FIRST_VERTEX}, {SPECIAL_CBUF_VAR}.{SPECIAL_FIRST_INSTANCE}, {SPECIAL_CBUF_VAR}.{SPECIAL_OTHER})",
+            )?;
+            return Ok(());
+        }
 
         if let Some(name) = self.named_expressions.get(&expr) {
-            write!(self.out, "{name}{closing_bracket}")?;
+            write!(self.out, "{name}")?;
             return Ok(());
         }
 
@@ -4969,9 +5009,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             | Expression::SubgroupOperationResult { .. } => {}
         }
 
-        if !closing_bracket.is_empty() {
-            write!(self.out, "{closing_bracket}")?;
-        }
         Ok(())
     }
 
