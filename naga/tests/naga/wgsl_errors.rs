@@ -513,7 +513,7 @@ fn vector_constructor_incorrect_component_count() {
   ┌─ wgsl:3:21
   │
 3 │                 _ = vec4(1, 2, 3);
-  │                     ^^^^^^^^^^^^^ see msg
+  │                     ^^^^^^^^^^^^^ wrong number of components
 
 "#,
     );
@@ -529,7 +529,7 @@ fn vector_constructor_incorrect_component_count() {
   ┌─ wgsl:3:21
   │
 3 │                 _ = vec4(1, 2, 3, 4, 5);
-  │                     ^^^^^^^^^^^^^^^^^^^ see msg
+  │                     ^^^^^^^^^^^^^^^^^^^ wrong number of components
 
 "#,
     );
@@ -546,7 +546,39 @@ fn vector_constructor_incorrect_component_count() {
   ┌─ wgsl:3:29
   │
 3 │                 _ = vec4(1, vec2(2, 3, 4));
-  │                             ^^^^^^^^^^^^^ see msg
+  │                             ^^^^^^^^^^^^^ wrong number of components
+
+"#,
+    );
+}
+
+#[test]
+fn vector_constructor_incorrect_flattened_component_count() {
+    // Vector arguments contribute one component per vector component.
+    check(
+        r#"
+            fn x(v: vec2f) {
+                _ = vec4(v, v, 1.0);
+            }
+        "#,
+        r#"error: Constructor expects 4 components, found 5
+  ┌─ wgsl:3:21
+  │
+3 │                 _ = vec4(v, v, 1.0);
+  │                     ^^^^^^^^^^^^^^^ wrong number of components
+
+"#,
+    );
+
+    check(
+        r#"
+            const c = vec3(vec2(), vec2());
+        "#,
+        r#"error: Constructor expects 3 components, found 4
+  ┌─ wgsl:2:23
+  │
+2 │             const c = vec3(vec2(), vec2());
+  │                       ^^^^^^^^^^^^^^^^^^^^ wrong number of components
 
 "#,
     );

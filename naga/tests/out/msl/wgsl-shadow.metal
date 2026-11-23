@@ -128,8 +128,8 @@ fragment fs_mainOutput fs_main(
         }
     }
     metal::float3 _e42 = color;
-    metal::float4 _e47 = u_entity.color;
-    return fs_mainOutput { metal::float4(_e42, 1.0) * _e47 };
+    metal::float4 _e50 = u_entity.color;
+    return fs_mainOutput { metal::float4(_e42.x, _e42.y, _e42.z, 1.0) * _e50 };
 }
 
 
@@ -181,6 +181,6 @@ fragment fs_main_without_storageOutput fs_main_without_storage(
         }
     }
     metal::float3 _e42 = color_1;
-    metal::float4 _e47 = u_entity.color;
-    return fs_main_without_storageOutput { metal::float4(_e42, 1.0) * _e47 };
+    metal::float4 _e50 = u_entity.color;
+    return fs_main_without_storageOutput { metal::float4(_e42.x, _e42.y, _e42.z, 1.0) * _e50 };
 }

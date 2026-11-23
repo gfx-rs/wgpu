@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 57
+; Bound: 56
 OpCapability Shader
 OpCapability Linkage
 %1 = OpExtInstImport "GLSL.std.450"
@@ -66,4 +66,3 @@ OpMemberDecorate %14 2 Offset 8
 %53 = OpConstantComposite  %13  %47 %11
 %54 = OpConstantComposite  %14  %38 %45 %47
 %55 = OpConstantComposite  %15  %38 %39 %41
-%56 = OpConstantComposite  %8  %39 %41

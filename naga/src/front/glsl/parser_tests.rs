@@ -860,3 +860,64 @@ fn expressions() {
         )
         .unwrap();
 }
+
+#[test]
+fn vector_initializer_list() {
+    let mut frontend = Frontend::default();
+
+    frontend
+        .parse(
+            &Options::from(ShaderStage::Vertex),
+            r#"
+        #  version 450
+        void main() {
+            vec4 v = { 1.0, 2.0, 3.0, 4.0 };
+            mat2 m = { vec2(1.0), vec2(2.0) };
+        }
+        "#,
+        )
+        .unwrap();
+
+    // Unlike constructors, initializer lists do not flatten vectors.
+    let source = r#"
+        #  version 450
+        void main() {
+            vec4 v = { vec2(1.0, 2.0), 3.0, 4.0 };
+        }
+        "#;
+    let start = source.find("vec2(1.0, 2.0)").unwrap() as u32;
+    assert_eq!(
+        frontend
+            .parse(&Options::from(ShaderStage::Vertex), source)
+            .err()
+            .unwrap(),
+        ParseErrors {
+            errors: vec![Error {
+                kind: ErrorKind::SemanticError(
+                    "Vector initializer list elements must be scalars".into()
+                ),
+                meta: Span::new(start, start + "vec2(1.0, 2.0)".len() as u32),
+            }]
+        },
+    );
+}
+
+/// Const initializer lists are checked by the constant evaluator.
+#[test]
+fn const_vector_initializer_list_component_count() {
+    let mut frontend = Frontend::default();
+    let source = "#version 450\nconst vec4 v = { 1.0, 2.0, 3.0 };\nvoid main() {}\n";
+    let start = source.find('{').unwrap() as u32;
+    assert_eq!(
+        frontend
+            .parse(&Options::from(ShaderStage::Vertex), source)
+            .err()
+            .unwrap(),
+        ParseErrors {
+            errors: vec![Error {
+                kind: ErrorKind::SemanticError("Constructor expects 4 components, found 3".into()),
+                meta: Span::new(start, start + "{ 1.0, 2.0, 3.0 }".len() as u32),
+            }]
+        },
+    );
+}

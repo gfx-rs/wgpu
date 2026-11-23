@@ -18,10 +18,10 @@ void main()
 #version 460
 #extension GL_EXT_fragment_shader_barycentric : require
 
-layout(location = 0) out vec4 _20;
+layout(location = 0) out vec4 _23;
 
 void main()
 {
-    _20 = vec4(gl_BaryCoordNoPerspEXT, 1.0);
+    _23 = vec4(gl_BaryCoordNoPerspEXT, 1.0);
 }
 

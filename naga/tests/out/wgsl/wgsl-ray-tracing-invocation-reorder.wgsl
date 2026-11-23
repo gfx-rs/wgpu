@@ -100,7 +100,7 @@ fn ray_gen_main(@builtin(ray_invocation_id) id: vec3<u32>, @builtin(num_ray_invo
 fn closest_hit_main(@builtin(hit_barycentrics) bary: vec2<f32>) {
     var ho_1: hit_object;
 
-    incoming_payload.color = vec3<f32>(bary, ((1f - bary.x) - bary.y));
+    incoming_payload.color = vec3<f32>(bary.x, bary.y, ((1f - bary.x) - bary.y));
     hitObjectTraceRay((&ho_1), acc_struct, RayDesc(0u, 255u, 0.01f, 100f, vec3(0f), vec3<f32>(0f, 1f, 0f)), (&incoming_payload));
     hitObjectExecuteShader((&ho_1), (&incoming_payload));
     return;

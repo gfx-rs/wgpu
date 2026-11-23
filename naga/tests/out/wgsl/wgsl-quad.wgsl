@@ -12,7 +12,8 @@ var u_sampler: sampler;
 
 @vertex
 fn vert_main(@location(0) pos: vec2<f32>, @location(1) uv: vec2<f32>) -> VertexOutput {
-    return VertexOutput(uv, vec4<f32>((c_scale * pos), 0f, 1f));
+    let _e3 = (c_scale * pos);
+    return VertexOutput(uv, vec4<f32>(_e3.x, _e3.y, 0f, 1f));
 }
 
 @fragment

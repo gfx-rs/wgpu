@@ -2200,3 +2200,132 @@ fn spv_longest_entry_point_name() {
 fn spv_entry_point_name_too_long() {
     write_spv_with_entry_point_name_len(LONGEST_SPV_ENTRY_POINT_NAME_LEN + 1);
 }
+
+/// Build a module with a `vec4<f32>` constant initialized by a `Compose`
+/// with the given components, and return the validation result.
+fn validate_vec4_compose(
+    make_components: impl FnOnce(&mut Module) -> Vec<naga::Handle<Expression>>,
+) -> Result<ModuleInfo, Box<naga::WithSpan<valid::ValidationError>>> {
+    let span = naga::Span::default();
+    let mut module = Module::default();
+    let ty_vec4 = module.types.insert(
+        ir::Type {
+            name: None,
+            inner: ir::TypeInner::Vector {
+                size: ir::VectorSize::Quad,
+                scalar: Scalar::F32,
+            },
+        },
+        span,
+    );
+    let components = make_components(&mut module);
+    let init = module.global_expressions.append(
+        Expression::Compose {
+            ty: ty_vec4,
+            components,
+        },
+        span,
+    );
+    module.constants.append(
+        ir::Constant {
+            name: Some("c".into()),
+            ty: ty_vec4,
+            init,
+        },
+        span,
+    );
+    valid::Validator::new(Default::default(), Capabilities::empty()).validate(&module)
+}
+
+#[test]
+fn vector_compose_scalar_components() {
+    validate_vec4_compose(|module| {
+        (0..4)
+            .map(|i| {
+                module.global_expressions.append(
+                    Expression::Literal(naga::Literal::F32(i as f32)),
+                    Default::default(),
+                )
+            })
+            .collect()
+    })
+    .expect("module should be valid");
+}
+
+/// Vector `Compose` expressions may not have vector components.
+#[test]
+fn vector_compose_vector_component() {
+    let err = validate_vec4_compose(|module| {
+        let span = naga::Span::default();
+        let ty_vec2 = module.types.insert(
+            ir::Type {
+                name: None,
+                inner: ir::TypeInner::Vector {
+                    size: ir::VectorSize::Bi,
+                    scalar: Scalar::F32,
+                },
+            },
+            span,
+        );
+        let lit = |module: &mut Module, value| {
+            module
+                .global_expressions
+                .append(Expression::Literal(naga::Literal::F32(value)), span)
+        };
+        let x = lit(module, 0.0);
+        let y = lit(module, 1.0);
+        let xy = module.global_expressions.append(
+            Expression::Compose {
+                ty: ty_vec2,
+                components: vec![x, y],
+            },
+            span,
+        );
+        vec![lit(module, 2.0), xy, lit(module, 3.0), lit(module, 4.0)]
+    })
+    .expect_err("module should be invalid")
+    .into_inner();
+
+    assert!(
+        matches!(
+            err,
+            valid::ValidationError::ConstExpression {
+                source: valid::ConstExpressionError::Compose(valid::ComposeError::ComponentType {
+                    index: 1
+                }),
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn vector_compose_wrong_component_count() {
+    let err = validate_vec4_compose(|module| {
+        (0..3)
+            .map(|i| {
+                module.global_expressions.append(
+                    Expression::Literal(naga::Literal::F32(i as f32)),
+                    Default::default(),
+                )
+            })
+            .collect()
+    })
+    .expect_err("module should be invalid")
+    .into_inner();
+
+    assert!(
+        matches!(
+            err,
+            valid::ValidationError::ConstExpression {
+                source: valid::ConstExpressionError::Compose(valid::ComposeError::ComponentCount {
+                    given: 3,
+                    expected: 4,
+                }),
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+}

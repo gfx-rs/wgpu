@@ -1172,10 +1172,24 @@
                 Load(
                     pointer: 43,
                 ),
+                AccessIndex(
+                    base: 118,
+                    index: 0,
+                ),
+                AccessIndex(
+                    base: 118,
+                    index: 1,
+                ),
+                AccessIndex(
+                    base: 118,
+                    index: 2,
+                ),
                 Compose(
                     ty: 3,
                     components: [
-                        118,
+                        119,
+                        120,
+                        121,
                         15,
                     ],
                 ),
@@ -1231,11 +1245,11 @@
                 ),
                 Emit((
                     start: 118,
-                    end: 120,
+                    end: 123,
                 )),
                 Store(
                     pointer: 2,
-                    value: 119,
+                    value: 122,
                 ),
                 Return(
                     value: None,

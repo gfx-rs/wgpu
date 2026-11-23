@@ -120,34 +120,14 @@ macro_rules! gen_component_wise_extractor {
                             let first_ty = ty;
                             let mut component_groups =
                                 ArrayVec::<ArrayVec<_, { crate::VectorSize::MAX }>, N>::new();
-                            {
-                                let mut inner = ArrayVec::new();
-                                for item in crate::proc::flatten_compose(
-                                    first_ty,
-                                    components,
-                                    eval.expressions,
-                                    eval.types,
-                                ) {
-                                    inner.push(item);
-                                }
-                                component_groups.push(inner);
-                            }
+                            component_groups.push(components.iter().copied().collect());
                             for expr in exprs {
                                 match sanitize!(expr)? {
                                     &Expression::Compose { ty, ref components }
                                         if &eval.types[ty].inner
                                             == &eval.types[first_ty].inner =>
                                     {
-                                        let mut inner = ArrayVec::new();
-                                        for item in crate::proc::flatten_compose(
-                                            ty,
-                                            components,
-                                            eval.expressions,
-                                            eval.types,
-                                        ) {
-                                            inner.push(item);
-                                        }
-                                        component_groups.push(inner);
+                                        component_groups.push(components.iter().copied().collect());
                                     }
                                     _ => return Err(err),
                                 }
@@ -915,7 +895,7 @@ pub enum ConstantEvaluatorError {
     InvalidClamp,
     #[error("Constructor expects {expected} components, found {actual}")]
     InvalidVectorComposeLength { expected: usize, actual: usize },
-    #[error("Constructor must only contain vector or scalar arguments")]
+    #[error("Vector constructor components must be scalars")]
     InvalidVectorComposeComponent,
     #[error("Splat is defined only on scalar values")]
     SplatScalarOnly,
@@ -1258,6 +1238,7 @@ impl<'a> ConstantEvaluator<'a> {
                     .iter()
                     .map(|component| self.check_and_get(*component))
                     .collect::<Result<Vec<_>, _>>()?;
+                self.check_vector_compose(ty, &components)?;
                 self.register_evaluated_expr(Expression::Compose { ty, components }, span)
             }
             Expression::Splat { size, value } => {
@@ -1449,19 +1430,11 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::Compose { ty, ref components } => {
                 let dst_ty = get_dst_ty(ty)?;
 
-                let mut flattened = [src_constant; 4]; // dummy value
-                let len =
-                    crate::proc::flatten_compose(ty, components, self.expressions, self.types)
-                        .zip(flattened.iter_mut())
-                        .map(|(component, elt)| *elt = component)
-                        .count();
-                let flattened = &flattened[..len];
-
                 let swizzled_components = pattern[..size as usize]
                     .iter()
                     .map(|&sc| {
                         let sc = sc as usize;
-                        if let Some(elt) = flattened.get(sc) {
+                        if let Some(elt) = components.get(sc) {
                             Ok(*elt)
                         } else {
                             Err(ConstantEvaluatorError::SwizzleOutOfBounds)
@@ -2206,10 +2179,7 @@ impl<'a> ConstantEvaluator<'a> {
         };
 
         let mut value = [Literal::Bool(false); N];
-        for (component, elt) in
-            crate::proc::flatten_compose(ty, components, self.expressions, self.types)
-                .zip(value.iter_mut())
-        {
+        for (&component, elt) in components.iter().zip(value.iter_mut()) {
             let Expression::Literal(literal) = self.expressions[component] else {
                 return Err(ConstantEvaluatorError::InvalidMathArg);
             };
@@ -2238,11 +2208,12 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::Literal(literal) if allow_single => {
                 Ok(LiteralVector::from_literal(literal))
             }
-            Expression::Compose { ty, ref components } => {
+            Expression::Compose {
+                ty: _,
+                ref components,
+            } => {
                 let mut components_out = ArrayVec::<Literal, { crate::VectorSize::MAX }>::new();
-                for expr in
-                    crate::proc::flatten_compose(ty, components, self.expressions, self.types)
-                {
+                for &expr in components {
                     match self.expressions[expr] {
                         Expression::Literal(l) => components_out.push(l),
                         _ => return Err(ConstantEvaluatorError::InvalidMathArg),
@@ -2338,8 +2309,9 @@ impl<'a> ConstantEvaluator<'a> {
                     .components()
                     .ok_or(ConstantEvaluatorError::InvalidAccessBase)?;
 
-                crate::proc::flatten_compose(ty, components, self.expressions, self.types)
-                    .nth(index)
+                components
+                    .get(index)
+                    .copied()
                     .ok_or(ConstantEvaluatorError::InvalidAccessIndex)
             }
             _ => Err(ConstantEvaluatorError::InvalidAccessBase),
@@ -3152,25 +3124,13 @@ impl<'a> ConstantEvaluator<'a> {
                 // We have to make a copy of the component lists, because the
                 // call to `binary_op_vector` needs `&mut self`, but `self` owns
                 // the component lists.
-                let left_flattened = crate::proc::flatten_compose(
-                    left_ty,
-                    left_components,
-                    self.expressions,
-                    self.types,
-                )
-                .collect::<Vec<_>>();
-                let right_flattened = crate::proc::flatten_compose(
-                    right_ty,
-                    right_components,
-                    self.expressions,
-                    self.types,
-                )
-                .collect::<Vec<_>>();
+                let left_components = left_components.clone();
+                let right_components = right_components.clone();
 
                 self.binary_op_compose(
                     op,
-                    &left_flattened,
-                    &right_flattened,
+                    &left_components,
+                    &right_components,
                     left_ty,
                     right_ty,
                     span,
@@ -3514,9 +3474,7 @@ impl<'a> ConstantEvaluator<'a> {
                     if matches!(self.types[ty].inner, TypeInner::Vector { .. }) =>
                 {
                     let mut bool_components = ArrayVec::<bool, { crate::VectorSize::MAX }>::new();
-                    for component in
-                        crate::proc::flatten_compose(ty, components, self.expressions, self.types)
-                    {
+                    for &component in components {
                         match self.expressions[component] {
                             Expression::Literal(Literal::Bool(val)) => {
                                 bool_components.push(val);
@@ -3577,26 +3535,6 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
-    /// Returns the total number of components, after flattening, of a vector compose expression.
-    fn vector_compose_flattened_size(
-        &self,
-        components: &[Handle<Expression>],
-    ) -> Result<usize, ConstantEvaluatorError> {
-        components
-            .iter()
-            .try_fold(0, |acc, c| -> Result<_, ConstantEvaluatorError> {
-                let size = match *self.resolve_type(*c)?.inner_with(self.types) {
-                    TypeInner::Scalar(_) => 1,
-                    // We trust that the vector size of `component` is correct,
-                    // as it will have already been validated when `component`
-                    // was registered.
-                    TypeInner::Vector { size, .. } => size as usize,
-                    _ => return Err(ConstantEvaluatorError::InvalidVectorComposeComponent),
-                };
-                Ok(acc + size)
-            })
-    }
-
     fn register_evaluated_expr(
         &mut self,
         expr: Expression,
@@ -3610,23 +3548,32 @@ impl<'a> ConstantEvaluator<'a> {
             crate::valid::check_literal_value(literal)?;
         }
 
-        // Ensure vector composes contain the correct number of components. We
-        // do so here when each compose is registered to avoid having to deal
-        // with the mess each time the compose is used in another expression.
-        if let Expression::Compose { ty, ref components } = expr {
-            if let TypeInner::Vector { size, scalar: _ } = self.types[ty].inner {
-                let expected = size as usize;
-                let actual = self.vector_compose_flattened_size(components)?;
-                if expected != actual {
-                    return Err(ConstantEvaluatorError::InvalidVectorComposeLength {
-                        expected,
-                        actual,
-                    });
-                }
+        Ok(self.append_expr(expr, span, ExpressionKind::Const))
+    }
+
+    /// Check that a vector `Compose` has one scalar per component.
+    fn check_vector_compose(
+        &self,
+        ty: Handle<Type>,
+        components: &[Handle<Expression>],
+    ) -> Result<(), ConstantEvaluatorError> {
+        let TypeInner::Vector { size, scalar: _ } = self.types[ty].inner else {
+            return Ok(());
+        };
+        let expected = size as usize;
+        let actual = components.len();
+        if expected != actual {
+            return Err(ConstantEvaluatorError::InvalidVectorComposeLength { expected, actual });
+        }
+        for &component in components {
+            if !matches!(
+                *self.resolve_type(component)?.inner_with(self.types),
+                TypeInner::Scalar(_)
+            ) {
+                return Err(ConstantEvaluatorError::InvalidVectorComposeComponent);
             }
         }
-
-        Ok(self.append_expr(expr, span, ExpressionKind::Const))
+        Ok(())
     }
 
     fn append_expr(

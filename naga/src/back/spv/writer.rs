@@ -2851,14 +2851,10 @@ impl Writer {
                 self.get_constant_null(type_id)
             }
             crate::Expression::Compose { ty, ref components } => {
-                let component_ids: Vec<_> = crate::proc::flatten_compose(
-                    ty,
-                    components,
-                    &ir_module.global_expressions,
-                    &ir_module.types,
-                )
-                .map(|component| self.constant_ids[component])
-                .collect();
+                let component_ids: Vec<_> = components
+                    .iter()
+                    .map(|&component| self.constant_ids[component])
+                    .collect();
                 self.get_constant_composite(LookupType::Handle(ty), component_ids.as_slice())
             }
             crate::Expression::Splat { size, value } => {

@@ -91,8 +91,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         }
     }
     let _e42 = color;
-    let _e47 = u_entity.color;
-    return (vec4<f32>(_e42, 1f) * _e47);
+    let _e50 = u_entity.color;
+    return (vec4<f32>(_e42.x, _e42.y, _e42.z, 1f) * _e50);
 }
 
 @fragment
@@ -124,6 +124,6 @@ fn fs_main_without_storage(in_1: VertexOutput) -> @location(0) vec4<f32> {
         }
     }
     let _e42 = color_1;
-    let _e47 = u_entity.color;
-    return (vec4<f32>(_e42, 1f) * _e47);
+    let _e50 = u_entity.color;
+    return (vec4<f32>(_e42.x, _e42.y, _e42.z, 1f) * _e50);
 }

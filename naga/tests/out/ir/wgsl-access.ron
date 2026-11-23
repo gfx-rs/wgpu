@@ -2535,10 +2535,24 @@
                         right: 51,
                     ),
                     Literal(F32(2.0)),
+                    AccessIndex(
+                        base: 52,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 52,
+                        index: 1,
+                    ),
+                    AccessIndex(
+                        base: 52,
+                        index: 2,
+                    ),
                     Compose(
                         ty: 24,
                         components: [
-                            52,
+                            54,
+                            55,
+                            56,
                             53,
                         ],
                     ),
@@ -2660,10 +2674,10 @@
                     )),
                     Emit((
                         start: 54,
-                        end: 55,
+                        end: 58,
                     )),
                     Return(
-                        value: Some(54),
+                        value: Some(57),
                     ),
                 ],
                 diagnostic_filter_leaf: None,

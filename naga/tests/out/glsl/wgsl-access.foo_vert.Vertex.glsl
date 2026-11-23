@@ -231,7 +231,8 @@ void main() {
     c2_[(vi + 1u)] = 42;
     int value_1 = c2_[vi];
     float _e49 = test_arr_as_arg(float[5][10](float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
-    gl_Position = vec4((_matrix * vec4(ivec4(value_1))), 2.0);
+    vec3 _e52 = (_matrix * vec4(ivec4(value_1)));
+    gl_Position = vec4(_e52.x, _e52.y, _e52.z, 2.0);
     gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);
     return;
 }
