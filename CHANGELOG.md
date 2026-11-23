@@ -322,6 +322,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - In the MSL backend, `subgroupBallot` now keeps lanes 32-63, which were lost on GPUs with 64-wide SIMD groups (AMD GPUs on macOS). By @ErkoRisthein in [#10797](https://github.com/gfx-rs/wgpu/pull/10797).
 - Report a WGSL error instead of panicking when the condition of a `const_assert` is a composite value, such as `const_assert(vec2i());`. By @MilosLord in [#10897](https://github.com/gfx-rs/wgpu/pull/10897).
 - Fix the HLSL backend adding the draw's first instance or first vertex twice to `@builtin(instance_index)` and `@builtin(vertex_index)` values copied into a `let`, and not at all when a struct holding them is passed to a function. By @MikeGrier in [#11090](https://github.com/gfx-rs/wgpu/pull/11090).
+- Fix WGSL `continuing` blocks falsely rejecting declarations that shadow variables from the loop body (e.g., `loop { let x = a; continuing { let x = b; } }`) as redefinitions. By @ekarad1um in [#10980](https://github.com/gfx-rs/wgpu/pull/10980).
 
 #### Validation
 

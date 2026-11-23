@@ -1582,6 +1582,9 @@ impl Parser {
                 let brace_span = lexer.expect_span(Token::Paren('{'))?;
                 let brace_nesting_level =
                     Self::increase_brace_nesting(brace_nesting_level, brace_span)?;
+                // The continuing block is a compound statement nested in the
+                // loop body, so its declarations may shadow the body's.
+                ctx.local_table.push_scope();
                 loop {
                     if lexer.next_if(Token::Word("break")) {
                         // Branch for the `break if` statement, this statement
@@ -1613,6 +1616,7 @@ impl Parser {
                         self.statement(lexer, ctx, &mut continuing, brace_nesting_level)?;
                     }
                 }
+                ctx.local_table.pop_scope();
                 // Since the continuing block must be the last part of the loop body,
                 // we expect to see a closing brace to end the loop body
                 lexer.expect(Token::Paren('}'))?;
