@@ -4572,12 +4572,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     class,
                 } = *func_ctx.resolve_type(image, &module.types)
                 {
-                    let wrapped_image_query = WrappedImageQuery {
-                        dim,
-                        arrayed,
-                        class,
-                        query: query.into(),
-                    };
+                    let wrapped_image_query = WrappedImageQuery::new(dim, arrayed, class, query);
 
                     self.write_wrapped_image_query_function_name(wrapped_image_query)?;
                     write!(self.out, "(")?;
