@@ -3962,6 +3962,24 @@ impl BlockContext<'_> {
                     let id = self.gen_id();
                     self.temp_list.clear();
                     for &argument in arguments {
+                        // Pointers derived by `Access`/`AccessIndex` are not
+                        // cached as standalone ids, so they cannot be passed
+                        // as call arguments yet.
+                        if let crate::Expression::Access { .. }
+                        | crate::Expression::AccessIndex { .. } =
+                            self.ir_function.expressions[argument]
+                        {
+                            if self.fun_info[argument]
+                                .ty
+                                .inner_with(&self.ir_module.types)
+                                .pointer_space()
+                                .is_some()
+                            {
+                                return Err(Error::FeatureNotImplemented(
+                                    "pointer to a member or element as a function argument",
+                                ));
+                            }
+                        }
                         self.temp_list.push(self.cached[argument]);
                     }
 
