@@ -391,7 +391,20 @@ impl Queue {
         // If the texture was never rendered to, clear it and transition to
         // PRESENT state before presenting.
         // Fixes <https://github.com/gfx-rs/wgpu/issues/6748>
-        self.prepare_surface_texture_for_present(&texture)?;
+        //
+        // A texture that was rendered to is already transitioned to PRESENT by the
+        // submission that rendered it, so doing it again here costs a second queue
+        // submission on every presented frame.
+        let never_rendered = {
+            let status = texture.initialization_status.read();
+            status
+                .mips
+                .first()
+                .is_some_and(|mip| mip.check(0..1).is_some())
+        };
+        if never_rendered {
+            self.prepare_surface_texture_for_present(&texture)?;
+        }
 
         let device = &self.device;
 
