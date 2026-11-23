@@ -7,7 +7,6 @@ OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %13 "fs_main" %11
 OpExecutionMode %13 OriginUpperLeft
-OpDecorate %6 ArrayStride 8
 OpDecorate %11 Location 0
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32

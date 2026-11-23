@@ -6,12 +6,6 @@ OpCapability Shader
 OpCapability Linkage
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpDecorate %10 ArrayStride 4
-OpDecorate %12 ArrayStride 4
-OpDecorate %13 ArrayStride 4
-OpMemberDecorate %14 0 Offset 0
-OpMemberDecorate %14 1 Offset 4
-OpMemberDecorate %14 2 Offset 8
 %2 = OpTypeVoid
 %3 = OpTypeInt 32 1
 %4 = OpTypeVector %3 2

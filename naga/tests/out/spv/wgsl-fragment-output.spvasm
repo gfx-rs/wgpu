@@ -9,18 +9,6 @@ OpEntryPoint Fragment %30 "main_vec4vec3" %18 %20 %22 %24 %26 %28
 OpEntryPoint Fragment %82 "main_vec2scalar" %70 %72 %74 %76 %78 %80
 OpExecutionMode %30 OriginUpperLeft
 OpExecutionMode %82 OriginUpperLeft
-OpMemberDecorate %12 0 Offset 0
-OpMemberDecorate %12 1 Offset 16
-OpMemberDecorate %12 2 Offset 32
-OpMemberDecorate %12 3 Offset 48
-OpMemberDecorate %12 4 Offset 64
-OpMemberDecorate %12 5 Offset 80
-OpMemberDecorate %16 0 Offset 0
-OpMemberDecorate %16 1 Offset 8
-OpMemberDecorate %16 2 Offset 16
-OpMemberDecorate %16 3 Offset 24
-OpMemberDecorate %16 4 Offset 28
-OpMemberDecorate %16 5 Offset 32
 OpDecorate %18 Location 0
 OpDecorate %20 Location 1
 OpDecorate %22 Location 2

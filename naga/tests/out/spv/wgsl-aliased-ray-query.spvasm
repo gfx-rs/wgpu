@@ -9,27 +9,6 @@ OpExtension "SPV_KHR_ray_query"
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %16 "main_candidate" %13
 OpExecutionMode %16 LocalSize 1 1 1
-OpMemberDecorate %8 0 Offset 0
-OpMemberDecorate %8 1 Offset 4
-OpMemberDecorate %8 2 Offset 8
-OpMemberDecorate %8 3 Offset 12
-OpMemberDecorate %8 4 Offset 16
-OpMemberDecorate %8 5 Offset 32
-OpMemberDecorate %12 0 Offset 0
-OpMemberDecorate %12 1 Offset 4
-OpMemberDecorate %12 2 Offset 8
-OpMemberDecorate %12 3 Offset 12
-OpMemberDecorate %12 4 Offset 16
-OpMemberDecorate %12 5 Offset 20
-OpMemberDecorate %12 6 Offset 24
-OpMemberDecorate %12 7 Offset 28
-OpMemberDecorate %12 8 Offset 36
-OpMemberDecorate %12 9 Offset 48
-OpMemberDecorate %12 9 ColMajor
-OpMemberDecorate %12 9 MatrixStride 16
-OpMemberDecorate %12 10 Offset 112
-OpMemberDecorate %12 10 ColMajor
-OpMemberDecorate %12 10 MatrixStride 16
 OpDecorate %13 DescriptorSet 0
 OpDecorate %13 Binding 0
 %2 = OpTypeVoid

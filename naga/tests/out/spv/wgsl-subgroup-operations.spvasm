@@ -14,8 +14,6 @@ OpCapability GroupNonUniformQuad
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %17 "main" %8 %11 %13 %15
 OpExecutionMode %17 LocalSize 1 1 1
-OpMemberDecorate %4 0 Offset 0
-OpMemberDecorate %4 1 Offset 4
 OpDecorate %8 BuiltIn NumSubgroups
 OpDecorate %11 BuiltIn SubgroupSize
 OpDecorate %13 BuiltIn SubgroupId

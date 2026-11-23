@@ -7,10 +7,6 @@ OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %129 "main"
 OpExecutionMode %129 LocalSize 1 1 1
-OpDecorate %10 ArrayStride 4
-OpDecorate %12 ArrayStride 4
-OpDecorate %14 ArrayStride 16
-OpDecorate %17 ArrayStride 16
 %2 = OpTypeVoid
 %3 = OpTypeInt 32 1
 %4 = OpTypeVector %3 2

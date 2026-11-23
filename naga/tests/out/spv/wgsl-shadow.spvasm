@@ -184,9 +184,6 @@ OpMemberDecorate %10 0 Offset 0
 OpMemberDecorate %10 0 ColMajor
 OpMemberDecorate %10 0 MatrixStride 16
 OpMemberDecorate %10 1 Offset 64
-OpMemberDecorate %12 0 Offset 0
-OpMemberDecorate %12 1 Offset 16
-OpMemberDecorate %12 2 Offset 32
 OpMemberDecorate %16 0 Offset 0
 OpMemberDecorate %16 0 ColMajor
 OpMemberDecorate %16 0 MatrixStride 16

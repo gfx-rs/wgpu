@@ -8,8 +8,6 @@ OpMemoryModel Logical GLSL450
 OpEntryPoint Vertex %15 "vs" %8 %11 %13
 OpEntryPoint Fragment %33 "fs" %32
 OpExecutionMode %33 OriginUpperLeft
-OpMemberDecorate %6 0 Offset 0
-OpMemberDecorate %6 1 Offset 16
 OpDecorate %8 Location 0
 OpDecorate %11 BuiltIn Position
 OpDecorate %13 Location 0

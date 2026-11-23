@@ -11,27 +11,6 @@ OpEntryPoint GLCompute %246 "main" %15 %17
 OpEntryPoint GLCompute %266 "main_candidate" %15
 OpExecutionMode %246 LocalSize 1 1 1
 OpExecutionMode %266 LocalSize 1 1 1
-OpMemberDecorate %10 0 Offset 0
-OpMemberDecorate %10 1 Offset 4
-OpMemberDecorate %10 2 Offset 8
-OpMemberDecorate %10 3 Offset 12
-OpMemberDecorate %10 4 Offset 16
-OpMemberDecorate %10 5 Offset 20
-OpMemberDecorate %10 6 Offset 24
-OpMemberDecorate %10 7 Offset 28
-OpMemberDecorate %10 8 Offset 36
-OpMemberDecorate %10 9 Offset 48
-OpMemberDecorate %10 9 ColMajor
-OpMemberDecorate %10 9 MatrixStride 16
-OpMemberDecorate %10 10 Offset 112
-OpMemberDecorate %10 10 ColMajor
-OpMemberDecorate %10 10 MatrixStride 16
-OpMemberDecorate %12 0 Offset 0
-OpMemberDecorate %12 1 Offset 4
-OpMemberDecorate %12 2 Offset 8
-OpMemberDecorate %12 3 Offset 12
-OpMemberDecorate %12 4 Offset 16
-OpMemberDecorate %12 5 Offset 32
 OpMemberDecorate %13 0 Offset 0
 OpMemberDecorate %13 1 Offset 16
 OpDecorate %15 DescriptorSet 0

@@ -14,12 +14,6 @@ OpEntryPoint ClosestHitKHR %181 "closest_hit_main" %170 %172 %174 %177 %179 %16
 OpEntryPoint ClosestHitKHR %195 "closest_hit_triangle" %191 %193 %16
 OpMemberDecorate %4 0 Offset 0
 OpMemberDecorate %4 1 Offset 4
-OpMemberDecorate %9 0 Offset 0
-OpMemberDecorate %9 1 Offset 4
-OpMemberDecorate %9 2 Offset 8
-OpMemberDecorate %9 3 Offset 12
-OpMemberDecorate %9 4 Offset 16
-OpMemberDecorate %9 5 Offset 32
 OpDecorate %14 DescriptorSet 0
 OpDecorate %14 Binding 0
 OpDecorate %19 BuiltIn LaunchIdKHR

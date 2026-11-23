@@ -7604,20 +7604,12 @@ OpMemberDecorate %20 1 Offset 8
 OpMemberDecorate %20 2 Offset 16
 OpMemberDecorate %20 3 Offset 24
 OpMemberDecorate %20 4 Offset 28
-OpMemberDecorate %21 0 Offset 0
-OpMemberDecorate %21 1 Offset 16
-OpMemberDecorate %21 2 Offset 32
-OpMemberDecorate %22 0 Offset 0
-OpMemberDecorate %22 1 Offset 4
 OpMemberDecorate %24 0 Offset 0
 OpMemberDecorate %24 1 Offset 16
 OpMemberDecorate %24 1 ColMajor
 OpMemberDecorate %24 1 MatrixStride 16
 OpMemberDecorate %25 0 Offset 0
 OpMemberDecorate %25 1 Offset 16
-OpMemberDecorate %26 0 Offset 0
-OpMemberDecorate %26 1 Offset 16
-OpMemberDecorate %26 2 Offset 32
 OpDecorate %29 DescriptorSet 0
 OpDecorate %29 Binding 0
 OpDecorate %30 Block
