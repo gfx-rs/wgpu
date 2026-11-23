@@ -64,6 +64,15 @@ fn switchLexicalScope(a_6: i32) {
     return;
 }
 
+fn continuingLexicalScope(a_7: i32) {
+    loop {
+        continuing {
+            break if true;
+        }
+    }
+    return;
+}
+
 @compute @workgroup_size(1, 1, 1)
 fn main() {
     blockLexicalScope(false);
@@ -72,5 +81,6 @@ fn main() {
     forLexicalScope(1f);
     whileLexicalScope(1i);
     switchLexicalScope(1i);
+    continuingLexicalScope(1i);
     return;
 }
