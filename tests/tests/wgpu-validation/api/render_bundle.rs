@@ -195,6 +195,7 @@ fn bundle_resource_lifetimes() {
                 format: TextureFormat::Rgba8Unorm,
                 usage: TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
             let view = texture.create_view(&Default::default());
             let mut commands = device.create_command_encoder(&Default::default());
