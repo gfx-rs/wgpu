@@ -3105,13 +3105,14 @@ impl Writer {
         let needs_polyfill = self.needs_f16_polyfill(ty_inner);
 
         let pointer_type_id = if needs_polyfill {
-            let f32_value_local =
+            let (f32_value_local, convert_op) =
                 super::f16_polyfill::F16IoPolyfill::create_polyfill_type(ty_inner)
                     .expect("needs_polyfill returned true but create_polyfill_type returned None");
 
             let f32_type_id = self.get_localtype_id(f32_value_local);
             let ptr_id = self.get_pointer_type_id(f32_type_id, class);
-            self.io_f16_polyfills.register_io_var(id, f32_type_id);
+            self.io_f16_polyfills
+                .register_io_var(id, f32_type_id, convert_op);
 
             ptr_id
         } else {
@@ -3507,7 +3508,8 @@ impl Writer {
         }
     }
 
-    /// Load an IO variable, converting from `f32` to `f16` if polyfill is active.
+    /// Load an IO variable, converting from the 32-bit type to the 16-bit one
+    /// (e.g. `f32` to `f16`) if polyfill is active.
     /// Returns the id of the loaded value matching `target_type_id`.
     pub(super) fn load_io_with_f16_polyfill(
         &mut self,
@@ -3516,10 +3518,11 @@ impl Writer {
         target_type_id: Word,
     ) -> Word {
         let tmp = self.id_gen.next();
-        if let Some(f32_ty) = self.io_f16_polyfills.get_f32_io_type(varying_id) {
+        if let Some((f32_ty, convert_op)) = self.io_f16_polyfills.get_f32_io_type(varying_id) {
             body.push(Instruction::load(f32_ty, tmp, varying_id, None));
             let converted = self.id_gen.next();
-            super::f16_polyfill::F16IoPolyfill::emit_f32_to_f16_conversion(
+            super::f16_polyfill::F16IoPolyfill::emit_conversion(
+                convert_op,
                 tmp,
                 target_type_id,
                 converted,
@@ -3532,17 +3535,18 @@ impl Writer {
         }
     }
 
-    /// Store an IO variable, converting from `f16` to `f32` if polyfill is active.
+    /// Store an IO variable, converting from the 16-bit type to the 32-bit one
+    /// (e.g. `f16` to `f32`) if polyfill is active.
     pub(super) fn store_io_with_f16_polyfill(
         &mut self,
         body: &mut Vec<Instruction>,
         varying_id: Word,
         value_id: Word,
     ) {
-        if let Some(f32_ty) = self.io_f16_polyfills.get_f32_io_type(varying_id) {
+        if let Some((f32_ty, convert_op)) = self.io_f16_polyfills.get_f32_io_type(varying_id) {
             let converted = self.id_gen.next();
-            super::f16_polyfill::F16IoPolyfill::emit_f16_to_f32_conversion(
-                value_id, f32_ty, converted, body,
+            super::f16_polyfill::F16IoPolyfill::emit_conversion(
+                convert_op, value_id, f32_ty, converted, body,
             );
             body.push(Instruction::store(varying_id, converted, None));
         } else {
@@ -4096,7 +4100,7 @@ impl Writer {
         Ok(())
     }
 
-    pub(super) fn needs_f16_polyfill(&self, ty_inner: &crate::TypeInner) -> bool {
+    pub(super) const fn needs_f16_polyfill(&self, ty_inner: &crate::TypeInner) -> bool {
         self.io_f16_polyfills.needs_polyfill(ty_inner)
     }
 

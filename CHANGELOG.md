@@ -331,6 +331,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 
 - Reject unsigned integer arguments to WGSL `sign()` during Naga validation instead of allowing them to reach and panic in the SPIR-V backend. By @notferdon in [#10451](https://github.com/gfx-rs/wgpu/pull/10451).
 - Declare `LocalInvocationIndex` only once in SPIR-V mesh shader entry points that don't take `local_invocation_index` as an argument. Previously these shaders were invalid SPIR-V. By @apollo-2006 in [#10497](https://github.com/gfx-rs/wgpu/pull/10497).
+- Polyfill `i16` and `u16` shader inputs and outputs in the SPIR-V backend with `i32` and `u32` when `StorageInputOutput16` is not used, as was already done for `f16`. Previously these shaders were invalid SPIR-V. By @atorcam102 in [#10078](https://github.com/gfx-rs/wgpu/issues/10078).
 - Fix panics when shader `var<immediate>` size is larger than 256 bytes. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
 - Fix a panic in the SPIR-V frontend when a subgroup collective operation (e.g. `OpGroupNonUniformUMin`) or `OpGroupNonUniformBallot` used an argument whose value needed to be spilled to a temporary variable, such as when the argument was computed inside a loop. By @nazar-pc in [#9957](https://github.com/gfx-rs/wgpu/issues/9957).
 - Lower `@builtin(instance_index)` in `@any_hit` and `@closest_hit` entry points to SPIR-V's `InstanceId` rather than `InstanceIndex`, which Vulkan only permits in the vertex stage. By @JMS55 in [10154](https://github.com/gfx-rs/wgpu/pull/10154).
