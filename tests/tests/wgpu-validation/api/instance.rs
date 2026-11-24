@@ -3,10 +3,9 @@ mod multi_instance {
 
     async fn get() -> wgpu::Adapter {
         let adapter = {
-            let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-                backends: wgpu::Backends::from_env().unwrap_or_default(),
-                ..wgpu::InstanceDescriptor::new_without_display_handle()
-            });
+            let instance = wgpu::Instance::new(
+                wgpu::InstanceDescriptor::new_without_display_handle_from_env(),
+            );
             instance
                 .request_adapter(&wgpu::RequestAdapterOptions::default())
                 .await

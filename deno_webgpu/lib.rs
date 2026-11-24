@@ -215,6 +215,7 @@ impl GPU {
               dx12: wgpu_types::Dx12BackendOptions {
                 shader_compiler: dx12_compiler
                   .unwrap_or(wgpu_types::Dx12Compiler::Fxc),
+                agility_sdk: wgpu_types::Dx12AgilitySDK::from_env(),
                 ..Default::default()
               },
               gl: wgpu_types::GlBackendOptions::default(),
