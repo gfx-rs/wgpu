@@ -1511,13 +1511,13 @@ impl StagingBuffer {
             memory_flags: hal::MemoryFlags::TRANSIENT,
         };
 
-        let (raw, _) = unsafe { device.raw().create_buffer(&stage_desc) }
+        let (raw, _) = unsafe { device.create_raw_buffer(&stage_desc) }
             .map_err(|e| device.handle_hal_error(e))?;
         let mapping = unsafe { device.raw().map_buffer(raw.as_ref(), 0..size.get()) }
             .map_err(|e| device.handle_hal_error(e))?;
 
         let staging_buffer = StagingBuffer {
-            raw,
+            raw: raw.unwrap_raw(),
             device: device.clone(),
             size,
             is_coherent: mapping.is_coherent,

@@ -97,6 +97,7 @@ mod weak_vec;
 // made private again.
 mod scratch;
 pub mod validation;
+mod raw_resource;
 
 pub use validation::{map_storage_format_from_naga, map_storage_format_to_naga};
 

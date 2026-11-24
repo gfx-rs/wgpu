@@ -203,9 +203,8 @@ impl Device {
             .flags
             .contains(wgpu_types::AccelerationStructureFlags::ALLOW_COMPACTION)
         {
-            Some(ManuallyDrop::new(unsafe {
-                self.raw()
-                    .create_buffer(&hal::BufferDescriptor {
+            Some(unsafe {
+                self.create_raw_buffer(&hal::BufferDescriptor {
                         label: hal_label(
                             Some("(wgpu internal) compaction read-back buffer"),
                             self.instance_flags,
@@ -217,7 +216,7 @@ impl Device {
                     })
                     .map_err(DeviceError::from_hal)?
                     .0
-            }))
+            })
         } else {
             None
         };
@@ -240,7 +239,7 @@ impl Device {
             label: blas_desc.label.to_string(),
             built_index: RwLock::new(rank::BLAS_BUILT_INDEX, None),
             tracking_data: TrackingData::new(self.tracker_indices.blas_s.clone()),
-            compaction_buffer,
+            compaction_buffer: compaction_buffer.map(|v| ManuallyDrop::new(v.unwrap_raw())),
             compacted_state: Mutex::new(rank::BLAS_COMPACTION_STATE, BlasCompactState::Idle),
         }))
     }
@@ -328,7 +327,7 @@ impl Device {
             .checked_mul(desc.max_instances.max(1))
             .expect("max_tlas_instance_count should not allow excessive buffer size");
         let (instance_buffer, _) = unsafe {
-            self.raw().create_buffer(&hal::BufferDescriptor {
+            self.create_raw_buffer(&hal::BufferDescriptor {
                 label: hal_label(Some("(wgpu-core) instances_buffer"), self.instance_flags),
                 size: u64::from(instance_buffer_size),
                 usage: wgt::BufferUses::COPY_DST
@@ -341,7 +340,7 @@ impl Device {
         Ok(Arc::new(resource::Tlas {
             state: ResourceState::Valid(resource::TlasState {
                 raw: Snatchable::new(raw),
-                instance_buffer,
+                instance_buffer: instance_buffer.unwrap_raw(),
             }),
             device: self.clone(),
             size_info,

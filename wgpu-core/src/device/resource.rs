@@ -1353,7 +1353,7 @@ impl Device {
             usage,
             memory_flags: hal::MemoryFlags::empty(),
         };
-        let (buffer, final_size) = unsafe { self.raw().create_buffer(&hal_desc) }
+        let (buffer, final_size) = unsafe { self.create_raw_buffer(&hal_desc) }
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         debug_assert!(final_size >= padded_size);
@@ -1378,7 +1378,7 @@ impl Device {
 
         let buffer = Buffer {
             state: ResourceState::Valid(BufferState {
-                raw: Snatchable::new(buffer),
+                raw: Snatchable::new(buffer.unwrap_raw()),
             }),
             device: self.clone(),
             usage: desc.usage,
