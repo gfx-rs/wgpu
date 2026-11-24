@@ -1196,9 +1196,7 @@ impl Queue {
             self.device.features,
         )?;
 
-        // Note: `_source_bytes_per_array_layer` is ignored since we
-        // have a staging copy, and it can have a different value.
-        let (required_bytes_in_copy, _source_bytes_per_array_layer, _) =
+        let (required_bytes_in_copy, source_bytes_per_array_layer, _) =
             validate_linear_texture_data(
                 data_layout,
                 dst.desc.format,
@@ -1231,6 +1229,57 @@ impl Queue {
         // so this check makes sure the write is submitted before the map.
         if !matches!(*dst.map_state.lock(), TextureMapState::Unmapped) {
             return Err(TransferError::TextureNotAvailable.into());
+        }
+
+        if dst.hal_usage.contains(wgt::TextureUses::HOST_COPY) {
+            // A texture is only `UNINITIALIZED` or `HOST_COPY` if no submission
+            // used it since it was created or mapped. Submissions update the device
+            // tracker under its lock, so holding it keeps the texture idle until the
+            // copy is done. `Texture::map_async` marks `dst` before locking the
+            // tracker, so check the map state again under the lock.
+            let result = {
+                let mut trackers = self.device.trackers.lock();
+                let state = trackers.textures.uniform_state(&dst);
+                let idle = matches!(
+                    state,
+                    Some(wgt::TextureUses::UNINITIALIZED | wgt::TextureUses::HOST_COPY)
+                ) && matches!(*dst.map_state.lock(), TextureMapState::Unmapped);
+                idle.then(|| {
+                    if state == Some(wgt::TextureUses::UNINITIALIZED) {
+                        unsafe {
+                            self.device.raw().transition_texture_on_host(
+                                dst_raw,
+                                wgt::TextureUses::UNINITIALIZED,
+                            )?;
+                        }
+                        drop(trackers.textures.set_single(
+                            &dst,
+                            dst.full_range.clone(),
+                            wgt::TextureUses::HOST_COPY,
+                        ));
+                    }
+                    let copy_range = CopyRange {
+                        hal_copy_extent,
+                        hal_base: dst_base.clone(),
+                        array_layer_count,
+                        selector: selector.clone(),
+                    };
+                    dst.write_from_host(
+                        dst_raw,
+                        &destination,
+                        data,
+                        *data_layout,
+                        size,
+                        &copy_range,
+                        source_bytes_per_array_layer,
+                    )
+                })
+            };
+            if let Some(result) = result {
+                drop(pending_writes);
+                drop(snatch_guard);
+                return result.map_err(|e| self.device.handle_hal_error(e).into());
+            }
         }
 
         let encoder = pending_writes.activate();

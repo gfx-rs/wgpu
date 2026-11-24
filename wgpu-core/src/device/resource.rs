@@ -2241,6 +2241,26 @@ impl Device {
         Ok(())
     }
 
+    /// Whether to add host copy usage to a texture that didn't ask for it, so
+    /// that [`Queue::write_texture`](crate::device::queue::Queue::write_texture)
+    /// can write it from the host.
+    fn use_implicit_host_copy(&self, desc: &resource::TextureDescriptor) -> bool {
+        !(self
+            .instance_flags
+            .contains(wgt::InstanceFlags::DISABLE_IMPLICIT_HOST_TEXTURE_COPY)
+            || desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE)
+            || !desc.usage.contains(wgt::TextureUsages::COPY_DST)
+            || desc
+                .usage
+                .contains(wgt::TextureUsages::TRANSIENT_ATTACHMENT)
+            || self.check_host_copy_support(desc).is_err()
+            || !self
+                .adapter
+                .get_texture_format_features(desc.format)
+                .flags
+                .contains(wgt::TextureFormatFeatureFlags::HOST_VISIBLE_OPTIMAL))
+    }
+
     fn create_texture_inner(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
@@ -2251,7 +2271,7 @@ impl Device {
 
         let texture_binding_view_dimension = self.resolve_texture_binding_view_dimension(desc);
 
-        let hal_desc = hal::TextureDescriptor {
+        let mut hal_desc = hal::TextureDescriptor {
             label: desc.label.to_hal(self.instance_flags),
             size: desc.size,
             mip_level_count: desc.mip_level_count,
@@ -2264,6 +2284,10 @@ impl Device {
             texture_binding_view_dimension,
             start_in_host_copy_state: desc.mapped_at_creation,
         };
+        if self.use_implicit_host_copy(desc) {
+            hal_desc.usage |= wgt::TextureUses::HOST_COPY;
+        }
+        let hal_usage = hal_desc.usage;
 
         let raw_texture = unsafe { self.raw().create_texture(&hal_desc) }
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;

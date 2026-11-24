@@ -428,6 +428,9 @@ struct RayTracingDeviceExtensionFunctions {
 /// device geometry, but affect the code paths taken internally.
 #[derive(Clone, Debug)]
 struct PrivateCapabilities {
+    /// Enable `VK_EXT_host_image_copy` even if `HOST_TEXTURE_COPY` wasn't
+    /// requested, so wgpu-core can add host copy usage to textures implicitly.
+    implicit_host_image_copy: bool,
     /// Images with `HOST_TRANSFER` usage can use the same memory types as
     /// other images, or all memory is the same anyway.
     host_image_copy_free_memory: bool,

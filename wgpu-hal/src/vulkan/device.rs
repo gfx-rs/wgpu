@@ -358,6 +358,77 @@ impl super::Device {
         None
     }
 
+    /// The parts of the `VkImageCreateInfo` for `desc` that depend on wgpu's
+    /// texture description, and the formats for a `VkImageFormatListCreateInfo`.
+    fn image_create_params(
+        &self,
+        desc: &crate::TextureDescriptor,
+        tiling: vk::ImageTiling,
+        has_external_memory: bool,
+    ) -> (
+        vk::ImageCreateFlags,
+        vk::Format,
+        vk::ImageUsageFlags,
+        Vec<vk::Format>,
+    ) {
+        let mut raw_flags = vk::ImageCreateFlags::empty();
+        if desc.dimension == wgt::TextureDimension::D3
+            && desc.usage.contains(wgt::TextureUses::COLOR_TARGET)
+        {
+            raw_flags |= vk::ImageCreateFlags::TYPE_2D_ARRAY_COMPATIBLE;
+        }
+        if desc.is_cube_compatible() {
+            raw_flags |= vk::ImageCreateFlags::CUBE_COMPATIBLE;
+        }
+
+        let original_format = self.shared.private_caps.map_texture_format(desc.format);
+        let mut vk_view_formats = vec![];
+        if !desc.view_formats.is_empty() {
+            raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
+
+            if self.shared.private_caps.image_format_list {
+                vk_view_formats = desc
+                    .view_formats
+                    .iter()
+                    .map(|f| self.shared.private_caps.map_texture_format(*f))
+                    .collect();
+                vk_view_formats.push(original_format)
+            }
+        }
+        if desc.format.is_multi_planar_format() {
+            raw_flags |=
+                vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE;
+        }
+
+        // Don't request HOST_TRANSFER_EXT if the extension functions are missing
+        // (e.g. a driver that advertises the extension but can't load them).
+        let effective_usage = if self.shared.extension_fns.host_image_copy.is_none() {
+            desc.usage - wgt::TextureUses::HOST_COPY
+        } else {
+            desc.usage
+        };
+
+        let mut usage = conv::map_texture_usage(effective_usage);
+        // wgpu allows views of textures that are only ever copied to or from, but Vulkan
+        // requires a viewable image to carry at least one of `VIEWABLE_IMAGE_USAGES`. Add a
+        // usage the format supports so that such views stay valid. Images backed by external
+        // memory are left alone: their usage has to match the resource being imported.
+        if !usage.intersects(conv::VIEWABLE_IMAGE_USAGES)
+            && !has_external_memory
+            && super::adapter::supports_format(
+                &self.shared.instance.raw,
+                self.shared.physical_device,
+                original_format,
+                tiling,
+                vk::FormatFeatureFlags::SAMPLED_IMAGE,
+            )
+        {
+            usage |= vk::ImageUsageFlags::SAMPLED;
+        }
+
+        (raw_flags, original_format, usage, vk_view_formats)
+    }
+
     /// Transitions all subresources of `image` from `UNDEFINED` to `GENERAL` on the host.
     unsafe fn host_transition_to_general(
         &self,
@@ -405,61 +476,8 @@ impl super::Device {
         drm_modifier_info: Option<&mut vk::ImageDrmFormatModifierExplicitCreateInfoEXT>,
     ) -> Result<ImageWithoutMemory, crate::DeviceError> {
         let copy_size = desc.copy_extent();
-
-        let mut raw_flags = vk::ImageCreateFlags::empty();
-        if desc.dimension == wgt::TextureDimension::D3
-            && desc.usage.contains(wgt::TextureUses::COLOR_TARGET)
-        {
-            raw_flags |= vk::ImageCreateFlags::TYPE_2D_ARRAY_COMPATIBLE;
-        }
-        if desc.is_cube_compatible() {
-            raw_flags |= vk::ImageCreateFlags::CUBE_COMPATIBLE;
-        }
-
-        let original_format = self.shared.private_caps.map_texture_format(desc.format);
-        let mut vk_view_formats = vec![];
-        if !desc.view_formats.is_empty() {
-            raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
-
-            if self.shared.private_caps.image_format_list {
-                vk_view_formats = desc
-                    .view_formats
-                    .iter()
-                    .map(|f| self.shared.private_caps.map_texture_format(*f))
-                    .collect();
-                vk_view_formats.push(original_format)
-            }
-        }
-        if desc.format.is_multi_planar_format() {
-            raw_flags |=
-                vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE;
-        }
-
-        // Don't request HOST_TRANSFER_EXT if the extension functions are missing
-        // (e.g. a driver that advertises the extension but can't load them).
-        let effective_usage = if self.shared.extension_fns.host_image_copy.is_none() {
-            desc.usage - wgt::TextureUses::HOST_COPY
-        } else {
-            desc.usage
-        };
-
-        let mut usage = conv::map_texture_usage(effective_usage);
-        // wgpu allows views of textures that are only ever copied to or from, but Vulkan
-        // requires a viewable image to carry at least one of `VIEWABLE_IMAGE_USAGES`. Add a
-        // usage the format supports so that such views stay valid. Images backed by external
-        // memory are left alone: their usage has to match the resource being imported.
-        if !usage.intersects(conv::VIEWABLE_IMAGE_USAGES)
-            && external_memory_image_create_info.is_none()
-            && super::adapter::supports_format(
-                &self.shared.instance.raw,
-                self.shared.physical_device,
-                original_format,
-                tiling,
-                vk::FormatFeatureFlags::SAMPLED_IMAGE,
-            )
-        {
-            usage |= vk::ImageUsageFlags::SAMPLED;
-        }
+        let (raw_flags, original_format, usage, vk_view_formats) =
+            self.image_create_params(desc, tiling, external_memory_image_create_info.is_some());
 
         let mut vk_info = vk::ImageCreateInfo::default()
             .flags(raw_flags)

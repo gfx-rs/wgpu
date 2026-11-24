@@ -2685,6 +2685,11 @@ impl super::Instance {
         let alignments = phd_capabilities.to_hal_alignments(has_robust_buffer_access2);
 
         let private_caps = super::PrivateCapabilities {
+            implicit_host_image_copy: !self
+                .shared
+                .flags
+                .contains(wgt::InstanceFlags::DISABLE_IMPLICIT_HOST_TEXTURE_COPY)
+                && phd_features.supports_host_image_copy(&phd_capabilities),
             host_image_copy_free_memory: phd_capabilities
                 .host_image_copy
                 .is_some_and(|p| p.identical_memory_type_requirements)
@@ -2961,6 +2966,13 @@ impl super::Adapter {
 
         if !unsupported_extensions.is_empty() {
             log::debug!("Missing extensions: {unsupported_extensions:?}");
+        }
+
+        let mut supported_extensions = supported_extensions;
+        if !features.contains(wgt::Features::HOST_TEXTURE_COPY)
+            && self.private_caps.implicit_host_image_copy
+        {
+            supported_extensions.push(ext::host_image_copy::NAME);
         }
 
         log::debug!("Supported extensions: {supported_extensions:?}");

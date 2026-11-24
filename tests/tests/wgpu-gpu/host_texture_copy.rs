@@ -19,6 +19,9 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(HOST_TEXTURE_BC_3D_LAYOUTS);
     vec.push(HOST_TEXTURE_MULTITHREADED);
     vec.push(HOST_TEXTURE_WRITE_TEXTURE_ORDERING);
+    vec.push(HOST_TEXTURE_WRITE_TEXTURE_ORDERING_NO_IMPLICIT_HOST_COPY);
+    vec.push(HOST_TEXTURE_WRITE_TEXTURE_COMPRESSED_ORDERING);
+    vec.push(HOST_TEXTURE_WRITE_TEXTURE_COMPRESSED_ORDERING_NO_IMPLICIT_HOST_COPY);
     vec.push(HOST_TEXTURE_WRITE_TEXTURE_HOST_VISIBLE);
 }
 
@@ -1363,6 +1366,107 @@ async fn write_texture_ordering(ctx: TestingContext) {
 #[apply(gpu_test!)]
 static HOST_TEXTURE_WRITE_TEXTURE_ORDERING: GpuTestConfiguration =
     GpuTestConfiguration::new().run_async(write_texture_ordering);
+
+#[apply(gpu_test!)]
+static HOST_TEXTURE_WRITE_TEXTURE_ORDERING_NO_IMPLICIT_HOST_COPY: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .instance_flags(wgpu::InstanceFlags::DISABLE_IMPLICIT_HOST_TEXTURE_COPY),
+        )
+        .run_async(write_texture_ordering);
+
+/// Block-compressed formats are the ones Metal lets `write_texture` copy into
+/// from the host.
+async fn write_texture_compressed_ordering(ctx: TestingContext) {
+    let ctx = &ctx;
+    let format = TextureFormat::Bc1RgbaUnorm;
+    let size = extent(16, 16, 1);
+    let create = || {
+        ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: TextureUsages::COPY_DST
+                | TextureUsages::COPY_SRC
+                | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+            texture_binding_view_dimension: None,
+            mapped_at_creation: false,
+        })
+    };
+    let a = pattern(128, 3);
+    let b = pattern(128, 9);
+    let c = pattern(32, 5);
+    let write = |texture: &wgpu::Texture, data: &[u8]| {
+        write_texture(&ctx.queue, texture, Origin3d::ZERO, size, data);
+    };
+    let copy = |src: &wgpu::Texture, dst: &wgpu::Texture| {
+        let mut encoder = encoder(&ctx.device);
+        encoder.copy_texture_to_texture(src.as_image_copy(), dst.as_image_copy(), size);
+        encoder.finish()
+    };
+    let read = |texture: wgpu::Texture| async move { gpu_read(ctx, &texture, 0, size).await };
+
+    let src = create();
+    write(&src, &b);
+
+    let t = create();
+    write(&t, &a);
+    assert_eq!(read(t).await, a, "write only");
+
+    let origin = Origin3d { x: 4, y: 8, z: 0 };
+    let part = extent(8, 8, 1);
+    let t = create();
+    write_texture(&ctx.queue, &t, origin, part, &c);
+    assert_eq!(
+        read(t).await,
+        embed(format, size, origin, part, &c),
+        "partial write"
+    );
+
+    let t = create();
+    write(&t, &a);
+    ctx.queue.submit(Some(copy(&src, &t)));
+    assert_eq!(read(t).await, b, "write then copy");
+
+    let t = create();
+    ctx.queue.submit(Some(copy(&src, &t)));
+    write(&t, &a);
+    assert_eq!(read(t).await, a, "copy then write");
+
+    let t = create();
+    let copy_command_buffer = copy(&src, &t);
+    write(&t, &a);
+    ctx.queue.submit(Some(copy_command_buffer));
+    assert_eq!(
+        read(t).await,
+        b,
+        "copy recorded, then write, then copy submitted"
+    );
+}
+
+fn compressed_params() -> TestParameters {
+    TestParameters::default().features(wgpu::Features::TEXTURE_COMPRESSION_BC)
+}
+
+#[apply(gpu_test!)]
+static HOST_TEXTURE_WRITE_TEXTURE_COMPRESSED_ORDERING: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(compressed_params())
+        .run_async(write_texture_compressed_ordering);
+
+#[apply(gpu_test!)]
+static HOST_TEXTURE_WRITE_TEXTURE_COMPRESSED_ORDERING_NO_IMPLICIT_HOST_COPY: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            compressed_params()
+                .instance_flags(wgpu::InstanceFlags::DISABLE_IMPLICIT_HOST_TEXTURE_COPY),
+        )
+        .run_async(write_texture_compressed_ordering);
 
 async fn host_texture_write_texture_host_visible(ctx: TestingContext) {
     let texture = rgba_texture(&ctx.device, HOST_RW, false);
