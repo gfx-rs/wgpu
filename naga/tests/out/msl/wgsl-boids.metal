@@ -47,7 +47,7 @@ kernel void main_(
     metal::float2 pos = {};
     metal::float2 vel = {};
     uint i = 0u;
-    metal::uint2 loop_bound = {};
+    metal::uint2 loop_bound = metal::uint2(4294967295u);
     uint index = global_invocation_id.x;
     if (index >= NUM_PARTICLES) {
         return;
@@ -56,7 +56,6 @@ kernel void main_(
     vPos = _e8;
     metal::float2 _e14 = particlesSrc.particles[index].vel;
     vVel = _e14;
-    loop_bound = metal::uint2(4294967295u);
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
@@ -64,11 +63,13 @@ kernel void main_(
             i = _e91 + 1u;
         }
         loop_init = false;
-        metal::uint2 _e186 = loop_bound;
-        if (metal::all(_e186 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e185 = loop_bound;
+            loop_bound = _e185 - metal::uint2((_e185.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e185 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound = _e186 - metal::uint2((_e186.y == 0u) ? 1u : 0u, 1u);
         uint _e36 = i;
         if (_e36 >= NUM_PARTICLES) {
             break;

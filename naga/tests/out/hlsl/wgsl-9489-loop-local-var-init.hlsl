@@ -12,10 +12,9 @@ void main()
     float4 acc_noinit = (float4)0;
     float4 acc_init = (float4)0;
     uint d = (uint)0;
-    uint2 loop_bound = (uint2)0;
-    uint2 loop_bound_1 = (uint2)0;
+    uint2 loop_bound = (4294967295u).xx;
+    uint2 loop_bound_1 = (4294967295u).xx;
 
-    loop_bound = (4294967295u).xx;
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
@@ -23,11 +22,13 @@ void main()
             t = (_e47 + 1u);
         }
         loop_init = false;
-        uint2 _e70 = loop_bound;
-        if (all((_e70 == (0u).xx))) {
-            break;
+        {
+            uint2 _e69 = loop_bound;
+            loop_bound = (_e69 - uint2(((_e69.y == 0u) ? 1u : 0u), 1u));
+            if (all((_e69 == (0u).xx))) {
+                break;
+            }
         }
-        loop_bound = (_e70 - uint2(((_e70.y == 0u) ? 1u : 0u), 1u));
         uint _e2 = t;
         if ((_e2 < 4u)) {
         } else {
@@ -45,11 +46,13 @@ void main()
                     d = (_e28 + 1u);
                 }
                 loop_init_1 = false;
-                uint2 _e55 = loop_bound_1;
-                if (all((_e55 == (0u).xx))) {
-                    break;
+                {
+                    uint2 _e57 = loop_bound_1;
+                    loop_bound_1 = (_e57 - uint2(((_e57.y == 0u) ? 1u : 0u), 1u));
+                    if (all((_e57 == (0u).xx))) {
+                        break;
+                    }
                 }
-                loop_bound_1 = (_e55 - uint2(((_e55.y == 0u) ? 1u : 0u), 1u));
                 uint _e11 = d;
                 if ((_e11 < 16u)) {
                 } else {

@@ -19,7 +19,7 @@ void main(uint3 global_id : SV_DispatchThreadID)
     uint n = (uint)0;
     uint i = (uint)0;
     uint local = (uint)0;
-    uint2 loop_bound = (uint2)0;
+    uint2 loop_bound = (4294967295u).xx;
 
     uint _e9 = asuint(v_indices.Load(global_id.x*4+0));
     n_base = _e9;
@@ -27,34 +27,35 @@ void main(uint3 global_id : SV_DispatchThreadID)
     n = ZeroValueuint();
     i = 0u;
     n = _e11;
-    loop_bound = (4294967295u).xx;
     while(true) {
-        uint2 _e16 = loop_bound;
-        if (all((_e16 == (0u).xx))) {
-            break;
+        {
+            uint2 _e15 = loop_bound;
+            loop_bound = (_e15 - uint2(((_e15.y == 0u) ? 1u : 0u), 1u));
+            if (all((_e15 == (0u).xx))) {
+                break;
+            }
         }
-        loop_bound = (_e16 - uint2(((_e16.y == 0u) ? 1u : 0u), 1u));
-        uint _e27 = n;
-        if ((_e27 > 1u)) {
+        uint _e25 = n;
+        if ((_e25 > 1u)) {
         } else {
             break;
         }
         {
-            uint _e30 = n;
-            if ((naga_mod(_e30, 2u) == 0u)) {
-                uint _e35 = n;
-                n = naga_div(_e35, 2u);
+            uint _e28 = n;
+            if ((naga_mod(_e28, 2u) == 0u)) {
+                uint _e33 = n;
+                n = naga_div(_e33, 2u);
             } else {
-                uint _e39 = n;
-                n = ((3u * _e39) + 1u);
+                uint _e37 = n;
+                n = ((3u * _e37) + 1u);
             }
-            uint _e44 = i;
-            i = (_e44 + 1u);
+            uint _e42 = i;
+            i = (_e42 + 1u);
         }
     }
-    uint _e47 = i;
-    local = _e47;
-    uint _e49 = local;
-    v_indices.Store(global_id.x*4+0, asuint(_e49));
+    uint _e45 = i;
+    local = _e45;
+    uint _e47 = local;
+    v_indices.Store(global_id.x*4+0, asuint(_e47));
     return;
 }

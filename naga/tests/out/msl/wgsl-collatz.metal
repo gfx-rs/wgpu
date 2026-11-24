@@ -26,15 +26,16 @@ uint collatz_iterations(
 ) {
     uint n = {};
     uint i = 0u;
-    metal::uint2 loop_bound = {};
+    metal::uint2 loop_bound = metal::uint2(4294967295u);
     n = n_base;
-    loop_bound = metal::uint2(4294967295u);
     while(true) {
-        metal::uint2 _e30 = loop_bound;
-        if (metal::all(_e30 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e29 = loop_bound;
+            loop_bound = _e29 - metal::uint2((_e29.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e29 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound = _e30 - metal::uint2((_e30.y == 0u) ? 1u : 0u, 1u);
         uint _e4 = n;
         if (_e4 > 1u) {
         } else {

@@ -169,14 +169,15 @@ void switch_const_expr_case_selectors(
 void loop_switch_continue(
     int x
 ) {
-    metal::uint2 loop_bound = {};
-    loop_bound = metal::uint2(4294967295u);
+    metal::uint2 loop_bound = metal::uint2(4294967295u);
     while(true) {
-        metal::uint2 _e7 = loop_bound;
-        if (metal::all(_e7 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e6 = loop_bound;
+            loop_bound = _e6 - metal::uint2((_e6.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e6 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound = _e7 - metal::uint2((_e7.y == 0u) ? 1u : 0u, 1u);
         switch(x) {
             case 1: {
                 continue;
@@ -194,16 +195,17 @@ void loop_switch_continue_nesting(
     int y,
     int z
 ) {
-    metal::uint2 loop_bound_1 = {};
-    metal::uint2 loop_bound_2 = {};
-    metal::uint2 loop_bound_3 = {};
-    loop_bound_1 = metal::uint2(4294967295u);
+    metal::uint2 loop_bound_1 = metal::uint2(4294967295u);
+    metal::uint2 loop_bound_2 = metal::uint2(4294967295u);
+    metal::uint2 loop_bound_3 = metal::uint2(4294967295u);
     while(true) {
-        metal::uint2 _e24 = loop_bound_1;
-        if (metal::all(_e24 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e23 = loop_bound_1;
+            loop_bound_1 = _e23 - metal::uint2((_e23.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e23 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound_1 = _e24 - metal::uint2((_e24.y == 0u) ? 1u : 0u, 1u);
         switch(x_1) {
             case 1: {
                 continue;
@@ -216,11 +218,13 @@ void loop_switch_continue_nesting(
                     default: {
                         loop_bound_2 = metal::uint2(4294967295u);
                         while(true) {
-                            metal::uint2 _e9 = loop_bound_2;
-                            if (metal::all(_e9 == metal::uint2(0u))) {
-                                break;
+                            {
+                                metal::uint2 _e11 = loop_bound_2;
+                                loop_bound_2 = _e11 - metal::uint2((_e11.y == 0u) ? 1u : 0u, 1u);
+                                if (metal::all(_e11 == metal::uint2(0u))) {
+                                    break;
+                                }
                             }
-                            loop_bound_2 = _e9 - metal::uint2((_e9.y == 0u) ? 1u : 0u, 1u);
                             switch(z) {
                                 case 1: {
                                     continue;
@@ -245,13 +249,14 @@ void loop_switch_continue_nesting(
             }
         }
     }
-    loop_bound_3 = metal::uint2(4294967295u);
     while(true) {
-        metal::uint2 _e39 = loop_bound_3;
-        if (metal::all(_e39 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e35 = loop_bound_3;
+            loop_bound_3 = _e35 - metal::uint2((_e35.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e35 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound_3 = _e39 - metal::uint2((_e39.y == 0u) ? 1u : 0u, 1u);
         switch(y) {
             case 1:
             default: {
@@ -274,15 +279,16 @@ void loop_switch_omit_continue_variable_checks(
     int w
 ) {
     int pos_1 = 0;
-    metal::uint2 loop_bound_4 = {};
-    metal::uint2 loop_bound_5 = {};
-    loop_bound_4 = metal::uint2(4294967295u);
+    metal::uint2 loop_bound_4 = metal::uint2(4294967295u);
+    metal::uint2 loop_bound_5 = metal::uint2(4294967295u);
     while(true) {
-        metal::uint2 _e14 = loop_bound_4;
-        if (metal::all(_e14 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e13 = loop_bound_4;
+            loop_bound_4 = _e13 - metal::uint2((_e13.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e13 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound_4 = _e14 - metal::uint2((_e14.y == 0u) ? 1u : 0u, 1u);
         switch(x_2) {
             case 1: {
                 pos_1 = 1;
@@ -293,13 +299,14 @@ void loop_switch_omit_continue_variable_checks(
             }
         }
     }
-    loop_bound_5 = metal::uint2(4294967295u);
     while(true) {
-        metal::uint2 _e29 = loop_bound_5;
-        if (metal::all(_e29 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e25 = loop_bound_5;
+            loop_bound_5 = _e25 - metal::uint2((_e25.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e25 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound_5 = _e29 - metal::uint2((_e29.y == 0u) ? 1u : 0u, 1u);
         switch(x_2) {
             case 1: {
                 break;

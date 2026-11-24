@@ -97,11 +97,29 @@
 //! ```ignore
 //! var loop_bound = vec2(4294967295u);
 //! loop {
-//!   if all(loop_bound == vec2(0u)) { break; }
-//!   loop_bound -= vec2(u32(loop_bound.y == 0u), 1u);
+//!   {
+//!     let value = loop_bound;
+//!     loop_bound = value - vec2(select(0u, 1u, value.y == 0u), 1u);
+//!     if all(value == vec2(0u)) { break; }
+//!   }
 //!   // ...the loop's own body...
 //! }
 //! ```
+//!
+//! The counter's initializer sets it for a loop that isn't inside another
+//! loop. A loop inside another loop also stores the initial value before it
+//! starts, since it may start more than once.
+//!
+//! The check is a block of its own, and it stores the decremented value before
+//! it breaks. Backends that write the loaded value to a temporary then declare
+//! it in that block, not in the loop's body. With the temporary in the loop's
+//! body, or the store after the `break`, the Metal compiler adds selects and
+//! phis to the loop.
+//!
+//! The check is its own block, so backend temporaries for it end before the
+//! loop's own code. Otherwise, C-like compilers route the counter's break, the
+//! loop's own exits and the backedge through one shared scope cleanup, and the
+//! optimizer merges them into select chains.
 //!
 //! The counter counts down from `u32::MAX` rather than up from zero, which avoids
 //! a hang on certain Intel drivers. See
@@ -155,11 +173,34 @@ pub(crate) fn run(module: &mut Cow<'_, Module>) -> bool {
         .map(|(_, function)| function)
         .chain(module.entry_points.iter_mut().map(|ep| &mut ep.function));
     for function in functions {
+        if !contains_loop(&function.body) {
+            continue;
+        }
+        let max = function
+            .expressions
+            .append(Expression::Literal(Literal::U32(u32::MAX)), Span::UNDEFINED);
+        let init = function.expressions.append(
+            Expression::Splat {
+                size: VectorSize::Bi,
+                value: max,
+            },
+            Span::UNDEFINED,
+        );
+        let counter = Counter {
+            ty: counter_ty,
+            init,
+        };
         let mut body = core::mem::take(&mut function.body);
-        bound_loops(&mut body, function, counter_ty);
+        bound_loops(&mut body, function, &counter, false);
         function.body = body;
     }
     true
+}
+
+/// The type of a function's loop counters, and their initializer.
+struct Counter {
+    ty: Handle<Type>,
+    init: Handle<Expression>,
 }
 
 fn contains_loop(block: &Block) -> bool {
@@ -177,25 +218,25 @@ fn contains_loop(block: &Block) -> bool {
 }
 
 /// Bound the loops in `block`, a block of `function`, and in its nested
-/// blocks.
-fn bound_loops(block: &mut Block, function: &mut Function, counter_ty: Handle<Type>) {
+/// blocks. `in_loop` is whether `block` is inside a loop.
+fn bound_loops(block: &mut Block, function: &mut Function, counter: &Counter, in_loop: bool) {
     if !contains_loop(block) {
         return;
     }
     for (mut statement, span) in core::mem::take(block).span_into_iter() {
         match statement {
-            Statement::Block(ref mut inner) => bound_loops(inner, function, counter_ty),
+            Statement::Block(ref mut inner) => bound_loops(inner, function, counter, in_loop),
             Statement::If {
                 ref mut accept,
                 ref mut reject,
                 ..
             } => {
-                bound_loops(accept, function, counter_ty);
-                bound_loops(reject, function, counter_ty);
+                bound_loops(accept, function, counter, in_loop);
+                bound_loops(reject, function, counter, in_loop);
             }
             Statement::Switch { ref mut cases, .. } => {
                 for case in cases.iter_mut() {
-                    bound_loops(&mut case.body, function, counter_ty);
+                    bound_loops(&mut case.body, function, counter, in_loop);
                 }
             }
             Statement::Loop {
@@ -207,17 +248,20 @@ fn bound_loops(block: &mut Block, function: &mut Function, counter_ty: Handle<Ty
                 // This is where such loops could be skipped.
                 // Outer loops get their counters first, so they are named
                 // first.
-                let counter = function.local_variables.append(
+                let local = function.local_variables.append(
                     LocalVariable {
                         name: Some(String::from("loop_bound")),
-                        ty: counter_ty,
-                        init: None,
+                        ty: counter.ty,
+                        init: Some(counter.init),
                     },
                     span,
                 );
-                bound_loops(body, function, counter_ty);
-                bound_loops(continuing, function, counter_ty);
-                bound_loop(block, body, function, counter, counter_ty, span);
+                bound_loops(body, function, counter, true);
+                bound_loops(continuing, function, counter, true);
+                if in_loop {
+                    reset(block, function, local, span);
+                }
+                bound_loop(body, function, local, counter.ty, span);
             }
             _ => {}
         }
@@ -225,18 +269,9 @@ fn bound_loops(block: &mut Block, function: &mut Function, counter_ty: Handle<Ty
     }
 }
 
-/// Make `counter` bound the loop whose body is `body`: reset it in `before`,
-/// just before the loop, and decrement it at the start of every iteration,
-/// breaking out of the loop once it reaches zero.
-fn bound_loop(
-    before: &mut Block,
-    body: &mut Block,
-    function: &mut Function,
-    counter: Handle<LocalVariable>,
-    counter_ty: Handle<Type>,
-    span: Span,
-) {
-    let mut out = Emitting::new(&mut function.expressions, before, span);
+/// Store the initial value in `counter`, at the end of `block`.
+fn reset(block: &mut Block, function: &mut Function, counter: Handle<LocalVariable>, span: Span) {
+    let mut out = Emitting::new(&mut function.expressions, block, span);
     let pointer = out.pre_emit(Expression::LocalVariable(counter));
     let max = out.pre_emit(Expression::Literal(Literal::U32(u32::MAX)));
     let value = out.expr(Expression::Splat {
@@ -244,31 +279,23 @@ fn bound_loop(
         value: max,
     });
     out.push(Statement::Store { pointer, value });
+}
 
-    let mut prologue = Block::new();
-    let mut out = Emitting::new(&mut function.expressions, &mut prologue, span);
+/// Make `counter` bound the loop whose body is `body`: decrement it at the
+/// start of every iteration, and break out of the loop if it was zero.
+fn bound_loop(
+    body: &mut Block,
+    function: &mut Function,
+    counter: Handle<LocalVariable>,
+    counter_ty: Handle<Type>,
+    span: Span,
+) {
+    let mut check = Block::new();
+    let mut out = Emitting::new(&mut function.expressions, &mut check, span);
     let pointer = out.pre_emit(Expression::LocalVariable(counter));
     let zero = out.pre_emit(Expression::Literal(Literal::U32(0)));
     let one = out.pre_emit(Expression::Literal(Literal::U32(1)));
     let value = out.expr(Expression::Load { pointer });
-    let zeros = out.expr(Expression::Splat {
-        size: VectorSize::Bi,
-        value: zero,
-    });
-    let at_zero = out.expr(Expression::Binary {
-        op: BinaryOperator::Equal,
-        left: value,
-        right: zeros,
-    });
-    let done = out.expr(Expression::Relational {
-        fun: RelationalFunction::All,
-        argument: at_zero,
-    });
-    out.push(Statement::If {
-        condition: done,
-        accept: Block::from_vec(vec![Statement::Break]),
-        reject: Block::new(),
-    });
     // Decrement the low word, and borrow from the high word when the low word
     // is zero.
     let low = out.expr(Expression::AccessIndex {
@@ -298,7 +325,27 @@ fn bound_loop(
         pointer,
         value: next,
     });
+    let zeros = out.expr(Expression::Splat {
+        size: VectorSize::Bi,
+        value: zero,
+    });
+    let at_zero = out.expr(Expression::Binary {
+        op: BinaryOperator::Equal,
+        left: value,
+        right: zeros,
+    });
+    let done = out.expr(Expression::Relational {
+        fun: RelationalFunction::All,
+        argument: at_zero,
+    });
+    out.push(Statement::If {
+        condition: done,
+        accept: Block::from_vec(vec![Statement::Break]),
+        reject: Block::new(),
+    });
 
+    let mut prologue = Block::new();
+    prologue.push(Statement::Block(check), span);
     prologue.append(body);
     *body = prologue;
 }
@@ -308,7 +355,7 @@ mod tests {
     use alloc::borrow::Cow;
 
     use crate::valid::{Capabilities, ValidationFlags, Validator};
-    use crate::{Block, Function, Module, Statement};
+    use crate::{Block, Expression, Function, Module, Statement};
 
     /// Run the pass on `source`, then compact and validate the result as the
     /// pass runner does. Return `None` if the pass left the module unchanged.
@@ -337,14 +384,66 @@ mod tests {
             .count()
     }
 
-    /// Whether `body` starts with the counter check: an `Emit`, then an `If`
-    /// whose accept block is a lone `Break`.
+    /// Whether `body` starts with the counter check: a block that decrements
+    /// the counter, then ends with an `If` whose accept block is a lone
+    /// `Break`.
     fn starts_with_check(body: &Block) -> bool {
+        let Some(&Statement::Block(ref check)) = body.iter().next() else {
+            return false;
+        };
         matches!(
-            body.iter().take(2).collect::<alloc::vec::Vec<_>>()[..],
-            [Statement::Emit(_), Statement::If { ref accept, .. }]
-                if matches!(accept[..], [Statement::Break])
+            check[..],
+            [
+                Statement::Emit(_),
+                Statement::Store { .. },
+                Statement::Emit(_),
+                Statement::If { ref accept, ref reject, .. },
+            ] if matches!(accept[..], [Statement::Break]) && reject.is_empty()
         )
+    }
+
+    /// For each loop in `block`, in order, whether the statement before it
+    /// stores to a counter.
+    fn resets(function: &Function, block: &Block, out: &mut alloc::vec::Vec<bool>) {
+        let mut previous = None;
+        for statement in block.iter() {
+            match *statement {
+                Statement::Loop {
+                    ref body,
+                    ref continuing,
+                    ..
+                } => {
+                    let reset = match previous {
+                        Some(&Statement::Store { pointer, .. }) => matches!(
+                            function.expressions[pointer],
+                            Expression::LocalVariable(local)
+                                if function.local_variables[local].name.as_deref()
+                                    == Some("loop_bound")
+                        ),
+                        _ => false,
+                    };
+                    out.push(reset);
+                    resets(function, body, out);
+                    resets(function, continuing, out);
+                }
+                Statement::Block(ref inner) => resets(function, inner, out),
+                Statement::If {
+                    ref accept,
+                    ref reject,
+                    ..
+                } => {
+                    resets(function, accept, out);
+                    resets(function, reject, out);
+                }
+                Statement::Switch { ref cases, .. } => {
+                    for case in cases {
+                        resets(function, &case.body, out);
+                    }
+                }
+                _ => {}
+            }
+            previous = Some(statement);
+        }
     }
 
     fn loop_bodies(block: &Block, out: &mut alloc::vec::Vec<Block>) {
@@ -424,6 +523,58 @@ mod tests {
         loop_bodies(&main.body, &mut bodies);
         assert_eq!(bodies.len(), 4);
         assert!(bodies.iter().all(starts_with_check));
+    }
+
+    /// Every counter starts at `u32::MAX`, from its initializer. Only a loop
+    /// inside another loop, which may start more than once, stores that
+    /// value again before it starts.
+    #[test]
+    fn only_nested_loops_reset_their_counters() {
+        let module = bound(
+            "
+            @compute @workgroup_size(1)
+            fn main() {
+                var x = 0;
+                for (var i = 0; i < 4; i++) {
+                    if x > 2 {
+                        while x < 10 {
+                            x += i;
+                        }
+                    }
+                    loop {
+                        x -= 1;
+                        continuing {
+                            break if x < 0;
+                        }
+                    }
+                }
+                while x < 20 {
+                    x += 3;
+                }
+            }
+            ",
+        )
+        .unwrap();
+
+        let main = &module.entry_points[0].function;
+        assert_eq!(counters(main), 4);
+        for (_, local) in main.local_variables.iter() {
+            if local.name.as_deref() != Some("loop_bound") {
+                continue;
+            }
+            let init = local.init.unwrap();
+            let Expression::Splat { value, .. } = main.expressions[init] else {
+                panic!("counter initializer is not a splat");
+            };
+            assert!(matches!(
+                main.expressions[value],
+                Expression::Literal(crate::Literal::U32(u32::MAX))
+            ));
+        }
+
+        let mut out = alloc::vec::Vec::new();
+        resets(main, &main.body, &mut out);
+        assert_eq!(out, [false, true, true, false]);
     }
 
     /// The counter's `break` must not make a barrier later in the loop body

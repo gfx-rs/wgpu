@@ -143,22 +143,22 @@ void main()
 {
     vec3 color = vec3(0.0500000007450580596923828125);
     uint i = 0u;
-    uvec2 loop_bound = uvec2(0u);
+    uvec2 loop_bound = uvec2(4294967295u);
     VertexOutput _134 = VertexOutput(gl_FragCoord, world_normal, world_position);
-    vec3 _162 = normalize(_134.world_normal);
-    loop_bound = uvec2(4294967295u);
+    vec3 _161 = normalize(_134.world_normal);
     for (;;)
     {
-        if (all(equal(loop_bound, uvec2(0u))))
+        uvec2 _168 = loop_bound;
+        loop_bound = _168 - uvec2(uint(_168.y == 0u), 1u);
+        if (all(equal(_168, uvec2(0u))))
         {
             break;
         }
-        loop_bound -= uvec2(uint(loop_bound.y == 0u), 1u);
         if (!(i < min(u_globals_1._m0.num_lights.x, 10u)))
         {
             break;
         }
-        color += (s_lights_1._m0[i].color.xyz * (fetch_shadow(i, s_lights_1._m0[i].proj * _134.world_position) * max(0.0, dot(_162, normalize(s_lights_1._m0[i].pos.xyz - _134.world_position.xyz)))));
+        color += (s_lights_1._m0[i].color.xyz * (fetch_shadow(i, s_lights_1._m0[i].proj * _134.world_position) * max(0.0, dot(_161, normalize(s_lights_1._m0[i].pos.xyz - _134.world_position.xyz)))));
         i++;
         continue;
     }
@@ -222,7 +222,7 @@ layout(set = 0, binding = 3) uniform samplerShadow sampler_shadow;
 
 layout(location = 0) in vec3 world_normal;
 layout(location = 1) in vec4 world_position;
-layout(location = 0) out vec4 _228;
+layout(location = 0) out vec4 _229;
 
 float fetch_shadow(uint light_id, vec4 homogeneous_coords)
 {
@@ -238,25 +238,25 @@ void main()
 {
     vec3 color = vec3(0.0500000007450580596923828125);
     uint i = 0u;
-    uvec2 loop_bound = uvec2(0u);
-    VertexOutput _221 = VertexOutput(gl_FragCoord, world_normal, world_position);
-    vec3 _242 = normalize(_221.world_normal);
-    loop_bound = uvec2(4294967295u);
+    uvec2 loop_bound = uvec2(4294967295u);
+    VertexOutput _222 = VertexOutput(gl_FragCoord, world_normal, world_position);
+    vec3 _242 = normalize(_222.world_normal);
     for (;;)
     {
-        if (all(equal(loop_bound, uvec2(0u))))
+        uvec2 _249 = loop_bound;
+        loop_bound = _249 - uvec2(uint(_249.y == 0u), 1u);
+        if (all(equal(_249, uvec2(0u))))
         {
             break;
         }
-        loop_bound -= uvec2(uint(loop_bound.y == 0u), 1u);
         if (!(i < min(u_globals_1._m0.num_lights.x, 10u)))
         {
             break;
         }
-        color += (u_lights_1._m0[i].color.xyz * (fetch_shadow(i, u_lights_1._m0[i].proj * _221.world_position) * max(0.0, dot(_242, normalize(u_lights_1._m0[i].pos.xyz - _221.world_position.xyz)))));
+        color += (u_lights_1._m0[i].color.xyz * (fetch_shadow(i, u_lights_1._m0[i].proj * _222.world_position) * max(0.0, dot(_242, normalize(u_lights_1._m0[i].pos.xyz - _222.world_position.xyz)))));
         i++;
         continue;
     }
-    _228 = vec4(color, 1.0) * u_entity_1._m0.color;
+    _229 = vec4(color, 1.0) * u_entity_1._m0.color;
 }
 

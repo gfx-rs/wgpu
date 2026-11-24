@@ -20,7 +20,7 @@ constant float o = 2.0;
     metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> rq = {};
     uint naga_query_init_tracker_for_rq = 0u;
     float naga_query_tmax_tracker_for_rq = 0.0;
-    metal::uint2 loop_bound = {};
+    metal::uint2 loop_bound = metal::uint2(4294967295u);
     RayDesc desc = RayDesc {4u, 255u, 34.0, 38.0, metal::float3(46.0), metal::float3(58.0, 62.0, 74.0)};
     {
         RayDesc desc = desc;
@@ -49,13 +49,14 @@ constant float o = 2.0;
             naga_query_tmax_tracker_for_rq = desc.tmax;
         }
     }
-    loop_bound = metal::uint2(4294967295u);
     while(true) {
-        metal::uint2 _e20 = loop_bound;
-        if (metal::all(_e20 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e19 = loop_bound;
+            loop_bound = _e19 - metal::uint2((_e19.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e19 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound = _e20 - metal::uint2((_e20.y == 0u) ? 1u : 0u, 1u);
         bool _e13 = false;
         if (((naga_query_init_tracker_for_rq & 1) == 1) && !((naga_query_init_tracker_for_rq & 4) == 4)) {
             _e13 = rq.next();

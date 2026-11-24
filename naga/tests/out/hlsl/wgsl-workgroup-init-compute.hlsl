@@ -76,36 +76,36 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
     uint j_4 = (uint)0;
     uint i_3 = 0u;
     bool local_3 = (bool)0;
-    uint2 loop_bound = (uint2)0;
-    uint2 loop_bound_1 = (uint2)0;
-    uint2 loop_bound_2 = (uint2)0;
-    uint2 loop_bound_3 = (uint2)0;
-    uint2 loop_bound_4 = (uint2)0;
-    uint2 loop_bound_5 = (uint2)0;
-    uint2 loop_bound_6 = (uint2)0;
-    uint2 loop_bound_7 = (uint2)0;
-    uint2 loop_bound_8 = (uint2)0;
-    uint2 loop_bound_9 = (uint2)0;
-    uint2 loop_bound_10 = (uint2)0;
+    uint2 loop_bound = (4294967295u).xx;
+    uint2 loop_bound_1 = (4294967295u).xx;
+    uint2 loop_bound_2 = (4294967295u).xx;
+    uint2 loop_bound_3 = (4294967295u).xx;
+    uint2 loop_bound_4 = (4294967295u).xx;
+    uint2 loop_bound_5 = (4294967295u).xx;
+    uint2 loop_bound_6 = (4294967295u).xx;
+    uint2 loop_bound_7 = (4294967295u).xx;
+    uint2 loop_bound_8 = (4294967295u).xx;
+    uint2 loop_bound_9 = (4294967295u).xx;
+    uint2 loop_bound_10 = (4294967295u).xx;
     uint zero_init_index = (uint)0;
 
     zero_init_index = zero_flat_index;
     while(true) {
-        uint _e513 = zero_init_index;
-        if ((_e513 >= 45u)) {
+        uint _e503 = zero_init_index;
+        if ((_e503 >= 45u)) {
             break;
         }
-        data[min(uint(naga_div(_e513, 15u)), 2u)].values[min(uint(naga_mod(naga_div(_e513, 3u), 5u)), 4u)][min(uint(naga_mod(_e513, 3u)), 2u)] = ZeroValuefloat4();
-        zero_init_index = (_e513 + 16u);
+        data[min(uint(naga_div(_e503, 15u)), 2u)].values[min(uint(naga_mod(naga_div(_e503, 3u), 5u)), 4u)][min(uint(naga_mod(_e503, 3u)), 2u)] = ZeroValuefloat4();
+        zero_init_index = (_e503 + 16u);
     }
     zero_init_index = zero_flat_index;
     while(true) {
-        uint _e533 = zero_init_index;
-        if ((_e533 >= 57u)) {
+        uint _e523 = zero_init_index;
+        if ((_e523 >= 57u)) {
             break;
         }
-        data[min(uint(naga_div(_e533, 19u)), 2u)].atoms[min(uint(naga_mod(_e533, 19u)), 18u)] = 0u;
-        zero_init_index = (_e533 + 16u);
+        data[min(uint(naga_div(_e523, 19u)), 2u)].atoms[min(uint(naga_mod(_e523, 19u)), 18u)] = 0u;
+        zero_init_index = (_e523 + 16u);
     }
     if ((zero_flat_index < 3u)) {
         data[min(uint(zero_flat_index), 2u)].matrix_ = ZeroValuefloat3x2();
@@ -115,21 +115,21 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
     }
     zero_init_index = zero_flat_index;
     while(true) {
-        uint _e565 = zero_init_index;
-        if ((_e565 >= 37u)) {
+        uint _e555 = zero_init_index;
+        if ((_e555 >= 37u)) {
             break;
         }
-        dynamic[min(uint(_e565), 36u)] = 0u;
-        zero_init_index = (_e565 + 16u);
+        dynamic[min(uint(_e555), 36u)] = 0u;
+        zero_init_index = (_e555 + 16u);
     }
     zero_init_index = zero_flat_index;
     while(true) {
-        uint _e574 = zero_init_index;
-        if ((_e574 >= 37u)) {
+        uint _e564 = zero_init_index;
+        if ((_e564 >= 37u)) {
             break;
         }
-        floats[min(uint(_e574), 36u)] = 0.0;
-        zero_init_index = (_e574 + 16u);
+        floats[min(uint(_e564), 36u)] = 0.0;
+        zero_init_index = (_e564 + 16u);
     }
     if ((zero_flat_index == 0u)) {
         tagged = ZeroValueTagged();
@@ -167,7 +167,6 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
     }
     bool _e57 = local_2;
     ok = (_e37 & _e57);
-    loop_bound = (4294967295u).xx;
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
@@ -175,11 +174,13 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
             i = (_e164 + 1u);
         }
         loop_init = false;
-        uint2 _e410 = loop_bound;
-        if (all((_e410 == (0u).xx))) {
-            break;
+        {
+            uint2 _e409 = loop_bound;
+            loop_bound = (_e409 - uint2(((_e409.y == 0u) ? 1u : 0u), 1u));
+            if (all((_e409 == (0u).xx))) {
+                break;
+            }
         }
-        loop_bound = (_e410 - uint2(((_e410.y == 0u) ? 1u : 0u), 1u));
         uint _e61 = i;
         if ((_e61 < 3u)) {
         } else {
@@ -195,11 +196,13 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
                     j = (_e93 + 1u);
                 }
                 loop_init_1 = false;
-                uint2 _e365 = loop_bound_1;
-                if (all((_e365 == (0u).xx))) {
-                    break;
+                {
+                    uint2 _e367 = loop_bound_1;
+                    loop_bound_1 = (_e367 - uint2(((_e367.y == 0u) ? 1u : 0u), 1u));
+                    if (all((_e367 == (0u).xx))) {
+                        break;
+                    }
                 }
-                loop_bound_1 = (_e365 - uint2(((_e365.y == 0u) ? 1u : 0u), 1u));
                 uint _e66 = j;
                 if ((_e66 < 5u)) {
                 } else {
@@ -215,11 +218,13 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
                             k = (_e90 + 1u);
                         }
                         loop_init_2 = false;
-                        uint2 _e350 = loop_bound_2;
-                        if (all((_e350 == (0u).xx))) {
-                            break;
+                        {
+                            uint2 _e352 = loop_bound_2;
+                            loop_bound_2 = (_e352 - uint2(((_e352.y == 0u) ? 1u : 0u), 1u));
+                            if (all((_e352 == (0u).xx))) {
+                                break;
+                            }
                         }
-                        loop_bound_2 = (_e350 - uint2(((_e350.y == 0u) ? 1u : 0u), 1u));
                         uint _e71 = k;
                         if ((_e71 < 3u)) {
                         } else {
@@ -245,11 +250,13 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
                     j_1 = (_e112 + 1u);
                 }
                 loop_init_3 = false;
-                uint2 _e380 = loop_bound_3;
-                if (all((_e380 == (0u).xx))) {
-                    break;
+                {
+                    uint2 _e382 = loop_bound_3;
+                    loop_bound_3 = (_e382 - uint2(((_e382.y == 0u) ? 1u : 0u), 1u));
+                    if (all((_e382 == (0u).xx))) {
+                        break;
+                    }
                 }
-                loop_bound_3 = (_e380 - uint2(((_e380.y == 0u) ? 1u : 0u), 1u));
                 uint _e97 = j_1;
                 if ((_e97 < 19u)) {
                 } else {
@@ -272,11 +279,13 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
                     j_2 = (_e161 + 1u);
                 }
                 loop_init_4 = false;
-                uint2 _e395 = loop_bound_4;
-                if (all((_e395 == (0u).xx))) {
-                    break;
+                {
+                    uint2 _e397 = loop_bound_4;
+                    loop_bound_4 = (_e397 - uint2(((_e397.y == 0u) ? 1u : 0u), 1u));
+                    if (all((_e397 == (0u).xx))) {
+                        break;
+                    }
                 }
-                loop_bound_4 = (_e395 - uint2(((_e395.y == 0u) ? 1u : 0u), 1u));
                 uint _e116 = j_2;
                 if ((_e116 < 3u)) {
                 } else {
@@ -302,7 +311,6 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
             }
         }
     }
-    loop_bound_5 = (4294967295u).xx;
     bool loop_init_5 = true;
     while(true) {
         if (!loop_init_5) {
@@ -310,11 +318,13 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
             i_1 = (_e188 + 1u);
         }
         loop_init_5 = false;
-        uint2 _e425 = loop_bound_5;
-        if (all((_e425 == (0u).xx))) {
-            break;
+        {
+            uint2 _e421 = loop_bound_5;
+            loop_bound_5 = (_e421 - uint2(((_e421.y == 0u) ? 1u : 0u), 1u));
+            if (all((_e421 == (0u).xx))) {
+                break;
+            }
         }
-        loop_bound_5 = (_e425 - uint2(((_e425.y == 0u) ? 1u : 0u), 1u));
         uint _e168 = i_1;
         if ((_e168 < count)) {
         } else {
@@ -336,7 +346,6 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
         scalar = 42u;
         vector_ = (42u).xxx;
         matrix_ = float2x3((42.0).xxx, (42.0).xxx);
-        loop_bound_6 = (4294967295u).xx;
         bool loop_init_6 = true;
         while(true) {
             if (!loop_init_6) {
@@ -344,11 +353,13 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
                 i_2 = (_e250 + 1u);
             }
             loop_init_6 = false;
-            uint2 _e485 = loop_bound_6;
-            if (all((_e485 == (0u).xx))) {
-                break;
+            {
+                uint2 _e478 = loop_bound_6;
+                loop_bound_6 = (_e478 - uint2(((_e478.y == 0u) ? 1u : 0u), 1u));
+                if (all((_e478 == (0u).xx))) {
+                    break;
+                }
             }
-            loop_bound_6 = (_e485 - uint2(((_e485.y == 0u) ? 1u : 0u), 1u));
             uint _e205 = i_2;
             if ((_e205 < 3u)) {
             } else {
@@ -364,11 +375,13 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
                         j_3 = (_e232 + 1u);
                     }
                     loop_init_7 = false;
-                    uint2 _e455 = loop_bound_7;
-                    if (all((_e455 == (0u).xx))) {
-                        break;
+                    {
+                        uint2 _e451 = loop_bound_7;
+                        loop_bound_7 = (_e451 - uint2(((_e451.y == 0u) ? 1u : 0u), 1u));
+                        if (all((_e451 == (0u).xx))) {
+                            break;
+                        }
                     }
-                    loop_bound_7 = (_e455 - uint2(((_e455.y == 0u) ? 1u : 0u), 1u));
                     uint _e210 = j_3;
                     if ((_e210 < 5u)) {
                     } else {
@@ -384,11 +397,13 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
                                 k_1 = (_e229 + 1u);
                             }
                             loop_init_8 = false;
-                            uint2 _e440 = loop_bound_8;
-                            if (all((_e440 == (0u).xx))) {
-                                break;
+                            {
+                                uint2 _e436 = loop_bound_8;
+                                loop_bound_8 = (_e436 - uint2(((_e436.y == 0u) ? 1u : 0u), 1u));
+                                if (all((_e436 == (0u).xx))) {
+                                    break;
+                                }
                             }
-                            loop_bound_8 = (_e440 - uint2(((_e440.y == 0u) ? 1u : 0u), 1u));
                             uint _e215 = k_1;
                             if ((_e215 < 3u)) {
                             } else {
@@ -412,11 +427,13 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
                         j_4 = (_e247 + 1u);
                     }
                     loop_init_9 = false;
-                    uint2 _e470 = loop_bound_9;
-                    if (all((_e470 == (0u).xx))) {
-                        break;
+                    {
+                        uint2 _e466 = loop_bound_9;
+                        loop_bound_9 = (_e466 - uint2(((_e466.y == 0u) ? 1u : 0u), 1u));
+                        if (all((_e466 == (0u).xx))) {
+                            break;
+                        }
                     }
-                    loop_bound_9 = (_e470 - uint2(((_e470.y == 0u) ? 1u : 0u), 1u));
                     uint _e236 = j_4;
                     if ((_e236 < 19u)) {
                     } else {
@@ -430,7 +447,6 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
                 }
             }
         }
-        loop_bound_10 = (4294967295u).xx;
         bool loop_init_10 = true;
         while(true) {
             if (!loop_init_10) {
@@ -438,11 +454,13 @@ void main(uint zero_flat_index : SV_GroupIndex, uint3 group : SV_GroupID)
                 i_3 = (_e266 + 1u);
             }
             loop_init_10 = false;
-            uint2 _e500 = loop_bound_10;
-            if (all((_e500 == (0u).xx))) {
-                break;
+            {
+                uint2 _e490 = loop_bound_10;
+                loop_bound_10 = (_e490 - uint2(((_e490.y == 0u) ? 1u : 0u), 1u));
+                if (all((_e490 == (0u).xx))) {
+                    break;
+                }
             }
-            loop_bound_10 = (_e500 - uint2(((_e500.y == 0u) ? 1u : 0u), 1u));
             uint _e254 = i_3;
             if ((_e254 < count)) {
             } else {

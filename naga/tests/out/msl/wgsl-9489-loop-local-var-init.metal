@@ -19,9 +19,8 @@ kernel void main_(
     metal::float4 acc_noinit = {};
     metal::float4 acc_init = {};
     uint d = {};
-    metal::uint2 loop_bound = {};
-    metal::uint2 loop_bound_1 = {};
-    loop_bound = metal::uint2(4294967295u);
+    metal::uint2 loop_bound = metal::uint2(4294967295u);
+    metal::uint2 loop_bound_1 = metal::uint2(4294967295u);
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
@@ -29,11 +28,13 @@ kernel void main_(
             t = _e47 + 1u;
         }
         loop_init = false;
-        metal::uint2 _e70 = loop_bound;
-        if (metal::all(_e70 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e69 = loop_bound;
+            loop_bound = _e69 - metal::uint2((_e69.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e69 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound = _e70 - metal::uint2((_e70.y == 0u) ? 1u : 0u, 1u);
         uint _e2 = t;
         if (_e2 < 4u) {
         } else {
@@ -51,11 +52,13 @@ kernel void main_(
                     d = _e28 + 1u;
                 }
                 loop_init_1 = false;
-                metal::uint2 _e55 = loop_bound_1;
-                if (metal::all(_e55 == metal::uint2(0u))) {
-                    break;
+                {
+                    metal::uint2 _e57 = loop_bound_1;
+                    loop_bound_1 = _e57 - metal::uint2((_e57.y == 0u) ? 1u : 0u, 1u);
+                    if (metal::all(_e57 == metal::uint2(0u))) {
+                        break;
+                    }
                 }
-                loop_bound_1 = _e55 - metal::uint2((_e55.y == 0u) ? 1u : 0u, 1u);
                 uint _e11 = d;
                 if (_e11 < 16u) {
                 } else {

@@ -13,41 +13,42 @@ layout(set = 0, binding = 1, std430) buffer _15_14
 
 void main()
 {
-    uvec2 _42 = uvec2(0u);
+    uvec2 _42 = uvec2(4294967295u);
     vec4 _35 = vec4(0.0);
     uint _33 = 0u;
-    uvec2 _45 = uvec2(0u);
+    uvec2 _44 = uvec2(4294967295u);
     vec4 _38 = vec4(0.0);
-    _42 = uvec2(4294967295u);
     for (;;)
     {
-        if (all(equal(_42, uvec2(0u))))
+        uvec2 _52 = _42;
+        _42 = _52 - uvec2(uint(_52.y == 0u), 1u);
+        if (all(equal(_52, uvec2(0u))))
         {
             break;
         }
-        _42 -= uvec2(uint(_42.y == 0u), 1u);
         if (!(_33 < 4u))
         {
             break;
         }
         _35 = vec4(0.0);
         _38 = vec4(0.0);
-        _45 = uvec2(4294967295u);
+        _44 = uvec2(4294967295u);
         uint _40 = 0u;
         for (;;)
         {
-            if (all(equal(_45, uvec2(0u))))
+            uvec2 _76 = _44;
+            _44 = _76 - uvec2(uint(_76.y == 0u), 1u);
+            if (all(equal(_76, uvec2(0u))))
             {
                 break;
             }
-            _45 -= uvec2(uint(_45.y == 0u), 1u);
             if (!(_40 < 16u))
             {
                 break;
             }
-            vec4 _97 = vec4(_11._m0[(_33 * 16u) + _40]);
-            _35 += _97;
-            _38 += _97;
+            vec4 _99 = vec4(_11._m0[(_33 * 16u) + _40]);
+            _35 += _99;
+            _38 += _99;
             _40++;
             continue;
         }

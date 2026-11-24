@@ -32,7 +32,7 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
     float2 pos = (float2)0;
     float2 vel = (float2)0;
     uint i = 0u;
-    uint2 loop_bound = (uint2)0;
+    uint2 loop_bound = (4294967295u).xx;
 
     uint index = global_invocation_id.x;
     if ((index >= NUM_PARTICLES)) {
@@ -42,7 +42,6 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
     vPos = _e8;
     float2 _e14 = asfloat(particlesSrc.Load2(8+index*16+0));
     vVel = _e14;
-    loop_bound = (4294967295u).xx;
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
@@ -50,11 +49,13 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
             i = (_e91 + 1u);
         }
         loop_init = false;
-        uint2 _e186 = loop_bound;
-        if (all((_e186 == (0u).xx))) {
-            break;
+        {
+            uint2 _e185 = loop_bound;
+            loop_bound = (_e185 - uint2(((_e185.y == 0u) ? 1u : 0u), 1u));
+            if (all((_e185 == (0u).xx))) {
+                break;
+            }
         }
-        loop_bound = (_e186 - uint2(((_e186.y == 0u) ? 1u : 0u), 1u));
         uint _e36 = i;
         if ((_e36 >= NUM_PARTICLES)) {
             break;

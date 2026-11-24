@@ -17,8 +17,7 @@ int f(
 void named(
 ) {
     int a = 0;
-    metal::uint2 loop_bound = {};
-    loop_bound = metal::uint2(4294967295u);
+    metal::uint2 loop_bound = metal::uint2(4294967295u);
     bool cmp = {};
     bool loop_init = true;
     while(true) {
@@ -28,11 +27,13 @@ void named(
             }
         }
         loop_init = false;
-        metal::uint2 _e14 = loop_bound;
-        if (metal::all(_e14 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e13 = loop_bound;
+            loop_bound = _e13 - metal::uint2((_e13.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e13 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound = _e14 - metal::uint2((_e14.y == 0u) ? 1u : 0u, 1u);
         int _e2 = a;
         cmp = _e2 < 8;
         if (cmp) {
@@ -46,8 +47,7 @@ void named(
 void call_result(
 ) {
     int a_1 = 0;
-    metal::uint2 loop_bound_1 = {};
-    loop_bound_1 = metal::uint2(4294967295u);
+    metal::uint2 loop_bound_1 = metal::uint2(4294967295u);
     int v = {};
     bool loop_init_1 = true;
     while(true) {
@@ -57,11 +57,13 @@ void call_result(
             }
         }
         loop_init_1 = false;
-        metal::uint2 _e15 = loop_bound_1;
-        if (metal::all(_e15 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e14 = loop_bound_1;
+            loop_bound_1 = _e14 - metal::uint2((_e14.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e14 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound_1 = _e15 - metal::uint2((_e15.y == 0u) ? 1u : 0u, 1u);
         int _e2 = a_1;
         v = f(_e2);
         int _e4 = a_1;
@@ -74,8 +76,7 @@ void through_pointer(
 ) {
     type_1 arr = type_1 {{0, 1, 2, 3}};
     int i = 0;
-    metal::uint2 loop_bound_2 = {};
-    loop_bound_2 = metal::uint2(4294967295u);
+    metal::uint2 loop_bound_2 = metal::uint2(4294967295u);
     int _e8 = {};
     bool loop_init_2 = true;
     while(true) {
@@ -86,11 +87,13 @@ void through_pointer(
             }
         }
         loop_init_2 = false;
-        metal::uint2 _e22 = loop_bound_2;
-        if (metal::all(_e22 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e21 = loop_bound_2;
+            loop_bound_2 = _e21 - metal::uint2((_e21.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e21 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound_2 = _e22 - metal::uint2((_e22.y == 0u) ? 1u : 0u, 1u);
         _e8 = i;
         int _e10 = i;
         i = as_type<int>(as_type<uint>(_e10) + as_type<uint>(1));
@@ -101,9 +104,8 @@ void through_pointer(
 void nested(
 ) {
     int a_2 = 0;
-    metal::uint2 loop_bound_3 = {};
-    metal::uint2 loop_bound_4 = {};
-    loop_bound_3 = metal::uint2(4294967295u);
+    metal::uint2 loop_bound_3 = metal::uint2(4294967295u);
+    metal::uint2 loop_bound_4 = metal::uint2(4294967295u);
     bool outer = {};
     bool loop_init_3 = true;
     while(true) {
@@ -113,11 +115,13 @@ void nested(
             }
         }
         loop_init_3 = false;
-        metal::uint2 _e32 = loop_bound_3;
-        if (metal::all(_e32 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e31 = loop_bound_3;
+            loop_bound_3 = _e31 - metal::uint2((_e31.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e31 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound_3 = _e32 - metal::uint2((_e32.y == 0u) ? 1u : 0u, 1u);
         int _e2 = a_2;
         outer = _e2 < 8;
         loop_bound_4 = metal::uint2(4294967295u);
@@ -130,11 +134,13 @@ void nested(
                 }
             }
             loop_init_4 = false;
-            metal::uint2 _e17 = loop_bound_4;
-            if (metal::all(_e17 == metal::uint2(0u))) {
-                break;
+            {
+                metal::uint2 _e19 = loop_bound_4;
+                loop_bound_4 = _e19 - metal::uint2((_e19.y == 0u) ? 1u : 0u, 1u);
+                if (metal::all(_e19 == metal::uint2(0u))) {
+                    break;
+                }
             }
-            loop_bound_4 = _e17 - metal::uint2((_e17.y == 0u) ? 1u : 0u, 1u);
             int _e5 = a_2;
             inner = _e5 < 4;
             int _e8 = a_2;
@@ -147,8 +153,7 @@ void nested(
 void dead_use(
 ) {
     int a_3 = 0;
-    metal::uint2 loop_bound_5 = {};
-    loop_bound_5 = metal::uint2(4294967295u);
+    metal::uint2 loop_bound_5 = metal::uint2(4294967295u);
     int v_1 = {};
     int w = {};
     bool loop_init_5 = true;
@@ -164,11 +169,13 @@ void dead_use(
             }
         }
         loop_init_5 = false;
-        metal::uint2 _e23 = loop_bound_5;
-        if (metal::all(_e23 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e22 = loop_bound_5;
+            loop_bound_5 = _e22 - metal::uint2((_e22.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e22 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound_5 = _e23 - metal::uint2((_e23.y == 0u) ? 1u : 0u, 1u);
         int _e2 = a_3;
         v_1 = f(_e2);
         int _e4 = a_3;
@@ -183,8 +190,7 @@ void restricted_image_load(
     metal::texture2d<float, metal::access::sample> tex
 ) {
     int i_1 = 0;
-    metal::uint2 loop_bound_6 = {};
-    loop_bound_6 = metal::uint2(4294967295u);
+    metal::uint2 loop_bound_6 = metal::uint2(4294967295u);
     float val = {};
     bool loop_init_6 = true;
     while(true) {
@@ -194,11 +200,13 @@ void restricted_image_load(
             }
         }
         loop_init_6 = false;
-        metal::uint2 _e20 = loop_bound_6;
-        if (metal::all(_e20 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e19 = loop_bound_6;
+            loop_bound_6 = _e19 - metal::uint2((_e19.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e19 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound_6 = _e20 - metal::uint2((_e20.y == 0u) ? 1u : 0u, 1u);
         int _e3 = i_1;
         uint clamped_lod_e7 = metal::min(uint(0), tex.get_num_mip_levels() - 1);
         metal::float4 _e7 = tex.read(metal::min(metal::uint2(metal::int2(_e3, 0)), metal::uint2(tex.get_width(clamped_lod_e7), tex.get_height(clamped_lod_e7)) - 1), clamped_lod_e7);
@@ -217,8 +225,7 @@ uint one(
 void call_result_as_index(
     device metal::float2 const& v0_
 ) {
-    metal::uint2 loop_bound_7 = {};
-    loop_bound_7 = metal::uint2(4294967295u);
+    metal::uint2 loop_bound_7 = metal::uint2(4294967295u);
     float v1_ = {};
     bool loop_init_7 = true;
     while(true) {
@@ -228,11 +235,13 @@ void call_result_as_index(
             }
         }
         loop_init_7 = false;
-        metal::uint2 _e12 = loop_bound_7;
-        if (metal::all(_e12 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e11 = loop_bound_7;
+            loop_bound_7 = _e11 - metal::uint2((_e11.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e11 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound_7 = _e12 - metal::uint2((_e12.y == 0u) ? 1u : 0u, 1u);
         uint _e1 = one();
         v1_ = v0_[_e1];
     }
@@ -242,8 +251,7 @@ void call_result_as_index(
 void break_if_uses_continuing(
     thread int& counter
 ) {
-    metal::uint2 loop_bound_8 = {};
-    loop_bound_8 = metal::uint2(4294967295u);
+    metal::uint2 loop_bound_8 = metal::uint2(4294967295u);
     bool loop_init_8 = true;
     while(true) {
         if (!loop_init_8) {
@@ -255,11 +263,13 @@ void break_if_uses_continuing(
             }
         }
         loop_init_8 = false;
-        metal::uint2 _e14 = loop_bound_8;
-        if (metal::all(_e14 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e13 = loop_bound_8;
+            loop_bound_8 = _e13 - metal::uint2((_e13.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e13 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound_8 = _e14 - metal::uint2((_e14.y == 0u) ? 1u : 0u, 1u);
     }
     return;
 }
@@ -269,8 +279,7 @@ void name_reuse(
     float a_4 = 0.0;
     int a_5 = {};
     float b = {};
-    metal::uint2 loop_bound_9 = {};
-    loop_bound_9 = metal::uint2(4294967295u);
+    metal::uint2 loop_bound_9 = metal::uint2(4294967295u);
     bool loop_init_9 = true;
     while(true) {
         if (!loop_init_9) {
@@ -280,11 +289,13 @@ void name_reuse(
             }
         }
         loop_init_9 = false;
-        metal::uint2 _e19 = loop_bound_9;
-        if (metal::all(_e19 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e18 = loop_bound_9;
+            loop_bound_9 = _e18 - metal::uint2((_e18.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e18 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound_9 = _e19 - metal::uint2((_e19.y == 0u) ? 1u : 0u, 1u);
         a_5 = 1;
         int _e4 = a_5;
         a_5 = as_type<int>(as_type<uint>(_e4) + as_type<uint>(1));

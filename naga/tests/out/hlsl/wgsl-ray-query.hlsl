@@ -92,7 +92,7 @@ void main()
     float3 world_point = (float3)0;
     RayIntersection intersection = (RayIntersection)0;
     float3 local_1 = (float3)0;
-    uint2 loop_bound = (uint2)0;
+    uint2 loop_bound = (4294967295u).xx;
 
     float3 pos_1 = (0.0).xxx;
     float3 dir_1 = float3(0.0, 1.0, 0.0);
@@ -127,23 +127,24 @@ void main()
             rq.TraceRayInline(acc_struct, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
         }
     }
-    loop_bound = (4294967295u).xx;
     while(true) {
-        uint2 _e19 = loop_bound;
-        if (all((_e19 == (0u).xx))) {
-            break;
+        {
+            uint2 _e18 = loop_bound;
+            loop_bound = (_e18 - uint2(((_e18.y == 0u) ? 1u : 0u), 1u));
+            if (all((_e18 == (0u).xx))) {
+                break;
+            }
         }
-        loop_bound = (_e19 - uint2(((_e19.y == 0u) ? 1u : 0u), 1u));
-        bool _e65 = false;
+        bool _e63 = false;
         {
             bool naga_has_initialized = ((naga_query_init_tracker_for_rq & 1) == 1);
             bool naga_has_finished = ((naga_query_init_tracker_for_rq & 4) == 4);
             if (naga_has_initialized && !naga_has_finished) {
-                _e65 = rq.Proceed();
+                _e63 = rq.Proceed();
                 naga_query_init_tracker_for_rq = naga_query_init_tracker_for_rq | 2;
-                if (!_e65) { naga_query_init_tracker_for_rq = naga_query_init_tracker_for_rq | 4; }
+                if (!_e63) { naga_query_init_tracker_for_rq = naga_query_init_tracker_for_rq | 4; }
         }}
-        if (_e65) {
+        if (_e63) {
         } else {
             break;
         }
@@ -154,12 +155,12 @@ void main()
     RayIntersection intersection_1 = local;
     output.Store(0, asuint(uint((intersection_1.kind == 0u))));
     world_point = (dir_1 * intersection_1.t);
-    float3 _e44 = world_point;
+    float3 _e42 = world_point;
     intersection = intersection_1;
-    RayIntersection _e46 = intersection;
-    local_1 = normalize((_e44 - mul(float4((normalize(mul(float4(_e44, 1.0), _e46.world_to_object).xy) * 2.4), 0.0, 1.0), _e46.object_to_world)));
-    float3 _e63 = local_1;
-    output.Store3(16, asuint(_e63));
+    RayIntersection _e44 = intersection;
+    local_1 = normalize((_e42 - mul(float4((normalize(mul(float4(_e42, 1.0), _e44.world_to_object).xy) * 2.4), 0.0, 1.0), _e44.object_to_world)));
+    float3 _e61 = local_1;
+    output.Store3(16, asuint(_e61));
     return;
 }
 

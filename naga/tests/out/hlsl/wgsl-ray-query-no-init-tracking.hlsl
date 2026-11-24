@@ -90,7 +90,7 @@ void main()
     float3 world_point = (float3)0;
     RayIntersection intersection = (RayIntersection)0;
     float3 local_1 = (float3)0;
-    uint2 loop_bound = (uint2)0;
+    uint2 loop_bound = (4294967295u).xx;
 
     float3 pos_1 = (0.0).xxx;
     float3 dir_1 = float3(0.0, 1.0, 0.0);
@@ -102,16 +102,17 @@ void main()
         RayDesc_ naga_desc = ConstructRayDesc_(4u, 255u, 0.1, 100.0, _e7, _e9);
         rq.TraceRayInline(acc_struct, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
     }
-    loop_bound = (4294967295u).xx;
     while(true) {
-        uint2 _e19 = loop_bound;
-        if (all((_e19 == (0u).xx))) {
-            break;
+        {
+            uint2 _e18 = loop_bound;
+            loop_bound = (_e18 - uint2(((_e18.y == 0u) ? 1u : 0u), 1u));
+            if (all((_e18 == (0u).xx))) {
+                break;
+            }
         }
-        loop_bound = (_e19 - uint2(((_e19.y == 0u) ? 1u : 0u), 1u));
-        bool _e65 = false;
-        _e65 = rq.Proceed();
-        if (_e65) {
+        bool _e63 = false;
+        _e63 = rq.Proceed();
+        if (_e63) {
         } else {
             break;
         }
@@ -122,12 +123,12 @@ void main()
     RayIntersection intersection_1 = local;
     output.Store(0, asuint(uint((intersection_1.kind == 0u))));
     world_point = (dir_1 * intersection_1.t);
-    float3 _e44 = world_point;
+    float3 _e42 = world_point;
     intersection = intersection_1;
-    RayIntersection _e46 = intersection;
-    local_1 = normalize((_e44 - mul(float4((normalize(mul(float4(_e44, 1.0), _e46.world_to_object).xy) * 2.4), 0.0, 1.0), _e46.object_to_world)));
-    float3 _e63 = local_1;
-    output.Store3(16, asuint(_e63));
+    RayIntersection _e44 = intersection;
+    local_1 = normalize((_e42 - mul(float4((normalize(mul(float4(_e42, 1.0), _e44.world_to_object).xy) * 2.4), 0.0, 1.0), _e44.object_to_world)));
+    float3 _e61 = local_1;
+    output.Store3(16, asuint(_e61));
     return;
 }
 

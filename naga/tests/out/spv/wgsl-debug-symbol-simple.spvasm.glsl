@@ -53,18 +53,18 @@ layout(location = 0) out vec4 _49;
 void main()
 {
     int i = 0;
-    uvec2 loop_bound = uvec2(0u);
+    uvec2 loop_bound = uvec2(4294967295u);
     vec3 color_1 = vec3(0.0);
     float ii = 0.0;
     color_1 = VertexOutput(gl_FragCoord, color).color;
-    loop_bound = uvec2(4294967295u);
     for (;;)
     {
-        if (all(equal(loop_bound, uvec2(0u))))
+        uvec2 _76 = loop_bound;
+        loop_bound = _76 - uvec2(uint(_76.y == 0u), 1u);
+        if (all(equal(_76, uvec2(0u))))
         {
             break;
         }
-        loop_bound -= uvec2(uint(loop_bound.y == 0u), 1u);
         if (!(i < 10))
         {
             break;

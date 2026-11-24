@@ -34,19 +34,19 @@ layout(set = 0, binding = 1, std430) buffer _17_16
 
 void main()
 {
-    uvec2 _42 = uvec2(0u);
+    uvec2 _41 = uvec2(4294967295u);
     int64_t _33 = 0l;
-    uvec2 _39 = uvec2(0u);
+    uvec2 _39 = uvec2(4294967295u);
     uint _31 = 0u;
     bool _36 = false;
-    _39 = uvec2(4294967295u);
     for (;;)
     {
-        if (all(equal(_39, uvec2(0u))))
+        uvec2 _49 = _39;
+        _39 = _49 - uvec2(uint(_49.y == 0u), 1u);
+        if (all(equal(_49, uvec2(0u))))
         {
             break;
         }
-        _39 -= uvec2(uint(_39.y == 0u), 1u);
         if (!(_31 < 128u))
         {
             break;
@@ -54,23 +54,24 @@ void main()
         int64_t _69 = atomicAdd(_13._m0[_31], 0);
         _33 = _69;
         _36 = false;
-        _42 = uvec2(4294967295u);
+        _41 = uvec2(4294967295u);
         for (;;)
         {
-            if (all(equal(_42, uvec2(0u))))
+            uvec2 _78 = _41;
+            _41 = _78 - uvec2(uint(_78.y == 0u), 1u);
+            if (all(equal(_78, uvec2(0u))))
             {
                 break;
             }
-            _42 -= uvec2(uint(_42.y == 0u), 1u);
             if (!(!_36))
             {
                 break;
             }
-            int64_t _95 = _33;
-            int64_t _98 = atomicCompSwap(_13._m0[_31], _95, _33 + 10l);
-            _10 _96 = _10(_98, _98 == _95);
-            _33 = _96._m0;
-            _36 = _96._m1;
+            int64_t _97 = _33;
+            int64_t _100 = atomicCompSwap(_13._m0[_31], _97, _33 + 10l);
+            _10 _98 = _10(_100, _100 == _97);
+            _33 = _98._m0;
+            _36 = _98._m1;
             continue;
         }
         _31++;
@@ -115,46 +116,47 @@ layout(set = 0, binding = 1, std430) buffer _17_16
 
 void main()
 {
-    uvec2 _117 = uvec2(0u);
-    uint64_t _110 = 0ul;
-    uvec2 _115 = uvec2(0u);
-    uint _109 = 0u;
-    bool _113 = false;
-    _115 = uvec2(4294967295u);
+    uvec2 _118 = uvec2(4294967295u);
+    uint64_t _112 = 0ul;
+    uvec2 _117 = uvec2(4294967295u);
+    uint _111 = 0u;
+    bool _115 = false;
     for (;;)
     {
-        if (all(equal(_115, uvec2(0u))))
+        uvec2 _126 = _117;
+        _117 = _126 - uvec2(uint(_126.y == 0u), 1u);
+        if (all(equal(_126, uvec2(0u))))
         {
             break;
         }
-        _115 -= uvec2(uint(_115.y == 0u), 1u);
-        if (!(_109 < 128u))
+        if (!(_111 < 128u))
         {
             break;
         }
-        uint64_t _143 = atomicAdd(_16._m0[_109], 0);
-        _110 = _143;
-        _113 = false;
-        _117 = uvec2(4294967295u);
+        uint64_t _145 = atomicAdd(_16._m0[_111], 0);
+        _112 = _145;
+        _115 = false;
+        _118 = uvec2(4294967295u);
         for (;;)
         {
-            if (all(equal(_117, uvec2(0u))))
+            uvec2 _152 = _118;
+            _118 = _152 - uvec2(uint(_152.y == 0u), 1u);
+            if (all(equal(_152, uvec2(0u))))
             {
                 break;
             }
-            _117 -= uvec2(uint(_117.y == 0u), 1u);
-            if (!(!_113))
+            if (!(!_115))
             {
                 break;
             }
-            uint64_t _167 = _110;
-            uint64_t _170 = atomicCompSwap(_16._m0[_109], _167, _110 + 10ul);
-            _11 _168 = _11(_170, _170 == _167);
-            _110 = _168._m0;
-            _113 = _168._m1;
+            uint64_t _171 = _112;
+            uint64_t _174 = atomicCompSwap(_16._m0[_111], _171, _112 + 10ul);
+            _11 _172 = _11(_174, _174 == _171);
+            _112 = _172._m0;
+            _115 = _172._m1;
             continue;
         }
-        _109++;
+        _111++;
         continue;
     }
 }

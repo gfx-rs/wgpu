@@ -19,12 +19,12 @@ void main()
     int z_1 = (int)0;
     int w = (int)0;
     int pos_1 = (int)0;
-    uint2 loop_bound = (uint2)0;
-    uint2 loop_bound_1 = (uint2)0;
-    uint2 loop_bound_2 = (uint2)0;
-    uint2 loop_bound_3 = (uint2)0;
-    uint2 loop_bound_4 = (uint2)0;
-    uint2 loop_bound_5 = (uint2)0;
+    uint2 loop_bound = (4294967295u).xx;
+    uint2 loop_bound_1 = (4294967295u).xx;
+    uint2 loop_bound_2 = (4294967295u).xx;
+    uint2 loop_bound_3 = (4294967295u).xx;
+    uint2 loop_bound_4 = (4294967295u).xx;
+    uint2 loop_bound_5 = (4294967295u).xx;
 
     do {
         pos = ZeroValueint();
@@ -198,13 +198,14 @@ void main()
     } while(false);
     x = int(1);
     int _e54 = x;
-    loop_bound = (4294967295u).xx;
     while(true) {
-        uint2 _e79 = loop_bound;
-        if (all((_e79 == (0u).xx))) {
-            break;
+        {
+            uint2 _e78 = loop_bound;
+            loop_bound = (_e78 - uint2(((_e78.y == 0u) ? 1u : 0u), 1u));
+            if (all((_e78 == (0u).xx))) {
+                break;
+            }
         }
-        loop_bound = (_e79 - uint2(((_e79.y == 0u) ? 1u : 0u), 1u));
         bool should_continue = false;
         switch(_e54) {
             case 1: {
@@ -222,13 +223,14 @@ void main()
     int _e58 = y;
     z = int(3);
     int _e60 = z;
-    loop_bound_1 = (4294967295u).xx;
     while(true) {
-        uint2 _e109 = loop_bound_1;
-        if (all((_e109 == (0u).xx))) {
-            break;
+        {
+            uint2 _e105 = loop_bound_1;
+            loop_bound_1 = (_e105 - uint2(((_e105.y == 0u) ? 1u : 0u), 1u));
+            if (all((_e105 == (0u).xx))) {
+                break;
+            }
         }
-        loop_bound_1 = (_e109 - uint2(((_e109.y == 0u) ? 1u : 0u), 1u));
         bool should_continue_1 = false;
         switch(_e56) {
             case 1: {
@@ -244,11 +246,13 @@ void main()
                     default: {
                         loop_bound_2 = (4294967295u).xx;
                         while(true) {
-                            uint2 _e94 = loop_bound_2;
-                            if (all((_e94 == (0u).xx))) {
-                                break;
+                            {
+                                uint2 _e93 = loop_bound_2;
+                                loop_bound_2 = (_e93 - uint2(((_e93.y == 0u) ? 1u : 0u), 1u));
+                                if (all((_e93 == (0u).xx))) {
+                                    break;
+                                }
                             }
-                            loop_bound_2 = (_e94 - uint2(((_e94.y == 0u) ? 1u : 0u), 1u));
                             bool should_continue_2 = false;
                             switch(_e60) {
                                 case 1: {
@@ -281,13 +285,14 @@ void main()
             break;
         } while(false);
     }
-    loop_bound_3 = (4294967295u).xx;
     while(true) {
-        uint2 _e124 = loop_bound_3;
-        if (all((_e124 == (0u).xx))) {
-            break;
+        {
+            uint2 _e117 = loop_bound_3;
+            loop_bound_3 = (_e117 - uint2(((_e117.y == 0u) ? 1u : 0u), 1u));
+            if (all((_e117 == (0u).xx))) {
+                break;
+            }
         }
-        loop_bound_3 = (_e124 - uint2(((_e124.y == 0u) ? 1u : 0u), 1u));
         bool should_continue_4 = false;
         do {
             do {
@@ -307,13 +312,14 @@ void main()
     int _e66 = z_1;
     w = int(4);
     pos_1 = int(0);
-    loop_bound_4 = (4294967295u).xx;
     while(true) {
-        uint2 _e139 = loop_bound_4;
-        if (all((_e139 == (0u).xx))) {
-            break;
+        {
+            uint2 _e129 = loop_bound_4;
+            loop_bound_4 = (_e129 - uint2(((_e129.y == 0u) ? 1u : 0u), 1u));
+            if (all((_e129 == (0u).xx))) {
+                break;
+            }
         }
-        loop_bound_4 = (_e139 - uint2(((_e139.y == 0u) ? 1u : 0u), 1u));
         bool should_continue_5 = false;
         switch(_e62) {
             case 1: {
@@ -325,13 +331,14 @@ void main()
             }
         }
     }
-    loop_bound_5 = (4294967295u).xx;
     while(true) {
-        uint2 _e154 = loop_bound_5;
-        if (all((_e154 == (0u).xx))) {
-            break;
+        {
+            uint2 _e141 = loop_bound_5;
+            loop_bound_5 = (_e141 - uint2(((_e141.y == 0u) ? 1u : 0u), 1u));
+            if (all((_e141 == (0u).xx))) {
+                break;
+            }
         }
-        loop_bound_5 = (_e154 - uint2(((_e154.y == 0u) ? 1u : 0u), 1u));
         bool should_continue_6 = false;
         switch(_e62) {
             case 1: {

@@ -20,8 +20,7 @@ struct RayDesc {
     metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> sq = {};
     uint naga_query_init_tracker_for_sq = 0u;
     float naga_query_tmax_tracker_for_sq = 0.0;
-    metal::uint2 loop_bound = {};
-    loop_bound = metal::uint2(4294967295u);
+    metal::uint2 loop_bound = metal::uint2(4294967295u);
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
@@ -29,11 +28,13 @@ struct RayDesc {
             i = _e21 + 1u;
         }
         loop_init = false;
-        metal::uint2 _e29 = loop_bound;
-        if (metal::all(_e29 == metal::uint2(0u))) {
-            break;
+        {
+            metal::uint2 _e28 = loop_bound;
+            loop_bound = _e28 - metal::uint2((_e28.y == 0u) ? 1u : 0u, 1u);
+            if (metal::all(_e28 == metal::uint2(0u))) {
+                break;
+            }
         }
-        loop_bound = _e29 - metal::uint2((_e29.y == 0u) ? 1u : 0u, 1u);
         uint _e2 = i;
         if (_e2 < 4u) {
         } else {
