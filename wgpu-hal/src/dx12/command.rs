@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use core::{mem, ops::Range};
+use core::{mem, num::NonZeroU32, ops::Range};
 
 use windows::{
     core::Interface as _,
@@ -519,6 +519,22 @@ impl super::CommandEncoder {
 
         (t, buffer)
     }
+}
+
+/// Returns the layer offsets that a pass with `multiview_mask` renders to, if they are not every
+/// layer of `view`. With no mask, the pass renders only to the base layer.
+///
+/// A clear through the RTV or DSV of `view` writes every layer, so these layers must be cleared
+/// one at a time.
+fn masked_layers(
+    multiview_mask: Option<NonZeroU32>,
+    view: &super::TextureView,
+) -> Option<impl Iterator<Item = u32>> {
+    let mask = multiview_mask.map_or(1, NonZeroU32::get);
+    if mask.count_ones() == view.view_desc.array_layer_count {
+        return None;
+    }
+    Some((0..u32::BITS).filter(move |layer| mask & (1 << layer) != 0))
 }
 
 impl crate::CommandEncoder for super::CommandEncoder {
@@ -1082,6 +1098,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
         drop(rtv_pool);
 
+        // The DSV handle, and if its depth and stencil aspects are read-only.
         let ds_view = desc.depth_stencil_attachment.as_ref().map(|ds| {
             if ds
                 .target
@@ -1093,7 +1110,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     .usage
                     .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
             {
-                ds.target.view.handle_dsv_wr.as_ref().unwrap().raw
+                (
+                    ds.target.view.handle_dsv_wr.as_ref().unwrap().raw,
+                    false,
+                    true,
+                )
             } else if ds
                 .target
                 .view
@@ -1104,15 +1125,27 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     .usage
                     .contains(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::STENCIL_WRITE)
             {
-                ds.target.view.handle_dsv_rw.as_ref().unwrap().raw
+                (
+                    ds.target.view.handle_dsv_rw.as_ref().unwrap().raw,
+                    true,
+                    false,
+                )
             } else if ds
                 .target
                 .usage
                 .intersects(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE)
             {
-                ds.target.view.handle_dsv_ww.as_ref().unwrap().raw
+                (
+                    ds.target.view.handle_dsv_ww.as_ref().unwrap().raw,
+                    false,
+                    false,
+                )
             } else {
-                ds.target.view.handle_dsv_rr.as_ref().unwrap().raw
+                (
+                    ds.target.view.handle_dsv_rr.as_ref().unwrap().raw,
+                    true,
+                    true,
+                )
             }
         });
 
@@ -1122,7 +1155,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 desc.color_attachments.len() as u32,
                 Some(color_views.as_ptr()),
                 false,
-                ds_view.as_ref().map(core::ptr::from_ref),
+                ds_view
+                    .as_ref()
+                    .map(|(handle, ..)| core::ptr::from_ref(handle)),
             )
         };
 
@@ -1136,7 +1171,26 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         cat.clear_value.b as f32,
                         cat.clear_value.a as f32,
                     ];
-                    unsafe { list.ClearRenderTargetView(*rtv, &value, None) };
+                    if let Some(layers) = masked_layers(desc.multiview_mask, cat.target.view) {
+                        // The descriptor can be reused as soon as the clear is recorded.
+                        let mut rtv_pool = self.rtv_pool.lock();
+                        let handle = rtv_pool.alloc_handle()?;
+                        for layer in layers {
+                            let raw_desc =
+                                unsafe { cat.target.view.view_desc.single_layer(layer).to_rtv() };
+                            unsafe {
+                                self.device.CreateRenderTargetView(
+                                    &cat.target.view.texture,
+                                    Some(&raw_desc),
+                                    handle.raw,
+                                );
+                                list.ClearRenderTargetView(handle.raw, &value, None);
+                            }
+                        }
+                        rtv_pool.free_handle(handle);
+                    } else {
+                        unsafe { list.ClearRenderTargetView(*rtv, &value, None) };
+                    }
                 }
                 if let Some(ref target) = cat.resolve_target {
                     self.pass.resolves.push(super::PassResolve {
@@ -1165,16 +1219,41 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 flags |= Direct3D12::D3D12_CLEAR_FLAG_STENCIL;
             }
 
-            if let Some(ds_view) = ds_view {
+            if let Some((ds_view, depth_read_only, stencil_read_only)) = ds_view {
                 if flags != Direct3D12::D3D12_CLEAR_FLAGS::default() {
-                    unsafe {
+                    let clear = |handle| unsafe {
                         list.ClearDepthStencilView(
-                            ds_view,
+                            handle,
                             flags,
                             ds.clear_value.0,
                             ds.clear_value.1 as u8,
                             None,
                         )
+                    };
+                    if let Some(layers) = masked_layers(desc.multiview_mask, ds.target.view) {
+                        // The descriptor can be reused as soon as the clear is recorded.
+                        let mut dsv_pool = self.dsv_pool.lock();
+                        let handle = dsv_pool.alloc_handle()?;
+                        for layer in layers {
+                            let raw_desc = unsafe {
+                                ds.target
+                                    .view
+                                    .view_desc
+                                    .single_layer(layer)
+                                    .to_dsv(depth_read_only, stencil_read_only)
+                            };
+                            unsafe {
+                                self.device.CreateDepthStencilView(
+                                    &ds.target.view.texture,
+                                    Some(&raw_desc),
+                                    handle.raw,
+                                )
+                            };
+                            clear(handle.raw);
+                        }
+                        dsv_pool.free_handle(handle);
+                    } else {
+                        clear(ds_view);
                     }
                 }
             }
