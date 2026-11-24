@@ -2176,7 +2176,8 @@ bitflags!(
         /// so depth/stencil formats commonly lack it even when the device exposes
         /// the host-texture-copy feature.
         const HOST_COPY = 1 << 17;
-        /// Host copy usage doesn't make device access to textures of this format slower.
+        /// Host copy usage doesn't make device access to textures of this format slower,
+        /// or lower their size limits.
         const HOST_COPY_OPTIMAL = 1 << 18;
     }
 );

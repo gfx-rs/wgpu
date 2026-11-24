@@ -2836,12 +2836,11 @@ impl super::Instance {
 }
 
 impl super::Adapter {
-    /// Whether host transfer usage keeps device access optimal for 2D images of
-    /// `format` with every other usage the format supports.
+    /// Whether host transfer usage keeps device access optimal for images of
+    /// `format` with every other usage and creation flag wgpu may use, without
+    /// lowering their size limits.
     fn host_copy_is_optimal(&self, format: vk::Format, features: vk::FormatFeatureFlags) -> bool {
-        let mut usage = vk::ImageUsageFlags::TRANSFER_SRC
-            | vk::ImageUsageFlags::TRANSFER_DST
-            | vk::ImageUsageFlags::HOST_TRANSFER_EXT;
+        let mut usage = vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::TRANSFER_DST;
         for (feature, feature_usage) in [
             (
                 vk::FormatFeatureFlags::SAMPLED_IMAGE,
@@ -2864,19 +2863,75 @@ impl super::Adapter {
                 usage |= feature_usage;
             }
         }
-        let info = vk::PhysicalDeviceImageFormatInfo2::default()
-            .format(format)
-            .ty(vk::ImageType::TYPE_2D)
-            .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(usage);
-        let mut performance = vk::HostImageCopyDevicePerformanceQueryEXT::default();
-        let mut properties = vk::ImageFormatProperties2::default().push_next(&mut performance);
-        let result = unsafe {
-            self.instance
-                .raw
-                .get_physical_device_image_format_properties2(self.raw, &info, &mut properties)
-        };
-        result.is_ok() && performance.optimal_device_access != vk::FALSE
+        let query =
+            |ty: vk::ImageType,
+             flags: vk::ImageCreateFlags,
+             usage: vk::ImageUsageFlags,
+             performance: Option<&mut vk::HostImageCopyDevicePerformanceQueryEXT>| {
+                let info = vk::PhysicalDeviceImageFormatInfo2::default()
+                    .format(format)
+                    .ty(ty)
+                    .tiling(vk::ImageTiling::OPTIMAL)
+                    .usage(usage)
+                    .flags(flags);
+                let mut properties = vk::ImageFormatProperties2::default();
+                if let Some(performance) = performance {
+                    properties = properties.push_next(performance);
+                }
+                unsafe {
+                    self.instance
+                        .raw
+                        .get_physical_device_image_format_properties2(
+                            self.raw,
+                            &info,
+                            &mut properties,
+                        )
+                }
+                .ok()
+                .map(|()| properties.image_format_properties)
+            };
+        // The creation flags `Device::create_texture` can add.
+        let variants = [
+            (vk::ImageType::TYPE_2D, vk::ImageCreateFlags::empty()),
+            (
+                vk::ImageType::TYPE_2D,
+                vk::ImageCreateFlags::CUBE_COMPATIBLE,
+            ),
+            (vk::ImageType::TYPE_2D, vk::ImageCreateFlags::MUTABLE_FORMAT),
+            (vk::ImageType::TYPE_3D, vk::ImageCreateFlags::empty()),
+            (
+                vk::ImageType::TYPE_3D,
+                vk::ImageCreateFlags::TYPE_2D_ARRAY_COMPATIBLE,
+            ),
+        ];
+        let mut any = false;
+        for (ty, flags) in variants {
+            // A combination the format doesn't support can't be created either way.
+            let Some(base) = query(ty, flags, usage, None) else {
+                continue;
+            };
+            any = true;
+            let mut performance = vk::HostImageCopyDevicePerformanceQueryEXT::default();
+            let Some(host) = query(
+                ty,
+                flags,
+                usage | vk::ImageUsageFlags::HOST_TRANSFER_EXT,
+                Some(&mut performance),
+            ) else {
+                return false;
+            };
+            if performance.optimal_device_access == vk::FALSE
+                || host.max_extent.width < base.max_extent.width
+                || host.max_extent.height < base.max_extent.height
+                || host.max_extent.depth < base.max_extent.depth
+                || host.max_mip_levels < base.max_mip_levels
+                || host.max_array_layers < base.max_array_layers
+                || host.max_resource_size < base.max_resource_size
+            {
+                return false;
+            }
+        }
+        any
     }
 
     pub fn raw_physical_device(&self) -> vk::PhysicalDevice {

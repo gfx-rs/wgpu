@@ -1983,8 +1983,9 @@ bitflags::bitflags! {
         /// If not present, the texture can't be blended into the render target.
         const BLENDABLE = 1 << 10;
         /// Adding [`TextureUsages::HOST_VISIBLE`](crate::TextureUsages::HOST_VISIBLE) is known
-        /// to not make device access to textures of this format slower, whatever their other
-        /// usages. Not set if it may, or if the backend can't tell.
+        /// to not make device access to textures of this format slower, or lower their size
+        /// limits, whatever their other usages. Not set if it may, or if the backend can't
+        /// tell.
         const HOST_VISIBLE_OPTIMAL = 1 << 11;
     }
 }
