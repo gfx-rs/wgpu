@@ -54,7 +54,7 @@ jobs:
 
           # Windows
           - platform: Windows x86_64
-            os: windows-2025
+            os: blacksmith-4vcpu-windows-2025
             target: x86_64-pc-windows-msvc
             backend: dx12
             shell: bash
@@ -64,14 +64,14 @@ jobs:
           # ancient MacOS bash. `zsh` is a non-standard shell in GitHub
           # actions, so must be specified as a command string.
           - platform: Mac aarch64
-            os: macos-26
+            os: blacksmith-6vcpu-macos-26
             target: x86_64-apple-darwin
             backend: metal
             shell: zsh {0}
 
           # Linux
           - platform: Linux x86_64
-            os: ubuntu-26.04
+            os: blacksmith-2vcpu-ubuntu-2604
             target: x86_64-unknown-linux-gnu
             backend: vulkan
             shell: bash
@@ -141,19 +141,24 @@ jobs:
           done
 
       - name: (Windows) Install DXC
-        if: matrix.os == 'windows-2025'
+        if: matrix.os == 'blacksmith-4vcpu-windows-2025'
         uses: $/.github/actions/install-dxc
 
       # Note: `target-dir` is intentionally different from other jobs.
       # See note above about `llvm-cov show-env`.
       - name: (Windows) Install WARP
-        if: matrix.os == 'windows-2025'
+        if: matrix.os == 'blacksmith-4vcpu-windows-2025'
         uses: $/.github/actions/install-warp
         with:
           target-dir: "target/debug"
 
+      # The system D3D12 runtime cannot create a device on the Blacksmith runners.
+      - name: (Windows) Install Agility SDK
+        if: matrix.os == 'blacksmith-4vcpu-windows-2025'
+        uses: $/.github/actions/install-agility-sdk
+
       - name: (Linux) Install Mesa
-        if: matrix.os == 'ubuntu-26.04'
+        if: matrix.os == 'blacksmith-2vcpu-ubuntu-2604'
         uses: $/.github/actions/install-mesa
         with:
           target-dir: "target/debug"

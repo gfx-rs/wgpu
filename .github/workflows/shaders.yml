@@ -17,7 +17,7 @@ concurrency:
 jobs:
   naga-validate-windows:
     name: "Validate: HLSL"
-    runs-on: windows-2025
+    runs-on: blacksmith-4vcpu-windows-2025
     permissions: {}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -67,7 +67,7 @@ jobs:
 
   naga-validate-macos:
     name: "Validate: MSL"
-    runs-on: macos-26
+    runs-on: blacksmith-6vcpu-macos-26
     permissions: {}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -100,7 +100,7 @@ jobs:
 
   naga-validate-linux:
     name: "Validate: SPIR-V/GLSL/DOT/WGSL"
-    runs-on: ubuntu-26.04
+    runs-on: blacksmith-2vcpu-ubuntu-2604
     permissions: {}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -111,7 +111,9 @@ jobs:
         uses: $/.github/actions/install-vulkan-sdk
 
       - name: Install Graphviz
-        run: sudo apt-get install graphviz
+        run: |
+          sudo apt-get update -y -qq
+          sudo apt-get install -y graphviz
 
       - name: Debug symbols to `line-tables-only`
         shell: bash

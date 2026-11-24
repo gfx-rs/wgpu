@@ -29,7 +29,7 @@ jobs:
 
     timeout-minutes: 5
 
-    runs-on: ubuntu-26.04
+    runs-on: blacksmith-2vcpu-ubuntu-2604
 
     name: "Discover Standalone Examples"
 
@@ -58,7 +58,7 @@ jobs:
 
     timeout-minutes: 5
 
-    runs-on: ubuntu-26.04
+    runs-on: blacksmith-2vcpu-ubuntu-2604
 
     needs: discover-standalone-examples
 

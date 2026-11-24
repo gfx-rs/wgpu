@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 5
 
     name: Cancel runs
-    runs-on: ubuntu-26.04
+    runs-on: blacksmith-2vcpu-ubuntu-2604
 
     permissions:
       actions: write
