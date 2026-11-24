@@ -176,6 +176,56 @@ impl Instance {
         async move { future.await.map(|adapter| Adapter { inner: adapter }) }
     }
 
+    /// Retrieves an [`Adapter`] which matches the given [`RequestAdapterOptions`], passing
+    /// backend-specific options to the backends.
+    ///
+    /// `backend_options` may contain options for any number of backends. Options for
+    /// backends that are not enabled are ignored. The `webgpu` and `custom` backends
+    /// ignore `backend_options`.
+    ///
+    /// The available options structs can be found by looking for implementors of
+    /// [`BackendMapValue<dyn BackendAdapterOptions>`](wgt::BackendMapValue) in [`wgpu_hal`].
+    ///
+    /// Note that while this function is safe, extensions in general may be unsafe.
+    /// Passing non-empty `Extensions` requires calling [`wgt::Extensions::new`], which
+    /// is unsafe.
+    #[cfg_attr(not(wgpu_core), expect(unused, clippy::unnecessary_literal_unwrap))]
+    pub fn request_adapters(
+        &self,
+        options: &RequestAdapterOptions<'_, '_>,
+        backend_options: wgt::Extensions<BackendAdapterOptionsMap>,
+    ) -> impl Future<Output = Result<Vec<Adapter>, RequestAdapterError>> + WasmNotSend {
+        enum Fut {
+            Multiple(core::pin::Pin<alloc::boxed::Box<dyn dispatch::RequestAdaptersFuture>>),
+            Single(core::pin::Pin<alloc::boxed::Box<dyn dispatch::RequestAdapterFuture>>),
+        }
+        // Conditional compilation makes this awkward but it's effectively:
+        // `match as_core_opt() { Some(core) => Fut::Multiple(...), None => Fut::Single(...) }`
+        #[cfg(not(wgpu_core))]
+        let future = None;
+        #[cfg(wgpu_core)]
+        let future = self
+            .inner
+            .as_core_opt()
+            .map(|core| Fut::Multiple(core.request_adapters(options, backend_options)));
+        let future = future.unwrap_or_else(|| Fut::Single(self.inner.request_adapter(options)));
+        async move {
+            // Values from `backend_options` are passed by reference to hal, but to avoid
+            // needing to make it `Send`/`Sync` for a future in our caller, we take it by value.
+            match future {
+                Fut::Multiple(f) => f.await.map(|adapters| {
+                    adapters
+                        .into_iter()
+                        .map(|adapter| Adapter { inner: adapter })
+                        .collect()
+                }),
+                Fut::Single(f) => f
+                    .await
+                    .map(|adapter| alloc::vec![Adapter { inner: adapter }]),
+            }
+        }
+    }
+
     /// Creates a new surface targeting a given window/canvas/surface/etc..
     ///
     /// Internally, this creates surfaces for all backends that are enabled for this instance.
