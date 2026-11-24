@@ -314,6 +314,7 @@ impl State {
             desired_maximum_frame_latency: 2,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             view_formats: vec![],
+            preserve_contents: false,
         };
         surface.configure(&device, &config);
 

@@ -156,6 +156,9 @@ impl WebGpuError for ConfigureSurfaceError {
 pub struct SurfaceOutput<T = Arc<resource::Texture>> {
     pub status: Status,
     pub texture: Option<T>,
+    /// How many presents ago the texture's kept contents were presented, or `0` when its
+    /// contents are undefined (see [`wgt::SurfaceConfiguration::preserve_contents`]).
+    pub age: u32,
 }
 
 impl Surface {
@@ -186,13 +189,15 @@ impl Surface {
         };
 
         let suf = self.raw(device.backend()).unwrap();
-        let (texture, status) = match unsafe {
+        let (texture, status, age) = match unsafe {
             suf.acquire_texture(
                 Some(core::time::Duration::from_millis(FRAME_TIMEOUT_MS as u64)),
                 device.fence.as_ref(),
             )
         } {
             Ok(ast) => {
+                // Kept contents are initialized, and were left in the present state.
+                let age = if config.preserve_contents { ast.age } else { 0 };
                 let texture_desc = wgt::TextureDescriptor {
                     label: hal_label(
                         Some(alloc::borrow::Cow::Borrowed("<Surface Texture>")),
@@ -250,17 +255,20 @@ impl Surface {
                     resource::TextureClearMode::Surface {
                         clear_view: ManuallyDrop::new(clear_view),
                     },
-                    true,
+                    age == 0,
                     None,
                 );
 
                 let texture = Arc::new(texture);
 
-                device
-                    .trackers
-                    .lock()
-                    .textures
-                    .insert_single(&texture, wgt::TextureUses::UNINITIALIZED);
+                device.trackers.lock().textures.insert_single(
+                    &texture,
+                    if age == 0 {
+                        wgt::TextureUses::UNINITIALIZED
+                    } else {
+                        wgt::TextureUses::PRESENT
+                    },
+                );
 
                 if present.acquired_texture.is_some() {
                     return Err(SurfaceError::AlreadyAcquired);
@@ -272,7 +280,7 @@ impl Surface {
                 } else {
                     Status::Good
                 };
-                (Some(texture), status)
+                (Some(texture), status, age)
             }
             Err(err) => (
                 None,
@@ -289,10 +297,15 @@ impl Surface {
                         Status::Lost
                     }
                 },
+                0,
             ),
         };
 
-        Ok(SurfaceOutput { status, texture })
+        Ok(SurfaceOutput {
+            status,
+            texture,
+            age,
+        })
     }
 
     pub fn present(self: &Arc<Self>) -> Result<Status, SurfaceError> {

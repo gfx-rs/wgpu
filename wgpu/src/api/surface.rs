@@ -97,6 +97,7 @@ impl Surface<'_> {
             present_mode: *caps.present_modes.first()?,
             alpha_mode: wgt::CompositeAlphaMode::Auto,
             view_formats: vec![],
+            preserve_contents: false,
         })
     }
 

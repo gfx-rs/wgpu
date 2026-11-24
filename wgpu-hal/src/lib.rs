@@ -1372,7 +1372,10 @@ pub trait Queue: WasmNotSendSync {
     ///
     /// `damage_rects` are the regions that changed since the last present, as a
     /// hint for backends that support incremental presentation. An empty slice
-    /// means the whole surface changed.
+    /// means the whole surface changed. On a surface that keeps its contents
+    /// ([`SurfaceConfiguration::preserve_contents`]), they are the regions that
+    /// changed since `texture` was last presented, and nothing outside them was
+    /// written.
     ///
     /// # Safety
     ///
@@ -2362,6 +2365,10 @@ pub struct AcquiredSurfaceTexture<A: Api> {
     /// the surface properties exactly, but can still be used to present
     /// to the surface successfully.
     pub suboptimal: bool,
+    /// How many presents ago the texture's contents were presented, when the surface
+    /// keeps its contents ([`SurfaceConfiguration::preserve_contents`]): `1` for the latest
+    /// present. `0` when its contents are unknown.
+    pub age: u32,
 }
 
 /// An open connection to a device and a queue.
@@ -2915,6 +2922,9 @@ pub struct SurfaceConfiguration {
     /// Allows views of swapchain texture to have a different format
     /// than the texture does.
     pub view_formats: Vec<wgt::TextureFormat>,
+    /// Keep each surface texture's contents between presents and report its age
+    /// ([`AcquiredSurfaceTexture::age`]).
+    pub preserve_contents: bool,
 }
 
 #[derive(Debug, Clone)]
