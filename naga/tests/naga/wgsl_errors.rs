@@ -7097,3 +7097,29 @@ fn main() {
 ",
     );
 }
+
+#[test]
+fn f16_conversion_overflow() {
+    // Converting a value outside the finite range of `f16` in a
+    // const-expression is a shader-creation error. This used to panic when the
+    // resulting infinity was converted to an integer (#9499).
+    check_error_matches(
+        "enable f16; const x: f16 = f16(65520i); const y: i32 = i32(x);",
+        "overflowed",
+    );
+    for value in ["65520i", "-65520i", "65535u", "1e10f", "100000i"] {
+        check_error_matches(
+            &format!("enable f16; const x: f16 = f16({value});"),
+            "overflowed",
+        );
+    }
+    check_error_matches(
+        "enable f16; const x: f16 = 70000;",
+        "cannot represent the abstract value",
+    );
+
+    // The largest finite `f16` values still convert, in both directions.
+    check_success("enable f16; const x: f16 = f16(65504i); const y: i32 = i32(x);");
+    check_success("enable f16; const x: f16 = f16(-65504i); const y: u32 = u32(x);");
+    check_success("enable f16; const x: f16 = 65504; const y: f16 = f16(65519u);");
+}
