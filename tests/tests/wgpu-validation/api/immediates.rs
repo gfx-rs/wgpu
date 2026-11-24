@@ -434,6 +434,7 @@ fn setup_render() -> (wgpu::Device, wgpu::Queue, wgpu::TextureView) {
         label: Some("Output Texture"),
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let output_texture_view = output_texture.create_view(&Default::default());
 

@@ -4,10 +4,11 @@ use crate::{
     AccelerationStructureBuildSizes, AccelerationStructureDescriptor, Api, BindGroupDescriptor,
     BindGroupLayoutDescriptor, BufferDescriptor, BufferMapping, CommandEncoderDescriptor,
     ComputePipelineDescriptor, Device, DeviceError, FenceValue,
-    GetAccelerationStructureBuildSizesDescriptor, Label, MemoryRange, PipelineCacheDescriptor,
-    PipelineCacheError, PipelineError, PipelineLayoutDescriptor, RayObjectIntersectionState,
-    RayTracingPipelineDescriptor, RenderPipelineDescriptor, SamplerDescriptor, ShaderError,
-    ShaderInput, ShaderModuleDescriptor, TextureDescriptor, TextureViewDescriptor, TlasInstance,
+    GetAccelerationStructureBuildSizesDescriptor, HostTextureCopy, Label, MemoryRange,
+    PipelineCacheDescriptor, PipelineCacheError, PipelineError, PipelineLayoutDescriptor,
+    RayObjectIntersectionState, RayTracingPipelineDescriptor, RenderPipelineDescriptor,
+    SamplerDescriptor, ShaderError, ShaderInput, ShaderModuleDescriptor, TextureDescriptor,
+    TextureViewDescriptor, TlasInstance,
 };
 
 use super::{
@@ -54,6 +55,32 @@ pub trait DynDevice: DynResource {
     /// Dynamic version of [Device::add_raw_texture]
     unsafe fn add_raw_texture(&self, texture: &dyn DynTexture);
 
+    /// Dynamic version of [Device::copy_texture_to_memory]
+    unsafe fn copy_texture_to_memory(
+        &self,
+        src: &dyn DynTexture,
+        dst: &mut [u8],
+        regions: &[HostTextureCopy],
+    ) -> Result<(), DeviceError>;
+    /// Dynamic version of [Device::copy_memory_to_texture]
+    unsafe fn copy_memory_to_texture(
+        &self,
+        src: &[u8],
+        dst: &dyn DynTexture,
+        regions: &[HostTextureCopy],
+    ) -> Result<(), DeviceError>;
+    /// Dynamic version of [Device::can_transition_texture_on_host]
+    fn can_transition_texture_on_host(
+        &self,
+        texture: &dyn DynTexture,
+        from: wgt::TextureUses,
+    ) -> bool;
+    /// Dynamic version of [Device::transition_texture_on_host]
+    unsafe fn transition_texture_on_host(
+        &self,
+        texture: &dyn DynTexture,
+        from: wgt::TextureUses,
+    ) -> Result<(), DeviceError>;
     /// Dynamic version of [Device::create_texture_view]
     unsafe fn create_texture_view(
         &self,
@@ -291,6 +318,44 @@ impl<D: Device + DynResource> DynDevice for D {
     unsafe fn add_raw_texture(&self, texture: &dyn DynTexture) {
         let texture = texture.expect_downcast_ref();
         unsafe { D::add_raw_texture(self, texture) };
+    }
+
+    unsafe fn copy_texture_to_memory(
+        &self,
+        src: &dyn DynTexture,
+        dst: &mut [u8],
+        regions: &[HostTextureCopy],
+    ) -> Result<(), DeviceError> {
+        let src = src.expect_downcast_ref();
+        unsafe { D::copy_texture_to_memory(self, src, dst, regions.iter().cloned()) }
+    }
+
+    unsafe fn copy_memory_to_texture(
+        &self,
+        src: &[u8],
+        dst: &dyn DynTexture,
+        regions: &[HostTextureCopy],
+    ) -> Result<(), DeviceError> {
+        let dst = dst.expect_downcast_ref();
+        unsafe { D::copy_memory_to_texture(self, src, dst, regions.iter().cloned()) }
+    }
+
+    fn can_transition_texture_on_host(
+        &self,
+        texture: &dyn DynTexture,
+        from: wgt::TextureUses,
+    ) -> bool {
+        let texture = texture.expect_downcast_ref();
+        D::can_transition_texture_on_host(self, texture, from)
+    }
+
+    unsafe fn transition_texture_on_host(
+        &self,
+        texture: &dyn DynTexture,
+        from: wgt::TextureUses,
+    ) -> Result<(), DeviceError> {
+        let texture = texture.expect_downcast_ref();
+        unsafe { D::transition_texture_on_host(self, texture, from) }
     }
 
     unsafe fn create_texture_view(

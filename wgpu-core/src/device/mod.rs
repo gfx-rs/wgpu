@@ -166,11 +166,59 @@ impl RenderPassContext {
 
 pub type BufferMapPendingClosure = (Option<BufferMapCallback>, BufferAccessResult);
 
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum TextureMapError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error(transparent)]
+    InvalidResource(#[from] crate::resource::InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(#[from] crate::resource::DestroyedResourceError),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
+    #[error("Texture was not created with TextureUsages::HOST_VISIBLE")]
+    MissingHostVisibleUsage,
+    #[error("Texture is already mapped")]
+    AlreadyMapped,
+    #[error("Texture map is already pending")]
+    MapAlreadyPending,
+    #[error("The texture map was aborted before it could complete")]
+    Aborted,
+    #[error("The texture can't be mapped without a device barrier, and the queue was dropped")]
+    QueueDropped,
+}
+
+impl WebGpuError for TextureMapError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
+            Self::MissingHostVisibleUsage
+            | Self::AlreadyMapped
+            | Self::MapAlreadyPending
+            | Self::Aborted
+            | Self::QueueDropped => ErrorType::Validation,
+        }
+    }
+}
+
+#[cfg(send_sync)]
+pub type TextureMapClosure = Box<dyn FnOnce(Result<(), TextureMapError>) + Send + 'static>;
+#[cfg(not(send_sync))]
+pub type TextureMapClosure = Box<dyn FnOnce(Result<(), TextureMapError>) + 'static>;
+
+/// A texture-map callback paired with the result to call it with.
+pub type TextureMapPendingClosure = (TextureMapClosure, Result<(), TextureMapError>);
+
 #[must_use]
 #[derive(Default)]
 pub struct UserClosures {
     pub mappings: Vec<BufferMapPendingClosure>,
     pub blas_compact_ready: Vec<BlasCompactReadyPendingClosure>,
+    pub texture_map_closures: Vec<TextureMapPendingClosure>,
     pub submissions: SmallVec<[queue::SubmittedWorkDoneClosure; 1]>,
     pub device_lost_invocations: SmallVec<[DeviceLostInvocation; 1]>,
 }
@@ -179,6 +227,7 @@ impl UserClosures {
     pub(crate) fn extend(&mut self, other: Self) {
         self.mappings.extend(other.mappings);
         self.blas_compact_ready.extend(other.blas_compact_ready);
+        self.texture_map_closures.extend(other.texture_map_closures);
         self.submissions.extend(other.submissions);
         self.device_lost_invocations
             .extend(other.device_lost_invocations);
@@ -199,6 +248,9 @@ impl UserClosures {
             if let Some(callback) = operation.take() {
                 callback(status);
             }
+        }
+        for (closure, status) in self.texture_map_closures {
+            closure(status);
         }
         for closure in self.submissions {
             closure();
@@ -363,6 +415,42 @@ impl DeviceError {
             hal::DeviceError::Lost => Self::Lost,
             hal::DeviceError::OutOfMemory => Self::OutOfMemory,
             hal::DeviceError::Unexpected => Self::Lost,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum HostTextureCopyError {
+    #[error(transparent)]
+    InvalidResource(#[from] crate::resource::InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(#[from] crate::resource::DestroyedResourceError),
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
+    #[error(transparent)]
+    Transfer(#[from] crate::command::TransferError),
+    #[error("Texture is not mapped")]
+    NotMapped,
+    #[error("Texture is not mapped for writing")]
+    NotMappedForWriting,
+    #[error("Cannot unmap texture while MappedTexture handles still exist")]
+    MappedHandlesExist,
+}
+
+impl WebGpuError for HostTextureCopyError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
+            Self::Transfer(e) => e.webgpu_error_type(),
+            Self::NotMapped | Self::NotMappedForWriting | Self::MappedHandlesExist => {
+                ErrorType::Validation
+            }
         }
     }
 }

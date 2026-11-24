@@ -1,5 +1,7 @@
+use alloc::string::String;
 #[cfg(wgpu_core)]
 use core::ops::Deref;
+use core::{error, fmt};
 
 use crate::*;
 
@@ -105,6 +107,10 @@ impl Texture {
     }
 
     /// Destroy the associated native resources as soon as possible.
+    ///
+    /// This [unmaps](Self::unmap) the texture first, like [`Buffer::destroy`].
+    ///
+    /// Panics if there is any [`MappedTexture`] or [`MappedTextureMut`] alive.
     pub fn destroy(&self) {
         self.inner.destroy();
     }
@@ -205,6 +211,95 @@ impl Texture {
     pub fn texture_binding_view_dimension(&self) -> Option<TextureViewDimension> {
         self.inner.texture_binding_view_dimension()
     }
+
+    /// Maps the texture for access from the CPU, once the GPU is done with it.
+    ///
+    /// This works like [`Buffer::map_async()`]: `callback` is called with `Ok` once
+    /// the texture is mapped, after which [`Texture::get_mapped_texture()`] (for
+    /// [`MapMode::Read`]) or [`Texture::get_mapped_texture_mut()`] (for
+    /// [`MapMode::Write`]) give access to it. It is called with `Err` if the map
+    /// fails, including when the texture is already mapped or its map is pending.
+    ///
+    /// For the callback to run, either [`queue.submit(..)`][q::s], [`instance.poll_all(..)`][i::p_a],
+    /// or [`device.poll(..)`][d::p] must be called elsewhere in the runtime.
+    ///
+    /// While a texture is mapped, or its map is pending, the GPU can't use it:
+    /// submitting commands that use it, or writing to it with [`Queue::write_texture`],
+    /// is an error. Use `map_texture_on_submit` on a [`CommandEncoder`] to map a
+    /// texture once work that uses it is submitted.
+    ///
+    /// Requires [`Features::HOST_TEXTURE_COPY`] and [`TextureUsages::HOST_VISIBLE`].
+    ///
+    /// # Panics
+    ///
+    /// - If the texture wasn't created with [`TextureUsages::HOST_VISIBLE`].
+    ///
+    /// [q::s]: Queue::submit
+    /// [i::p_a]: Instance::poll_all
+    /// [d::p]: Device::poll
+    pub fn map_async(
+        &self,
+        mode: MapMode,
+        callback: impl FnOnce(Result<(), TextureAsyncError>) + WasmNotSend + 'static,
+    ) {
+        self.inner.map_async(mode, alloc::boxed::Box::new(callback));
+    }
+
+    /// Gains read-only access to a texture [mapped](Self::map_async) with
+    /// [`MapMode::Read`], like [`Buffer::get_mapped_range()`].
+    ///
+    /// Several [`MappedTexture`]s can exist at once.
+    ///
+    /// # Errors
+    ///
+    /// - If the texture is not mapped.
+    /// - If the texture was not mapped with [`MapMode::Read`].
+    pub fn get_mapped_texture(&self) -> Result<MappedTexture, MapTextureError> {
+        let (token, mode) = self.map_token()?;
+        if mode != MapMode::Read {
+            return Err(MapTextureError("texture is not mapped for reading".into()));
+        }
+        Ok(MappedTexture {
+            texture: self.clone(),
+            _token: token,
+        })
+    }
+
+    /// Gains write-only access to a texture [mapped](Self::map_async) with
+    /// [`MapMode::Write`] or at creation, like [`Buffer::get_mapped_range_mut()`].
+    ///
+    /// Several [`MappedTextureMut`]s can exist at once; copies through them don't
+    /// alias memory the way buffer views do, so they may overlap.
+    ///
+    /// # Errors
+    ///
+    /// - If the texture is not mapped.
+    /// - If the texture was not mapped with [`MapMode::Write`].
+    pub fn get_mapped_texture_mut(&self) -> Result<MappedTextureMut, MapTextureError> {
+        let (token, mode) = self.map_token()?;
+        if mode != MapMode::Write {
+            return Err(MapTextureError("texture is not mapped for writing".into()));
+        }
+        Ok(MappedTextureMut {
+            texture: self.clone(),
+            _token: token,
+        })
+    }
+
+    fn map_token(&self) -> Result<(alloc::sync::Arc<()>, MapMode), MapTextureError> {
+        self.inner
+            .get_map_token()
+            .ok_or_else(|| MapTextureError("texture is not mapped".into()))
+    }
+
+    /// Unmaps the texture from the CPU, making it available for use by the GPU again.
+    ///
+    /// If a map is pending, it is cancelled, and its callback is called with an error.
+    ///
+    /// Panics if there is any [`MappedTexture`] or [`MappedTextureMut`] alive.
+    pub fn unmap(&self) {
+        self.inner.unmap();
+    }
 }
 
 #[cfg(wgpu_core)]
@@ -234,3 +329,95 @@ impl Texture {
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputexturedescriptor).
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, &'a [TextureFormat]>;
 static_assertions::assert_impl_all!(TextureDescriptor<'_>: Send, Sync);
+
+/// Read-only access to a mapped [`Texture`].
+///
+/// To get a `MappedTexture`, first [map](Texture::map_async) the texture, and then
+/// call [`Texture::get_mapped_texture()`]. It must be dropped before the texture is
+/// [unmapped](Texture::unmap).
+#[derive(Debug)]
+pub struct MappedTexture {
+    texture: Texture,
+    _token: alloc::sync::Arc<()>,
+}
+
+/// Write-only access to a mapped [`Texture`].
+///
+/// To get a `MappedTextureMut`, first [map](Texture::map_async) the texture with
+/// [`MapMode::Write`], and then call [`Texture::get_mapped_texture_mut()`]. It must
+/// be dropped before the texture is [unmapped](Texture::unmap).
+#[derive(Debug)]
+pub struct MappedTextureMut {
+    texture: Texture,
+    _token: alloc::sync::Arc<()>,
+}
+
+impl MappedTexture {
+    /// Copies from the texture into `destination`, on the calling thread.
+    ///
+    /// Reads of the same texture can run on several threads at once.
+    /// `destination_layout` has no alignment requirements.
+    pub fn copy_to_memory(
+        &self,
+        source_range: TexelCopyTextureInfoBase<()>,
+        destination: &mut [u8],
+        destination_layout: TexelCopyBufferLayout,
+        copy_size: Extent3d,
+    ) {
+        self.texture.inner.copy_texture_to_memory(
+            &source_range,
+            destination,
+            destination_layout,
+            &copy_size,
+        );
+    }
+}
+
+impl MappedTextureMut {
+    /// Copies `source` into the texture, on the calling thread.
+    ///
+    /// Copies into the same texture from several threads run one at a time, but
+    /// copies to different textures run in parallel. `source_layout` has no
+    /// alignment requirements.
+    pub fn copy_from_memory(
+        &self,
+        destination_range: TexelCopyTextureInfoBase<()>,
+        source: &[u8],
+        source_layout: TexelCopyBufferLayout,
+        copy_size: Extent3d,
+    ) {
+        self.texture.inner.copy_memory_to_texture(
+            &destination_range,
+            source,
+            source_layout,
+            &copy_size,
+        );
+    }
+}
+
+/// Error returned by [`Texture::get_mapped_texture()`] and
+/// [`Texture::get_mapped_texture_mut()`].
+#[derive(Clone, Debug)]
+pub struct MapTextureError(String);
+static_assertions::assert_impl_all!(MapTextureError: Send, Sync);
+
+impl fmt::Display for MapTextureError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Mapped texture error: {}", self.0)
+    }
+}
+
+impl error::Error for MapTextureError {}
+
+/// Error occurred when trying to async map a texture.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct TextureAsyncError;
+static_assertions::assert_impl_all!(TextureAsyncError: Send, Sync);
+
+impl fmt::Display for TextureAsyncError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Error occurred when trying to async map a texture")
+    }
+}
+
+impl error::Error for TextureAsyncError {}

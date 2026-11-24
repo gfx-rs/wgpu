@@ -65,6 +65,7 @@ pub fn run_bench(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
                 usage: wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
                 texture_binding_view_dimension: None,
+                mapped_at_creation: false,
             });
         texture_views.push(texture.create_view(&wgpu::TextureViewDescriptor {
             label: Some(&format!("Texture View {i}")),

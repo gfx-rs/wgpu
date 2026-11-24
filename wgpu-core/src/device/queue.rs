@@ -14,7 +14,10 @@ use wgt::{
     AccelerationStructureFlags,
 };
 
-use super::{life::LifetimeTracker, Device};
+use super::{
+    life::{LifetimeTracker, TextureMapEntry},
+    Device,
+};
 #[cfg(feature = "trace")]
 use crate::device::trace::{Action, IntoTrace};
 use crate::{
@@ -36,7 +39,7 @@ use crate::{
         BufferMapState, DestroyedBuffer, DestroyedQuerySet, DestroyedResourceError,
         DestroyedTexture, FlushedStagingBuffer, InvalidOrDestroyedResourceError,
         InvalidResourceError, Labeled, ParentDevice, ResourceErrorIdent, ResourceState,
-        StagingBuffer, Texture, TextureInner, Trackable, TrackingData,
+        StagingBuffer, Texture, TextureInner, TextureMapState, Trackable, TrackingData,
     },
     resource_log,
     scratch::ScratchBuffer,
@@ -240,24 +243,24 @@ impl Queue {
         &self,
         submission_index: u64,
         snatch_guard: &SnatchGuard,
-    ) -> (
-        SmallVec<[SubmittedWorkDoneClosure; 1]>,
-        Vec<super::BufferMapPendingClosure>,
-        Vec<BlasCompactReadyPendingClosure>,
-        bool,
-    ) {
+    ) -> MaintainResult {
         let mut life_tracker = self.lock_life();
         let submission_closures = life_tracker.triage_submissions(submission_index);
 
         let mapping_closures = life_tracker.handle_mapping(snatch_guard);
         let blas_closures = life_tracker.handle_compact_read_back();
+        let ready_texture_maps = life_tracker.take_ready_texture_maps();
 
         let queue_empty = life_tracker.queue_empty();
+        drop(life_tracker);
+
+        let texture_map_closures = self.finish_texture_maps(ready_texture_maps, snatch_guard);
 
         (
             submission_closures,
             mapping_closures,
             blas_closures,
+            texture_map_closures,
             queue_empty,
         )
     }
@@ -301,16 +304,33 @@ impl Drop for Queue {
             .last_successful_submission_index
             .load(Ordering::Acquire);
 
+        // On a lost device, `maintain` below treats every submission as done, but
+        // the maps never happened.
+        let lost_texture_map_closures = if self.device.is_valid() {
+            Vec::new()
+        } else {
+            self.lock_life().drain_pending_texture_maps()
+        };
+
         let snatch_guard = self.device.snatchable_lock.read();
-        let (submission_closures, mapping_closures, blas_compact_ready_closures, queue_empty) =
-            self.maintain(last_successful_submission_index, &snatch_guard);
+        let (
+            submission_closures,
+            mapping_closures,
+            blas_compact_ready_closures,
+            mut texture_map_closures,
+            queue_empty,
+        ) = self.maintain(last_successful_submission_index, &snatch_guard);
         drop(snatch_guard);
 
-        assert!(queue_empty);
+        if self.device.is_valid() {
+            assert!(queue_empty);
+        }
+        texture_map_closures.extend(lost_texture_map_closures);
 
         let closures = crate::device::UserClosures {
             mappings: mapping_closures,
             blas_compact_ready: blas_compact_ready_closures,
+            texture_map_closures,
             submissions: submission_closures,
             device_lost_invocations: SmallVec::new(),
         };
@@ -323,6 +343,14 @@ impl Drop for Queue {
 pub type SubmittedWorkDoneClosure = Box<dyn FnOnce() + Send + 'static>;
 #[cfg(not(send_sync))]
 pub type SubmittedWorkDoneClosure = Box<dyn FnOnce() + 'static>;
+
+pub(crate) type MaintainResult = (
+    SmallVec<[SubmittedWorkDoneClosure; 1]>,
+    Vec<super::BufferMapPendingClosure>,
+    Vec<BlasCompactReadyPendingClosure>,
+    Vec<super::TextureMapPendingClosure>,
+    bool,
+);
 
 /// A texture or buffer to be freed soon.
 ///
@@ -741,6 +769,8 @@ pub enum QueueSubmitError {
     DestroyedResource(#[from] DestroyedResourceError),
     #[error("{0} is still mapped")]
     BufferStillMapped(ResourceErrorIdent),
+    #[error("{0} is mapped or queued for mapping")]
+    TextureStillMapped(ResourceErrorIdent),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
@@ -765,7 +795,9 @@ impl WebGpuError for QueueSubmitError {
             Self::CommandEncoder(e) => e.webgpu_error_type(),
             Self::ValidateAsActionsError(e) => e.webgpu_error_type(),
             Self::InvalidResource(e) => e.webgpu_error_type(),
-            Self::DestroyedResource(_) | Self::BufferStillMapped(_) => ErrorType::Validation,
+            Self::DestroyedResource(_)
+            | Self::BufferStillMapped(_)
+            | Self::TextureStillMapped(_) => ErrorType::Validation,
         }
     }
 }
@@ -1142,6 +1174,11 @@ impl Queue {
 
         dst.check_usage(wgt::TextureUsages::COPY_DST)
             .map_err(TransferError::MissingTextureUsage)?;
+        if !matches!(*dst.map_state.lock(), TextureMapState::Unmapped) {
+            return Err(QueueWriteError::Transfer(
+                TransferError::TextureNotAvailable,
+            ));
+        }
 
         // Note: Doing the copy range validation early is important because ensures that the
         // dimensions are not going to cause overflow in other parts of the validation.
@@ -1193,6 +1230,13 @@ impl Queue {
         }
 
         let mut pending_writes = self.pending_writes.lock();
+
+        // A submission that maps `dst` marks it before it locks `pending_writes`,
+        // so this check makes sure the write is submitted before the map.
+        if !matches!(*dst.map_state.lock(), TextureMapState::Unmapped) {
+            return Err(TransferError::TextureNotAvailable.into());
+        }
+
         let encoder = pending_writes.activate();
 
         // If the copy does not fully cover the layers, we need to initialize to
@@ -1422,6 +1466,9 @@ impl Queue {
         }
         dst.check_usage(wgt::TextureUsages::COPY_DST | wgt::TextureUsages::RENDER_ATTACHMENT)
             .map_err(TransferError::MissingTextureUsage)?;
+        if !matches!(*dst.map_state.lock(), TextureMapState::Unmapped) {
+            return Err(TransferError::TextureNotAvailable.into());
+        }
         if dst.desc.sample_count != 1 {
             return Err(TransferError::InvalidSampleCount {
                 sample_count: dst.desc.sample_count,
@@ -1608,6 +1655,73 @@ impl Queue {
         submission.submit(pending_writes)?;
 
         Ok(())
+    }
+
+    /// Makes sure a texture with a pending map reaches the `HOST_COPY` state once
+    /// the device is done with it.
+    ///
+    /// If the backend can transition the texture on the host, that is left to
+    /// [`Self::finish_texture_maps`]. Otherwise, the transition is submitted.
+    pub(crate) fn prepare_texture_map(
+        &self,
+        texture: &Arc<Texture>,
+        id: &Arc<()>,
+        snatch_guard: SnatchGuard,
+    ) -> Result<(), super::TextureMapError> {
+        // The map is already pending, and allocating a submission waits for
+        // submissions in progress, so every submission that uses `texture` is
+        // either tracked by the life tracker from here on, or fails validation.
+        let submission = self.allocate_submission(snatch_guard)?;
+        let raw_texture = texture.try_raw(&submission.snatch_guard)?;
+
+        let pending_writes = self.pending_writes.lock();
+        let mut trackers = self.device.trackers.lock();
+        let state = trackers.textures.uniform_state(texture);
+        let host_transition_from = state.filter(|&state| {
+            !pending_writes.contains_texture(texture)
+                && self
+                    .device
+                    .raw()
+                    .can_transition_texture_on_host(raw_texture, state)
+        });
+        if let Some(from) = host_transition_from {
+            if let TextureMapState::Pending(pending) = &mut *texture.map_state.lock() {
+                if Arc::ptr_eq(&pending.id, id) {
+                    pending.host_transition_from = Some(from);
+                }
+            }
+            return Ok(());
+        }
+
+        let barriers = trackers
+            .textures
+            .set_single(
+                texture,
+                texture.full_range.clone(),
+                wgt::TextureUses::HOST_COPY,
+            )
+            .map(|pending| pending.into_hal(raw_texture))
+            .collect::<Vec<_>>();
+        drop(trackers);
+
+        let mut pending_writes = pending_writes;
+        let encoder = pending_writes.activate();
+        unsafe { encoder.transition_textures(&barriers) };
+        pending_writes.insert_texture(texture);
+        submission.submit(pending_writes)?;
+        Ok(())
+    }
+
+    /// Completes the maps of textures the device is done with.
+    fn finish_texture_maps(
+        &self,
+        textures: Vec<TextureMapEntry>,
+        snatch_guard: &SnatchGuard,
+    ) -> Vec<super::TextureMapPendingClosure> {
+        textures
+            .into_iter()
+            .filter_map(|(texture, id)| texture.complete_map(&id, snatch_guard))
+            .collect()
     }
 
     fn flush_pending_writes(&self) -> Result<Option<SubmissionIndex>, DeviceError> {
@@ -2100,7 +2214,6 @@ impl Queue {
                 .last_successful_submission_index
                 .fetch_max(submit_index, Ordering::SeqCst);
         }
-
         // this will register the new submission to the life time tracker
         self.lock_life().track_submission(submit_index, executions);
 
@@ -2295,6 +2408,9 @@ fn validate_command_buffer(
         {
             profiling::scope!("textures");
             for texture in cmd_buf_data.trackers.textures.used_resources() {
+                if !matches!(*texture.map_state.lock(), TextureMapState::Unmapped) {
+                    return Err(QueueSubmitError::TextureStillMapped(texture.error_ident()));
+                }
                 let should_extend = match texture.try_inner(snatch_guard)? {
                     TextureInner::Native { .. } => false,
                     TextureInner::Surface { .. } => {

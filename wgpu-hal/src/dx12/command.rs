@@ -19,7 +19,7 @@ use crate::{
     AccelerationStructureEntries, CommandEncoder as _,
 };
 
-fn make_box(origin: &wgt::Origin3d, size: &crate::CopyExtent) -> Direct3D12::D3D12_BOX {
+pub(super) fn make_box(origin: &wgt::Origin3d, size: &crate::CopyExtent) -> Direct3D12::D3D12_BOX {
     Direct3D12::D3D12_BOX {
         left: origin.x,
         top: origin.y,

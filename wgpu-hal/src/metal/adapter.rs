@@ -498,7 +498,23 @@ impl crate::Adapter for super::Adapter {
             }
         };
 
-        Tfc::COPY_SRC | Tfc::COPY_DST | Tfc::SAMPLED | Tfc::STORAGE_READ_ONLY | extra
+        // `replaceRegion` and `getBytes` can't select an aspect.
+        let host_copy_if = if self.shared.private_caps.supports_host_texture_copy
+            && !format.is_combined_depth_stencil_format()
+            && (self.shared.private_caps.host_copy_compressed || !format.is_compressed())
+        {
+            // `Shared` storage loses lossless compression, which Apple GPUs don't
+            // apply to block-compressed formats.
+            if format.is_compressed() {
+                Tfc::HOST_COPY | Tfc::HOST_COPY_OPTIMAL
+            } else {
+                Tfc::HOST_COPY
+            }
+        } else {
+            Tfc::empty()
+        };
+
+        Tfc::COPY_SRC | Tfc::COPY_DST | Tfc::SAMPLED | Tfc::STORAGE_READ_ONLY | extra | host_copy_if
     }
 
     unsafe fn surface_capabilities(
@@ -1260,6 +1276,10 @@ impl super::CapabilitiesQuery {
             } else {
                 None
             },
+            supports_host_texture_copy: family_check
+                && device.supportsFamily(MTLGPUFamily::Apple1)
+                && device.hasUnifiedMemory(),
+            host_copy_compressed: !is_virtual,
             timestamp_query_support,
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             supports_simd_scoped_operations: family_check
@@ -1542,6 +1562,8 @@ impl super::CapabilitiesQuery {
             ),
         );
 
+        features.set(F::HOST_TEXTURE_COPY, self.supports_host_texture_copy);
+
         features
     }
 
@@ -1780,6 +1802,8 @@ impl super::CapabilitiesQuery {
             low_power: self.low_power,
             headless: self.headless,
             has_unified_memory: self.has_unified_memory,
+            supports_host_texture_copy: self.supports_host_texture_copy,
+            host_copy_compressed: self.host_copy_compressed,
             timestamp_query_support: self.timestamp_query_support,
             supports_memoryless_storage: self.supports_memoryless_storage,
             mesh_shaders: self.mesh_shaders,

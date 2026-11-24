@@ -299,6 +299,7 @@ async fn vertex_index_common(ctx: TestingContext) {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
                 texture_binding_view_dimension: None,
+                mapped_at_creation: false,
             },
             wgpu::util::TextureDataOrder::LayerMajor,
             &[0, 0, 0, 1],
