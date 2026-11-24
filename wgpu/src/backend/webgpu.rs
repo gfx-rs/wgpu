@@ -2653,10 +2653,16 @@ impl dispatch::DeviceInterface for WebDevice {
     }
 
     fn create_texture(&self, desc: &crate::TextureDescriptor<'_>) -> dispatch::DispatchTexture {
+        let mut usage = desc.usage;
+        if desc.mapped_at_creation {
+            // `mapped_at_creation` requires `HOST_VISIBLE`, which isn't a WebGPU
+            // usage, so the browser reports the validation error.
+            usage |= crate::TextureUsages::HOST_VISIBLE;
+        }
         let mapped_desc = webgpu_sys::GpuTextureDescriptor::new_with_gpu_extent_3d_dict(
             map_texture_format(desc.format),
             &map_extent_3d(desc.size),
-            desc.usage.bits(),
+            usage.bits(),
         );
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
@@ -3285,6 +3291,39 @@ impl dispatch::TextureInterface for WebTexture {
 
     fn texture_binding_view_dimension(&self) -> Option<crate::TextureViewDimension> {
         None
+    }
+
+    fn map_async(&self, _mode: crate::MapMode, callback: dispatch::TextureMapCallback) {
+        // `Features::HOST_TEXTURE_COPY` is native-only, so the map can't succeed.
+        callback(Err(crate::TextureAsyncError));
+    }
+
+    fn get_map_token(&self) -> Option<(alloc::sync::Arc<()>, crate::MapMode)> {
+        None
+    }
+
+    fn unmap(&self) {
+        // Textures can't be mapped on WebGPU.
+    }
+
+    fn copy_texture_to_memory(
+        &self,
+        _source: &wgt::TexelCopyTextureInfo<()>,
+        _destination: &mut [u8],
+        _layout: wgt::TexelCopyBufferLayout,
+        _size: &wgt::Extent3d,
+    ) {
+        unreachable!("`MappedTexture` can't exist on WebGPU");
+    }
+
+    fn copy_memory_to_texture(
+        &self,
+        _destination: &wgt::TexelCopyTextureInfo<()>,
+        _source: &[u8],
+        _layout: wgt::TexelCopyBufferLayout,
+        _size: &wgt::Extent3d,
+    ) {
+        unreachable!("`MappedTexture` can't exist on WebGPU");
     }
 }
 impl Drop for WebTexture {

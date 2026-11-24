@@ -24,6 +24,7 @@ fn create_texture_binding(device: &wgpu::Device, format: wgpu::TextureFormat, fi
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());

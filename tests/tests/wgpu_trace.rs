@@ -199,6 +199,7 @@ fn trace_texture_test() {
         usage: wgt::TextureUsages::COPY_DST | wgt::TextureUsages::TEXTURE_BINDING,
         view_formats: Vec::new(),
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     };
 
     device.push_error_scope(wgpu::ErrorFilter::Validation);

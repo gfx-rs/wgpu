@@ -148,6 +148,7 @@ impl crate::framework::Example for Example {
             view_formats: &[],
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         // Done
@@ -184,6 +185,7 @@ impl crate::framework::Example for Example {
             view_formats: &[],
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
     }
 

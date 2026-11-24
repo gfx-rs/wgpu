@@ -241,6 +241,7 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
         label: Some("Output Texture"),
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let output_texture_view = output_texture.create_view(&Default::default());
 

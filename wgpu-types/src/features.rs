@@ -589,7 +589,17 @@ features! {
         #[name("wgpu-multi-draw-indirect-count", "multi-draw-indirect-count")]
         const MULTI_DRAW_INDIRECT_COUNT = 1 << 15;
 
-        // Bit 16 is available.
+        /// Enables creating textures with `TextureUsages::HOST_VISIBLE`, which the CPU
+        /// can read and write without a staging buffer.
+        ///
+        /// Supported platforms:
+        /// - Vulkan 1.3+ with `VK_EXT_host_image_copy`
+        /// - Metal on Apple GPUs
+        /// - DX12 on UMA adapters
+        ///
+        /// This is a native only feature.
+        #[name("wgpu-host-texture-copy")]
+        const HOST_TEXTURE_COPY = 1 << 16;
 
         /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
         /// of [`SamplerBorderColor::Zero`].

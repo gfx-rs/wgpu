@@ -1,4 +1,5 @@
 use alloc::{sync::Arc, vec::Vec};
+use core::mem;
 
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -6,13 +7,16 @@ use thiserror::Error;
 use crate::{
     device::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
-        DeviceError,
+        DeviceError, TextureMapError, TextureMapPendingClosure,
     },
     ray_tracing::BlasCompactReadyPendingClosure,
-    resource::{Blas, Buffer, QuerySet, Texture, Trackable},
+    resource::{Blas, Buffer, QuerySet, Texture, TextureMapState, Trackable},
     snatch::SnatchGuard,
     SubmissionIndex,
 };
+
+/// A pending texture map, with the id of the map it was scheduled for.
+pub(crate) type TextureMapEntry = (Arc<Texture>, Arc<()>);
 
 /// A command submitted to the GPU for execution.
 ///
@@ -34,6 +38,9 @@ struct ActiveSubmission {
 
     /// BLASes to have their compacted size read back once this submission has completed.
     compact_read_back: Vec<Arc<Blas>>,
+
+    /// Textures to transition to host-mapped state once this submission completes.
+    textures_to_map: Vec<TextureMapEntry>,
 
     /// Command buffers used by this submission, and the encoder that owns them.
     ///
@@ -196,6 +203,10 @@ pub(crate) struct LifetimeTracker {
     /// queue submission still in flight.
     ready_to_compact: Vec<Arc<Blas>>,
 
+    /// Textures whose mapping submission has completed and are ready to be
+    /// transitioned to `TextureMapState::Mapped`.
+    ready_to_map_textures: Vec<TextureMapEntry>,
+
     /// Queue "on_submitted_work_done" closures that were initiated for while there is no
     /// currently pending submissions. These cannot be immediately invoked as they
     /// must happen _after_ all mapped buffer callbacks are mapped, so we defer them
@@ -209,6 +220,7 @@ impl LifetimeTracker {
             active: Vec::new(),
             ready_to_map: Vec::new(),
             ready_to_compact: Vec::new(),
+            ready_to_map_textures: Vec::new(),
             work_done_closures: SmallVec::new(),
         }
     }
@@ -224,6 +236,7 @@ impl LifetimeTracker {
             index,
             mapped: Vec::new(),
             compact_read_back: Vec::new(),
+            textures_to_map: Vec::new(),
             encoders,
             work_done_closures: SmallVec::new(),
         });
@@ -338,6 +351,7 @@ impl LifetimeTracker {
         for a in self.active.drain(..done_count) {
             self.ready_to_map.extend(a.mapped);
             self.ready_to_compact.extend(a.compact_read_back);
+            self.ready_to_map_textures.extend(a.textures_to_map);
             for encoder in a.encoders {
                 // This involves actually decrementing the ref count of all command buffer
                 // resources, so can be _very_ expensive.
@@ -431,5 +445,62 @@ impl LifetimeTracker {
             }
         }
         pending_callbacks
+    }
+
+    /// Returns the textures whose pending map can complete.
+    pub(crate) fn take_ready_texture_maps(&mut self) -> Vec<TextureMapEntry> {
+        mem::take(&mut self.ready_to_map_textures)
+    }
+
+    /// Schedules completing the pending map of `texture` after the last
+    /// submission that uses it, and returns that submission's index.
+    pub(crate) fn map_texture(
+        &mut self,
+        texture: &Arc<Texture>,
+        id: Arc<()>,
+    ) -> Option<SubmissionIndex> {
+        let submission = self
+            .active
+            .iter_mut()
+            .rev()
+            .find(|a| a.contains_texture(texture));
+
+        let maybe_submission_index = submission.as_ref().map(|s| s.index);
+
+        submission
+            .map_or(&mut self.ready_to_map_textures, |a| &mut a.textures_to_map)
+            .push((texture.clone(), id));
+
+        maybe_submission_index
+    }
+
+    /// Drain pending texture maps for a lost device: revert pending maps
+    /// textures to `Unmapped` and return their callbacks paired with `Err`, so
+    /// awaiting callers observe the failure instead of hanging.
+    #[must_use]
+    pub(crate) fn drain_pending_texture_maps(&mut self) -> Vec<TextureMapPendingClosure> {
+        let mut closures = Vec::new();
+        let abort = |(texture, id): TextureMapEntry,
+                     closures: &mut Vec<TextureMapPendingClosure>| {
+            let mut map_state = texture.map_state.lock();
+            if let TextureMapState::Pending(pending) = &mut *map_state {
+                if !Arc::ptr_eq(&pending.id, &id) {
+                    return;
+                }
+                if let Some(cb) = pending.callback.take() {
+                    closures.push((cb, Err(TextureMapError::Device(DeviceError::Lost))));
+                }
+                *map_state = TextureMapState::Unmapped;
+            }
+        };
+        for a in &mut self.active {
+            for entry in a.textures_to_map.drain(..) {
+                abort(entry, &mut closures);
+            }
+        }
+        for entry in self.ready_to_map_textures.drain(..) {
+            abort(entry, &mut closures);
+        }
+        closures
     }
 }

@@ -76,7 +76,81 @@ pub struct DeviceDescriptor<'a> {
 
 pub type QueueDescriptor<'a> = wgt::QueueDescriptor<Label<'a>>;
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>, wgt::BufferUsagesWebGPU>;
-pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::TextureFormat>>;
+
+/// Describes a `Texture`.
+///
+/// Corresponds to [WebGPU `GPUTextureDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gputexturedescriptor).
+///
+/// Unlike [`wgt::TextureDescriptor`], this can't describe native-only usages or
+/// mapping at creation.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct TextureDescriptor<'a> {
+    pub label: Label<'a>,
+    pub size: wgt::Extent3d,
+    pub mip_level_count: u32,
+    pub sample_count: u32,
+    pub dimension: wgt::TextureDimension,
+    pub format: wgt::TextureFormat,
+    pub usage: TextureUsagesWebGPU,
+    pub view_formats: Vec<wgt::TextureFormat>,
+    pub texture_binding_view_dimension: Option<wgt::TextureViewDimension>,
+}
+
+impl TextureDescriptor<'_> {
+    pub fn to_core(&self) -> wgt::TextureDescriptor<Label<'_>, Vec<wgt::TextureFormat>> {
+        wgt::TextureDescriptor {
+            label: self.label.as_deref().map(Cow::Borrowed),
+            size: self.size,
+            mip_level_count: self.mip_level_count,
+            sample_count: self.sample_count,
+            dimension: self.dimension,
+            format: self.format,
+            usage: self.usage.0,
+            view_formats: self.view_formats.clone(),
+            texture_binding_view_dimension: self.texture_binding_view_dimension,
+            mapped_at_creation: false,
+        }
+    }
+}
+
+/// Texture usages that are defined in the WebGPU specification.
+///
+/// Deserialization fails if any other usage is set.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "wgt::TextureUsages", into = "wgt::TextureUsages")]
+pub struct TextureUsagesWebGPU(wgt::TextureUsages);
+
+impl TextureUsagesWebGPU {
+    const ALL: wgt::TextureUsages = wgt::TextureUsages::COPY_SRC
+        .union(wgt::TextureUsages::COPY_DST)
+        .union(wgt::TextureUsages::TEXTURE_BINDING)
+        .union(wgt::TextureUsages::STORAGE_BINDING)
+        .union(wgt::TextureUsages::RENDER_ATTACHMENT)
+        .union(wgt::TextureUsages::TRANSIENT_ATTACHMENT);
+
+    pub fn get(self) -> wgt::TextureUsages {
+        self.0
+    }
+}
+
+impl TryFrom<wgt::TextureUsages> for TextureUsagesWebGPU {
+    type Error = &'static str;
+
+    fn try_from(usage: wgt::TextureUsages) -> Result<Self, Self::Error> {
+        if Self::ALL.contains(usage) {
+            Ok(Self(usage))
+        } else {
+            Err("texture usage is not a WebGPU usage")
+        }
+    }
+}
+
+impl From<TextureUsagesWebGPU> for wgt::TextureUsages {
+    fn from(usage: TextureUsagesWebGPU) -> Self {
+        usage.0
+    }
+}
 pub type ExternalTextureDescriptor<'a> = wgt::ExternalTextureDescriptor<Label<'a>>;
 
 /// Describes a `TextureView`.
@@ -211,3 +285,28 @@ bitflags::bitflags! {
 }
 
 assert_ffi_safe!(MapMode);
+
+#[cfg(test)]
+mod tests {
+    use serde::{
+        de::{
+            value::{Error, StrDeserializer},
+            IntoDeserializer,
+        },
+        Deserialize,
+    };
+
+    use super::TextureUsagesWebGPU;
+
+    fn parse(usage: &str) -> Result<TextureUsagesWebGPU, Error> {
+        let deserializer: StrDeserializer<Error> = usage.into_deserializer();
+        TextureUsagesWebGPU::deserialize(deserializer)
+    }
+
+    #[test]
+    fn texture_usages_reject_native_usages() {
+        assert!(parse("COPY_DST | RENDER_ATTACHMENT").is_ok());
+        assert!(parse("COPY_DST | HOST_VISIBLE").is_err());
+        assert!(parse("STORAGE_ATOMIC").is_err());
+    }
+}

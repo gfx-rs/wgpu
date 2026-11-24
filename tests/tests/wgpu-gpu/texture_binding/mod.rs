@@ -39,6 +39,7 @@ fn texture_binding(ctx: TestingContext) {
         usage: TextureUsages::STORAGE_BINDING,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let shader = ctx
         .device
@@ -96,6 +97,7 @@ fn single_scalar_load(ctx: TestingContext) {
         usage: TextureUsages::STORAGE_BINDING,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let texture_write = ctx.device.create_texture(&TextureDescriptor {
         label: None,
@@ -111,6 +113,7 @@ fn single_scalar_load(ctx: TestingContext) {
         usage: TextureUsages::STORAGE_BINDING | TextureUsages::COPY_SRC,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let buffer = ctx.device.create_buffer(&BufferDescriptor {
         label: None,

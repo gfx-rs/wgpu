@@ -2008,7 +2008,77 @@ impl dispatch::TextureInterface for CoreTexture {
     }
 
     fn destroy(&self) {
+        if let Err(wgc::device::HostTextureCopyError::MappedHandlesExist) =
+            self.wgpu_texture.unmap()
+        {
+            panic!("Texture::destroy called while a MappedTexture is alive");
+        }
         self.wgpu_texture.destroy();
+    }
+
+    fn map_async(&self, mode: crate::MapMode, callback: dispatch::TextureMapCallback) {
+        // Like `BufferSlice::map_async`, which fails a second map without an error.
+        if !self.wgpu_texture.is_unmapped() {
+            callback(Err(crate::TextureAsyncError));
+            return;
+        }
+        self.wgpu_texture.map_async(
+            mode,
+            Some(Box::new(|status| {
+                callback(status.map_err(|_| crate::TextureAsyncError));
+            })),
+        );
+    }
+
+    fn get_map_token(&self) -> Option<(alloc::sync::Arc<()>, crate::MapMode)> {
+        self.wgpu_texture.get_map_token()
+    }
+
+    fn unmap(&self) {
+        match self.wgpu_texture.unmap() {
+            Ok(()) => {}
+            Err(wgc::device::HostTextureCopyError::MappedHandlesExist) => {
+                panic!("Texture::unmap called while a MappedTexture is alive");
+            }
+            Err(cause) => self
+                .wgpu_texture
+                .device()
+                .handle_error_nolabel(cause, "Texture::unmap"),
+        }
+    }
+
+    fn copy_texture_to_memory(
+        &self,
+        source: &wgt::TexelCopyTextureInfo<()>,
+        destination: &mut [u8],
+        layout: wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    ) {
+        if let Err(cause) = self
+            .wgpu_texture
+            .copy_to_memory(source, destination, layout, size)
+        {
+            self.wgpu_texture
+                .device()
+                .handle_error_nolabel(cause, "Texture::copy_texture_to_memory");
+        }
+    }
+
+    fn copy_memory_to_texture(
+        &self,
+        destination: &wgt::TexelCopyTextureInfo<()>,
+        source: &[u8],
+        layout: wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    ) {
+        if let Err(cause) = self
+            .wgpu_texture
+            .copy_from_memory(destination, source, layout, size)
+        {
+            self.wgpu_texture
+                .device()
+                .handle_error_nolabel(cause, "Texture::copy_memory_to_texture");
+        }
     }
 
     fn size(&self) -> wgt::Extent3d {

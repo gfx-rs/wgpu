@@ -251,6 +251,20 @@ bitflags::bitflags! {
         ///
         /// When `Self::from_env()` is used takes value from `WGPU_DEBUG_PRINTF` environment variable.
         const DEBUG_PRINTF = 1 << 8;
+
+        /// Never add host copy usage to textures that didn't request
+        /// [`TextureUsages::HOST_VISIBLE`](crate::TextureUsages::HOST_VISIBLE).
+        ///
+        /// By default, textures with [`TextureUsages::COPY_DST`](crate::TextureUsages::COPY_DST)
+        /// whose format has
+        /// [`TextureFormatFeatureFlags::HOST_VISIBLE_OPTIMAL`](crate::TextureFormatFeatureFlags::HOST_VISIBLE_OPTIMAL)
+        /// are created with host copy usage, so that `Queue::write_texture` can copy into
+        /// them from the host instead of through a staging buffer until the GPU first
+        /// uses them.
+        ///
+        /// When `Self::from_env()` is used takes value from
+        /// `WGPU_DISABLE_IMPLICIT_HOST_TEXTURE_COPY` environment variable.
+        const DISABLE_IMPLICIT_HOST_TEXTURE_COPY = 1 << 9;
     }
 }
 
@@ -340,6 +354,9 @@ impl InstanceFlags {
         }
         if let Some(bit) = env("WGPU_STRICT_WEBGPU_COMPLIANCE") {
             self.set(Self::STRICT_WEBGPU_COMPLIANCE, bit);
+        }
+        if let Some(bit) = env("WGPU_DISABLE_IMPLICIT_HOST_TEXTURE_COPY") {
+            self.set(Self::DISABLE_IMPLICIT_HOST_TEXTURE_COPY, bit);
         }
         if let Some(bit) = env("WGPU_DEBUG_PRINTF") {
             self.set(Self::DEBUG_PRINTF, bit);

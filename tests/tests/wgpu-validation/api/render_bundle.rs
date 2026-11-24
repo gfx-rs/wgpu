@@ -130,6 +130,7 @@ fn invalid_bundle_rejected_by_pass() {
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
         texture_binding_view_dimension: None,
+        mapped_at_creation: false,
     });
     let view = texture.create_view(&Default::default());
     for (ops, expected) in [

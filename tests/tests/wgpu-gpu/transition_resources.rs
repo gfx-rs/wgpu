@@ -22,6 +22,7 @@ static TRANSITION_RESOURCES: GpuTestConfiguration = GpuTestConfiguration::new()
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         });
 
         let mut encoder = ctx

@@ -171,6 +171,7 @@ impl crate::framework::Example for Example {
             label: None,
             view_formats: &[],
             texture_binding_view_dimension: None,
+            mapped_at_creation: false,
         };
         let red_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("red"),

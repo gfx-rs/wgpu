@@ -61,6 +61,7 @@ static TEXTURE_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
                 usage: TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
                 texture_binding_view_dimension: None,
+                mapped_at_creation: false,
             });
             if let Some(err) = scope.pop().await {
                 match err {
