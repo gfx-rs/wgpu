@@ -24,7 +24,7 @@ pub(crate) struct Dispatch {
     src_bind_group_layout: Box<dyn hal::DynBindGroupLayout>,
     dispatch: ValidationPipeline,
     /// Validates the arguments of indirect trace rays calls. Only created if
-    /// `Features::EXPERIMENTAL_RAY_TRACING_PIPELINES` is enabled.
+    /// `Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT` is enabled.
     trace_rays: Option<ValidationPipeline>,
 }
 
@@ -128,12 +128,13 @@ impl Dispatch {
         )?;
         let dispatch = guard(dispatch, |dispatch| dispatch.dispose(device));
 
-        let trace_rays = if features.contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES) {
-            let [max_x, max_y, max_z] = crate::command::max_trace_rays_dimensions(limits);
-            let max_total = limits.max_ray_dispatch_count;
+        let trace_rays =
+            if features.contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT) {
+                let [max_x, max_y, max_z] = crate::command::max_trace_rays_dimensions(limits);
+                let max_total = limits.max_ray_dispatch_count;
 
-            let trace_rays_shader = format!(
-                "
+                let trace_rays_shader = format!(
+                    "
                 @group(0) @binding(0)
                 var<storage, read_write> dst: array<u32, 3>;
                 @group(1) @binding(0)
@@ -162,19 +163,19 @@ impl Dispatch {
                     }}
                 }}
             "
-            );
+                );
 
-            Some(ValidationPipeline::new(
-                device,
-                instance_flags,
-                src_bind_group_layout.as_ref(),
-                "trace rays",
-                trace_rays_shader,
-                SRC_BUFFER_SIZE,
-            )?)
-        } else {
-            None
-        };
+                Some(ValidationPipeline::new(
+                    device,
+                    instance_flags,
+                    src_bind_group_layout.as_ref(),
+                    "trace rays",
+                    trace_rays_shader,
+                    SRC_BUFFER_SIZE,
+                )?)
+            } else {
+                None
+            };
 
         // Error returns after we start consuming guards could bypass resource cleanup.
         #[deny(clippy::question_mark_used)]
@@ -234,7 +235,7 @@ impl Dispatch {
     /// Parameters for validating the arguments of an indirect trace rays call.
     ///
     /// The destination buffer holds the validated arguments at offset 0. Returns `None` if
-    /// `Features::EXPERIMENTAL_RAY_TRACING_PIPELINES` is not enabled.
+    /// `Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT` is not enabled.
     pub fn trace_rays_params<'a>(
         &'a self,
         limits: &wgt::Limits,

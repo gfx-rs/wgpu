@@ -87,6 +87,8 @@ impl RayTracingPass<'_> {
     /// Traces rays with the current ray tracing pipeline, with the number of rays read from
     /// `indirect_buffer`.
     ///
+    /// Requires [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT`].
+    ///
     /// The buffer must have [`BufferUsages::INDIRECT`] and `indirect_offset` must be a multiple
     /// of 4. The structure expected in `indirect_buffer` has the same layout as
     /// [`DispatchIndirectArgs`](crate::util::DispatchIndirectArgs), with `x`, `y` and `z` being
@@ -97,6 +99,7 @@ impl RayTracingPass<'_> {
     /// disabled, exceeding those limits is undefined behavior.
     ///
     /// [`BufferUsages::INDIRECT`]: crate::BufferUsages::INDIRECT
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT`]: crate::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT
     /// [`InstanceFlags::VALIDATION_INDIRECT_CALL`]: crate::InstanceFlags::VALIDATION_INDIRECT_CALL
     pub fn trace_rays_indirect(
         &mut self,

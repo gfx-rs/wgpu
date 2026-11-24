@@ -177,7 +177,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Added `TextureDescriptor::default_view_dimension` to get the view dimension a texture's views default to. By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Added `Queue` getter on `Device`. By @sagudev in [#10895](https://github.com/gfx-rs/wgpu/pull/10895).
 - Add `Queue::present_with_damage`, which takes the regions that changed since the last present as a hint for the compositor. Implemented for Vulkan (`VK_KHR_incremental_present`) and EGL (`EGL_KHR_swap_buffers_with_damage` / `EGL_EXT_swap_buffers_with_damage`); ignored elsewhere. Adds `wgpu::Rect`, moved from `wgpu_core::command::Rect`. By @sauliusvl in [#10152](https://github.com/gfx-rs/wgpu/pull/10152).
-- Add `RayTracingPass::trace_rays_indirect`, which reads the number of rays from a buffer. Supported on Vulkan. By @JMS55 in [#11077](https://github.com/gfx-rs/wgpu/pull/11077).
+- Add `RayTracingPass::trace_rays_indirect`, which reads the number of rays from a buffer. Requires `Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT`, which is supported on Vulkan. By @JMS55 in [#11077](https://github.com/gfx-rs/wgpu/pull/11077).
 
 #### Naga
 

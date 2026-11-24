@@ -16,6 +16,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.push(TRACE_RAYS_INDIRECT_NO_VALIDATION);
     tests.push(TRACE_RAYS_INDIRECT_STATE_RESTORE);
     tests.push(TRACE_RAYS_INDIRECT_INVALID);
+    tests.push(TRACE_RAYS_INDIRECT_NO_FEATURE);
 }
 
 fn ray_tracing_limits() -> Limits {
@@ -89,7 +90,9 @@ fn counting_pipeline(ctx: &TestingContext) -> RayTracingPipeline {
 fn run_indirect(ctx: &TestingContext, args: &[[u32; 3]]) -> Vec<u32> {
     let pipeline = counting_pipeline(ctx);
 
-    // Offsets that are multiples of 4 but not of 12 or 256, some of which are past 256.
+    // Indirect offsets only need 4-byte alignment. Indirect validation binds the arguments at an
+    // offset aligned to `min_storage_buffer_offset_alignment` (256 by default) and reads them at
+    // the remainder, so use offsets that aren't multiples of 256, some of them past 256.
     let offset_of = |i: usize| 4 + 100 * i as u64;
     let mut indirect_data = vec![0u8; offset_of(args.len()) as usize];
     for (i, arg) in args.iter().enumerate() {
@@ -201,7 +204,10 @@ fn read_counters(
 static TRACE_RAYS_INDIRECT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+            .features(
+                Features::EXPERIMENTAL_RAY_TRACING_PIPELINES
+                    | Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT,
+            )
             .instance_flags(InstanceFlags::VALIDATION_INDIRECT_CALL)
             .limits(ray_tracing_limits()),
     )
@@ -227,7 +233,10 @@ static TRACE_RAYS_INDIRECT: GpuTestConfiguration = GpuTestConfiguration::new()
 static TRACE_RAYS_INDIRECT_DISCARD: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+            .features(
+                Features::EXPERIMENTAL_RAY_TRACING_PIPELINES
+                    | Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT,
+            )
             .instance_flags(InstanceFlags::VALIDATION_INDIRECT_CALL)
             .limits(Limits {
                 // Limits each dimension to 8 rays.
@@ -263,7 +272,10 @@ static TRACE_RAYS_INDIRECT_DISCARD: GpuTestConfiguration = GpuTestConfiguration:
 static TRACE_RAYS_INDIRECT_NO_VALIDATION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+            .features(
+                Features::EXPERIMENTAL_RAY_TRACING_PIPELINES
+                    | Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT,
+            )
             .remove_instance_flags(InstanceFlags::VALIDATION_INDIRECT_CALL)
             .limits(ray_tracing_limits()),
     )
@@ -278,7 +290,11 @@ static TRACE_RAYS_INDIRECT_NO_VALIDATION: GpuTestConfiguration = GpuTestConfigur
 static TRACE_RAYS_INDIRECT_STATE_RESTORE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES | Features::IMMEDIATES)
+            .features(
+                Features::EXPERIMENTAL_RAY_TRACING_PIPELINES
+                    | Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT
+                    | Features::IMMEDIATES,
+            )
             .instance_flags(InstanceFlags::VALIDATION_INDIRECT_CALL)
             .limits(Limits {
                 max_immediate_size: 4,
@@ -415,7 +431,10 @@ static TRACE_RAYS_INDIRECT_STATE_RESTORE: GpuTestConfiguration = GpuTestConfigur
 static TRACE_RAYS_INDIRECT_INVALID: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+            .features(
+                Features::EXPERIMENTAL_RAY_TRACING_PIPELINES
+                    | Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT,
+            )
             .limits(ray_tracing_limits()),
     )
     .run_sync(|ctx| {
@@ -512,5 +531,52 @@ static TRACE_RAYS_INDIRECT_INVALID: GpuTestConfiguration = GpuTestConfiguration:
                 encoder.finish()
             },
             Some("Attempted to use Buffer with 'storage indirect buffer' label with"),
+        );
+    });
+
+#[apply(gpu_test!)]
+static TRACE_RAYS_INDIRECT_NO_FEATURE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+            .limits(ray_tracing_limits()),
+    )
+    .run_sync(|ctx| {
+        let pipeline = counting_pipeline(&ctx);
+        let counter = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("counter"),
+            size: 4,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+        let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: counter.as_entire_binding(),
+            }],
+        });
+        let indirect_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("indirect buffer"),
+            size: 12,
+            usage: BufferUsages::INDIRECT,
+            mapped_at_creation: false,
+        });
+
+        fail(
+            &ctx.device,
+            || {
+                let mut encoder = ctx.device.create_command_encoder(&Default::default());
+                {
+                    let mut pass =
+                        encoder.begin_ray_tracing_pass(&RayTracingPassDescriptor::default());
+                    pass.set_pipeline(&pipeline);
+                    pass.set_bind_group(0, &bind_group, &[]);
+                    pass.trace_rays_indirect(&indirect_buffer, 0);
+                }
+                encoder.finish()
+            },
+            Some("are required but not enabled on the device"),
         );
     });

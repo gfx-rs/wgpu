@@ -1071,6 +1071,8 @@ fn trace_rays_indirect(
 
     buffer.same_device(device)?;
 
+    device.require_features(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT)?;
+
     state.is_ready()?;
 
     state
@@ -1113,7 +1115,7 @@ fn trace_rays_indirect(
         let params = indirect_validation
             .dispatch
             .trace_rays_params(&state.pass.base.device.limits, offset, buffer.size)
-            .expect("Ray tracing passes require `Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`");
+            .expect("Indirect trace rays requires `Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT`");
 
         // The validation runs a compute dispatch, which needs a compute pass.
         unsafe {

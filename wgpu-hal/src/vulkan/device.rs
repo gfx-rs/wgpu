@@ -1033,7 +1033,7 @@ impl crate::Device for super::Device {
             && self
                 .shared
                 .features
-                .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+                .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT)
         {
             // `vkCmdTraceRaysIndirectKHR` takes the address of the indirect buffer.
             usage |= vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;

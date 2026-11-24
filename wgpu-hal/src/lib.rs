@@ -2000,6 +2000,8 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     ///
     /// # Safety
     ///
+    /// - The device must have been created with
+    ///   [`wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT`].
     /// - `buffer` must have been created with [`wgt::BufferUses::INDIRECT`] and must be in the
     ///   [`wgt::BufferUses::INDIRECT`] state.
     /// - `offset` must be a multiple of 4, and `offset + 12` must not exceed the buffer size.
