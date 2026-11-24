@@ -21,7 +21,7 @@ macro_rules! resource {
                 fn drop(&mut self) {
                     // # Safety: we are in the drop impl and won't use raw anymore
                     let raw = unsafe { core::mem::ManuallyDrop::take(&mut self.raw) };
-                    unsafe { self.parent.raw().$destroy_call(raw) }
+                    unsafe { self.parent.$destroy_call(raw) }
                 }
             }
 
@@ -65,7 +65,7 @@ macro_rules! device_resource {
             $(
                 $resource_name => $hal_resource {
                     destroy: $destroy_call
-                    child of $crate::device::Device
+                    child of dyn hal::DynDevice
                 }
             )*
         }
@@ -91,7 +91,7 @@ impl Device {
 
         Ok((RawBuffer {
             raw: ManuallyDrop::new(raw),
-            parent: self,
+            parent: self.raw(),
         }, size))
     }
 }
