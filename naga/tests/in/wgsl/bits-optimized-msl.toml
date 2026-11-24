@@ -1,4 +1,3 @@
-capabilities = "SHADER_FLOAT16_IN_FLOAT32"
 targets = "METAL"
 
 [msl]

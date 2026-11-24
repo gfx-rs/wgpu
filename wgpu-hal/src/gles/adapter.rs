@@ -386,8 +386,7 @@ impl super::Adapter {
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::COMPARISON_SAMPLERS
             | wgt::DownlevelFlags::MSL2_1
-            | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
-            | wgt::DownlevelFlags::SHADER_F16_IN_F32;
+            | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES;
         downlevel_flags.set(
             wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES,
             supports_cube_array,
@@ -643,6 +642,29 @@ impl super::Adapter {
         // We *might* be able to emulate bgra8unorm-storage but currently don't attempt to.
 
         let mut private_caps = super::PrivateCapabilities::empty();
+
+        #[cfg(all(unix, native))]
+        if let Some(egl) = context.egl_instance() {
+            if let Some(display) = context.raw_display() {
+                if let Ok(extensions) = egl.query_string(Some(*display), khronos_egl::EXTENSIONS) {
+                    for extension in extensions.to_string_lossy().split_ascii_whitespace() {
+                        match extension {
+                            "EGL_EXT_image_dma_buf_import" => {
+                                private_caps
+                                    .insert(super::PrivateCapabilities::EGL_IMAGE_DMA_BUF_IMPORT);
+                            }
+                            "EGL_EXT_image_dma_buf_import_modifiers" => {
+                                private_caps.insert(
+                                    super::PrivateCapabilities::EGL_IMAGE_DMA_BUF_IMPORT_MODIFIERS,
+                                );
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
         private_caps.set(
             super::PrivateCapabilities::BUFFER_ALLOCATION,
             extensions.contains("GL_EXT_buffer_storage")
@@ -1007,6 +1029,7 @@ impl super::Adapter {
                     ray_tracing_pipeline_data_offset_alignment: 0,
                 },
                 cooperative_matrix_properties: Vec::new(),
+                ray_tracing_invocation_reorder_mode: wgt::RayTracingInvocationReorderMode::None,
             },
         })
     }
