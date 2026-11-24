@@ -10,6 +10,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(HOST_TEXTURE_MAP_STATE_VALIDATION);
     vec.push(HOST_TEXTURE_MAP_DEVICE_LOST);
     vec.push(HOST_TEXTURE_MAP_WITHOUT_QUEUE);
+    vec.push(HOST_TEXTURE_OPTIMAL_FORMATS);
     vec.push(HOST_TEXTURE_ZERO_INIT);
     vec.push(HOST_TEXTURE_DEPTH);
     vec.push(HOST_TEXTURE_PLANAR_ROUNDTRIP);
@@ -621,6 +622,46 @@ async fn host_texture_map_without_queue(ctx: TestingContext) {
 static HOST_TEXTURE_MAP_WITHOUT_QUEUE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(host_params())
     .run_async(host_texture_map_without_queue);
+
+#[apply(gpu_test!)]
+static HOST_TEXTURE_OPTIMAL_FORMATS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(host_params())
+    .run_sync(host_texture_optimal_formats);
+
+fn host_texture_optimal_formats(ctx: TestingContext) {
+    let formats = [
+        TextureFormat::Rgba8Unorm,
+        TextureFormat::R8Unorm,
+        TextureFormat::Rgba16Float,
+        TextureFormat::Bc1RgbaUnorm,
+        TextureFormat::Bc7RgbaUnorm,
+        TextureFormat::Etc2Rgb8Unorm,
+        TextureFormat::Astc {
+            block: wgpu::AstcBlock::B4x4,
+            channel: wgpu::AstcChannel::Unorm,
+        },
+    ];
+    for format in formats {
+        let features = ctx.adapter.get_texture_format_features(format);
+        let host_visible = features
+            .allowed_usages
+            .contains(TextureUsages::HOST_VISIBLE);
+        let optimal = features
+            .flags
+            .contains(wgpu::TextureFormatFeatureFlags::HOST_VISIBLE_OPTIMAL);
+        assert!(
+            !optimal || host_visible,
+            "{format:?} is HOST_VISIBLE_OPTIMAL but doesn't allow HOST_VISIBLE"
+        );
+        if ctx.adapter_info.backend == wgpu::Backend::Metal {
+            assert_eq!(
+                optimal,
+                host_visible && format.is_compressed(),
+                "HOST_VISIBLE_OPTIMAL for {format:?}"
+            );
+        }
+    }
+}
 
 #[apply(gpu_test!)]
 static HOST_TEXTURE_MAP_STATE_VALIDATION: GpuTestConfiguration = GpuTestConfiguration::new()

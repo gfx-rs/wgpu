@@ -503,7 +503,13 @@ impl crate::Adapter for super::Adapter {
             && !format.is_combined_depth_stencil_format()
             && (self.shared.private_caps.host_copy_compressed || !format.is_compressed())
         {
-            Tfc::HOST_COPY
+            // `Shared` storage loses lossless compression, which Apple GPUs don't
+            // apply to block-compressed formats.
+            if format.is_compressed() {
+                Tfc::HOST_COPY | Tfc::HOST_COPY_OPTIMAL
+            } else {
+                Tfc::HOST_COPY
+            }
         } else {
             Tfc::empty()
         };
