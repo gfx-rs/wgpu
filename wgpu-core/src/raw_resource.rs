@@ -75,23 +75,29 @@ macro_rules! device_resource {
 device_resource!(
     RawBuffer => dyn hal::DynBuffer {
         destroy: destroy_buffer
-    } 
+    }
 );
 
 impl Device {
     /// Creates a raw buffer that automatically destroys itself on drop.
-    /// 
+    ///
     /// # Safety
     /// Same as [`hal::Device::create_buffer`] plus
     /// - The buffer must not be used in any resources
     ///   that hold a reference it (e.g. bind groups)
     ///    - Note: this likely indicates a resource leak
-    pub(crate) unsafe fn create_raw_buffer<'a>(&'a self, desc: &hal::BufferDescriptor) -> Result<(RawBuffer<'a>, u64), hal::DeviceError> {
+    pub(crate) unsafe fn create_raw_buffer<'a>(
+        &'a self,
+        desc: &hal::BufferDescriptor,
+    ) -> Result<(RawBuffer<'a>, u64), hal::DeviceError> {
         let (raw, size) = unsafe { self.raw().create_buffer(desc)? };
 
-        Ok((RawBuffer {
-            raw: ManuallyDrop::new(raw),
-            parent: self.raw(),
-        }, size))
+        Ok((
+            RawBuffer {
+                raw: ManuallyDrop::new(raw),
+                parent: self.raw(),
+            },
+            size,
+        ))
     }
 }

@@ -205,17 +205,17 @@ impl Device {
         {
             Some(unsafe {
                 self.create_raw_buffer(&hal::BufferDescriptor {
-                        label: hal_label(
-                            Some("(wgpu internal) compaction read-back buffer"),
-                            self.instance_flags,
-                        ),
-                        size: size_of::<wgpu_types::BufferAddress>() as wgpu_types::BufferAddress,
-                        usage: wgpu_types::BufferUses::ACCELERATION_STRUCTURE_QUERY
-                            | wgpu_types::BufferUses::MAP_READ,
-                        memory_flags: hal::MemoryFlags::PREFER_COHERENT,
-                    })
-                    .map_err(DeviceError::from_hal)?
-                    .0
+                    label: hal_label(
+                        Some("(wgpu internal) compaction read-back buffer"),
+                        self.instance_flags,
+                    ),
+                    size: size_of::<wgpu_types::BufferAddress>() as wgpu_types::BufferAddress,
+                    usage: wgpu_types::BufferUses::ACCELERATION_STRUCTURE_QUERY
+                        | wgpu_types::BufferUses::MAP_READ,
+                    memory_flags: hal::MemoryFlags::PREFER_COHERENT,
+                })
+                .map_err(DeviceError::from_hal)?
+                .0
             })
         } else {
             None
