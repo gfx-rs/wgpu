@@ -4,7 +4,7 @@ use ash::vk;
 use core::{mem, ops::Range};
 use hashbrown::hash_map::Entry;
 
-const ALLOCATION_GRANULARITY: u32 = 16;
+const ALLOCATION_GRANULARITY: u32 = 1;
 const DST_IMAGE_LAYOUT: vk::ImageLayout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
 
 impl super::Texture {
@@ -199,6 +199,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         I: Iterator<Item = super::CommandBuffer>,
     {
         self.temp.clear();
+        let unused = self.free.len();
         self.free
             .extend(cmd_bufs.into_iter().map(|cmd_buf| cmd_buf.raw));
         self.free.append(&mut self.discarded);
@@ -211,6 +212,29 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 .raw
                 .reset_command_pool(self.raw, vk::CommandPoolResetFlags::default())
         };
+        // Keep only what this encoding used, or the encoder holds its busiest
+        // submission's buffers for the life of the device. Mesa only returns
+        // their memory on a trim, not on free. Every buffer was just reset, so
+        // it doesn't matter which `unused` buffers are freed.
+        self.min_unused = self.min_unused.min(unused);
+        self.resets_since_trim += 1;
+        let window = self
+            .device
+            .instance
+            .backend_options
+            .command_pool_trim_window;
+        if self.resets_since_trim < window.get() {
+            return;
+        }
+        self.resets_since_trim = 0;
+        let unused = mem::replace(&mut self.min_unused, usize::MAX);
+        if unused > 0 {
+            let excess = self.free.split_off(self.free.len() - unused);
+            unsafe {
+                self.device.raw.free_command_buffers(self.raw, &excess);
+                self.device.trim_command_pool(self.raw);
+            }
+        }
     }
 
     unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
