@@ -377,6 +377,9 @@ impl super::CommandEncoder {
             self.pass.root_elements[root_index as usize] =
                 super::RootElement::SamplerHeapDescriptorTable;
         }
+        if let Some(info) = layout.immediates_info.as_ref() {
+            self.pass.root_elements[info.root_index as usize] = super::RootElement::Immediates;
+        }
         self.pass.layout = layout.clone();
         self.pass.dirty_root_elements = (1 << layout.total_root_elements) - 1;
     }
