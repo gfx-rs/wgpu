@@ -1,3 +1,4 @@
+#[cfg(dx12)]
 use core::ffi;
 use core::{error::Error, fmt};
 
@@ -10,12 +11,17 @@ use windows::{
 use crate::auxil::dxgi::{factory::DxgiAdapter, result::HResult as _};
 use crate::auxil::dyn_lib::DynLib;
 
+/// Loads `d3d12.dll` at runtime, the same way [`DxgiLib`](super::dxgi_lib::DxgiLib) loads
+/// `dxgi.dll`, so the DLL is never a load-time import and the binary stays loadable on systems
+/// without D3D12 (e.g. Windows 7/8, where Vulkan still needs to work). Shared by the DX12 backend
+/// and the Vulkan DXGI interop swapchain.
 #[derive(Debug)]
 pub(crate) struct D3D12Lib {
     lib: DynLib,
     // Entry points, loaded lazily by `cached_proc`.
     create_device_fn: OnceCell<Direct3D12::PFN_D3D12_CREATE_DEVICE>,
     debug_interface_fn: OnceCell<Direct3D12::PFN_D3D12_GET_DEBUG_INTERFACE>,
+    #[cfg(dx12)]
     serialize_root_signature_fn: OnceCell<Direct3D12::PFN_D3D12_SERIALIZE_ROOT_SIGNATURE>,
     get_interface_fn: OnceCell<Direct3D12::PFN_D3D12_GET_INTERFACE>,
 }
@@ -27,6 +33,7 @@ impl D3D12Lib {
                 lib,
                 create_device_fn: OnceCell::new(),
                 debug_interface_fn: OnceCell::new(),
+                #[cfg(dx12)]
                 serialize_root_signature_fn: OnceCell::new(),
                 get_interface_fn: OnceCell::new(),
             })
@@ -76,6 +83,7 @@ impl D3D12Lib {
         result__.ok_or(CreateDeviceError::RetDeviceIsNull)
     }
 
+    #[cfg(dx12)]
     pub(crate) fn serialize_root_signature(
         &self,
         version: Direct3D12::D3D_ROOT_SIGNATURE_VERSION,

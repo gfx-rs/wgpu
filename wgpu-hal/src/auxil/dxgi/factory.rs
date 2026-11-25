@@ -1,13 +1,17 @@
-use alloc::{string::String, vec::Vec};
+use alloc::string::String;
+#[cfg(dx12)]
+use alloc::vec::Vec;
 use core::ops::Deref;
 
 use windows::{core::Interface as _, Win32::Graphics::Dxgi};
 
 use super::dxgi_lib::DxgiLib;
+#[cfg(dx12)]
 use super::result::HResult as _;
 
 // We can rely on the presence of DXGI 1.4 since D3D12 requires WDDM 2.0, Windows 10 (1507), and so does DXGI 1.4.
 
+#[cfg(dx12)]
 fn should_keep_adapter(adapter: &Dxgi::IDXGIAdapter1) -> bool {
     let desc = unsafe { adapter.GetDesc1() }.unwrap();
 
@@ -57,6 +61,8 @@ pub enum DxgiAdapter {
 }
 
 impl DxgiAdapter {
+    // Only the DX12 backend queries video memory.
+    #[cfg(dx12)]
     pub fn query_video_memory_info(
         &self,
         group: Dxgi::DXGI_MEMORY_SEGMENT_GROUP,
@@ -79,6 +85,7 @@ impl Deref for DxgiAdapter {
     }
 }
 
+#[cfg(dx12)]
 pub fn enumerate_adapters(factory: DxgiFactory) -> Vec<DxgiAdapter> {
     let mut adapters = Vec::with_capacity(8);
 

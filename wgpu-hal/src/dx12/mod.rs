@@ -124,8 +124,9 @@ use crate::auxil::{
     },
 };
 
-// `CreateDeviceError` lives in `auxil::dxgi::d3d12_lib` but is part of the DX12 public API via
-// `D3D12ExposeAdapterResult`, so re-export it to keep `wgpu_hal::dx12::CreateDeviceError` stable.
+// `CreateDeviceError` lives in `auxil::dxgi::d3d12_lib` (shared with the Vulkan DXGI path) but is
+// part of the DX12 public API via `D3D12ExposeAdapterResult`, so re-export it to keep
+// `wgpu_hal::dx12::CreateDeviceError` stable.
 pub use crate::auxil::dxgi::d3d12_lib::CreateDeviceError;
 
 struct D3DBlob(Direct3D::ID3DBlob);
@@ -290,6 +291,7 @@ impl Instance {
     }
 }
 
+// `compiler_container` is not `Send`/`Sync`.
 unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
@@ -322,6 +324,7 @@ pub struct Surface {
     hdr_source: Option<auxil::dxgi::hdr::DxgiHdrSource>,
 }
 
+// `SwapChain::waitable` is not `Send`/`Sync`.
 unsafe impl Send for Surface {}
 unsafe impl Sync for Surface {}
 

@@ -1,30 +1,21 @@
-#[cfg(dx12)]
 use core::mem;
 
-#[cfg(dx12)]
 use windows::core::Interface;
 
-// Every module here is gated behind `dx12` except `hdr` (the
-// `DXGI_OUTPUT_DESC1` -> `DisplayHdrInfo` mapping), which the
-// Vulkan-on-Windows backend also uses.
-#[cfg(dx12)]
+// Everything here is shared between DX12 and the Windows Vulkan backend's
+// DXGI presentation path, so cfgs are used to include the appropriate bits for each backend.
 pub mod conv;
-#[cfg(dx12)]
 pub mod d3d12_lib;
-#[cfg(dx12)]
 pub mod dcomp;
-#[cfg(dx12)]
 pub mod device_factory;
 pub mod dxgi_lib;
 #[cfg(dx12)]
 pub mod exception;
-#[cfg(dx12)]
 pub mod factory;
 pub mod hdr;
 #[cfg(dx12)]
 pub mod name;
 pub mod result;
-#[cfg(dx12)]
 pub mod swapchain;
 #[cfg(dx12)]
 pub mod time;
@@ -48,7 +39,6 @@ pub mod types;
 /// # Safety
 /// The returned value holds the pointer of `src` without a reference of its own. It must not be
 /// dropped, and must not be used after `src` is released.
-#[cfg(dx12)]
 pub(crate) unsafe fn borrow_interface_temporarily<I: Interface>(
     src: &I,
 ) -> mem::ManuallyDrop<Option<I>> {
