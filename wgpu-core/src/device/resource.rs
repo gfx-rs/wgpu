@@ -1394,7 +1394,9 @@ impl Device {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
-            timestamp_normalization_bind_group: Snatchable::new(ScopeGuard::into_inner(timestamp_normalization_bind_group)),
+            timestamp_normalization_bind_group: Snatchable::new(ScopeGuard::into_inner(
+                timestamp_normalization_bind_group,
+            )),
             indirect_validation_bind_groups,
         };
 
@@ -1766,7 +1768,9 @@ impl Device {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
-            timestamp_normalization_bind_group: Snatchable::new(ScopeGuard::into_inner(timestamp_normalization_bind_group)),
+            timestamp_normalization_bind_group: Snatchable::new(ScopeGuard::into_inner(
+                timestamp_normalization_bind_group,
+            )),
             indirect_validation_bind_groups,
         };
 
@@ -2237,7 +2241,9 @@ impl Device {
 
         let texture = Texture::new(
             self,
-            resource::TextureInner::Native { raw: ScopeGuard::into_inner(raw_texture) },
+            resource::TextureInner::Native {
+                raw: ScopeGuard::into_inner(raw_texture),
+            },
             hal_usage,
             desc,
             format_features,

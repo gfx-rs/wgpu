@@ -7,7 +7,7 @@
 
 use std::boxed::Box;
 
-use scopeguard::{ScopeGuard, guard};
+use scopeguard::{guard, ScopeGuard};
 
 use crate::device::Device;
 
@@ -20,13 +20,17 @@ macro_rules! scoped_resource {
 
 macro_rules! create_raw_docs {
     ($fn_create:ident) => {
-        concat!("Creates a raw resource that automatically destroys itself on drop.\
+        concat!(
+            "Creates a raw resource that automatically destroys itself on drop.\
         \n\
         \n # Safety\
-        \n Same as [`hal::Device::", stringify!($fn_create), "`] plus\
+        \n Same as [`hal::Device::",
+            stringify!($fn_create),
+            "`] plus\
         \n - The buffer must not be used in any resources\
         \n   that hold a reference it (e.g. bind groups)\
-        \n    - Note: this likely indicates a resource leak")
+        \n    - Note: this likely indicates a resource leak"
+        )
     };
 }
 
@@ -79,8 +83,8 @@ impl Device {
     ) -> Result<scoped_resource!(Box<dyn hal::DynTextureView>, 'a), hal::DeviceError> {
         let raw = unsafe { self.raw().create_texture_view(texture, desc)? };
 
-        Ok(
-            guard(raw, |raw| unsafe { self.raw().destroy_texture_view(raw) }),
-        )
+        Ok(guard(raw, |raw| unsafe {
+            self.raw().destroy_texture_view(raw)
+        }))
     }
 }

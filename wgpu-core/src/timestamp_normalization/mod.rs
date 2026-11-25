@@ -258,16 +258,28 @@ impl TimestampNormalizer {
         buffer_label: Option<&str>,
         buffer_size: wgt::BufferSize,
         buffer_usages: wgt::BufferUsages,
-    ) -> Result<ScopeGuard<TimestampNormalizationBindGroup, impl FnOnce(TimestampNormalizationBindGroup) + 'a>, DeviceError> {
+    ) -> Result<
+        ScopeGuard<
+            TimestampNormalizationBindGroup,
+            impl FnOnce(TimestampNormalizationBindGroup) + 'a,
+        >,
+        DeviceError,
+    > {
         let destroy_fn = |bg: TimestampNormalizationBindGroup| bg.dispose(device.raw());
 
         unsafe {
             let Some(ref state) = &self.state else {
-                return Ok(ScopeGuard::with_strategy(TimestampNormalizationBindGroup { raw: None }, destroy_fn));
+                return Ok(ScopeGuard::with_strategy(
+                    TimestampNormalizationBindGroup { raw: None },
+                    destroy_fn,
+                ));
             };
 
             if !buffer_usages.contains(wgt::BufferUsages::QUERY_RESOLVE) {
-                return Ok(ScopeGuard::with_strategy(TimestampNormalizationBindGroup { raw: None }, destroy_fn));
+                return Ok(ScopeGuard::with_strategy(
+                    TimestampNormalizationBindGroup { raw: None },
+                    destroy_fn,
+                ));
             }
 
             // If this buffer is large enough that we wouldn't be able to bind the entire thing
@@ -305,7 +317,10 @@ impl TimestampNormalizer {
                 })
                 .map_err(|e| device.handle_hal_error(e))?;
 
-            Ok(ScopeGuard::with_strategy(TimestampNormalizationBindGroup { raw: Some(bg) }, destroy_fn))
+            Ok(ScopeGuard::with_strategy(
+                TimestampNormalizationBindGroup { raw: Some(bg) },
+                destroy_fn,
+            ))
         }
     }
 

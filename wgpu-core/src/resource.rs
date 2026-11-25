@@ -5,7 +5,6 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use scopeguard::ScopeGuard;
 use core::{
     borrow::Borrow,
     fmt,
@@ -14,6 +13,7 @@ use core::{
     ops::Range,
     ptr::NonNull,
 };
+use scopeguard::ScopeGuard;
 use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{
@@ -1750,7 +1750,10 @@ impl ClearViews {
             }
         }
         Ok(Self {
-            views: views.into_iter().map(|guard| ScopeGuard::into_inner(guard)).collect(),
+            views: views
+                .into_iter()
+                .map(|guard| ScopeGuard::into_inner(guard))
+                .collect(),
             mip_level_count,
             array_layer_count,
             aspects,

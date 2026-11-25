@@ -1,6 +1,6 @@
 use alloc::{string::ToString, sync::Arc, vec::Vec};
-use scopeguard::ScopeGuard;
 use core::mem::{size_of, ManuallyDrop};
+use scopeguard::ScopeGuard;
 
 use crate::device::stage_compiler::StageCompiler;
 #[cfg(feature = "trace")]
@@ -189,13 +189,13 @@ impl Device {
 
         let raw = unsafe {
             self.create_raw_acceleration_structure(&hal::AccelerationStructureDescriptor {
-                    label: hal_label(blas_desc.label.as_deref(), self.instance_flags),
-                    size: size_info.acceleration_structure_size,
-                    format: hal::AccelerationStructureFormat::BottomLevel,
-                    allow_compaction: blas_desc
-                        .flags
-                        .contains(wgpu_types::AccelerationStructureFlags::ALLOW_COMPACTION),
-                })
+                label: hal_label(blas_desc.label.as_deref(), self.instance_flags),
+                size: size_info.acceleration_structure_size,
+                format: hal::AccelerationStructureFormat::BottomLevel,
+                allow_compaction: blas_desc
+                    .flags
+                    .contains(wgpu_types::AccelerationStructureFlags::ALLOW_COMPACTION),
+            })
         }
         .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
@@ -239,7 +239,8 @@ impl Device {
             label: blas_desc.label.to_string(),
             built_index: RwLock::new(rank::BLAS_BUILT_INDEX, None),
             tracking_data: TrackingData::new(self.tracker_indices.blas_s.clone()),
-            compaction_buffer: compaction_buffer.map(|v| ManuallyDrop::new(ScopeGuard::into_inner(v))),
+            compaction_buffer: compaction_buffer
+                .map(|v| ManuallyDrop::new(ScopeGuard::into_inner(v))),
             compacted_state: Mutex::new(rank::BLAS_COMPACTION_STATE, BlasCompactState::Idle),
         }))
     }
@@ -312,11 +313,11 @@ impl Device {
 
         let raw = unsafe {
             self.create_raw_acceleration_structure(&hal::AccelerationStructureDescriptor {
-                    label: hal_label(desc.label.as_deref(), self.instance_flags),
-                    size: size_info.acceleration_structure_size,
-                    format: hal::AccelerationStructureFormat::TopLevel,
-                    allow_compaction: false,
-                })
+                label: hal_label(desc.label.as_deref(), self.instance_flags),
+                size: size_info.acceleration_structure_size,
+                format: hal::AccelerationStructureFormat::TopLevel,
+                allow_compaction: false,
+            })
         }
         .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 

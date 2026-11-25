@@ -83,6 +83,7 @@ pub mod pipeline;
 mod pipeline_cache;
 mod pool;
 pub mod present;
+mod raw_resource;
 pub mod ray_tracing;
 pub mod ray_tracing_pipeline;
 pub mod resource;
@@ -91,7 +92,6 @@ pub mod storage;
 mod timestamp_normalization;
 mod track;
 mod weak_vec;
-mod raw_resource;
 // This is public for users who pre-compile shaders while still wanting to
 // preserve all run-time checks that `wgpu-core` does.
 // See <https://github.com/gfx-rs/wgpu/issues/3103>, after which this can be
