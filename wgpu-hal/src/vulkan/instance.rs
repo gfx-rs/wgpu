@@ -351,8 +351,14 @@ impl super::Instance {
         if cfg!(target_os = "macos") {
             // VK_EXT_metal_surface
             extensions.push(ext::metal_surface::NAME);
-            extensions.push(khr::portability_enumeration::NAME);
         }
+    // Non-conformant Vulkan drivers exist on Linux too: WIP Mesa
+    // bring-up drivers (e.g. Honeykrisp) report conformanceVersion
+    // 0.0.0.0, and the loader hides them unless the instance sets
+    // ENUMERATE_PORTABILITY_KHR. desired_extensions() retains only
+    // supported extensions, so this is a no-op where the loader
+    // lacks the extension.
+    extensions.push(khr::portability_enumeration::NAME);
         if cfg!(drm) {
             // VK_EXT_acquire_drm_display -> VK_EXT_direct_mode_display -> VK_KHR_display
             extensions.push(ext::acquire_drm_display::NAME);
