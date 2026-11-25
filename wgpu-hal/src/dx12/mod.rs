@@ -1117,51 +1117,6 @@ impl SwapChain {
         }
         self.raw
     }
-
-    unsafe fn wait(
-        &mut self,
-        timeout: Option<core::time::Duration>,
-    ) -> Result<bool, crate::SurfaceError> {
-        let timeout_ms = match timeout {
-            Some(duration) => duration.as_millis() as u32,
-            None => Threading::INFINITE,
-        };
-
-        if let Some(waitable) = self.waitable {
-            match unsafe { Threading::WaitForSingleObject(waitable, timeout_ms) } {
-                Foundation::WAIT_ABANDONED | Foundation::WAIT_FAILED => {
-                    Err(crate::SurfaceError::Lost)
-                }
-                Foundation::WAIT_OBJECT_0 => Ok(true),
-                Foundation::WAIT_TIMEOUT => Ok(false),
-                other => {
-                    log::error!("Unexpected wait status: 0x{other:x?}");
-                    Err(crate::SurfaceError::Lost)
-                }
-            }
-        } else {
-            Ok(true)
-        }
-    }
-}
-
-fn map_surface_color_space(
-    color_space: wgt::SurfaceColorSpace,
-) -> Dxgi::Common::DXGI_COLOR_SPACE_TYPE {
-    use wgt::SurfaceColorSpace as Scs;
-    match color_space {
-        Scs::Srgb => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709,
-        Scs::ExtendedSrgbLinear => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709,
-        Scs::Bt2100Pq => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020,
-        Scs::Auto
-        | Scs::DisplayP3
-        | Scs::Bt2100Hlg
-        | Scs::ExtendedSrgb
-        | Scs::ExtendedDisplayP3
-        | Scs::PassThrough => {
-            unreachable!("`{color_space:?}` is never reported in the DX12 surface capabilities")
-        }
-    }
 }
 
 impl crate::Surface for Surface {
@@ -1220,24 +1175,13 @@ impl crate::Surface for Surface {
                 raw
             }
             None => {
-                let desc = Dxgi::DXGI_SWAP_CHAIN_DESC1 {
-                    AlphaMode: auxil::dxgi::conv::map_acomposite_alpha_mode(
-                        config.composite_alpha_mode,
-                    ),
-                    Width: config.extent.width,
-                    Height: config.extent.height,
-                    Format: non_srgb_format,
-                    Stereo: false.into(),
-                    SampleDesc: Dxgi::Common::DXGI_SAMPLE_DESC {
-                        Count: 1,
-                        Quality: 0,
-                    },
-                    BufferUsage: Dxgi::DXGI_USAGE_RENDER_TARGET_OUTPUT,
-                    BufferCount: swap_chain_buffer,
-                    Scaling: Dxgi::DXGI_SCALING_STRETCH,
-                    SwapEffect: Dxgi::DXGI_SWAP_EFFECT_FLIP_DISCARD,
-                    Flags: flags.0 as u32,
-                };
+                let desc = auxil::dxgi::swapchain::swap_chain_descriptor(
+                    non_srgb_format,
+                    config.extent,
+                    swap_chain_buffer,
+                    auxil::dxgi::conv::map_acomposite_alpha_mode(config.composite_alpha_mode),
+                    flags,
+                );
                 let swap_chain1 = match self.target {
                     SurfaceTarget::Visual(_)
                     | SurfaceTarget::VisualFromWndHandle { .. }
@@ -1350,7 +1294,7 @@ impl crate::Surface for Surface {
         // correctly even when the check returns false (as the MS docs note). This
         // lets an app configure e.g. BT.2100 PQ on an SDR output and let the
         // compositor map it.
-        let color_space = map_surface_color_space(config.color_space);
+        let color_space = auxil::dxgi::swapchain::map_surface_color_space(config.color_space);
         // SAFETY: `swap_chain` is a live `IDXGISwapChain3`; `color_space` is a
         // valid `DXGI_COLOR_SPACE_TYPE`.
         unsafe { swap_chain.SetColorSpace1(color_space) }.map_err(|err| {
@@ -1438,7 +1382,7 @@ impl crate::Surface for Surface {
             | wgt::Dx12UseFrameLatencyWaitableObject::DontWait => {}
             wgt::Dx12UseFrameLatencyWaitableObject::Wait => {
                 if let Some(remaining) = sc.pending_present_count.checked_sub(1) {
-                    unsafe { sc.wait(timeout) }?;
+                    auxil::dxgi::swapchain::wait_for_waitable(sc.waitable, timeout)?;
                     sc.pending_present_count = remaining;
                 }
             }
@@ -1536,13 +1480,7 @@ impl crate::Queue for Queue {
         let sc = swapchain.as_mut().unwrap();
         sc.acquired_count -= 1;
 
-        let (interval, flags) = match sc.present_mode {
-            // We only allow immediate if ALLOW_TEARING is valid.
-            wgt::PresentMode::Immediate => (0, Dxgi::DXGI_PRESENT_ALLOW_TEARING),
-            wgt::PresentMode::Mailbox => (0, Dxgi::DXGI_PRESENT::default()),
-            wgt::PresentMode::Fifo => (1, Dxgi::DXGI_PRESENT::default()),
-            m => unreachable!("Cannot make surface with present mode {m:?}"),
-        };
+        let (interval, flags) = auxil::dxgi::swapchain::present_flags(sc.present_mode);
 
         if sc.restart_pending {
             sc.restart_pending = false;

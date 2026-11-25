@@ -61,6 +61,15 @@ pub enum DxgiAdapter {
 }
 
 impl DxgiAdapter {
+    /// Wraps `adapter1` in the newest adapter interface it supports.
+    pub fn new(adapter1: Dxgi::IDXGIAdapter1) -> Self {
+        if let Ok(adapter4) = adapter1.cast::<Dxgi::IDXGIAdapter4>() {
+            DxgiAdapter::Adapter4(adapter4)
+        } else {
+            DxgiAdapter::Adapter3(adapter1.cast::<Dxgi::IDXGIAdapter3>().unwrap())
+        }
+    }
+
     // Only the DX12 backend queries video memory.
     #[cfg(dx12)]
     pub fn query_video_memory_info(
@@ -104,12 +113,7 @@ pub fn enumerate_adapters(factory: DxgiFactory) -> Vec<DxgiAdapter> {
             continue;
         }
 
-        if let Ok(adapter4) = adapter1.cast::<Dxgi::IDXGIAdapter4>() {
-            adapters.push(DxgiAdapter::Adapter4(adapter4));
-        } else {
-            let adapter3 = adapter1.cast::<Dxgi::IDXGIAdapter3>().unwrap();
-            adapters.push(DxgiAdapter::Adapter3(adapter3));
-        }
+        adapters.push(DxgiAdapter::new(adapter1));
     }
 
     adapters
