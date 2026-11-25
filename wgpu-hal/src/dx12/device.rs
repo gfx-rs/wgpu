@@ -24,12 +24,11 @@ use super::{conv, descriptor, D3D12Lib, D3DBlob};
 use crate::{
     auxil::{
         self,
-        dxgi::{name::ObjectExt as _, result::HResult as _},
+        dxgi::{borrow_optional_interface_temporarily, name::ObjectExt as _, result::HResult as _},
     },
     dx12::{
-        borrow_optional_interface_temporarily, pipeline_desc::RenderPipelineStateStreamDesc,
-        shader_compilation, suballocation, DCompLib, DynamicStorageBufferOffsets, Event,
-        ShaderCacheKey, ShaderCacheValue,
+        pipeline_desc::RenderPipelineStateStreamDesc, shader_compilation, suballocation, DCompLib,
+        DynamicStorageBufferOffsets, Event, ShaderCacheKey, ShaderCacheValue,
     },
     AccelerationStructureEntries, TlasInstance,
 };

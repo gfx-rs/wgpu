@@ -80,28 +80,25 @@ Otherwise, we pass a range corresponding only to the current bind group.
 mod adapter;
 mod command;
 mod conv;
-mod dcomp;
 mod descriptor;
 mod device;
-mod device_creation;
 mod instance;
 mod pipeline_desc;
 mod sampler;
 mod shader_compilation;
 mod suballocation;
-mod types;
 mod view;
 
 use alloc::{borrow::ToOwned as _, string::String, sync::Arc, vec::Vec};
-use core::{error::Error, ffi, fmt, mem, ops::Deref};
+use core::{ffi, fmt, ops::Deref};
 
 use arrayvec::ArrayVec;
 use hashbrown::HashMap;
 use suballocation::Allocator;
 use wgpu_sync::atomic::AtomicU64;
-use wgpu_sync::{Mutex, OnceCell, RwLock};
+use wgpu_sync::{Mutex, RwLock};
 use windows::{
-    core::{Free as _, IUnknown, Interface, Ref},
+    core::{Free as _, Interface},
     Win32::{
         Foundation,
         Graphics::{
@@ -113,244 +110,23 @@ use windows::{
     },
 };
 
-use self::dcomp::DCompLib;
 use crate::auxil::{
     self,
     dxgi::{
+        d3d12_lib::D3D12Lib,
+        dcomp::DCompLib,
+        device_factory::DeviceFactory,
         dxgi_lib::DxgiLib,
         factory::{DxgiAdapter, DxgiFactory},
         result::HResult,
+        swapchain::SurfaceTarget,
+        types::ISwapChainPanelNative,
     },
-    dyn_lib::DynLib,
 };
 
-#[derive(Debug)]
-struct D3D12Lib {
-    lib: DynLib,
-    // Entry points, loaded lazily by `cached_proc`.
-    create_device_fn: OnceCell<Direct3D12::PFN_D3D12_CREATE_DEVICE>,
-    debug_interface_fn: OnceCell<Direct3D12::PFN_D3D12_GET_DEBUG_INTERFACE>,
-    serialize_root_signature_fn: OnceCell<Direct3D12::PFN_D3D12_SERIALIZE_ROOT_SIGNATURE>,
-    get_interface_fn: OnceCell<Direct3D12::PFN_D3D12_GET_INTERFACE>,
-}
-
-impl D3D12Lib {
-    fn new() -> Result<Self, libloading::Error> {
-        unsafe {
-            DynLib::new("d3d12.dll").map(|lib| Self {
-                lib,
-                create_device_fn: OnceCell::new(),
-                debug_interface_fn: OnceCell::new(),
-                serialize_root_signature_fn: OnceCell::new(),
-                get_interface_fn: OnceCell::new(),
-            })
-        }
-    }
-
-    /// Loads the entry point `symbol` on first use, caching it in `cell`.
-    fn cached_proc<T: Copy>(
-        &self,
-        cell: &OnceCell<T>,
-        symbol: &[u8],
-    ) -> Result<T, crate::DeviceError> {
-        cell.get_or_try_init(|| {
-            let sym: libloading::Symbol<T> = unsafe { self.lib.get(symbol) }?;
-            Ok(*sym)
-        })
-        .copied()
-    }
-
-    fn create_device(
-        &self,
-        adapter: &DxgiAdapter,
-        feature_level: Direct3D::D3D_FEATURE_LEVEL,
-    ) -> Result<Direct3D12::ID3D12Device, CreateDeviceError> {
-        // Calls windows::Win32::Graphics::Direct3D12::D3D12CreateDevice on d3d12.dll.
-        let func = self
-            .cached_proc(&self.create_device_fn, c"D3D12CreateDevice".to_bytes())
-            .map_err(|_| CreateDeviceError::GetProcAddress)?
-            .ok_or(CreateDeviceError::GetProcAddress)?;
-
-        let adapter: &IUnknown = (&**adapter).into();
-        let adapter = Ref::from(adapter);
-
-        let mut result__: Option<Direct3D12::ID3D12Device> = None;
-        let res = unsafe {
-            func(
-                adapter,
-                feature_level,
-                &Direct3D12::ID3D12Device::IID,
-                <*mut _>::cast(&mut result__),
-            )
-        };
-
-        if res.is_err() {
-            return Err(CreateDeviceError::D3D12CreateDevice(res));
-        }
-        result__.ok_or(CreateDeviceError::RetDeviceIsNull)
-    }
-
-    fn serialize_root_signature(
-        &self,
-        version: Direct3D12::D3D_ROOT_SIGNATURE_VERSION,
-        parameters: &[Direct3D12::D3D12_ROOT_PARAMETER],
-        static_samplers: &[Direct3D12::D3D12_STATIC_SAMPLER_DESC],
-        flags: Direct3D12::D3D12_ROOT_SIGNATURE_FLAGS,
-    ) -> Result<Direct3D::ID3DBlob, crate::DeviceError> {
-        // Calls windows::Win32::Graphics::Direct3D12::D3D12SerializeRootSignature on d3d12.dll.
-        let func = self
-            .cached_proc(
-                &self.serialize_root_signature_fn,
-                c"D3D12SerializeRootSignature".to_bytes(),
-            )?
-            .ok_or(crate::DeviceError::Unexpected)?;
-
-        let desc = Direct3D12::D3D12_ROOT_SIGNATURE_DESC {
-            NumParameters: parameters.len() as _,
-            pParameters: parameters.as_ptr(),
-            NumStaticSamplers: static_samplers.len() as _,
-            pStaticSamplers: static_samplers.as_ptr(),
-            Flags: flags,
-        };
-
-        let mut blob: Option<Direct3D::ID3DBlob> = None;
-        let mut error: Option<Direct3D::ID3DBlob> = None;
-        unsafe { func(&desc, version, (&mut blob).into(), (&mut error).into()) }
-            .ok()
-            .into_device_result("Root signature serialization")?;
-
-        if let Some(error) = error {
-            let slice = unsafe {
-                core::slice::from_raw_parts(
-                    error.GetBufferPointer().cast::<u8>(),
-                    error.GetBufferSize(),
-                )
-            };
-            let message = match ffi::CStr::from_bytes_until_nul(slice) {
-                Ok(message) => message.to_string_lossy(),
-                Err(_) => String::from_utf8_lossy(slice),
-            };
-            log::error!("Root signature serialization error: {message:?}");
-            return Err(crate::DeviceError::Unexpected); // could be hal_usage_error or hal_internal_error
-        }
-
-        blob.ok_or(crate::DeviceError::Unexpected)
-    }
-
-    fn debug_interface(&self) -> Result<Option<Direct3D12::ID3D12Debug>, crate::DeviceError> {
-        // Calls windows::Win32::Graphics::Direct3D12::D3D12GetDebugInterface on d3d12.dll.
-        let func = self
-            .cached_proc(
-                &self.debug_interface_fn,
-                c"D3D12GetDebugInterface".to_bytes(),
-            )?
-            .ok_or(crate::DeviceError::Unexpected)?;
-
-        let mut result__ = None;
-        let res =
-            unsafe { func(&Direct3D12::ID3D12Debug::IID, <*mut _>::cast(&mut result__)) }.ok();
-
-        if let Err(ref err) = res {
-            if err.code() == Dxgi::DXGI_ERROR_SDK_COMPONENT_MISSING {
-                return Ok(None);
-            }
-        }
-
-        res.into_device_result("GetDebugInterface")?;
-
-        result__.ok_or(crate::DeviceError::Unexpected).map(Some)
-    }
-
-    /// Calls D3D12GetInterface to obtain a COM interface by CLSID and IID.
-    ///
-    /// This is used by the Independent Devices API to obtain `ID3D12SDKConfiguration1`.
-    fn get_interface<T: Interface>(
-        &self,
-        clsid: &windows_core::GUID,
-    ) -> Result<T, GetInterfaceError> {
-        // Calls windows::Win32::Graphics::Direct3D12::D3D12GetInterface on d3d12.dll.
-        let func = self
-            .cached_proc(&self.get_interface_fn, c"D3D12GetInterface".to_bytes())
-            .map_err(|_| GetInterfaceError::GetProcAddress)?
-            .ok_or(GetInterfaceError::GetProcAddress)?;
-
-        let mut result__: Option<T> = None;
-        let res = unsafe { func(clsid, &T::IID, <*mut _>::cast(&mut result__)) };
-
-        if res.is_err() {
-            return Err(GetInterfaceError::D3D12GetInterface(res));
-        }
-        result__.ok_or(GetInterfaceError::RetIsNull)
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum CreateDeviceError {
-    GetProcAddress,
-    D3D12CreateDevice(windows_core::HRESULT),
-    RetDeviceIsNull,
-}
-
-impl fmt::Display for CreateDeviceError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::GetProcAddress => write!(f, "D3D12CreateDevice not found in d3d12.dll"),
-            Self::D3D12CreateDevice(hr) => write!(f, "D3D12CreateDevice failed: {hr}"),
-            Self::RetDeviceIsNull => write!(f, "D3D12CreateDevice returned null"),
-        }
-    }
-}
-
-impl Error for CreateDeviceError {}
-
-#[derive(Clone, Copy, Debug)]
-pub(super) enum GetInterfaceError {
-    GetProcAddress,
-    D3D12GetInterface(windows_core::HRESULT),
-    RetIsNull,
-}
-
-impl fmt::Display for GetInterfaceError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::GetProcAddress => write!(f, "D3D12GetInterface not found in d3d12.dll"),
-            Self::D3D12GetInterface(hr) => write!(f, "D3D12GetInterface failed: {hr}"),
-            Self::RetIsNull => write!(f, "D3D12GetInterface returned null"),
-        }
-    }
-}
-
-impl Error for GetInterfaceError {}
-
-/// Create a temporary "owned" copy inside a [`mem::ManuallyDrop`] without increasing the refcount or
-/// moving away the source variable.
-///
-/// This is a common pattern when needing to pass interface pointers ("borrows") into Windows
-/// structs.  Moving/cloning ownership is impossible/inconvenient because:
-///
-/// - The caller does _not_ assume ownership (and decrement the refcount at a later time);
-/// - Unnecessarily increasing and decrementing the refcount;
-/// - [`Drop`] destructors cannot run inside `union` structures (when the created structure is
-///   implicitly dropped after a call).
-///
-/// See also <https://github.com/microsoft/windows-rs/pull/2361#discussion_r1150799401> and
-/// <https://github.com/microsoft/windows-rs/issues/2386>.
-///
-/// # Safety
-/// The returned value holds the pointer of `src` without a reference of its own. It must not be
-/// dropped, and must not be used after `src` is released.
-pub(crate) unsafe fn borrow_interface_temporarily<I: Interface>(
-    src: &I,
-) -> mem::ManuallyDrop<Option<I>> {
-    mem::ManuallyDrop::new(Some(unsafe { I::from_raw(src.as_raw()) }))
-}
-
-/// See [`borrow_interface_temporarily()`]
-pub(crate) unsafe fn borrow_optional_interface_temporarily<I: Interface>(
-    src: &Option<I>,
-) -> mem::ManuallyDrop<Option<I>> {
-    mem::ManuallyDrop::new(src.as_ref().map(|src| unsafe { I::from_raw(src.as_raw()) }))
-}
+// `CreateDeviceError` lives in `auxil::dxgi::d3d12_lib` but is part of the DX12 public API via
+// `D3D12ExposeAdapterResult`, so re-export it to keep `wgpu_hal::dx12::CreateDeviceError` stable.
+pub use crate::auxil::dxgi::d3d12_lib::CreateDeviceError;
 
 struct D3DBlob(Direct3D::ID3DBlob);
 
@@ -443,7 +219,7 @@ pub struct Instance {
     // object's Release call goes through the d3d12.dll vtable.  If
     // `library` (which unloads d3d12.dll) is dropped first the Release
     // segfaults.
-    device_factory: Arc<device_creation::DeviceFactory>,
+    device_factory: Arc<DeviceFactory>,
     library: Arc<D3D12Lib>,
     dcomp_lib: Arc<DCompLib>,
     supports_allow_tearing: bool,
@@ -500,7 +276,7 @@ impl Instance {
         swap_chain_panel: *mut ffi::c_void,
     ) -> Surface {
         let swap_chain_panel =
-            unsafe { types::ISwapChainPanelNative::from_raw_borrowed(&swap_chain_panel) }
+            unsafe { ISwapChainPanelNative::from_raw_borrowed(&swap_chain_panel) }
                 .expect("COM pointer should not be NULL");
         Surface {
             factory: self.factory.clone(),
@@ -532,20 +308,6 @@ struct SwapChain {
     format: wgt::TextureFormat,
     size: wgt::Extent3d,
     restart_pending: bool,
-}
-
-enum SurfaceTarget {
-    /// Borrowed, lifetime externally managed
-    WndHandle(Foundation::HWND),
-    /// `handle` is borrowed, lifetime externally managed
-    VisualFromWndHandle {
-        handle: Foundation::HWND,
-        dcomp_state: Mutex<dcomp::DCompState>,
-    },
-    Visual(DirectComposition::IDCompositionVisual),
-    /// Borrowed, lifetime externally managed
-    SurfaceHandle(Foundation::HANDLE),
-    SwapChainPanel(types::ISwapChainPanelNative),
 }
 
 pub struct Surface {

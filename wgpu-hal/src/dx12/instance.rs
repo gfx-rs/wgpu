@@ -3,12 +3,12 @@ use alloc::{string::String, sync::Arc, vec::Vec};
 use wgpu_sync::RwLock;
 use windows::Win32::{Foundation, Graphics::Dxgi};
 
-use super::SurfaceTarget;
 use crate::{
-    auxil,
-    dx12::{
-        device_creation::DeviceFactory, shader_compilation::CompilerContainer, D3D12Lib, DCompLib,
+    auxil::{
+        self,
+        dxgi::{dcomp::DCompLib, device_factory::DeviceFactory, swapchain::SurfaceTarget},
     },
+    dx12::{shader_compilation::CompilerContainer, D3D12Lib},
 };
 
 impl crate::Instance for super::Instance {
