@@ -1,4 +1,5 @@
 use alloc::{string::ToString, sync::Arc, vec::Vec};
+use scopeguard::ScopeGuard;
 use core::mem::{size_of, ManuallyDrop};
 
 use crate::device::stage_compiler::StageCompiler;
@@ -187,8 +188,7 @@ impl Device {
         };
 
         let raw = unsafe {
-            self.raw()
-                .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
+            self.create_raw_acceleration_structure(&hal::AccelerationStructureDescriptor {
                     label: hal_label(blas_desc.label.as_deref(), self.instance_flags),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::BottomLevel,
@@ -228,7 +228,7 @@ impl Device {
 
         Ok(Arc::new(resource::Blas {
             state: ResourceState::Valid(resource::BlasState {
-                raw: Snatchable::new(raw),
+                raw: Snatchable::new(ScopeGuard::into_inner(raw)),
             }),
             device: self.clone(),
             size_info,
@@ -239,7 +239,7 @@ impl Device {
             label: blas_desc.label.to_string(),
             built_index: RwLock::new(rank::BLAS_BUILT_INDEX, None),
             tracking_data: TrackingData::new(self.tracker_indices.blas_s.clone()),
-            compaction_buffer: compaction_buffer.map(|v| ManuallyDrop::new(v.unwrap_raw())),
+            compaction_buffer: compaction_buffer.map(|v| ManuallyDrop::new(ScopeGuard::into_inner(v))),
             compacted_state: Mutex::new(rank::BLAS_COMPACTION_STATE, BlasCompactState::Idle),
         }))
     }
@@ -311,8 +311,7 @@ impl Device {
         };
 
         let raw = unsafe {
-            self.raw()
-                .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
+            self.create_raw_acceleration_structure(&hal::AccelerationStructureDescriptor {
                     label: hal_label(desc.label.as_deref(), self.instance_flags),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::TopLevel,
@@ -339,8 +338,8 @@ impl Device {
 
         Ok(Arc::new(resource::Tlas {
             state: ResourceState::Valid(resource::TlasState {
-                raw: Snatchable::new(raw),
-                instance_buffer: instance_buffer.unwrap_raw(),
+                raw: Snatchable::new(ScopeGuard::into_inner(raw)),
+                instance_buffer: ScopeGuard::into_inner(instance_buffer),
             }),
             device: self.clone(),
             size_info,

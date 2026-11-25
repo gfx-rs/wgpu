@@ -1366,7 +1366,7 @@ impl Device {
                 .unwrap()
                 .create_normalization_bind_group(
                     self,
-                    &*buffer,
+                    &**buffer,
                     desc.label.as_deref(),
                     wgt::BufferSize::new(hal_desc.size).unwrap(),
                     desc.usage,
@@ -1378,7 +1378,7 @@ impl Device {
 
         let buffer = Buffer {
             state: ResourceState::Valid(BufferState {
-                raw: Snatchable::new(buffer.unwrap_raw()),
+                raw: Snatchable::new(ScopeGuard::into_inner(buffer)),
             }),
             device: self.clone(),
             usage: desc.usage,
@@ -2194,7 +2194,7 @@ impl Device {
             texture_binding_view_dimension,
         };
 
-        let raw_texture = unsafe { self.raw().create_texture(&hal_desc) }
+        let raw_texture = unsafe { self.create_raw_texture(&hal_desc) }
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let clear_mode = if hal_usage
@@ -2223,7 +2223,7 @@ impl Device {
                 desc.mip_level_count,
                 desc.size.depth_or_array_layers,
                 |desc| {
-                    unsafe { self.raw().create_texture_view(raw_texture.as_ref(), desc) }
+                    unsafe { self.create_raw_texture_view(raw_texture.as_ref(), desc) }
                         .map_err(|e| self.handle_hal_error(e))
                 },
             )?;
@@ -2237,7 +2237,7 @@ impl Device {
 
         let texture = Texture::new(
             self,
-            resource::TextureInner::Native { raw: raw_texture },
+            resource::TextureInner::Native { raw: ScopeGuard::into_inner(raw_texture) },
             hal_usage,
             desc,
             format_features,

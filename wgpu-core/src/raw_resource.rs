@@ -5,99 +5,82 @@
 //! special raw resources that wrap hal resources during creation, but on drop
 //! destroy the resource.
 
-use core::mem::ManuallyDrop;
+use std::boxed::Box;
+
+use scopeguard::{ScopeGuard, guard};
 
 use crate::device::Device;
 
-macro_rules! resource {
-    ($($resource_name:ident => $hal_resource:ty { destroy: $destroy_call:ident child of $parent:ty })*) => {
-        $(
-            pub(crate) struct $resource_name<'a> {
-                raw: core::mem::ManuallyDrop<alloc::boxed::Box<$hal_resource>>,
-                parent: &'a $parent,
-            }
-
-            impl Drop for $resource_name<'_> {
-                fn drop(&mut self) {
-                    // # Safety: we are in the drop impl and won't use raw anymore
-                    let raw = unsafe { core::mem::ManuallyDrop::take(&mut self.raw) };
-                    unsafe { self.parent.$destroy_call(raw) }
-                }
-            }
-
-            impl core::ops::Deref for $resource_name<'_> {
-                type Target = $hal_resource;
-
-                fn deref(&self) -> &Self::Target {
-                    self.raw.as_ref()
-                }
-            }
-
-            impl core::convert::AsRef<$hal_resource> for $resource_name<'_> {
-                fn as_ref(&self) -> &$hal_resource {
-                    self.raw.as_ref()
-                }
-            }
-
-            impl $resource_name<'_> {
-                /// Unwraps this raw structure, returning the inner value.
-                /// This means that the value will not be destroyed on drop.
-                pub(crate) fn unwrap_raw(self) -> alloc::boxed::Box<$hal_resource> {
-                    // We need to get out the raw value. We can't destructure this as it
-                    // implements drop (which we want to skip here). Therefore, we
-                    // read the raw field. Pointers don't need to be destroyed.
-                    let mut wrapped = core::mem::ManuallyDrop::new(self);
-                    // # Safety:
-                    // We will never use the other version of this, and it will not be
-                    // used in the drop because `wrapped` is in a manually drop.
-                    let raw = unsafe { core::mem::ManuallyDrop::take(&mut wrapped.raw) };
-
-                    return raw
-                }
-            }
-        )*
+/// Defines the type for a resource that will be destroyed on drop
+macro_rules! scoped_resource {
+    ($hal_out:ty, $lifetime:lifetime) => {
+        ScopeGuard<$hal_out, impl FnOnce($hal_out) + $lifetime>
     }
 }
 
-macro_rules! device_resource {
-    ($($resource_name:ident => $hal_resource:ty { destroy: $destroy_call:ident })*) => {
-        resource!{
+macro_rules! create_raw_docs {
+    ($fn_create:ident) => {
+        concat!("Creates a raw resource that automatically destroys itself on drop.\
+        \n\
+        \n # Safety\
+        \n Same as [`hal::Device::", stringify!($fn_create), "`] plus\
+        \n - The buffer must not be used in any resources\
+        \n   that hold a reference it (e.g. bind groups)\
+        \n    - Note: this likely indicates a resource leak")
+    };
+}
+
+macro_rules! create_raw {
+    ($($fn_name:ident($desc:ty) -> $hal_out:ty { wraps $fn_create:ident, destroy $fn_destroy:ident })*) => {
+        impl Device {
             $(
-                $resource_name => $hal_resource {
-                    destroy: $destroy_call
-                    child of dyn hal::DynDevice
-                }
-            )*
+            #[doc = create_raw_docs!($fn_create)]
+            pub(crate) unsafe fn $fn_name<'a>(
+                &'a self,
+                desc: &$desc,
+            ) -> Result<scoped_resource!($hal_out, 'a), hal::DeviceError> {
+                let raw = unsafe { self.raw().$fn_create(desc)? };
+
+                return Ok(scopeguard::guard(raw, |r| unsafe {self.raw().$fn_destroy(r)}));
+            })*
         }
     };
 }
 
-device_resource!(
-    RawBuffer => dyn hal::DynBuffer {
-        destroy: destroy_buffer
+create_raw! {
+    create_raw_texture(hal::TextureDescriptor) -> Box<dyn hal::DynTexture> {
+        wraps create_texture,
+        destroy destroy_texture
     }
-);
+    create_raw_acceleration_structure(hal::AccelerationStructureDescriptor) -> Box<dyn hal::DynAccelerationStructure> {
+        wraps create_acceleration_structure,
+        destroy destroy_acceleration_structure
+    }
+}
 
 impl Device {
-    /// Creates a raw buffer that automatically destroys itself on drop.
-    ///
-    /// # Safety
-    /// Same as [`hal::Device::create_buffer`] plus
-    /// - The buffer must not be used in any resources
-    ///   that hold a reference it (e.g. bind groups)
-    ///    - Note: this likely indicates a resource leak
+    #[doc = create_raw_docs!(create_buffer)]
     pub(crate) unsafe fn create_raw_buffer<'a>(
         &'a self,
         desc: &hal::BufferDescriptor,
-    ) -> Result<(RawBuffer<'a>, u64), hal::DeviceError> {
+    ) -> Result<(scoped_resource!(Box<dyn hal::DynBuffer>, 'a), u64), hal::DeviceError> {
         let (raw, size) = unsafe { self.raw().create_buffer(desc)? };
 
         Ok((
-            RawBuffer {
-                raw: ManuallyDrop::new(raw),
-                parent: self.raw(),
-            },
+            guard(raw, |raw| unsafe { self.raw().destroy_buffer(raw) }),
             size,
         ))
+    }
+    #[doc = create_raw_docs!(create_texture_view)]
+    pub(crate) unsafe fn create_raw_texture_view<'a>(
+        &'a self,
+        texture: &dyn hal::DynTexture,
+        desc: &hal::TextureViewDescriptor,
+    ) -> Result<scoped_resource!(Box<dyn hal::DynTextureView>, 'a), hal::DeviceError> {
+        let raw = unsafe { self.raw().create_texture_view(texture, desc)? };
+
+        Ok(
+            guard(raw, |raw| unsafe { self.raw().destroy_texture_view(raw) }),
+        )
     }
 }
