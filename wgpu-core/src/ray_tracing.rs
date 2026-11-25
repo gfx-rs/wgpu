@@ -179,6 +179,9 @@ pub enum BuildAccelerationStructureError {
     #[error("Tlas {0:?} instance {1} contains an invalid custom data (more than 24bits)")]
     TlasInvalidCustomData(ResourceErrorIdent, usize),
 
+    #[error("Tlas {0:?} instance transform contains a non-finite value")]
+    TlasNonFiniteTransform(ResourceErrorIdent),
+
     #[error(
         "Tlas {0:?} has {1} active instances but only {2} are allowed as specified by the descriptor at creation"
     )]
@@ -240,6 +243,7 @@ impl WebGpuError for BuildAccelerationStructureError {
             | Self::CompactedBlas(..)
             | Self::MissingIndexBuffer(..)
             | Self::TlasInvalidCustomData(..)
+            | Self::TlasNonFiniteTransform(..)
             | Self::TlasInstanceCountExceeded(..)
             | Self::TransformMissing(..)
             | Self::UseTransformMissing(..)

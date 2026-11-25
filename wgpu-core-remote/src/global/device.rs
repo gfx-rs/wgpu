@@ -73,10 +73,7 @@ impl Global {
         let desc = resource::BufferDescriptor {
             label: desc.label.as_ref().map(|s| Cow::Borrowed(s.deref())),
             size: desc.size,
-            usage: wgt::BufferUsages::from_internal_flags(
-                desc.usage,
-                wgt::BufferUsagesWGPU::empty(),
-            ),
+            usage: wgt::BufferUsages::from(desc.usage),
             mapped_at_creation: desc.mapped_at_creation,
         };
 
@@ -127,10 +124,7 @@ impl Global {
         let desc = resource::BufferDescriptor {
             label: desc.label.as_ref().map(|s| Cow::Borrowed(s.deref())),
             size: desc.size,
-            usage: wgt::BufferUsages::from_internal_flags(
-                desc.usage,
-                wgt::BufferUsagesWGPU::empty(),
-            ),
+            usage: wgt::BufferUsages::from(desc.usage),
             mapped_at_creation: desc.mapped_at_creation,
         };
         buffers.assign(id_in, resource::Buffer::invalid(device, &desc));
@@ -317,10 +311,7 @@ impl Global {
         let desc = resource::BufferDescriptor {
             label: desc.label.as_ref().map(|s| Cow::Borrowed(s.deref())),
             size: desc.size,
-            usage: wgt::BufferUsages::from_internal_flags(
-                desc.usage,
-                wgt::BufferUsagesWGPU::empty(),
-            ),
+            usage: wgt::BufferUsages::from(desc.usage),
             mapped_at_creation: desc.mapped_at_creation,
         };
 
@@ -515,6 +506,7 @@ impl Global {
                     texture,
                     storage_texture,
                     external_texture,
+                    acceleration_structure,
                 }) = entry;
                 binding_model::BindGroupLayoutEntry {
                     binding,
@@ -549,7 +541,11 @@ impl Global {
                     } else {
                         None
                     },
-                    acceleration_structure: None,
+                    acceleration_structure: acceleration_structure.then_some(
+                        binding_model::AccelerationStructureBindingLayout {
+                            vertex_return: false,
+                        },
+                    ),
                     count: None,
                 }
             }
@@ -634,6 +630,7 @@ impl Global {
             samplers,
             texture_views,
             external_textures,
+            tlases,
             ..
         } = &mut *hub;
 
@@ -647,6 +644,7 @@ impl Global {
             samplers: &mut Registry<Arc<resource::Sampler>>,
             texture_views: &mut Registry<Arc<resource::TextureView>>,
             external_textures: &mut Registry<Arc<resource::ExternalTexture>>,
+            tlases: &mut Registry<Arc<resource::Tlas>>,
         ) -> binding_model::BindGroupEntry<'a> {
             let resolve_buffer = |bb: &BufferBinding| {
                 let buffer = buffers.get(bb.buffer);
@@ -669,6 +667,9 @@ impl Global {
                 BindingResource::TextureView(ref view) => {
                     binding_model::BindingResource::TextureView(resolve_view(view))
                 }
+                BindingResource::AccelerationStructure(id) => {
+                    binding_model::BindingResource::AccelerationStructure(tlases.get(id))
+                }
                 BindingResource::ExternalTexture(ref et) => {
                     binding_model::BindingResource::ExternalTexture(resolve_external_texture(et))
                 }
@@ -682,7 +683,16 @@ impl Global {
         let entries = desc
             .entries
             .iter()
-            .map(|e| resolve_entry(e, buffers, samplers, texture_views, external_textures))
+            .map(|e| {
+                resolve_entry(
+                    e,
+                    buffers,
+                    samplers,
+                    texture_views,
+                    external_textures,
+                    tlases,
+                )
+            })
             .collect::<Vec<_>>();
         let entries = Cow::Owned(entries);
 

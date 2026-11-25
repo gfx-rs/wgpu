@@ -178,7 +178,6 @@ impl GPUDevice {
 
     let usage = wgpu_types::BufferUsages::from_internal_flags(
       wgpu_types::BufferUsagesWebGPU::from_bits_retain(descriptor.usage),
-      wgpu_types::BufferUsagesWGPU::empty(),
     );
 
     let wgpu_descriptor = wgpu_core::resource::BufferDescriptor {

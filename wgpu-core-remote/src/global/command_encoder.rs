@@ -307,6 +307,12 @@ impl Global {
                     self.command_encoder_insert_debug_marker(command_encoder_id, &label)
                 }
             },
+            CommandEncoderCommand::BuildAccelerationStructures { blases, tlases } => self
+                .command_encoder_build_acceleration_structures(
+                    command_encoder_id,
+                    &blases,
+                    &tlases,
+                ),
             CommandEncoderCommand::Finish {
                 desc,
                 command_buffer_id,

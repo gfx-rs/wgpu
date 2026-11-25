@@ -1,4 +1,4 @@
-use alloc::borrow::Cow;
+use alloc::{borrow::Cow, format};
 
 use alloc::sync::Arc;
 
@@ -135,14 +135,28 @@ pub fn map_device_descriptor<'a>(
     desc: &'a DeviceDescriptor<'a>,
     trace: wgt::Trace,
     additional_features: wgt::Features,
-) -> wgt::DeviceDescriptor<Label<'a>> {
-    wgt::DeviceDescriptor {
+    instance_flags: wgt::InstanceFlags,
+) -> Result<wgt::DeviceDescriptor<Label<'a>>, RequestDeviceError> {
+    // Validate requested features against trusted browser policy.
+    let mut allowed_features =
+        wgt::FeaturesWebGPU::all().difference(wgt::FeaturesWebGPU::EXPERIMENTAL_RAY_QUERY);
+    if instance_flags.contains(wgt::InstanceFlags::ALLOW_EXPERIMENTAL_RAY_QUERY) {
+        allowed_features |= wgt::FeaturesWebGPU::EXPERIMENTAL_RAY_QUERY;
+    }
+    let disallowed_features = desc.required_features.difference(allowed_features);
+    if !disallowed_features.is_empty() {
+        return Err(RequestDeviceError::UnsupportedFeature(format!(
+            "Requested features are disabled by browser policy: {disallowed_features:?}"
+        )));
+    }
+    // Determine whether the device explicitly requests experimental ray queries.
+    let ray_query = desc
+        .required_features
+        .contains(wgt::FeaturesWebGPU::EXPERIMENTAL_RAY_QUERY);
+    let required_features = wgt::Features::from(desc.required_features).union(additional_features);
+    Ok(wgt::DeviceDescriptor {
         label: desc.label.as_ref().map(|l| Cow::Borrowed(l.as_ref())),
-        required_features: wgt::Features::from_internal_flags(
-            wgt::FeaturesWGPU::empty(),
-            desc.required_features,
-        )
-        .union(additional_features),
+        required_features,
         required_limits: desc.required_limits.clone(),
         default_queue: wgt::QueueDescriptor {
             label: desc
@@ -151,10 +165,15 @@ pub fn map_device_descriptor<'a>(
                 .as_ref()
                 .map(|l| Cow::Borrowed(l.as_ref())),
         },
-        experimental_features: wgt::ExperimentalFeatures::disabled(),
+        experimental_features: if ray_query {
+            // Browser policy above authorizes this experimental device.
+            unsafe { wgt::ExperimentalFeatures::enabled() }
+        } else {
+            wgt::ExperimentalFeatures::disabled()
+        },
         memory_hints: wgt::MemoryHints::MemoryUsage,
         trace,
-    }
+    })
 }
 
 impl Global {
@@ -176,7 +195,7 @@ impl Global {
         } = &mut *hub;
 
         let adapter = adapters.get(adapter_id);
-        let desc = map_device_descriptor(desc, trace, additional_features);
+        let desc = map_device_descriptor(desc, trace, additional_features, self.instance.flags)?;
         let (device, queue) = adapter
             .request_device(&desc)
             .map_err(map_request_device_error)?;
@@ -229,5 +248,64 @@ impl Global {
         let queue_id = queues.assign(queue_id_in, queue);
 
         Ok((device_id, queue_id))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ray_queries_require_browser_policy_and_device_opt_in() {
+        let ray_query = wgt::FeaturesWebGPU::EXPERIMENTAL_RAY_QUERY;
+        for (required_features, allowed) in [
+            (wgt::FeaturesWebGPU::empty(), false),
+            (ray_query, false),
+            (wgt::FeaturesWebGPU::empty(), true),
+            (ray_query, true),
+        ] {
+            let desc = DeviceDescriptor {
+                required_features,
+                ..Default::default()
+            };
+            let mut flags = wgt::InstanceFlags::STRICT_WEBGPU_COMPLIANCE;
+            flags.set(wgt::InstanceFlags::ALLOW_EXPERIMENTAL_RAY_QUERY, allowed);
+            let result =
+                map_device_descriptor(&desc, wgt::Trace::Off, wgt::Features::empty(), flags);
+            if !allowed && required_features.contains(ray_query) {
+                assert!(matches!(
+                    result,
+                    Err(RequestDeviceError::UnsupportedFeature(_))
+                ));
+            } else {
+                let mapped = result.unwrap();
+                assert_eq!(
+                    mapped.required_features,
+                    wgt::Features::from(required_features)
+                );
+                assert_eq!(
+                    mapped.experimental_features.is_enabled(),
+                    required_features.contains(ray_query)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn unknown_feature_bits_are_rejected_even_with_ray_query_policy() {
+        let desc = DeviceDescriptor {
+            required_features: wgt::FeaturesWebGPU::EXPERIMENTAL_RAY_QUERY
+                | wgt::FeaturesWebGPU::from_bits_retain(1 << 63),
+            ..Default::default()
+        };
+        assert!(matches!(
+            map_device_descriptor(
+                &desc,
+                wgt::Trace::Off,
+                wgt::Features::empty(),
+                wgt::InstanceFlags::ALLOW_EXPERIMENTAL_RAY_QUERY,
+            ),
+            Err(RequestDeviceError::UnsupportedFeature(_))
+        ));
     }
 }

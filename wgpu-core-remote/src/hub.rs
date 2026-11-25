@@ -95,7 +95,7 @@ use wgpu_core::{
     device::{queue::Queue, Device},
     instance::Adapter,
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
-    resource::{Buffer, ExternalTexture, QuerySet, Sampler, Texture, TextureView},
+    resource::{Blas, Buffer, ExternalTexture, QuerySet, Sampler, Texture, TextureView, Tlas},
 };
 
 #[allow(rustdoc::private_intra_doc_links)]
@@ -139,6 +139,8 @@ pub struct Hub {
     pub(crate) render_passes: Registry<RenderPass>,
     pub(crate) compute_passes: Registry<ComputePass>,
     pub(crate) render_bundle_encoders: Registry<RenderBundleEncoder>,
+    pub(crate) blases: Registry<Arc<Blas>>,
+    pub(crate) tlases: Registry<Arc<Tlas>>,
 }
 
 impl fmt::Debug for Hub {
@@ -174,6 +176,8 @@ impl Hub {
             render_passes: Registry::new(),
             compute_passes: Registry::new(),
             render_bundle_encoders: Registry::new(),
+            blases: Registry::new(),
+            tlases: Registry::new(),
         }
     }
 }

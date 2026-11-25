@@ -44,6 +44,14 @@ Bottom level categories:
 
 ### Major changes
 
+#### Ray-query feature and buffer-usage masks
+
+- `EXPERIMENTAL_RAY_QUERY` moved from `FeaturesWGPU` to `FeaturesWebGPU`. The combined `Features::EXPERIMENTAL_RAY_QUERY` constant remains available, and `WEBGPU_FEATURE_RAY_QUERY` exposes its browser feature bit.
+- `BLAS_INPUT` and `TLAS_INPUT` moved from `BufferUsagesWGPU` to `BufferUsagesWebGPU` (bits 10 and 11). `BufferUsagesWGPU` and the `buffer_usages_wgpu` field were removed; the combined `BufferUsages` constants remain available.
+- `BufferUsagesBits` now wraps `[u32; 1]` instead of `[u32; 2]`, and `BufferUsages::from_internal_flags` now takes only the browser usage mask.
+
+The raw feature and buffer-usage encodings have changed, including their binary serialization. Ray queries remain experimental; moving their encoding to the browser-facing mask does not enable them in the Rust WebGPU backend.
+
 #### `TEXTURE_COMPONENT_SWIZZLE` feature and `swizzle` field in `TextureViewDescriptor`
 
 A new `swizzle` field is in `TextureViewDescriptor` used for mapping red/green/blue/alpha channels of the texture view
@@ -158,6 +166,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 
 #### General
 
+- Added `InstanceFlags::ALLOW_EXPERIMENTAL_RAY_QUERY` to preserve experimental ray-query support and acceleration-structure limits under `STRICT_WEBGPU_COMPLIANCE`. Devices must explicitly request the ray-query feature.
 - Support the `wasm64-unknown-unknown` target for the web backend. Building for wasm64 requires a nightly toolchain with `-Z build-std=std,panic_abort`. By @nickbabcock in [#9836](https://github.com/gfx-rs/wgpu/pull/9836).
 - Many types now offer `pub const fn default()` in addition to implementing the `Default` trait, allowing constants to make use of default values. By @kpreid in [#9929](https://github.com/gfx-rs/wgpu/pull/9929).
 - `wgpu-core` now exposes `validate_device_descriptor` and `validate_texture_descriptor` functions that perform the same descriptor validation the corresponding resource creation APIs would, without actually creating a resource. This may be useful in conjunction with hal raw APIs. By @andyleiserson in [#9967](https://github.com/gfx-rs/wgpu/pull/9967) and [#9979](https://github.com/gfx-rs/wgpu/pull/9979).
@@ -354,6 +363,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 
 #### Validation
 
+- Reject acceleration-structure builds that use buffers or structures from another device, or TLAS instances with non-finite transforms.
 - Report an accurate validation error when a passthrough shader module has no entry points. By @ksh368-bit in [#10079](https://github.com/gfx-rs/wgpu/pull/10079).
 - Validate that the arguments are within the indirect buffer when encoding an indirect draw to a render bundle. Moves some indirect draw errors from `RenderPassErrorInner` to `RenderCommandError`. By @andyleiserson in [#9871](https://github.com/gfx-rs/wgpu/pull/9871).
 - When creating render pipelines, validate that a corresponding shader output is present for each color attachment with non-zero write mask, and that shader output includes alpha when the blend operation uses source alpha. By @andyleiserson in [#9939](https://github.com/gfx-rs/wgpu/pull/9939).

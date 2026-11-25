@@ -220,6 +220,10 @@ pub enum CommandEncoderCommand<'a> {
         destination: id::BufferId,
         destination_offset: u64,
     },
+    BuildAccelerationStructures {
+        blases: Vec<crate::ray_tracing::BlasBuild>,
+        tlases: Vec<crate::ray_tracing::TlasBuild>,
+    },
     DebugCommand(DebugCommand),
     Finish {
         desc: CommandBufferDescriptor<'a>,

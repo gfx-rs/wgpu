@@ -91,6 +91,9 @@ mod webgpu_impl {
 
     #[doc(hidden)]
     pub const WEBGPU_FEATURE_TEXTURE_COMPONENT_SWIZZLE: u64 = 1 << 19;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_RAY_QUERY: u64 = 1 << 20;
 }
 
 /// Prefer `From<(FeaturesWGPU, FeaturesWebGPU)>` instead, which protects against swapping
@@ -787,18 +790,8 @@ features! {
 
         // Shader:
 
-        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
-        /// major bugs in it and are expected to be subject to breaking changes, suggestions
-        /// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040)
-        ///
-        /// Allows for the creation of ray-tracing queries within shaders.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        ///
-        /// This is a native-only feature.
-        #[name("wgpu-ray-query")]
-        const EXPERIMENTAL_RAY_QUERY = 1 << 32;
+        // Bit 32 is available.
+
         /// Enables 64-bit floating point types in SPIR-V shaders.
         ///
         /// Note: even when supported by GPU hardware, 64-bit floating point operations are
@@ -1207,7 +1200,8 @@ features! {
 
     /// Features that are not guaranteed to be supported.
     ///
-    /// These are part of the WebGPU standard. For all features, see [`Features`].
+    /// These are part of the WebGPU standard or explicitly modeled browser extensions.
+    /// For all features, see [`Features`].
     ///
     /// If you want to use a feature, you need to first verify that the adapter supports
     /// the feature. If the adapter does not support the feature, requesting a device with it enabled
@@ -1585,6 +1579,22 @@ features! {
         #[name("texture-component-swizzle")]
         #[web(allow)]
         const TEXTURE_COMPONENT_SWIZZLE = WEBGPU_FEATURE_TEXTURE_COMPONENT_SWIZZLE;
+
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
+        /// major bugs in it and are expected to be subject to breaking changes, suggestions
+        /// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040)
+        ///
+        /// Allows for the creation of ray-tracing queries within shaders.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        ///
+        /// Browser support requires explicit experimental ray-query policy.
+        #[name("wgpu-ray-query")]
+        #[web(ignore)]
+        const EXPERIMENTAL_RAY_QUERY = WEBGPU_FEATURE_RAY_QUERY;
     }
 }
 
@@ -1599,13 +1609,16 @@ impl Features {
     /// Mask of all features which are part of the upstream WebGPU standard.
     #[must_use]
     pub const fn all_webgpu_mask() -> Self {
-        Self::from_parts(FeaturesWGPU::empty(), FeaturesWebGPU::all())
+        Self::from_parts(
+            FeaturesWGPU::empty(),
+            FeaturesWebGPU::all().difference(FeaturesWebGPU::EXPERIMENTAL_RAY_QUERY),
+        )
     }
 
     /// Mask of all features that are only available when targeting native (not web).
     #[must_use]
     pub const fn all_native_mask() -> Self {
-        Self::from_parts(FeaturesWGPU::all(), FeaturesWebGPU::empty())
+        Self::from_parts(FeaturesWGPU::all(), FeaturesWebGPU::EXPERIMENTAL_RAY_QUERY)
     }
 
     /// Mask of all features which are experimental.
@@ -1616,13 +1629,12 @@ impl Features {
                 FeaturesWGPU::EXPERIMENTAL_MESH_SHADER.bits()
                     | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_MULTIVIEW.bits()
                     | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_POINTS.bits()
-                    | FeaturesWGPU::EXPERIMENTAL_RAY_QUERY.bits()
                     | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
                     | FeaturesWGPU::EXPERIMENTAL_COOPERATIVE_MATRIX.bits()
                     | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_PIPELINES.bits()
                     | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER.bits(),
             ),
-            FeaturesWebGPU::empty(),
+            FeaturesWebGPU::EXPERIMENTAL_RAY_QUERY,
         )
     }
 
@@ -1687,11 +1699,10 @@ mod tests {
 
     #[test]
     fn allowed_on_web_backend() {
-        // Every WebGPU feature is currently allowed on the web backend,
-        // as well as `subgroups`.
+        // Standard WebGPU features and subgroups have web backend support.
         assert_eq!(
             Features::ALLOWED_ON_WEB_BACKEND,
-            Features::from_parts(FeaturesWGPU::SUBGROUP, FeaturesWebGPU::all()),
+            Features::from(FeaturesWGPU::SUBGROUP) | Features::all_webgpu_mask(),
         );
     }
 
@@ -1704,6 +1715,20 @@ mod tests {
 
         let feature = Features::CLEAR_TEXTURE | Features::BGRA8UNORM_STORAGE;
         assert_eq!(format!("{feature}"), "CLEAR_TEXTURE | BGRA8UNORM_STORAGE");
+    }
+
+    #[test]
+    fn ray_queries_use_browser_feature_bits() {
+        let ray_query = Features::EXPERIMENTAL_RAY_QUERY;
+        assert!(ray_query.features_wgpu.is_empty());
+        assert_eq!(
+            ray_query.features_webgpu,
+            FeaturesWebGPU::EXPERIMENTAL_RAY_QUERY
+        );
+        assert!(!Features::all_webgpu_mask().intersects(ray_query));
+        assert!(Features::all_native_mask().contains(ray_query));
+        assert!(Features::all_experimental_mask().contains(ray_query));
+        assert!(!Features::ALLOWED_ON_WEB_BACKEND.intersects(ray_query));
     }
 
     #[test]

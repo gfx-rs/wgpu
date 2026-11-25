@@ -28,7 +28,10 @@ mod compute_pass;
 mod device;
 mod instance;
 mod queue;
+mod ray_tracing;
 mod render_pass;
+
+pub use instance::map_device_descriptor;
 
 /// Wrapper around [`Instance`] that uses [`Hub`] to store all resources created by the instance behind an [`Id`].
 ///
