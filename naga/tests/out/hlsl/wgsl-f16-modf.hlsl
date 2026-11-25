@@ -18,32 +18,32 @@ struct _modf_result_vec4_f16_ {
     half4 whole;
 };
 
-_modf_result_f16_ naga_modf(float arg) {
-    float other;
+_modf_result_f16_ naga_modf(half arg) {
+    half other;
     _modf_result_f16_ result;
     result.fract = modf(arg, other);
     result.whole = other;
     return result;
 }
 
-_modf_result_vec2_f16_ naga_modf(float2 arg) {
-    float2 other;
+_modf_result_vec2_f16_ naga_modf(half2 arg) {
+    half2 other;
     _modf_result_vec2_f16_ result;
     result.fract = modf(arg, other);
     result.whole = other;
     return result;
 }
 
-_modf_result_vec3_f16_ naga_modf(float3 arg) {
-    float3 other;
+_modf_result_vec3_f16_ naga_modf(half3 arg) {
+    half3 other;
     _modf_result_vec3_f16_ result;
     result.fract = modf(arg, other);
     result.whole = other;
     return result;
 }
 
-_modf_result_vec4_f16_ naga_modf(float4 arg) {
-    float4 other;
+_modf_result_vec4_f16_ naga_modf(half4 arg) {
+    half4 other;
     _modf_result_vec4_f16_ result;
     result.fract = modf(arg, other);
     result.whole = other;

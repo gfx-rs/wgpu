@@ -1310,18 +1310,13 @@ impl<W: Write> super::Writer<'_, W> {
             match type_key {
                 &crate::PredeclaredType::ModfResult { size, scalar }
                 | &crate::PredeclaredType::FrexpResult { size, scalar } => {
+                    let scalar_name = scalar.to_hlsl_str()?;
                     let arg_type_name_owner;
                     let arg_type_name = if let Some(size) = size {
-                        arg_type_name_owner = format!(
-                            "{}{}",
-                            if scalar.width == 8 { "double" } else { "float" },
-                            size as u8
-                        );
+                        arg_type_name_owner = format!("{scalar_name}{}", size as u8);
                         &arg_type_name_owner
-                    } else if scalar.width == 8 {
-                        "double"
                     } else {
-                        "float"
+                        scalar_name
                     };
 
                     let (defined_func_name, called_func_name, second_field_name, sign_multiplier) =
