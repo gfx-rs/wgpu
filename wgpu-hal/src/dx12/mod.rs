@@ -93,15 +93,15 @@ mod types;
 mod view;
 
 use alloc::{borrow::ToOwned as _, string::String, sync::Arc, vec::Vec};
-use core::{ffi, fmt, mem, ops::Deref};
+use core::{error::Error, ffi, fmt, mem, ops::Deref};
 
 use arrayvec::ArrayVec;
 use hashbrown::HashMap;
 use suballocation::Allocator;
 use wgpu_sync::atomic::AtomicU64;
-use wgpu_sync::{Mutex, RwLock};
+use wgpu_sync::{Mutex, OnceCell, RwLock};
 use windows::{
-    core::{Free as _, Interface},
+    core::{Free as _, IUnknown, Interface, Ref},
     Win32::{
         Foundation,
         Graphics::{
@@ -127,18 +127,37 @@ use crate::auxil::{
 #[derive(Debug)]
 struct D3D12Lib {
     lib: DynLib,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum CreateDeviceError {
-    GetProcAddress,
-    D3D12CreateDevice(windows_core::HRESULT),
-    RetDeviceIsNull,
+    // Entry points, loaded lazily by `cached_proc`.
+    create_device_fn: OnceCell<Direct3D12::PFN_D3D12_CREATE_DEVICE>,
+    debug_interface_fn: OnceCell<Direct3D12::PFN_D3D12_GET_DEBUG_INTERFACE>,
+    serialize_root_signature_fn: OnceCell<Direct3D12::PFN_D3D12_SERIALIZE_ROOT_SIGNATURE>,
+    get_interface_fn: OnceCell<Direct3D12::PFN_D3D12_GET_INTERFACE>,
 }
 
 impl D3D12Lib {
     fn new() -> Result<Self, libloading::Error> {
-        unsafe { DynLib::new("d3d12.dll").map(|lib| Self { lib }) }
+        unsafe {
+            DynLib::new("d3d12.dll").map(|lib| Self {
+                lib,
+                create_device_fn: OnceCell::new(),
+                debug_interface_fn: OnceCell::new(),
+                serialize_root_signature_fn: OnceCell::new(),
+                get_interface_fn: OnceCell::new(),
+            })
+        }
+    }
+
+    /// Loads the entry point `symbol` on first use, caching it in `cell`.
+    fn cached_proc<T: Copy>(
+        &self,
+        cell: &OnceCell<T>,
+        symbol: &[u8],
+    ) -> Result<T, crate::DeviceError> {
+        cell.get_or_try_init(|| {
+            let sym: libloading::Symbol<T> = unsafe { self.lib.get(symbol) }?;
+            Ok(*sym)
+        })
+        .copied()
     }
 
     fn create_device(
@@ -146,31 +165,28 @@ impl D3D12Lib {
         adapter: &DxgiAdapter,
         feature_level: Direct3D::D3D_FEATURE_LEVEL,
     ) -> Result<Direct3D12::ID3D12Device, CreateDeviceError> {
-        // Calls windows::Win32::Graphics::Direct3D12::D3D12CreateDevice on d3d12.dll
-        type Fun = extern "system" fn(
-            padapter: *mut ffi::c_void,
-            minimumfeaturelevel: Direct3D::D3D_FEATURE_LEVEL,
-            riid: *const windows_core::GUID,
-            ppdevice: *mut *mut ffi::c_void,
-        ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> =
-            unsafe { self.lib.get(c"D3D12CreateDevice".to_bytes()) }
-                .map_err(|_| CreateDeviceError::GetProcAddress)?;
+        // Calls windows::Win32::Graphics::Direct3D12::D3D12CreateDevice on d3d12.dll.
+        let func = self
+            .cached_proc(&self.create_device_fn, c"D3D12CreateDevice".to_bytes())
+            .map_err(|_| CreateDeviceError::GetProcAddress)?
+            .ok_or(CreateDeviceError::GetProcAddress)?;
+
+        let adapter: &IUnknown = (&**adapter).into();
+        let adapter = Ref::from(adapter);
 
         let mut result__: Option<Direct3D12::ID3D12Device> = None;
-
-        let res = (func)(
-            adapter.as_raw(),
-            feature_level,
-            // TODO: Generic?
-            &Direct3D12::ID3D12Device::IID,
-            <*mut _>::cast(&mut result__),
-        );
+        let res = unsafe {
+            func(
+                adapter,
+                feature_level,
+                &Direct3D12::ID3D12Device::IID,
+                <*mut _>::cast(&mut result__),
+            )
+        };
 
         if res.is_err() {
             return Err(CreateDeviceError::D3D12CreateDevice(res));
         }
-
         result__.ok_or(CreateDeviceError::RetDeviceIsNull)
     }
 
@@ -180,16 +196,14 @@ impl D3D12Lib {
         parameters: &[Direct3D12::D3D12_ROOT_PARAMETER],
         static_samplers: &[Direct3D12::D3D12_STATIC_SAMPLER_DESC],
         flags: Direct3D12::D3D12_ROOT_SIGNATURE_FLAGS,
-    ) -> Result<D3DBlob, crate::DeviceError> {
-        // Calls windows::Win32::Graphics::Direct3D12::D3D12SerializeRootSignature on d3d12.dll
-        type Fun = extern "system" fn(
-            prootsignature: *const Direct3D12::D3D12_ROOT_SIGNATURE_DESC,
-            version: Direct3D12::D3D_ROOT_SIGNATURE_VERSION,
-            ppblob: *mut *mut ffi::c_void,
-            pperrorblob: *mut *mut ffi::c_void,
-        ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> =
-            unsafe { self.lib.get(c"D3D12SerializeRootSignature".to_bytes()) }?;
+    ) -> Result<Direct3D::ID3DBlob, crate::DeviceError> {
+        // Calls windows::Win32::Graphics::Direct3D12::D3D12SerializeRootSignature on d3d12.dll.
+        let func = self
+            .cached_proc(
+                &self.serialize_root_signature_fn,
+                c"D3D12SerializeRootSignature".to_bytes(),
+            )?
+            .ok_or(crate::DeviceError::Unexpected)?;
 
         let desc = Direct3D12::D3D12_ROOT_SIGNATURE_DESC {
             NumParameters: parameters.len() as _,
@@ -199,23 +213,24 @@ impl D3D12Lib {
             Flags: flags,
         };
 
-        let mut blob = None;
-        let mut error = None::<Direct3D::ID3DBlob>;
-        (func)(
-            &desc,
-            version,
-            <*mut _>::cast(&mut blob),
-            <*mut _>::cast(&mut error),
-        )
-        .ok()
-        .into_device_result("Root signature serialization")?;
+        let mut blob: Option<Direct3D::ID3DBlob> = None;
+        let mut error: Option<Direct3D::ID3DBlob> = None;
+        unsafe { func(&desc, version, (&mut blob).into(), (&mut error).into()) }
+            .ok()
+            .into_device_result("Root signature serialization")?;
 
         if let Some(error) = error {
-            let error = D3DBlob(error);
-            log::error!(
-                "Root signature serialization error: {:?}",
-                unsafe { error.as_c_str() }.unwrap().to_str().unwrap()
-            );
+            let slice = unsafe {
+                core::slice::from_raw_parts(
+                    error.GetBufferPointer().cast::<u8>(),
+                    error.GetBufferSize(),
+                )
+            };
+            let message = match ffi::CStr::from_bytes_until_nul(slice) {
+                Ok(message) => message.to_string_lossy(),
+                Err(_) => String::from_utf8_lossy(slice),
+            };
+            log::error!("Root signature serialization error: {message:?}");
             return Err(crate::DeviceError::Unexpected); // could be hal_usage_error or hal_internal_error
         }
 
@@ -223,22 +238,21 @@ impl D3D12Lib {
     }
 
     fn debug_interface(&self) -> Result<Option<Direct3D12::ID3D12Debug>, crate::DeviceError> {
-        // Calls windows::Win32::Graphics::Direct3D12::D3D12GetDebugInterface on d3d12.dll
-        type Fun = extern "system" fn(
-            riid: *const windows_core::GUID,
-            ppvdebug: *mut *mut ffi::c_void,
-        ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> =
-            unsafe { self.lib.get(c"D3D12GetDebugInterface".to_bytes()) }?;
+        // Calls windows::Win32::Graphics::Direct3D12::D3D12GetDebugInterface on d3d12.dll.
+        let func = self
+            .cached_proc(
+                &self.debug_interface_fn,
+                c"D3D12GetDebugInterface".to_bytes(),
+            )?
+            .ok_or(crate::DeviceError::Unexpected)?;
 
         let mut result__ = None;
-
-        let res = (func)(&Direct3D12::ID3D12Debug::IID, <*mut _>::cast(&mut result__)).ok();
+        let res =
+            unsafe { func(&Direct3D12::ID3D12Debug::IID, <*mut _>::cast(&mut result__)) }.ok();
 
         if let Err(ref err) = res {
-            match err.code() {
-                Dxgi::DXGI_ERROR_SDK_COMPONENT_MISSING => return Ok(None),
-                _ => {}
+            if err.code() == Dxgi::DXGI_ERROR_SDK_COMPONENT_MISSING {
+                return Ok(None);
             }
         }
 
@@ -254,27 +268,40 @@ impl D3D12Lib {
         &self,
         clsid: &windows_core::GUID,
     ) -> Result<T, GetInterfaceError> {
-        // Calls windows::Win32::Graphics::Direct3D12::D3D12GetInterface on d3d12.dll
-        type Fun = extern "system" fn(
-            rclsid: *const windows_core::GUID,
-            riid: *const windows_core::GUID,
-            ppvdebug: *mut *mut ffi::c_void,
-        ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> =
-            unsafe { self.lib.get(c"D3D12GetInterface".to_bytes()) }
-                .map_err(|_| GetInterfaceError::GetProcAddress)?;
+        // Calls windows::Win32::Graphics::Direct3D12::D3D12GetInterface on d3d12.dll.
+        let func = self
+            .cached_proc(&self.get_interface_fn, c"D3D12GetInterface".to_bytes())
+            .map_err(|_| GetInterfaceError::GetProcAddress)?
+            .ok_or(GetInterfaceError::GetProcAddress)?;
 
         let mut result__: Option<T> = None;
-
-        let res = (func)(clsid, &T::IID, <*mut _>::cast(&mut result__));
+        let res = unsafe { func(clsid, &T::IID, <*mut _>::cast(&mut result__)) };
 
         if res.is_err() {
             return Err(GetInterfaceError::D3D12GetInterface(res));
         }
-
         result__.ok_or(GetInterfaceError::RetIsNull)
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+pub enum CreateDeviceError {
+    GetProcAddress,
+    D3D12CreateDevice(windows_core::HRESULT),
+    RetDeviceIsNull,
+}
+
+impl fmt::Display for CreateDeviceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::GetProcAddress => write!(f, "D3D12CreateDevice not found in d3d12.dll"),
+            Self::D3D12CreateDevice(hr) => write!(f, "D3D12CreateDevice failed: {hr}"),
+            Self::RetDeviceIsNull => write!(f, "D3D12CreateDevice returned null"),
+        }
+    }
+}
+
+impl Error for CreateDeviceError {}
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum GetInterfaceError {
@@ -293,7 +320,7 @@ impl fmt::Display for GetInterfaceError {
     }
 }
 
-impl core::error::Error for GetInterfaceError {}
+impl Error for GetInterfaceError {}
 
 /// Create a temporary "owned" copy inside a [`mem::ManuallyDrop`] without increasing the refcount or
 /// moving away the source variable.
@@ -338,10 +365,6 @@ impl Deref for D3DBlob {
 impl D3DBlob {
     unsafe fn as_slice(&self) -> &[u8] {
         unsafe { core::slice::from_raw_parts(self.GetBufferPointer().cast(), self.GetBufferSize()) }
-    }
-
-    unsafe fn as_c_str(&self) -> Result<&ffi::CStr, ffi::FromBytesUntilNulError> {
-        ffi::CStr::from_bytes_until_nul(unsafe { self.as_slice() })
     }
 }
 
