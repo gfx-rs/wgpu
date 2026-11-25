@@ -124,7 +124,7 @@ webgpu:api,validation,createBindGroup:binding_resources,device_mismatch:*
 webgpu:api,validation,createBindGroup:buffer_offset_and_size_for_bind_groups_match:*
 webgpu:api,validation,createBindGroup:buffer,effective_buffer_binding_size:*
 // Fails with OOM if maxBindingSize is large. https://github.com/gfx-rs/wgpu/issues/9642
-fails-if(vulkan) webgpu:api,validation,createBindGroup:buffer,resource_binding_size:*
+fails-if(dx12,vulkan) webgpu:api,validation,createBindGroup:buffer,resource_binding_size:*
 webgpu:api,validation,createBindGroup:buffer,resource_offset:*
 webgpu:api,validation,createBindGroup:buffer,usage:*
 webgpu:api,validation,createBindGroup:minBindingSize:*

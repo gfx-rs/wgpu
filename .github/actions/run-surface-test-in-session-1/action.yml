@@ -1,0 +1,36 @@
+name: "Run surface test in session 1"
+description: "Run the `wgpu_surface` test binary in the console session. The runner is a service in session 0, where DXGI cannot create a swapchain."
+runs:
+  using: "composite"
+  steps:
+    - shell: pwsh
+      run: |
+        $work = Join-Path $env:RUNNER_TEMP "surface-test"
+        New-Item -ItemType Directory -Force -Path $work | Out-Null
+        curl.exe -L --fail --retry 5 --retry-all-errors https://download.sysinternals.com/files/PSTools.zip -o "$work/pstools.zip"
+        Expand-Archive "$work/pstools.zip" -DestinationPath "$work/pstools" -Force
+        $psexec = "$work/pstools/PsExec64.exe"
+        # The download has no fixed version, so a checksum is not possible.
+        $signature = Get-AuthenticodeSignature $psexec
+        if ($signature.Status -ne "Valid" -or $signature.SignerCertificate.Subject -notmatch "O=Microsoft Corporation") {
+            throw "PsExec64.exe does not have a valid Microsoft signature"
+        }
+
+        $tests = @(Get-ChildItem "target/llvm-cov-target/debug/deps/wgpu_surface-*.exe")
+        if ($tests.Count -ne 1) {
+            throw "Expected one wgpu_surface test binary, found $($tests.Count)"
+        }
+        # PsExec does not pass the environment to the process and does not return its output.
+        @(
+            "set WGPU_BACKEND=dx12"
+            "set WGPU_DX12_AGILITY_SDK_PATH=$env:WGPU_DX12_AGILITY_SDK_PATH"
+            "set WGPU_DX12_AGILITY_SDK_VERSION=$env:WGPU_DX12_AGILITY_SDK_VERSION"
+            "set WGPU_DX12_AGILITY_SDK_REQUIRE=1"
+            "set RUST_BACKTRACE=1"
+            "`"$($tests[0].FullName)`" > surface-test.log 2>&1"
+        ) | Set-Content "$work/surface-test.cmd"
+
+        & $psexec -accepteula -nobanner -i 1 -w $work cmd /c surface-test.cmd
+        $code = $LASTEXITCODE
+        Get-Content "$work/surface-test.log" -ErrorAction SilentlyContinue
+        exit $code

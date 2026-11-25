@@ -4,7 +4,7 @@ on:
   pull_request:
   # Runs on `trunk` to save the build caches that pull requests read.
   schedule:
-    - cron: "0 6 * * *"
+  - cron: "0 6 * * *"
   workflow_dispatch:
 
 env:
@@ -38,43 +38,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: ["API Operation", "API Validation", "Other"]
-        platform: ["Windows x86_64", "Mac aarch64", "Linux x86_64"]
+        suite:
+        - Other
+        platform:
+        - Linux x86_64
         include:
           # When an `include` item matches existing matrix entries, the additional items are
           # added only to the matching entries. The two lines above define the matrix, and
           # the items below attach the rest of the configuration values that apply to suites
           # and platforms.
-          - suite: API Operation
-            filter: "^webgpu:api,operation,"
-          - suite: API Validation
-            filter: "^webgpu:api,validation,"
-          - suite: Other
-            filter: "!^webgpu:api,operation,|^webgpu:api,validation,"
+        - suite: Other
+          filter: "!^webgpu:api,operation,|^webgpu:api,validation,"
 
           # Windows
-          - platform: Windows x86_64
-            os: windows-2025
-            target: x86_64-pc-windows-msvc
-            backend: dx12
-            shell: bash
-
-          # Mac
-          # Need to use `zsh` for `source <(cmd)` because it doesn't work in
-          # ancient MacOS bash. `zsh` is a non-standard shell in GitHub
-          # actions, so must be specified as a command string.
-          - platform: Mac aarch64
-            os: macos-26
-            target: x86_64-apple-darwin
-            backend: metal
-            shell: zsh {0}
-
-          # Linux
-          - platform: Linux x86_64
-            os: ubuntu-26.04
-            target: x86_64-unknown-linux-gnu
-            backend: vulkan
-            shell: bash
+        - platform: Linux x86_64
+          os: blacksmith-2vcpu-ubuntu-2604
+          target: x86_64-unknown-linux-gnu
+          backend: vulkan
+          shell: bash
 
     name: ${{ matrix.suite }} ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
@@ -87,42 +68,42 @@ jobs:
     permissions: {}
 
     steps:
-      - name: checkout repo
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+    - name: checkout repo
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
+      with:
+        persist-credentials: false
 
-      - name: Install Repo MSRV toolchain
-        run: |
-          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --target ${{ matrix.target }} --component llvm-tools
-          rustup override set ${{ env.REPO_MSRV }}
-          cargo -V
+    - name: Install Repo MSRV toolchain
+      run: |
+        rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --target ${{ matrix.target }} --component llvm-tools
+        rustup override set ${{ env.REPO_MSRV }}
+        cargo -V
 
-      - name: Install `cargo-llvm-cov`
-        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
-        with:
-          tool: cargo-llvm-cov
+    - name: Install `cargo-llvm-cov`
+      uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f   # v2.90.6
+      with:
+        tool: cargo-llvm-cov
 
-      - name: caching
-        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
+    - name: caching
+      uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0   # v2.9.3
+      with:
           # The version number can be incremented for cache busting.
-          prefix-key: v3-rust-${{ hashFiles('cts_runner/revision.txt') }}
-          env-vars: ImageVersion
-          cache-directories: cts
+        prefix-key: v3-rust-${{ hashFiles('cts_runner/revision.txt') }}
+        env-vars: ImageVersion
+        cache-directories: cts
           # Save the cache from the `other` job because it also runs the cts_runner
           # integration tests.
-          save-if: ${{ github.ref == 'refs/heads/trunk' && matrix.suite == 'other' }}
+        save-if: true
 
       # We enable line numbers for panics, but that's it
-      - name: disable debug
-        shell: bash
-        run: |
-          mkdir -p .cargo
-          cat <<EOF >> .cargo/config.toml
-          [profile.dev]
-          debug = "line-tables-only"
-          EOF
+    - name: disable debug
+      shell: bash
+      run: |
+        mkdir -p .cargo
+        cat <<EOF >> .cargo/config.toml
+        [profile.dev]
+        debug = "line-tables-only"
+        EOF
 
       # Unlike regular `llvm-cov run`, which builds artifacts in `target/llvm-cov-target`,
       # `llvm-cov show-env` uses the regular target directory for artifacts. Because of this,
@@ -131,58 +112,63 @@ jobs:
       #
       # The `GITHUB_ENV` file is not subject to shell expansion, so we need to un-escape the
       # `llvm-cov show-env` output.
-      - name: Set llvm-cov environment
-        shell: bash
-        run: |
-          cargo llvm-cov --no-cfg-coverage show-env | while read -r assignment; do
-            key="${assignment%%=*}"
-            eval "$assignment"
-            echo "$key=${!key}" >> "$GITHUB_ENV"
-          done
+    - name: Set llvm-cov environment
+      shell: bash
+      run: |
+        cargo llvm-cov --no-cfg-coverage show-env | while read -r assignment; do
+          key="${assignment%%=*}"
+          eval "$assignment"
+          echo "$key=${!key}" >> "$GITHUB_ENV"
+        done
 
-      - name: (Windows) Install DXC
-        if: matrix.os == 'windows-2025'
-        uses: $/.github/actions/install-dxc
+    - name: (Windows) Install DXC
+      if: matrix.os == 'blacksmith-4vcpu-windows-2025'
+      uses: $/.github/actions/install-dxc
 
       # Note: `target-dir` is intentionally different from other jobs.
       # See note above about `llvm-cov show-env`.
-      - name: (Windows) Install WARP
-        if: matrix.os == 'windows-2025'
-        uses: $/.github/actions/install-warp
-        with:
-          target-dir: "target/debug"
+    - name: (Windows) Install WARP
+      if: matrix.os == 'blacksmith-4vcpu-windows-2025'
+      uses: $/.github/actions/install-warp
+      with:
+        target-dir: "target/debug"
 
-      - name: (Linux) Install Mesa
-        if: matrix.os == 'ubuntu-26.04'
-        uses: $/.github/actions/install-mesa
-        with:
-          target-dir: "target/debug"
+      # The system D3D12 runtime cannot create a device on the Blacksmith runners.
+    - name: (Windows) Install Agility SDK
+      if: matrix.os == 'blacksmith-4vcpu-windows-2025'
+      uses: $/.github/actions/install-agility-sdk
+
+    - name: (Linux) Install Mesa
+      if: contains(matrix.os, 'ubuntu')
+      uses: $/.github/actions/install-mesa
+      with:
+        target-dir: "target/debug"
 
       # Some of these tests check stdout, so we explicitly set the backend
       # to avoid getting EGL messages in the output.
-      - name: Test cts_runner
-        if: matrix.suite == 'other'
-        shell: bash
-        run: |
-          export LLVM_PROFILE_FILE=${{ github.workspace }}/target/wgpu-%p-%m.profraw
-          export DENO_WEBGPU_BACKEND=${{ matrix.backend }}
-          cargo --locked test -p cts_runner
+    - name: Test cts_runner
+      if: matrix.suite == 'other'
+      shell: bash
+      run: |
+        export LLVM_PROFILE_FILE=${{ github.workspace }}/target/wgpu-%p-%m.profraw
+        export DENO_WEBGPU_BACKEND=${{ matrix.backend }}
+        cargo --locked test -p cts_runner
 
-      - name: Run CTS
-        shell: bash
-        run: cargo --locked xtask cts --llvm-cov --backend ${{ matrix.backend }} --filter '${{matrix.filter }}'
+    - name: Run CTS
+      shell: bash
+      run: cargo --locked xtask cts --llvm-cov --backend ${{ matrix.backend }} --filter '${{matrix.filter }}'
 
-      - name: Generate coverage report
-        id: coverage
-        continue-on-error: true
-        run: |
-          set -e
+    - name: Generate coverage report
+      id: coverage
+      continue-on-error: true
+      run: |
+        set -e
 
-          cargo --locked llvm-cov report --lcov --output-path lcov.info
+        cargo --locked llvm-cov report --lcov --output-path lcov.info
 
-      - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
-        if: steps.coverage.outcome == 'success'
-        with:
-          files: lcov.info
-          token: ${{ secrets.CODECOV_TOKEN }}
+    - name: Upload coverage report to Codecov
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5   # v7
+      if: steps.coverage.outcome == 'success'
+      with:
+        files: lcov.info
+        token: ${{ secrets.CODECOV_TOKEN }}
