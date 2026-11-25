@@ -32,6 +32,7 @@ use core::num::NonZeroU64;
 use alloc::{boxed::Box, string::String, sync::Arc};
 
 use hashbrown::HashMap;
+use scopeguard::ScopeGuard;
 
 use crate::{
     device::{Device, DeviceError},
@@ -250,21 +251,23 @@ impl TimestampNormalizer {
     /// not used to check the destination range of query resolution requests. That
     /// uses the application-requested buffer size, obtained from the `wgpu_core`
     /// `Buffer`.
-    pub unsafe fn create_normalization_bind_group(
+    pub unsafe fn create_normalization_bind_group<'a>(
         &self,
-        device: &Device,
+        device: &'a Device,
         buffer: &dyn hal::DynBuffer,
         buffer_label: Option<&str>,
         buffer_size: wgt::BufferSize,
         buffer_usages: wgt::BufferUsages,
-    ) -> Result<TimestampNormalizationBindGroup, DeviceError> {
+    ) -> Result<ScopeGuard<TimestampNormalizationBindGroup, impl FnOnce(TimestampNormalizationBindGroup) + 'a>, DeviceError> {
+        let destroy_fn = |bg: TimestampNormalizationBindGroup| bg.dispose(device.raw());
+
         unsafe {
             let Some(ref state) = &self.state else {
-                return Ok(TimestampNormalizationBindGroup { raw: None });
+                return Ok(ScopeGuard::with_strategy(TimestampNormalizationBindGroup { raw: None }, destroy_fn));
             };
 
             if !buffer_usages.contains(wgt::BufferUsages::QUERY_RESOLVE) {
-                return Ok(TimestampNormalizationBindGroup { raw: None });
+                return Ok(ScopeGuard::with_strategy(TimestampNormalizationBindGroup { raw: None }, destroy_fn));
             }
 
             // If this buffer is large enough that we wouldn't be able to bind the entire thing
@@ -302,7 +305,7 @@ impl TimestampNormalizer {
                 })
                 .map_err(|e| device.handle_hal_error(e))?;
 
-            Ok(TimestampNormalizationBindGroup { raw: Some(bg) })
+            Ok(ScopeGuard::with_strategy(TimestampNormalizationBindGroup { raw: Some(bg) }, destroy_fn))
         }
     }
 
