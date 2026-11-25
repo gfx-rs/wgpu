@@ -310,17 +310,19 @@ impl core::error::Error for GetInterfaceError {}
 /// <https://github.com/microsoft/windows-rs/issues/2386>.
 ///
 /// # Safety
-/// Performs a [`mem::transmute_copy()`] on a refcounted [`Interface`] type.  The returned
-/// [`mem::ManuallyDrop`] should _not_ be dropped.
-pub unsafe fn borrow_interface_temporarily<I: Interface>(src: &I) -> mem::ManuallyDrop<Option<I>> {
-    unsafe { mem::transmute_copy(src) }
+/// The returned value holds the pointer of `src` without a reference of its own. It must not be
+/// dropped, and must not be used after `src` is released.
+pub(crate) unsafe fn borrow_interface_temporarily<I: Interface>(
+    src: &I,
+) -> mem::ManuallyDrop<Option<I>> {
+    mem::ManuallyDrop::new(Some(unsafe { I::from_raw(src.as_raw()) }))
 }
 
 /// See [`borrow_interface_temporarily()`]
-pub unsafe fn borrow_optional_interface_temporarily<I: Interface>(
+pub(crate) unsafe fn borrow_optional_interface_temporarily<I: Interface>(
     src: &Option<I>,
 ) -> mem::ManuallyDrop<Option<I>> {
-    unsafe { mem::transmute_copy(src) }
+    mem::ManuallyDrop::new(src.as_ref().map(|src| unsafe { I::from_raw(src.as_raw()) }))
 }
 
 struct D3DBlob(Direct3D::ID3DBlob);
