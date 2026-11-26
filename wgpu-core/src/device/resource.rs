@@ -894,6 +894,7 @@ impl Device {
             .map_err(|e| self.handle_hal_error(e));
     }
 
+    #[track_caller]
     pub fn handle_hal_error(&self, error: hal::DeviceError) -> DeviceError {
         match error {
             hal::DeviceError::OutOfMemory
@@ -905,6 +906,7 @@ impl Device {
         DeviceError::from_hal(error)
     }
 
+    #[track_caller]
     pub fn handle_hal_error_with_nonfatal_oom(&self, error: hal::DeviceError) -> DeviceError {
         match error {
             hal::DeviceError::OutOfMemory => DeviceError::from_hal(error),
@@ -5446,6 +5448,7 @@ impl Device {
     /// so that `self` is marked as lost when appropriate.
     ///
     /// [`CreatePipelineError`]: pipeline::CreatePipelineError
+    #[track_caller]
     pub(crate) fn handle_hal_pipeline_error(
         &self,
         error: hal::PipelineError,
@@ -5672,12 +5675,29 @@ impl Device {
         Ok(query_set)
     }
 
+    #[track_caller]
     pub(crate) fn lose(&self, message: &str) {
         // Follow the steps at https://gpuweb.github.io/gpuweb/#lose-the-device.
 
         // Mark the device explicitly as invalid. This is checked in various
         // places to prevent new work from being submitted.
-        self.valid.store(false, Ordering::Release);
+        let was_valid = self.valid.swap(false, Ordering::AcqRel);
+
+        if was_valid {
+            // `message` rarely identifies the cause on its own ("Device is
+            // lost"), so say which operation failed and on which driver.
+            // This is only logged: the message below may reach web content.
+            let info = &self.adapter.raw.info;
+            log::error!(
+                "{} lost at {}: {message}. Adapter: {:?} ({:?}), driver: {:?} {:?}",
+                self.error_ident(),
+                core::panic::Location::caller(),
+                info.name,
+                info.backend,
+                info.driver,
+                info.driver_info,
+            );
+        }
 
         // 1) Resolve the GPUDevice device.lost promise.
         if let Some(device_lost_closure) = self.device_lost_closure.lock().take() {

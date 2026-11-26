@@ -276,6 +276,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - `Device::poll` now always returns `PollError::CantWait` if called with `PollType::Wait` on the WebGPU backend. By @teoxoy in [#10218](https://github.com/gfx-rs/wgpu/pull/10218).
 - `DownlevelFlags::SHADER_F16_IN_F32` has been removed. It previously blocked broken `quantizeToF16`, `pack2x16float`, and `unpack2x16float` on older llvmpipe / lavapipe. Using wgpu with an up-to-date Mesa version is always recommended. By @szymros in [#10957](https://github.com/gfx-rs/wgpu/pull/10957)
 - Texture copy extents are now correctly validated for subsampled chroma planes. Copying is now supported between a plane of a multi-planar texture and other textures or buffers, in either direction. By @andyleiserson in [#10776](https://github.com/gfx-rs/wgpu/pull/10776).
+- When a device is lost because of a backend error, wgpu-core now logs an error with the location in wgpu-core that reported it, the adapter name and the driver name and version. The Vulkan backend also logs the `VkResult` of an error it did not expect. The message passed to the device-lost callback is unchanged. By @matthargett in [#11135](https://github.com/gfx-rs/wgpu/pull/11135).
 
 #### naga
 
