@@ -177,8 +177,7 @@ impl TimestampNormalizer {
                 runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
             };
             let module = device
-                .raw()
-                .create_shader_module(&hal_desc, hal_shader)
+                .create_raw_shader_module(&hal_desc, hal_shader)
                 .map_err(|error| match error {
                     hal::ShaderError::Device(error) => {
                         CreateShaderModuleError::Device(device.handle_hal_error(error))
@@ -190,8 +189,7 @@ impl TimestampNormalizer {
                 })?;
 
             let pipeline_layout = device
-                .raw()
-                .create_pipeline_layout(&hal::PipelineLayoutDescriptor {
+                .create_raw_pipeline_layout(&hal::PipelineLayoutDescriptor {
                     label: hal_label(
                         Some("(wgpu internal) Timestamp normalizer pipeline layout"),
                         device.instance_flags,
@@ -232,9 +230,9 @@ impl TimestampNormalizer {
             Ok(Self {
                 state: Some(InternalState {
                     temporary_bind_group_layout: ScopeGuard::into_inner(temporary_bind_group_layout),
-                    pipeline_layout,
+                    pipeline_layout: ScopeGuard::into_inner(pipeline_layout),
                     pipeline,
-                    module,
+                    module: ScopeGuard::into_inner(module),
                 }),
             })
         }

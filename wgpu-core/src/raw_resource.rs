@@ -34,19 +34,28 @@ macro_rules! create_raw_docs {
     };
 }
 
-macro_rules! create_raw {
-    ($($fn_name:ident($desc:ty) -> $hal_out:ty { wraps $fn_create:ident, destroy $fn_destroy:ident })*) => {
+macro_rules! create_raw_multi_args {
+    ($($fn_name:ident($($arg:ident:$arg_ty:ty,)*) -> Result<$hal_out:ty, $err_ty:ty> { wraps $fn_create:ident, destroy $fn_destroy:ident })*) => {
         impl Device {
             $(
             #[doc = create_raw_docs!($fn_create)]
             pub(crate) unsafe fn $fn_name<'a>(
                 &'a self,
-                desc: &$desc,
-            ) -> Result<scoped_resource!($hal_out, 'a), hal::DeviceError> {
-                let raw = unsafe { self.raw().$fn_create(desc)? };
+                $($arg:$arg_ty,)*
+            ) -> Result<scoped_resource!($hal_out, 'a), $err_ty> {
+                let raw = unsafe { self.raw().$fn_create($($arg,)*)? };
 
                 return Ok(scopeguard::guard(raw, |r| unsafe {self.raw().$fn_destroy(r)}));
             })*
+        }
+    };
+}
+
+/// [`create_raw_multi_args`], but with only a descriptor argument.
+macro_rules! create_raw {
+    ($($fn_name:ident($desc:ty) -> $hal_out:ty { wraps $fn_create:ident, destroy $fn_destroy:ident })*) => {
+        create_raw_multi_args! {
+            $($fn_name(desc: &$desc,) -> Result<$hal_out, hal::DeviceError> { wraps $fn_create, destroy $fn_destroy })*
         }
     };
 }
@@ -64,6 +73,27 @@ create_raw! {
         wraps create_bind_group_layout,
         destroy destroy_bind_group_layout
     }
+    create_raw_pipeline_layout(hal::PipelineLayoutDescriptor<dyn hal::DynBindGroupLayout>) -> Box<dyn hal::DynPipelineLayout> {
+        wraps create_pipeline_layout,
+        destroy destroy_pipeline_layout
+    }
+}
+
+create_raw_multi_args! {
+    create_raw_texture_view(
+        texture: &dyn hal::DynTexture,
+        desc: &hal::TextureViewDescriptor,
+    ) -> Result<Box<dyn hal::DynTextureView>, hal::DeviceError> {
+        wraps create_texture_view,
+        destroy destroy_texture_view
+    }
+    create_raw_shader_module(
+        desc: &hal::ShaderModuleDescriptor,
+        shader: hal::ShaderInput,
+    ) -> Result<Box<dyn hal::DynShaderModule>, hal::ShaderError> {
+        wraps create_shader_module,
+        destroy destroy_shader_module
+    }
 }
 
 impl Device {
@@ -78,17 +108,5 @@ impl Device {
             guard(raw, |raw| unsafe { self.raw().destroy_buffer(raw) }),
             size,
         ))
-    }
-    #[doc = create_raw_docs!(create_texture_view)]
-    pub(crate) unsafe fn create_raw_texture_view<'a>(
-        &'a self,
-        texture: &dyn hal::DynTexture,
-        desc: &hal::TextureViewDescriptor,
-    ) -> Result<scoped_resource!(Box<dyn hal::DynTextureView>, 'a), hal::DeviceError> {
-        let raw = unsafe { self.raw().create_texture_view(texture, desc)? };
-
-        Ok(guard(raw, |raw| unsafe {
-            self.raw().destroy_texture_view(raw)
-        }))
     }
 }
