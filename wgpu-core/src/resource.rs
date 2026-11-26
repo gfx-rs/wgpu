@@ -1865,6 +1865,11 @@ pub(crate) enum TextureOwnership {
     /// command buffer that uses the texture acquires it from the foreign
     /// queue family first and releases it back after, and between command
     /// buffers the tracker holds it at [`TextureOwnership::FOREIGN_RESTING`].
+    // Only a DMA-buf import makes one, and that builds only for Vulkan on Linux.
+    #[cfg_attr(
+        not(all(vulkan, target_os = "linux", feature = "std")),
+        allow(dead_code)
+    )]
     Foreign {
         /// This device's queue family, the other side of each transfer.
         queue_family: u32,
