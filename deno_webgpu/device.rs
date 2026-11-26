@@ -148,9 +148,14 @@ impl GPUDevice {
   #[undefined]
   fn destroy(&self) {
     self.wgpu_device.destroy();
-    // Poll the device to encourage it to process any pending operations
-    // and release resources associated with the destroyed device (and thus calling lost closure).
-    let _ = self.wgpu_device.poll(wgpu_types::PollType::Poll);
+    // Wait for the device to finish any pending submissions and release the
+    // resources associated with the destroyed device, which is when wgpu
+    // calls the lost closure. A single non-blocking poll is not enough: if a
+    // submission is still in flight, the closure is not called, nothing else
+    // polls a destroyed device, and `device.lost` never resolves.
+    let _ = self
+      .wgpu_device
+      .poll(wgpu_types::PollType::wait_indefinitely());
   }
 
   #[reentrant]

@@ -445,6 +445,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 #### deno_webgpu
 
 - Fix panics when a device is lost: `mapAsync()` and `onSubmittedWorkDone()` unwrapped the result of polling the device, and the task that resolves `device.lost` unwrapped a resolver that the device's finalizer may already have removed. By @matthargett in [#11134](https://github.com/gfx-rs/wgpu/pull/11134).
+- Fix `device.lost` never resolving after `device.destroy()` when a queue submission was still in flight. `cts_runner` then exited with status 0 and without reporting any result, as it did for `webgpu:api,operation,uncapturederror:iff_uncaptured:*`. By @matthargett in [#11134](https://github.com/gfx-rs/wgpu/pull/11134).
 
 ### Performance
 
