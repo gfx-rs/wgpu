@@ -1081,10 +1081,11 @@ impl CommandEncoder {
             .set_from_tracker_and_drain_transitions(&head.buffers, snatch_guard)
             .collect::<Vec<_>>();
 
-        let texture_barriers = base
+        let mut texture_barriers = base
             .textures
             .set_from_tracker_and_drain_transitions(&head.textures, snatch_guard)
             .collect::<Vec<_>>();
+        crate::track::foreign::acquire(&head.textures, &mut texture_barriers, snatch_guard);
 
         unsafe {
             raw.transition_buffers(&buffer_barriers);

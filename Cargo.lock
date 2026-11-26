@@ -5114,6 +5114,7 @@ dependencies = [
  "image",
  "itertools 0.15.0",
  "js-sys",
+ "libc",
  "libtest-mimic",
  "log",
  "macro_rules_attribute",

@@ -1547,6 +1547,12 @@ impl PhysicalDeviceProperties {
             extensions.push(google::display_timing::NAME);
         }
 
+        // Optional `VK_EXT_queue_family_foreign`, for acquiring and releasing
+        // images whose memory another device or the kernel also uses.
+        if self.supports_extension(ext::queue_family_foreign::NAME) {
+            extensions.push(ext::queue_family_foreign::NAME);
+        }
+
         // Optional `VK_EXT_memory_budget`
         if self.supports_extension(ext::memory_budget::NAME) {
             extensions.push(ext::memory_budget::NAME);

@@ -93,6 +93,9 @@ pub mod util;
 #[cfg(custom)]
 pub use backend::custom;
 
+#[cfg(all(wgpu_core, vulkan, target_os = "linux", feature = "std"))]
+pub use wgc::device::dmabuf::{DmabufTextureDescriptor, ImportDmabufError, DMABUF_FORMATS};
+
 pub use api::*;
 pub use wgt::{
     AdapterInfo, AddressMode, AllocatorReport, AstcBlock, AstcChannel, Backend, BackendOptions,

@@ -15,6 +15,31 @@ use wgpu_sync::{Mutex, RwLock};
 use super::{conv, descriptor::DescriptorCounts, RawTlasInstance};
 use crate::TlasInstance;
 
+/// Why a DMA-buf could not be imported as a texture.
+// Debug can forward to Display so `{:?}` of the error is readable too.
+#[derive(Debug, thiserror::Error)]
+pub enum ImportTextureError {
+    #[error(transparent)]
+    DeviceError(#[from] crate::DeviceError),
+    #[error("Vulkan driver does not support {}", .0.to_string_lossy())]
+    MissingExtension(&'static CStr),
+    #[error("The driver can't import {format:?} with DRM modifier {modifier:#x} for {usage:?}")]
+    UnsupportedFormat {
+        format: wgt::TextureFormat,
+        modifier: u64,
+        usage: wgt::TextureUses,
+    },
+    #[error("The driver refused the plane layout (offset {offset}, row pitch {row_pitch})")]
+    PlaneLayoutRefused { offset: u64, row_pitch: u64 },
+    #[error("The image needs {needed} bytes but the DMA-buf holds {size}")]
+    TooSmall { needed: u64, size: u64 },
+    #[error(
+        "No suitable memory type found. \
+        Image types = {image_types:#x}, import types = {import_types:#x}."
+    )]
+    NoCompatibleMemoryType { image_types: u32, import_types: u32 },
+}
+
 impl super::DeviceShared {
     /// Set the name of `object` to `name`.
     ///
@@ -379,6 +404,28 @@ impl super::Device {
         external_memory_image_create_info: Option<&mut vk::ExternalMemoryImageCreateInfo>,
         drm_modifier_info: Option<&mut vk::ImageDrmFormatModifierExplicitCreateInfoEXT>,
     ) -> Result<ImageWithoutMemory, crate::DeviceError> {
+        self.create_image_without_memory_vk(
+            desc,
+            tiling,
+            external_memory_image_create_info,
+            drm_modifier_info,
+        )
+        .map_err(|err| {
+            // We don't use VK_EXT_image_compression_control
+            // VK_ERROR_COMPRESSION_EXHAUSTED_EXT
+            super::map_host_device_oom_and_ioca_err(err)
+        })
+    }
+
+    /// As [`Self::create_image_without_memory_with_tiling`], but returns
+    /// `vkCreateImage`'s own error, for callers that tell its errors apart.
+    fn create_image_without_memory_vk(
+        &self,
+        desc: &crate::TextureDescriptor,
+        tiling: vk::ImageTiling,
+        external_memory_image_create_info: Option<&mut vk::ExternalMemoryImageCreateInfo>,
+        drm_modifier_info: Option<&mut vk::ImageDrmFormatModifierExplicitCreateInfoEXT>,
+    ) -> Result<ImageWithoutMemory, vk::Result> {
         let copy_size = desc.copy_extent();
 
         let mut raw_flags = vk::ImageCreateFlags::empty();
@@ -455,12 +502,7 @@ impl super::Device {
             vk_info = vk_info.push_next(drm_info);
         }
 
-        let raw = unsafe { self.shared.raw.create_image(&vk_info, None) }.map_err(map_err)?;
-        fn map_err(err: vk::Result) -> crate::DeviceError {
-            // We don't use VK_EXT_image_compression_control
-            // VK_ERROR_COMPRESSION_EXHAUSTED_EXT
-            super::map_host_device_oom_and_ioca_err(err)
-        }
+        let raw = unsafe { self.shared.raw.create_image(&vk_info, None) }?;
         let mut req = unsafe { self.shared.raw.get_image_memory_requirements(raw) };
 
         if desc.usage.contains(wgt::TextureUses::TRANSIENT) {
@@ -576,16 +618,117 @@ impl super::Device {
         })
     }
 
-    /// Import a DMA-buf as a texture. Currently only supports single-plane DMA-bufs.
+    /// The first extension that importing a DMA-buf needs and this device did
+    /// not enable, if any. Each is enabled whenever the driver supports it.
+    #[cfg(unix)]
+    pub fn missing_dmabuf_extension(&self) -> Option<&'static CStr> {
+        [
+            ash::khr::external_memory_fd::NAME,
+            ext::external_memory_dma_buf::NAME,
+            ext::image_drm_format_modifier::NAME,
+            ext::queue_family_foreign::NAME,
+        ]
+        .into_iter()
+        .find(|name| !self.shared.enabled_extensions.contains(name))
+    }
+
+    /// Whether the driver can import a single-plane DMA-buf of `format`, laid
+    /// out by `drm_modifier`, as a 2D image for `usage`, and how large it may be.
+    ///
+    /// Asks `vkGetPhysicalDeviceFormatProperties2` for the format's modifiers,
+    /// then `vkGetPhysicalDeviceImageFormatProperties2` for an import of that
+    /// modifier as a DMA-buf. Returns the largest extent the driver allows, or
+    /// `None` when any answer is no.
+    #[cfg(unix)]
+    pub fn dmabuf_import_extent(
+        &self,
+        format: wgt::TextureFormat,
+        drm_modifier: u64,
+        usage: wgt::TextureUses,
+    ) -> Option<vk::Extent3D> {
+        if self.missing_dmabuf_extension().is_some()
+            || self.shared.instance.instance_api_version < vk::API_VERSION_1_1
+        {
+            return None;
+        }
+        let instance = &self.shared.instance.raw;
+        let phd = self.shared.physical_device;
+        let vk_format = self.shared.private_caps.map_texture_format(format);
+
+        // The modifiers the driver lists for this format: count, then fill.
+        let mut list = vk::DrmFormatModifierPropertiesListEXT::default();
+        let mut props = vk::FormatProperties2::default().push_next(&mut list);
+        unsafe { instance.get_physical_device_format_properties2(phd, vk_format, &mut props) };
+        let count = list.drm_format_modifier_count as usize;
+        let mut modifiers = vec![vk::DrmFormatModifierPropertiesEXT::default(); count];
+        let mut list = vk::DrmFormatModifierPropertiesListEXT::default()
+            .drm_format_modifier_properties(&mut modifiers);
+        let mut props = vk::FormatProperties2::default().push_next(&mut list);
+        unsafe { instance.get_physical_device_format_properties2(phd, vk_format, &mut props) };
+        let filled = list.drm_format_modifier_count as usize;
+
+        let mut needed = vk::FormatFeatureFlags::empty();
+        if usage.contains(wgt::TextureUses::RESOURCE) {
+            needed |= vk::FormatFeatureFlags::SAMPLED_IMAGE;
+        }
+        if usage.contains(wgt::TextureUses::COPY_SRC) {
+            needed |= vk::FormatFeatureFlags::TRANSFER_SRC;
+        }
+        let listed = modifiers.get(..filled)?.iter().any(|m| {
+            m.drm_format_modifier == drm_modifier
+                && m.drm_format_modifier_plane_count == 1
+                && m.drm_format_modifier_tiling_features.contains(needed)
+        });
+        if !listed {
+            return None;
+        }
+
+        // An import of that modifier as a DMA-buf, for this usage.
+        let mut modifier_info = vk::PhysicalDeviceImageDrmFormatModifierInfoEXT::default()
+            .drm_format_modifier(drm_modifier)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+        let mut external_info = vk::PhysicalDeviceExternalImageFormatInfo::default()
+            .handle_type(vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT);
+        let info = vk::PhysicalDeviceImageFormatInfo2::default()
+            .format(vk_format)
+            .ty(vk::ImageType::TYPE_2D)
+            .tiling(vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT)
+            .usage(conv::map_texture_usage(usage))
+            .push_next(&mut modifier_info)
+            .push_next(&mut external_info);
+        let mut external_props = vk::ExternalImageFormatProperties::default();
+        let mut image_props = vk::ImageFormatProperties2::default().push_next(&mut external_props);
+        unsafe {
+            instance.get_physical_device_image_format_properties2(phd, &info, &mut image_props)
+        }
+        .ok()?;
+        let max_extent = image_props.image_format_properties.max_extent;
+        let importable = external_props
+            .external_memory_properties
+            .external_memory_features
+            .contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE);
+        importable.then_some(max_extent)
+    }
+
+    /// Import a single-plane DMA-buf as a texture.
+    ///
+    /// Before Vulkan sees the descriptor, this checks that the driver can
+    /// import `desc.format` with `drm_modifier` for `desc.usage`
+    /// ([`Self::dmabuf_import_extent`]). After creating the image, it checks
+    /// that the image's memory fits in the DMA-buf, whose size it asks the
+    /// kernel with `lseek`. A plane layout the driver refuses comes back as
+    /// [`ImportTextureError::PlaneLayoutRefused`].
+    ///
+    /// The `fd` is closed exactly once on every failure; on success Vulkan owns
+    /// it.
     ///
     /// # Safety
     ///
-    /// - Requires the VK_KHR_external_memory_fd, VK_EXT_external_memory_dma_buf, and
-    ///   VK_EXT_image_drm_format_modifier extensions
-    /// - The `fd` must be a valid DMA-buf file descriptor matching `desc`
-    /// - On success, Vulkan takes ownership of the file descriptor. On failure,
-    ///   the file descriptor is closed.
-    /// - The `drm_modifier`, `stride`, and `offset` must match the DMA-buf layout
+    /// - The `fd` must be a DMA-buf.
+    /// - `desc` must be a 2D texture with one mip level, one layer and one sample.
+    /// - The texture's initial layout is `UNDEFINED`, but its contents belong to
+    ///   the DMA-buf's producer: the caller acquires it from
+    ///   [`crate::QueueFamily::Foreign`] before each use, and releases it after.
     #[cfg(unix)]
     pub unsafe fn texture_from_dmabuf_fd(
         &self,
@@ -594,18 +737,11 @@ impl super::Device {
         drm_modifier: u64,
         stride: u64,
         offset: u64,
-    ) -> Result<super::Texture, crate::DeviceError> {
-        use std::os::unix::io::IntoRawFd;
+    ) -> Result<super::Texture, ImportTextureError> {
+        use std::os::unix::io::{AsRawFd, IntoRawFd};
 
-        let enabled_extensions = &self.shared.enabled_extensions;
-        if !enabled_extensions.contains(&ext::external_memory_dma_buf::NAME)
-            || !enabled_extensions.contains(&ext::image_drm_format_modifier::NAME)
-        {
-            log::error!(
-                "Vulkan driver does not support VK_EXT_external_memory_dma_buf \
-                 or VK_EXT_image_drm_format_modifier"
-            );
-            return Err(crate::DeviceError::Unexpected);
+        if let Some(extension) = self.missing_dmabuf_extension() {
+            return Err(ImportTextureError::MissingExtension(extension));
         }
 
         let external_memory_fd_fn = self
@@ -613,10 +749,25 @@ impl super::Device {
             .extension_fns
             .external_memory_fd
             .as_ref()
-            .ok_or_else(|| {
-                log::error!("VK_KHR_external_memory_fd extension not loaded");
-                crate::DeviceError::Unexpected
-            })?;
+            .ok_or(ImportTextureError::MissingExtension(
+                ash::khr::external_memory_fd::NAME,
+            ))?;
+
+        let unsupported = ImportTextureError::UnsupportedFormat {
+            format: desc.format,
+            modifier: drm_modifier,
+            usage: desc.usage,
+        };
+        let max = self
+            .dmabuf_import_extent(desc.format, drm_modifier, desc.usage)
+            .ok_or(unsupported)?;
+        if desc.size.width > max.width || desc.size.height > max.height {
+            return Err(ImportTextureError::UnsupportedFormat {
+                format: desc.format,
+                modifier: drm_modifier,
+                usage: desc.usage,
+            });
+        }
 
         let mut external_memory_image_info = vk::ExternalMemoryImageCreateInfo::default()
             .handle_types(vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT);
@@ -632,12 +783,35 @@ impl super::Device {
             .drm_format_modifier(drm_modifier)
             .plane_layouts(core::slice::from_ref(&plane_layout));
 
-        let image = self.create_image_without_memory_with_tiling(
-            desc,
-            vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT,
-            Some(&mut external_memory_image_info),
-            Some(&mut drm_modifier_info),
-        )?;
+        // On any error up to `into_raw_fd`, `fd` is dropped, which closes it.
+        let image = self
+            .create_image_without_memory_vk(
+                desc,
+                vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT,
+                Some(&mut external_memory_image_info),
+                Some(&mut drm_modifier_info),
+            )
+            .map_err(|err| match err {
+                vk::Result::ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT => {
+                    ImportTextureError::PlaneLayoutRefused {
+                        offset,
+                        row_pitch: stride,
+                    }
+                }
+                other => super::map_host_device_oom_and_ioca_err(other).into(),
+            })?;
+
+        // The image's memory must lie inside the DMA-buf. For a DMA-buf,
+        // `lseek(SEEK_END)` answers its size and nothing else.
+        let size = unsafe { libc::lseek(fd.as_raw_fd(), 0, libc::SEEK_END) };
+        let size = u64::try_from(size).unwrap_or(0);
+        if image.requirements.size > size {
+            unsafe { self.shared.raw.destroy_image(image.raw, None) };
+            return Err(ImportTextureError::TooSmall {
+                needed: image.requirements.size,
+                size,
+            });
+        }
 
         // Convert to raw fd. We must close it ourselves if any operation below
         // fails, since Vulkan only takes ownership on successful vkAllocateMemory.
@@ -678,7 +852,7 @@ impl super::Device {
         fd_raw: i32,
         image: vk::Image,
         requirements: &vk::MemoryRequirements,
-    ) -> Result<vk::DeviceMemory, crate::DeviceError> {
+    ) -> Result<vk::DeviceMemory, ImportTextureError> {
         let mut fd_props = vk::MemoryFdPropertiesKHR::default();
         unsafe {
             external_memory_fd_fn.get_memory_fd_properties(
@@ -699,7 +873,10 @@ impl super::Device {
             )
             .ok_or_else(|| {
                 unsafe { libc::close(fd_raw) };
-                crate::DeviceError::Unexpected
+                ImportTextureError::NoCompatibleMemoryType {
+                    image_types: requirements.memory_type_bits,
+                    import_types: fd_props.memory_type_bits,
+                }
             })?;
 
         let mut dedicated_allocate_info = vk::MemoryDedicatedAllocateInfo::default().image(image);

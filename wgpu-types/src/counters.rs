@@ -135,6 +135,12 @@ pub struct HalCounters {
     pub indirect_command_buffer_memory: InternalCounter,
     /// Number of gpu memory allocations.
     pub memory_allocations: InternalCounter,
+
+    // Commands
+    /// Number of image barriers recorded that transfer queue family ownership,
+    /// as the acquire and release of a texture another device or the kernel
+    /// owns between uses.
+    pub queue_family_transfers: InternalCounter,
 }
 
 /// `wgpu-core`'s part of [`InternalCounters`].

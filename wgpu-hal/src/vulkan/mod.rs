@@ -29,6 +29,8 @@ mod command;
 pub mod conv;
 mod descriptor;
 mod device;
+#[cfg(unix)]
+pub use device::ImportTextureError;
 mod drm;
 mod instance;
 mod memory;
