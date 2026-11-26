@@ -1450,6 +1450,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn dispatch_workgroups(&mut self, count: [u32; 3]) {
+        // A dispatch with a zero dimension runs nothing, but not every driver
+        // treats it as a no-op: Arm's proprietary Mali driver (seen with r20p0
+        // on a Mali-G52) stalls for about six seconds per such dispatch and
+        // loses the device for `[0, 0, 0]`, and Qualcomm's proprietary driver
+        // for the Adreno 540 hangs.
+        if count.contains(&0) {
+            return;
+        }
         unsafe {
             self.device
                 .raw
