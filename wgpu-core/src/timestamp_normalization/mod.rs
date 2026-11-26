@@ -50,6 +50,7 @@ struct InternalState {
     temporary_bind_group_layout: Box<dyn hal::DynBindGroupLayout>,
     pipeline_layout: Box<dyn hal::DynPipelineLayout>,
     pipeline: Box<dyn hal::DynComputePipeline>,
+    module: Box<dyn hal::DynShaderModule>,
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -111,8 +112,7 @@ impl TimestampNormalizer {
             }
 
             let temporary_bind_group_layout = device
-                .raw()
-                .create_bind_group_layout(&hal::BindGroupLayoutDescriptor {
+                .create_raw_bind_group_layout(&hal::BindGroupLayoutDescriptor {
                     label: hal_label(
                         Some("(wgpu internal) Timestamp Normalization Bind Group Layout"),
                         device.instance_flags,
@@ -231,9 +231,10 @@ impl TimestampNormalizer {
 
             Ok(Self {
                 state: Some(InternalState {
-                    temporary_bind_group_layout,
+                    temporary_bind_group_layout: ScopeGuard::into_inner(temporary_bind_group_layout),
                     pipeline_layout,
                     pipeline,
+                    module,
                 }),
             })
         }
@@ -380,6 +381,7 @@ impl TimestampNormalizer {
             device.destroy_compute_pipeline(state.pipeline);
             device.destroy_pipeline_layout(state.pipeline_layout);
             device.destroy_bind_group_layout(state.temporary_bind_group_layout);
+            device.destroy_shader_module(state.module);
         }
     }
 

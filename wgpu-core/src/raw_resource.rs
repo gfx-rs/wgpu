@@ -60,6 +60,10 @@ create_raw! {
         wraps create_acceleration_structure,
         destroy destroy_acceleration_structure
     }
+    create_raw_bind_group_layout(hal::BindGroupLayoutDescriptor) -> Box<dyn hal::DynBindGroupLayout> {
+        wraps create_bind_group_layout,
+        destroy destroy_bind_group_layout
+    }
 }
 
 impl Device {
