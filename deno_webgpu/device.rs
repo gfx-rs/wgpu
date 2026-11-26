@@ -568,7 +568,7 @@ impl GPUDevice {
       Err(err) => {
         let err = make_pipeline_error(
           scope,
-          GPUPipelineErrorReason::Validation,
+          GPUPipelineErrorReason::of(&err),
           &fmt_err(&err),
         );
         resolver.reject(scope, err.into());
@@ -608,7 +608,7 @@ impl GPUDevice {
       Err(err) => {
         let err = make_pipeline_error(
           scope,
-          GPUPipelineErrorReason::Validation,
+          GPUPipelineErrorReason::of(&err),
           &fmt_err(&err),
         );
         resolver.reject(scope, err.into());
