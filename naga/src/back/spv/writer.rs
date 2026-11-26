@@ -2323,7 +2323,10 @@ impl Writer {
             let id = self.id_gen.next();
             let instruction = match ty.inner {
                 crate::TypeInner::Array { base, size, stride } => {
-                    self.decorate(id, Decoration::ArrayStride, &[stride]);
+                    // See `contains_bool` for why these arrays get no stride.
+                    if !contains_bool(&module.types, base) {
+                        self.decorate(id, Decoration::ArrayStride, &[stride]);
+                    }
 
                     let type_id = self.get_handle_type_id(base);
                     match size.resolve(module.to_ctx())? {
@@ -2354,6 +2357,7 @@ impl Writer {
                 } => {
                     let mut has_runtime_array = false;
                     let mut member_ids = Vec::with_capacity(members.len());
+                    let explicit_layout = !contains_bool(&module.types, handle);
                     for (index, member) in members.iter().enumerate() {
                         let member_ty = &module.types[member.ty];
                         match member_ty.inner {
@@ -2366,7 +2370,13 @@ impl Writer {
                             }
                             _ => (),
                         }
-                        self.decorate_struct_member(id, index, member, &module.types)?;
+                        self.decorate_struct_member(
+                            id,
+                            index,
+                            member,
+                            &module.types,
+                            explicit_layout,
+                        )?;
                         let member_id = self.get_handle_type_id(member.ty);
                         member_ids.push(member_id);
                     }
@@ -2613,6 +2623,7 @@ impl Writer {
                                                 next_index as usize,
                                                 member,
                                                 &module.types,
+                                                true,
                                             )?;
                                             self.get_handle_type_id(member.ty)
                                         }
@@ -3663,7 +3674,13 @@ impl Writer {
                         binding: None,
                         offset: 0,
                     };
-                    self.decorate_struct_member(wrapper_type_id, 0, &member, &ir_module.types)?;
+                    self.decorate_struct_member(
+                        wrapper_type_id,
+                        0,
+                        &member,
+                        &ir_module.types,
+                        true,
+                    )?;
 
                     Instruction::type_struct(wrapper_type_id, &[inner_type_id])
                         .to_words(&mut self.logical_layout.declarations);
@@ -3739,15 +3756,9 @@ impl Writer {
         index: usize,
         member: &crate::StructMember,
         arena: &UniqueArena<crate::Type>,
+        explicit_layout: bool,
     ) -> Result<(), Error> {
         use spirv::Decoration;
-
-        self.annotations.push(Instruction::member_decorate(
-            struct_id,
-            index as u32,
-            Decoration::Offset,
-            &[member.offset],
-        ));
 
         if self.flags.contains(WriterFlags::DEBUG) {
             if let Some(ref name) = member.name {
@@ -3755,6 +3766,18 @@ impl Writer {
                     .push(Instruction::member_name(struct_id, index as u32, name));
             }
         }
+
+        // See `contains_bool` for which structs get no layout decorations.
+        if !explicit_layout {
+            return Ok(());
+        }
+
+        self.annotations.push(Instruction::member_decorate(
+            struct_id,
+            index as u32,
+            Decoration::Offset,
+            &[member.offset],
+        ));
 
         // Matrices and (potentially nested) arrays of matrices both require decorations,
         // so "see through" any arrays to determine if they're needed.
@@ -4132,6 +4155,30 @@ impl Writer {
             print_id,
             &operands,
         ));
+    }
+}
+
+/// Returns `true` if `ty` is, or contains, a `bool`.
+///
+/// Such a type is not host-shareable, so it can never be the type of a buffer
+/// and never needs the explicit layout decorations (`ArrayStride`, `Offset`,
+/// `MatrixStride`) that SPIR-V requires there. It must not have them either:
+/// they come from Naga's own layout, in which a `bool` takes one byte, while
+/// SPIR-V gives `OpTypeBool` no size. Arm's proprietary Mali driver (seen with
+/// `r20p0` on a Mali-G52) lays variables out by these decorations but reads
+/// and writes a `bool` as a wider value, so the elements of an
+/// `array<bool, N>` with `ArrayStride 1` overlap and `a[i]` reads as
+/// `a[i] || a[i + 1]`.
+fn contains_bool(types: &UniqueArena<crate::Type>, ty: Handle<crate::Type>) -> bool {
+    match types[ty].inner {
+        crate::TypeInner::Scalar(scalar) | crate::TypeInner::Vector { scalar, .. } => {
+            scalar.kind == crate::ScalarKind::Bool
+        }
+        crate::TypeInner::Array { base, .. } => contains_bool(types, base),
+        crate::TypeInner::Struct { ref members, .. } => {
+            members.iter().any(|member| contains_bool(types, member.ty))
+        }
+        _ => false,
     }
 }
 
