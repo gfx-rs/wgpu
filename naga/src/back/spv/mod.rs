@@ -376,7 +376,21 @@ impl LocalImageType {
                     width: 4,
                 },
                 dim,
-                flags: make_flags(multi, ImageTypeFlags::DEPTH | ImageTypeFlags::SAMPLED),
+                // Vulkan ignores the `Depth` operand of `OpTypeImage`, and a
+                // multisampled image cannot be used with a comparison sampler
+                // anyway. Arm's Mali driver (seen on a Mali-G52, driver
+                // r20p0) fails pipeline creation with
+                // `VK_ERROR_INITIALIZATION_FAILED` for any shader that
+                // declares a multisampled image with `Depth` set to 1, so
+                // leave it at 0 for those.
+                flags: make_flags(
+                    multi,
+                    if multi {
+                        ImageTypeFlags::SAMPLED
+                    } else {
+                        ImageTypeFlags::DEPTH | ImageTypeFlags::SAMPLED
+                    },
+                ),
                 image_format: spirv::ImageFormat::Unknown,
             },
             crate::ImageClass::Storage { format, access: _ } => LocalImageType {

@@ -351,6 +351,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - In the MSL backend, `subgroupBallot` now keeps lanes 32-63, which were lost on GPUs with 64-wide SIMD groups (AMD GPUs on macOS). By @ErkoRisthein in [#10797](https://github.com/gfx-rs/wgpu/pull/10797).
 - Report a WGSL error instead of panicking when the condition of a `const_assert` is a composite value, such as `const_assert(vec2i());`. By @MilosLord in [#10897](https://github.com/gfx-rs/wgpu/pull/10897).
 - Fix WGSL `continuing` blocks falsely rejecting declarations that shadow variables from the loop body (e.g., `loop { let x = a; continuing { let x = b; } }`) as redefinitions. By @ekarad1um in [#10980](https://github.com/gfx-rs/wgpu/pull/10980).
+- Stop marking multisampled depth textures as depth images in SPIR-V (the `Depth` operand of `OpTypeImage`). Arm's proprietary Mali driver (seen with `r20p0` on a Mali-G52) failed to create any pipeline whose shader declares a `texture_depth_multisampled_2d`. By @matthargett in [#11131](https://github.com/gfx-rs/wgpu/pull/11131).
 
 #### Validation
 

@@ -78,7 +78,7 @@ OpDecorate %89 Location 0
 %7 = OpTypeVector %6 2
 %8 = OpTypeImage %5 2D 1 1 0 1 Unknown
 %9 = OpTypeInt 32 0
-%10 = OpTypeImage %5 2D 1 0 1 1 Unknown
+%10 = OpTypeImage %5 2D 0 0 1 1 Unknown
 %11 = OpTypeVector %5 4
 %13 = OpTypePointer UniformConstant %4
 %12 = OpVariable  %13  UniformConstant
