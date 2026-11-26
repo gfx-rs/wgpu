@@ -1,5 +1,6 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
+#![allow(missing_debug_implementations)]
 
 use windows::Win32::Graphics::Dxgi;
 

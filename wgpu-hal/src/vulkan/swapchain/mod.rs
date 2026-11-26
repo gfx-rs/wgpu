@@ -5,6 +5,11 @@ use crate::vulkan::{semaphore_list::SemaphoreType, DeviceShared};
 
 pub(super) use native::*;
 
+#[cfg(windows)]
+pub(super) use dxgi::*;
+
+#[cfg(windows)]
+mod dxgi;
 mod native;
 
 /// Win32 `HWND`, handed to a Win32 [`NativeSurface`] at construction so it can
