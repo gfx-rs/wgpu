@@ -130,6 +130,30 @@ Example for a cube map:
 
 By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
+#### DXGI swapchain for Vulkan on Windows
+
+The Vulkan backend can now present via a DXGI swapchain on Windows. DXGI swapchains generally perform more consistently, give more control over frame pacing, and may use optimizations that are not available to native vulkan swapchains. For now this is a default-off feature, though in the future it may be enabled by default.
+
+Turn it on at instance creation, or if your program is using wgpu environment variables set `WGPU_VULKAN_SWAPCHAIN_KIND` to `native`, `dxgi-hwnd`, or `dxgi-visual`:
+
+```diff
+  let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+      backends: wgpu::Backends::VULKAN,
++     backend_options: wgpu::BackendOptions {
++         vulkan: wgpu::VulkanBackendOptions {
++             swapchain_kind: wgpu::VulkanSwapchainKind::DxgiFromHwnd,
++             ..Default::default()
++         },
++         ..Default::default()
++     },
+      ..Default::default()
+  });
+```
+
+Nsight and Radeon GPU Profiler should work normally, and all graphics debuggers should still broadly function, but RenderDoc will only capture the D3D12 work, unless you explicitly use `Device::start_graphics_debugger_capture` on the wgpu device to capture the vulkan work. RenderDoc does not support DirectComposition, so it does not work with `DxgiFromVisual`. The interop D3D12 device honors the same Agility SDK configuration as the DX12 backend, via `VulkanBackendOptions::agility_sdk`.
+
+By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
+
 ### Added/New Features
 
 #### General
@@ -234,6 +258,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 #### General
 
+- Resources passed to `RenderBundleEncoder` and `util::RenderEncoder` no longer need to outlive the encoder. External `RenderEncoder` implementations must update all six resource-taking methods to accept independent argument lifetimes instead of the trait's `'a` lifetime. By @mvanhorn in [#10839](https://github.com/gfx-rs/wgpu/pull/10839).
 - Allow `set_immediates` before `set_pipeline` by deferring actual setting of immediates to draw/dispatch call time. By @beicause in [#9597](https://github.com/gfx-rs/wgpu/pull/9597).
 - Validate pipeline layout `immediate_size` and fix its calculation when there are multiple immediate variables. Now it must be >= required size of the shader entry point. By @beicause in [#9711](https://github.com/gfx-rs/wgpu/pull/9711).
 - [`immediate_address_space`](https://www.w3.org/TR/WGSL/#language_extension-immediate_address_space) WGSL language extension is implemented. By @beicause in [#9711](https://github.com/gfx-rs/wgpu/pull/9711).
@@ -274,6 +299,8 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Removed the `VULKAN_GOOGLE_DISPLAY_TIMING`, `VULKAN_EXTERNAL_MEMORY_WIN32`, `VULKAN_EXTERNAL_MEMORY_FD`, and `VULKAN_EXTERNAL_MEMORY_DMA_BUF` features. wgpu enables the corresponding Vulkan extensions whenever the adapter supports them. To check for support, use `Adapter::as_hal::<wgpu::hal::api::Vulkan>()` and call `physical_device_capabilities().supports_extension()` with the extension name. By @andyleiserson in [#10635](https://github.com/gfx-rs/wgpu/pull/10635).
 - Sub-allocate `wgpu_hal::MemoryFlags::TRANSIENT` buffers and acceleration structure build scratch from a separate Vulkan memory pool, so short-lived allocations no longer pin memory blocks shared with long-lived resources. By @stuartparmenter in [#10232](https://github.com/gfx-rs/wgpu/pull/10232).
 - Allocate acceleration structures created with `AccelerationStructureFlags::ALLOW_COMPACTION` from the transient Vulkan memory pool, since they are usually replaced by their compacted copies. By @stuartparmenter in [#10233](https://github.com/gfx-rs/wgpu/pull/10233).
+- Renamed `wgpu_hal::vulkan::Device::texture_from_d3d11_shared_handle` to `texture_from_shared_handle`. It has a new `handle_type` argument: pass `vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE` for the previous behavior, or `D3D12_RESOURCE` for an `ID3D12Resource` shared handle. By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
+- `wgpu_hal::vulkan::Instance::from_raw` has new `swapchain_kind` and `agility_sdk` arguments. Pass `VulkanSwapchainKind::Native` and `None` for the previous behavior. By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 
 ### Bug Fixes
 
@@ -296,7 +323,9 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Make `TextureBlitter` respect the `sample_type` when performing downsampling. Previously, `FilterMode::Nearest` was always used when copying a larger texture to a smaller one. By @DouglasDwyer in [#10657](https://github.com/gfx-rs/wgpu/pull/10657)
 - Fixed some cases where `Adapter::get_texture_format_features` and `TextureFormat::guaranteed_format_features` did not match the validation applied by `create_texture`. By @andyleiserson in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
 - `STORAGE_BINDING` usage is no longer allowed for multi-planar textures. It was previously accepted, but was untested, and likely broken. By @andyleiserson in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
+- Fix a panic on Metal and DX12, and a Vulkan validation error, when `set_immediates` writes past the immediate size of the current pipeline layout, including layouts with no immediates. Fix a DX12 panic when a pipeline layout has immediates that are never set. By @cwfitzgerald in [#10903](https://github.com/gfx-rs/wgpu/pull/10903).
 - Make `wgpu-core` build with `--no-default-features` by fixing the logic in `wgpu_core::lock`. By @jimblandy in [#10972](https://github.com/gfx-rs/wgpu/pull/10972).
+- Fix the start state of a texture subresource that a pass uses for the first time in a command buffer that already uses other subresources of the same texture. If the pass used the subresource in two ways, the subresource began the submission in the wrong state. By @cwfitzgerald in [#10212](https://github.com/gfx-rs/wgpu/pull/10212).
 
 #### naga
 
