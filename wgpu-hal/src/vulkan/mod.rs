@@ -611,6 +611,25 @@ bitflags::bitflags!(
         /// [`Fence`]: super::Fence
         /// [`FencePool`]: super::FencePool
         const DISABLE_TIMELINE_SEMAPHORES = 1 << 4;
+        /// Never put a depth-stencil image in the
+        /// `DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL` layout; use
+        /// `DEPTH_STENCIL_ATTACHMENT_OPTIMAL` in its place.
+        ///
+        /// Arm's proprietary Mali driver loses the device when a draw writes stencil in a
+        /// render pass whose depth-stencil attachment is in that layout. Observed with
+        /// driver `v1.r20p0-01rel0` on a Mali-G52 MC2 (MT6768, Android 10) and a
+        /// `D24_UNORM_S8_UINT` attachment: the submission stalls for about nine seconds
+        /// and the device is lost, whether or not the depth aspect is sampled in the
+        /// pass. The same pass with the attachment in `DEPTH_STENCIL_ATTACHMENT_OPTIMAL`
+        /// renders correctly.
+        ///
+        /// When the pass also samples the read-only depth aspect, the image is then
+        /// sampled while in an attachment layout, which Vulkan does not allow. Nothing
+        /// writes depth in such a pass, and the affected driver renders it correctly.
+        ///
+        /// Set for Arm drivers up to and including `r20`, the only release known to be
+        /// affected. Later releases have not been tested.
+        const AVOID_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_LAYOUT = 1 << 5;
     }
 );
 

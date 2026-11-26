@@ -2546,6 +2546,11 @@ impl super::Instance {
                 phd_capabilities.is_driver(vk::DriverId::ARM_PROPRIETARY)
                     && arm_driver_leaks_timeline_semaphores(&info.driver_info),
             );
+            workarounds.set(
+                super::Workarounds::AVOID_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_LAYOUT,
+                phd_capabilities.is_driver(vk::DriverId::ARM_PROPRIETARY)
+                    && arm_driver_breaks_depth_read_only_stencil_attachment(&info.driver_info),
+            );
         };
 
         if let Some(driver) = phd_capabilities.driver {
@@ -3777,6 +3782,21 @@ fn arm_driver_leaks_timeline_semaphores(driver_info: &str) -> bool {
     }
 }
 
+/// Returns `true` if Arm's proprietary driver loses the device when a draw writes stencil
+/// through an attachment in the `DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL` layout.
+///
+/// Observed with `r20`. Earlier `r` releases are assumed to share the defect; later ones have
+/// not been tested. If `driver_info` does not start with `v1.r<N>p`, this returns `false`,
+/// because the replacement layout is not valid Vulkan when the depth aspect is sampled.
+fn arm_driver_breaks_depth_read_only_stencil_attachment(driver_info: &str) -> bool {
+    const LAST_KNOWN_AFFECTED: u32 = 20;
+    driver_info
+        .strip_prefix("v1.r")
+        .and_then(|rest| rest.split_once('p'))
+        .and_then(|(number, _)| number.parse::<u32>().ok())
+        .is_some_and(|n| n <= LAST_KNOWN_AFFECTED)
+}
+
 /// Convert Vulkan component type to wgt::CooperativeScalarType.
 fn map_vk_component_type(ty: vk::ComponentTypeKHR) -> Option<wgt::CooperativeScalarType> {
     match ty {
@@ -3903,7 +3923,23 @@ fn query_cooperative_matrix_properties(
 
 #[cfg(test)]
 mod tests {
+    use super::arm_driver_breaks_depth_read_only_stencil_attachment as breaks_layout;
     use super::arm_driver_leaks_timeline_semaphores as leaks;
+
+    #[test]
+    fn arm_depth_read_only_stencil_attachment_driver_versions() {
+        assert!(breaks_layout(
+            "v1.r20p0-01rel0.2ecdebafc539890b5b86a06d83f2e755"
+        ));
+        assert!(breaks_layout("v1.r16p0-01rel0"));
+        assert!(!breaks_layout("v1.r21p0-01rel0"));
+        assert!(!breaks_layout("v1.r46p0-01eac0"));
+        assert!(!breaks_layout(
+            "v1.g18p0-01eac0.9e534f339477793d151cc7ab4c27f2c0"
+        ));
+        assert!(!breaks_layout("?"));
+        assert!(!breaks_layout("v1.r20"));
+    }
 
     #[test]
     fn arm_timeline_semaphore_driver_versions() {

@@ -9,13 +9,17 @@ const DST_IMAGE_LAYOUT: vk::ImageLayout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
 
 /// The layout for `usage`. Identical to [`conv::derive_image_layout`] except that
 /// `TextureUses::PRESENT` is `GENERAL` for [`super::PresentTransition::ReleaseToExternal`]
-/// textures.
-fn barrier_image_layout(texture: &super::Texture, usage: wgt::TextureUses) -> vk::ImageLayout {
+/// textures, and that layouts ruled out by `workarounds` are replaced.
+fn barrier_image_layout(
+    texture: &super::Texture,
+    usage: wgt::TextureUses,
+    workarounds: super::Workarounds,
+) -> vk::ImageLayout {
     match (usage, texture.present_transition) {
         (wgt::TextureUses::PRESENT, super::PresentTransition::ReleaseToExternal) => {
             vk::ImageLayout::GENERAL
         }
-        _ => conv::derive_image_layout(usage, texture.format),
+        _ => workarounds.image_layout(conv::derive_image_layout(usage, texture.format)),
     }
 }
 
@@ -322,7 +326,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 self.device.private_caps.store_op_none,
                 self.device.features,
             );
-            let src_layout = barrier_image_layout(bar.texture, bar.usage.from);
+            let src_layout =
+                barrier_image_layout(bar.texture, bar.usage.from, self.device.workarounds);
             src_stages |= src_stage;
             let (dst_stage, dst_access) = conv::map_texture_usage_to_barrier(
                 bar.usage.to,
@@ -330,7 +335,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 self.device.private_caps.store_op_none,
                 self.device.features,
             );
-            let dst_layout = barrier_image_layout(bar.texture, bar.usage.to);
+            let dst_layout =
+                barrier_image_layout(bar.texture, bar.usage.to, self.device.workarounds);
             dst_stages |= dst_stage;
 
             // Insert a queue family ownership transfer if the caller requested
@@ -923,10 +929,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     color: unsafe { cat.make_vk_clear_color() },
                 });
                 let color = super::ColorAttachmentKey {
-                    base: cat.target.make_attachment_key(cat.ops),
+                    base: cat
+                        .target
+                        .make_attachment_key(cat.ops, self.device.workarounds),
                     resolve: cat.resolve_target.as_ref().map(|target| {
                         target.make_attachment_key(
                             crate::AttachmentOps::LOAD_CLEAR | crate::AttachmentOps::STORE,
+                            self.device.workarounds,
                         )
                     }),
                 };
@@ -951,7 +960,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 },
             });
             rp_key.depth_stencil = Some(super::DepthStencilAttachmentKey {
-                base: ds.target.make_attachment_key(ds.depth_ops),
+                base: ds
+                    .target
+                    .make_attachment_key(ds.depth_ops, self.device.workarounds),
                 stencil_ops: ds.stencil_ops,
             });
             fb_key.push_view(ds.target.view.identified_raw_view());

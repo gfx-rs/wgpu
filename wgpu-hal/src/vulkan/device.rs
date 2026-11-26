@@ -2271,15 +2271,17 @@ impl crate::Device for super::Device {
                 ds.is_stencil_read_only(desc.primitive.cull_mode),
             );
             let vk_format = self.shared.private_caps.map_texture_format(ds.format);
-            let vk_layout = match (
-                compatible_rp_key.depth_read_only,
-                compatible_rp_key.stencil_read_only,
-            ) {
-                (true, true) => vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
-                (true, false) => vk::ImageLayout::DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL,
-                (false, true) => vk::ImageLayout::DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
-                (false, false) => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            };
+            let vk_layout = self.shared.workarounds.image_layout(
+                match (
+                    compatible_rp_key.depth_read_only,
+                    compatible_rp_key.stencil_read_only,
+                ) {
+                    (true, true) => vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                    (true, false) => vk::ImageLayout::DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL,
+                    (false, true) => vk::ImageLayout::DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
+                    (false, false) => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                },
+            );
             compatible_rp_key.depth_stencil = Some(super::DepthStencilAttachmentKey {
                 base: super::AttachmentKey::compatible(vk_format, vk_layout),
                 stencil_ops: crate::AttachmentOps::all(),

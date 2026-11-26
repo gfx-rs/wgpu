@@ -212,10 +212,14 @@ pub fn map_surface_color_space(color_space: wgt::SurfaceColorSpace) -> vk::Color
 }
 
 impl crate::Attachment<'_, super::TextureView> {
-    pub(super) fn make_attachment_key(&self, ops: crate::AttachmentOps) -> super::AttachmentKey {
+    pub(super) fn make_attachment_key(
+        &self,
+        ops: crate::AttachmentOps,
+        workarounds: super::Workarounds,
+    ) -> super::AttachmentKey {
         super::AttachmentKey {
             format: self.view.raw_format,
-            layout: derive_image_layout(self.usage, self.view.format),
+            layout: workarounds.image_layout(derive_image_layout(self.usage, self.view.format)),
             ops,
         }
     }
@@ -263,6 +267,22 @@ pub fn derive_image_layout(usage: wgt::TextureUses, format: wgt::TextureFormat) 
                     (false, false) => vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
                 }
             }
+        }
+    }
+}
+
+impl super::Workarounds {
+    /// Returns the layout to use where wgpu would otherwise use `layout`.
+    ///
+    /// Every layout that an image is transitioned to or used in as an attachment
+    /// must go through this, so that barriers and render passes agree.
+    pub(super) fn image_layout(self, layout: vk::ImageLayout) -> vk::ImageLayout {
+        if layout == vk::ImageLayout::DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL
+            && self.contains(Self::AVOID_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_LAYOUT)
+        {
+            vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+        } else {
+            layout
         }
     }
 }
