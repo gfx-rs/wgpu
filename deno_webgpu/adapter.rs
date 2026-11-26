@@ -187,7 +187,14 @@ impl GPUAdapter {
     let error_handler =
       Rc::new(super::error::DeviceErrorHandler::new(wgpu_device.clone()));
 
-    let wgpu_device_id = Arc::as_ptr(&wgpu_device) as usize;
+    // Key the per-device tables by a number that is never reused. The
+    // address of the device was used before, but a stale device-lost task or
+    // finalizer for a freed device could then act on a newer device that
+    // happened to be allocated at the same address.
+    static NEXT_DEVICE_ID: std::sync::atomic::AtomicUsize =
+      std::sync::atomic::AtomicUsize::new(1);
+    let wgpu_device_id =
+      NEXT_DEVICE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
     let lost_resolver = v8::PromiseResolver::new(scope).unwrap();
     let lost_promise = lost_resolver.get_promise(scope);
@@ -201,11 +208,16 @@ impl GPUAdapter {
     };
     let wake = Arc::new(Mutex::new(move |reason: DeviceLostReason| {
       cross_thread_spawner.spawn(move |scope| {
-        let lost_resolver = JsRuntime::op_state_from(scope)
+        // The finalizer of the JS device object removes the resolver too.
+        // If the object was collected between the device being lost and
+        // this task running, there is nobody left to tell.
+        let Some(lost_resolver) = JsRuntime::op_state_from(scope)
           .borrow_mut()
           .borrow_mut::<LostPromiseResolverHM>()
           .remove(&wgpu_device_id)
-          .unwrap();
+        else {
+          return;
+        };
         let lost_resolver = v8::Local::new(scope, lost_resolver);
         let info = make_cppgc_object(
           scope,
