@@ -409,6 +409,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - Fix pass timestamp queries on Vulkan sometimes reporting a duration of almost zero for a render or compute pass, when the GPU was busy with other work. By @kikijiki in [#10837](https://github.com/gfx-rs/wgpu/pull/10837).
 - Skip direct compute dispatches that have a zero dimension instead of passing them to the driver. Arm's proprietary Mali driver (seen with `r20p0` on a Mali-G52) stalled for about six seconds on each one and lost the device for `dispatch_workgroups(0, 0, 0)`, and Qualcomm's proprietary driver for the Adreno 540 hung. By @matthargett in [#11133](https://github.com/gfx-rs/wgpu/pull/11133).
 - Work around Arm's proprietary Mali driver losing the device when a render pass has a depth-stencil attachment with read-only depth and writable stencil (seen with `r20p0` on a Mali-G52 and `depth24plus-stencil8`). On Arm drivers up to `r20`, wgpu now uses the `DEPTH_STENCIL_ATTACHMENT_OPTIMAL` layout in place of `DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL`. By @matthargett in [#11133](https://github.com/gfx-rs/wgpu/pull/11133).
+- Clamp the reported `max_compute_workgroups_per_dimension` to the product of the three workgroup size limits. Arm's proprietary Mali driver (seen with `r20p0` on a Mali-G52) reports `u32::MAX`, which left no larger value for validation to reject. By @matthargett in [#11133](https://github.com/gfx-rs/wgpu/pull/11133).
 
 #### Metal
 

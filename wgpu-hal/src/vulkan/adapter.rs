@@ -1936,9 +1936,23 @@ impl PhysicalDeviceProperties {
             max_compute_workgroup_size_x: limits.max_compute_work_group_size[0],
             max_compute_workgroup_size_y: limits.max_compute_work_group_size[1],
             max_compute_workgroup_size_z: limits.max_compute_work_group_size[2],
-            max_compute_workgroups_per_dimension: limits.max_compute_work_group_count[0]
-                .min(limits.max_compute_work_group_count[1])
-                .min(limits.max_compute_work_group_count[2]),
+            max_compute_workgroups_per_dimension: {
+                // WebGPU expects this limit to be no larger than the product of the
+                // three workgroup size limits, and expects `limit + 1` to be a value
+                // that `dispatchWorkgroups` can be called with and reject. Some
+                // drivers report `u32::MAX` workgroups per dimension (Arm Mali
+                // `r20p0`, with a size limit of 384 per dimension), which satisfies
+                // neither.
+                let max_workgroup_size_product = limits
+                    .max_compute_work_group_size
+                    .iter()
+                    .fold(1u32, |product, &size| product.saturating_mul(size));
+                limits.max_compute_work_group_count[0]
+                    .min(limits.max_compute_work_group_count[1])
+                    .min(limits.max_compute_work_group_count[2])
+                    .min(max_workgroup_size_product)
+                    .min(u32::MAX - 1)
+            },
             max_immediate_size: limits.max_push_constants_size,
             //
             // NATIVE (Non-WebGPU) LIMITS:
