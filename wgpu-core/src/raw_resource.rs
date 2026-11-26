@@ -5,7 +5,7 @@
 //! special raw resources that wrap hal resources during creation, but on drop
 //! destroy the resource.
 
-use std::boxed::Box;
+use alloc::boxed::Box;
 
 use scopeguard::{guard, ScopeGuard};
 
@@ -98,6 +98,7 @@ create_raw_multi_args! {
 
 impl Device {
     #[doc = create_raw_docs!(create_buffer)]
+    #[expect(clippy::type_complexity, reason = "types don't support impl FnOnce, so it can't be simpler.")]
     pub(crate) unsafe fn create_raw_buffer<'a>(
         &'a self,
         desc: &hal::BufferDescriptor,
