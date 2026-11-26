@@ -407,6 +407,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - Polyfill workgroup zero init in mesh and task shaders on AMD's proprietary driver, which fails with `VK_ERROR_INITIALIZATION_FAILED` when they use `OpVariable` initializers. By @apollo-2006 in [#10692](https://github.com/gfx-rs/wgpu/pull/10692).
 - Fix a fence data race between submitting and polling on devices without timeline semaphores. By @JasperDeSutter in [#10960](https://github.com/gfx-rs/wgpu/pull/10960).
 - Fix pass timestamp queries on Vulkan sometimes reporting a duration of almost zero for a render or compute pass, when the GPU was busy with other work. By @kikijiki in [#10837](https://github.com/gfx-rs/wgpu/pull/10837).
+- A `vkCreateGraphicsPipelines`, `vkCreateComputePipelines` or `vkCreateRayTracingPipelinesKHR` call that fails with a result other than out-of-memory or device-lost (drivers return `VK_ERROR_INITIALIZATION_FAILED` or `VK_ERROR_UNKNOWN` for shaders they cannot compile) now fails that pipeline with an internal error naming the command and the result. It used to lose the device. By @matthargett in [#11135](https://github.com/gfx-rs/wgpu/pull/11135).
 
 #### Metal
 

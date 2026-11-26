@@ -2199,6 +2199,8 @@ impl crate::Device for super::Device {
         let mut compiled_vs = None;
         let mut compiled_ms = None;
         let mut compiled_ts = None;
+        // The stages of this pipeline, for error reporting.
+        let mut pipeline_stages = wgt::ShaderStages::empty();
         match &desc.vertex_processor {
             crate::VertexProcessor::Standard {
                 vertex_buffers: _,
@@ -2210,6 +2212,7 @@ impl crate::Device for super::Device {
                     &desc.layout.binding_map,
                 )?);
                 stages.push(compiled_vs.as_ref().unwrap().create_info);
+                pipeline_stages |= wgt::ShaderStages::VERTEX;
             }
             crate::VertexProcessor::Mesh {
                 task_stage,
@@ -2222,6 +2225,7 @@ impl crate::Device for super::Device {
                         &desc.layout.binding_map,
                     )?);
                     stages.push(compiled_ts.as_ref().unwrap().create_info);
+                    pipeline_stages |= wgt::ShaderStages::TASK;
                 }
                 compiled_ms = Some(self.compile_stage(
                     mesh_stage,
@@ -2229,6 +2233,7 @@ impl crate::Device for super::Device {
                     &desc.layout.binding_map,
                 )?);
                 stages.push(compiled_ms.as_ref().unwrap().create_info);
+                pipeline_stages |= wgt::ShaderStages::MESH;
             }
         }
         let compiled_fs = match desc.fragment_stage {
@@ -2239,6 +2244,7 @@ impl crate::Device for super::Device {
                     &desc.layout.binding_map,
                 )?;
                 stages.push(compiled.create_info);
+                pipeline_stages |= wgt::ShaderStages::FRAGMENT;
                 Some(compiled)
             }
             None => None,
@@ -2389,48 +2395,32 @@ impl crate::Device for super::Device {
             .map(|it| it.raw)
             .unwrap_or(vk::PipelineCache::null());
 
-        let mut raw_vec = {
+        let result = {
             profiling::scope!("vkCreateGraphicsPipelines");
             unsafe {
                 self.shared
                     .raw
                     .create_graphics_pipelines(pipeline_cache, &vk_infos, None)
-                    .map_err(|(_, e)| super::map_pipeline_err(e))
-            }?
+            }
         };
+
+        // The device stays usable when creation fails, so the temporary
+        // modules are destroyed before the result is checked.
+        for raw_module in [&compiled_vs, &compiled_ts, &compiled_ms, &compiled_fs]
+            .into_iter()
+            .flatten()
+            .filter_map(|stage| stage.temp_raw_module)
+        {
+            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
+        }
+
+        let mut raw_vec = result.map_err(|(_, e)| {
+            super::map_pipeline_err(e, "vkCreateGraphicsPipelines", pipeline_stages)
+        })?;
 
         let raw = raw_vec.pop().unwrap();
         if let Some(label) = desc.label {
             unsafe { self.shared.set_object_name(raw, label) };
-        }
-
-        if let Some(CompiledStage {
-            temp_raw_module: Some(raw_module),
-            ..
-        }) = compiled_vs
-        {
-            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
-        }
-        if let Some(CompiledStage {
-            temp_raw_module: Some(raw_module),
-            ..
-        }) = compiled_ts
-        {
-            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
-        }
-        if let Some(CompiledStage {
-            temp_raw_module: Some(raw_module),
-            ..
-        }) = compiled_ms
-        {
-            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
-        }
-        if let Some(CompiledStage {
-            temp_raw_module: Some(raw_module),
-            ..
-        }) = compiled_fs
-        {
-            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
         }
 
         self.counters.render_pipelines.add(1);
@@ -2472,23 +2462,28 @@ impl crate::Device for super::Device {
             .map(|it| it.raw)
             .unwrap_or(vk::PipelineCache::null());
 
-        let mut raw_vec = {
+        let result = {
             profiling::scope!("vkCreateComputePipelines");
             unsafe {
                 self.shared
                     .raw
                     .create_compute_pipelines(pipeline_cache, &vk_infos, None)
-                    .map_err(|(_, e)| super::map_pipeline_err(e))
-            }?
+            }
         };
+
+        // The device stays usable when creation fails, so the temporary
+        // module is destroyed before the result is checked.
+        if let Some(raw_module) = compiled.temp_raw_module {
+            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
+        }
+
+        let mut raw_vec = result.map_err(|(_, e)| {
+            super::map_pipeline_err(e, "vkCreateComputePipelines", wgt::ShaderStages::COMPUTE)
+        })?;
 
         let raw = raw_vec.pop().unwrap();
         if let Some(label) = desc.label {
             unsafe { self.shared.set_object_name(raw, label) };
-        }
-
-        if let Some(raw_module) = compiled.temp_raw_module {
-            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
         }
 
         self.counters.compute_pipelines.add(1);
@@ -2512,6 +2507,8 @@ impl crate::Device for super::Device {
     ) -> Result<super::RayTracingPipeline, crate::PipelineError> {
         let mut stages = Vec::new();
         let mut groups = Vec::new();
+        // The stages of this pipeline, for error reporting.
+        let mut pipeline_stages = wgt::ShaderStages::RAY_GENERATION | wgt::ShaderStages::MISS;
 
         let compiled_ray_gen = self.compile_stage(
             &desc.ray_generation,
@@ -2561,6 +2558,7 @@ impl crate::Device for super::Device {
             let closest_idx = stages.len();
 
             stages.push(compiled_closest_hits.create_info);
+            pipeline_stages |= wgt::ShaderStages::CLOSEST_HIT;
 
             compiled_stages.push(compiled_closest_hits);
 
@@ -2582,6 +2580,7 @@ impl crate::Device for super::Device {
                 let any_idx = stages.len();
 
                 stages.push(compiled_any_hit.create_info);
+                pipeline_stages |= wgt::ShaderStages::ANY_HIT;
 
                 compiled_stages.push(compiled_any_hit);
 
@@ -2610,16 +2609,17 @@ impl crate::Device for super::Device {
             .ray_tracing_pipelines
             .as_ref()
             .unwrap();
-        let pipelines = unsafe {
+        let result = unsafe {
             fns.create_ray_tracing_pipelines(
                 vk::DeferredOperationKHR::null(),
                 pipeline_cache,
                 &create_infos,
                 None,
             )
-            .map_err(|(_, e)| super::map_pipeline_err(e))
-        }?;
+        };
 
+        // The device stays usable when creation fails, so the temporary
+        // modules are destroyed before the result is checked.
         if let Some(raw_module) = compiled_ray_gen.temp_raw_module {
             unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
         }
@@ -2634,6 +2634,10 @@ impl crate::Device for super::Device {
         {
             unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
         }
+
+        let pipelines = result.map_err(|(_, e)| {
+            super::map_pipeline_err(e, "vkCreateRayTracingPipelinesKHR", pipeline_stages)
+        })?;
 
         self.counters.ray_tracing_pipelines.add(1);
 
