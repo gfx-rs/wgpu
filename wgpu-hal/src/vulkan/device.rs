@@ -17,6 +17,7 @@ use crate::TlasInstance;
 
 /// Why a DMA-buf could not be imported as a texture.
 // Debug can forward to Display so `{:?}` of the error is readable too.
+#[cfg(unix)]
 #[derive(Debug, thiserror::Error)]
 pub enum ImportTextureError {
     #[error(transparent)]

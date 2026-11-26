@@ -5,14 +5,17 @@
 
 use wgpu_test::GpuTestInitializer;
 
+// The browser run lists tests from the native build and looks each up in the
+// wasm build, which has no Linux module, so the native build leaves them out
+// of that run.
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", not(wasm_test)))]
     linux::all_tests(vec);
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(any(not(target_os = "linux"), wasm_test))]
     let _ = vec;
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(wasm_test)))]
 mod linux {
     use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 
@@ -111,7 +114,7 @@ mod linux {
                 size: u64,
             }
             // _IOW('u', 0x42, struct udmabuf_create), include/uapi/linux/udmabuf.h
-            const UDMABUF_CREATE: libc::c_ulong = 0x4018_7542;
+            const UDMABUF_CREATE: libc::Ioctl = 0x4018_7542;
             const UDMABUF_FLAGS_CLOEXEC: u32 = 0x01;
             let device = libc::open(c"/dev/udmabuf".as_ptr(), libc::O_RDWR | libc::O_CLOEXEC);
             assert!(
