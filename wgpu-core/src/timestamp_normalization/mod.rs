@@ -229,7 +229,9 @@ impl TimestampNormalizer {
 
             Ok(Self {
                 state: Some(InternalState {
-                    temporary_bind_group_layout: ScopeGuard::into_inner(temporary_bind_group_layout),
+                    temporary_bind_group_layout: ScopeGuard::into_inner(
+                        temporary_bind_group_layout,
+                    ),
                     pipeline_layout: ScopeGuard::into_inner(pipeline_layout),
                     pipeline,
                     module: ScopeGuard::into_inner(module),

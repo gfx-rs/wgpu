@@ -1,13 +1,13 @@
 #[cfg(feature = "trace")]
 use alloc::string::ToString as _;
 use alloc::{boxed::Box, string::String, sync::Arc, vec, vec::Vec};
-use scopeguard::ScopeGuard;
 use core::{
     mem::{self, ManuallyDrop},
     num::NonZeroU64,
     ptr::NonNull,
     sync::atomic::Ordering,
 };
+use scopeguard::ScopeGuard;
 use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{
@@ -630,8 +630,8 @@ impl PendingWrites {
 
             let cmd_buf = unsafe { self.command_encoder.end_encoding() }
                 .map_err(|e| device.handle_hal_error(e))?;
-            let cmd_buf = scopeguard::guard(cmd_buf, |buf| {
-                unsafe { self.command_encoder.reset_all(vec![buf]); }
+            let cmd_buf = scopeguard::guard(cmd_buf, |buf| unsafe {
+                self.command_encoder.reset_all(vec![buf]);
             });
             self.is_recording = false;
 
