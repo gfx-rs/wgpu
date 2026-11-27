@@ -388,6 +388,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - Fix a use-after-free when several threads create pipelines from the same shader with FXC. The shader cache now holds copies of the bytecode, not FXC's blobs, whose reference count is not thread-safe. By @xorza in [#10805](https://github.com/gfx-rs/wgpu/pull/10805).
 - Fix a 1 second stall in `Surface::get_current_texture` after a surface texture was dropped without being presented. By @DouglasDwyer in [#10511](https://github.com/gfx-rs/wgpu/pull/10511).
 - Present with `DXGI_PRESENT_RESTART` the first time after a swapchain is created or resized, discarding queued frames of the old size that DWM would otherwise show stretched while the window is being resized. By @DouglasDwyer in [#10548](https://github.com/gfx-rs/wgpu/pull/10548).
+- Free the intermediate buffers of unaligned buffer/texture copies through the memory allocator. They were dropped without it, so their heap space stayed in use until the device was destroyed. By @fxOne in [#11068](https://github.com/gfx-rs/wgpu/issues/11068).
 
 #### Vulkan
 
