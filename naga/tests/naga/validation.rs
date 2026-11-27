@@ -2200,3 +2200,173 @@ fn spv_longest_entry_point_name() {
 fn spv_entry_point_name_too_long() {
     write_spv_with_entry_point_name_len(LONGEST_SPV_ENTRY_POINT_NAME_LEN + 1);
 }
+
+const COOPERATIVE_SOURCE: &str = "
+enable wgpu_cooperative_matrix;
+
+var<private> a: coop_mat8x8<f32, A>;
+var<private> b: coop_mat8x8<f32, B>;
+@group(0) @binding(0)
+var<storage, read_write> ext: array<f32>;
+@group(0) @binding(1)
+var<uniform> stride: u32;
+
+@compute @workgroup_size(8, 8, 1)
+fn main() {
+    let c = coopLoad<coop_mat8x8<f32, C>>(&ext[4]);
+    let d = coopMultiplyAdd(a, b, c);
+    coopStoreT(d, &ext[0], stride);
+}
+";
+
+/// Parses [`COOPERATIVE_SOURCE`], applies `mutate` to its entry point, and
+/// returns the resulting `FunctionError`.
+fn cooperative_function_error(mutate: impl FnOnce(&Module, &mut Function)) -> valid::FunctionError {
+    let mut module = naga::front::wgsl::parse_str(COOPERATIVE_SOURCE).unwrap();
+    valid::Validator::new(ValidationFlags::all(), Capabilities::all())
+        .validate(&module)
+        .expect("unmodified module should be valid");
+
+    let mut function = core::mem::take(&mut module.entry_points[0].function);
+    mutate(&module, &mut function);
+    module.entry_points[0].function = function;
+
+    let err = valid::Validator::new(ValidationFlags::all(), Capabilities::all())
+        .validate(&module)
+        .expect_err("modified module should be invalid")
+        .into_inner();
+    match err {
+        valid::ValidationError::EntryPoint {
+            source: valid::EntryPointError::Function(source),
+            ..
+        } => source,
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+fn cooperative_store_data(function: &mut Function) -> &mut ir::CooperativeData {
+    function
+        .body
+        .span_iter_mut()
+        .find_map(|(stmt, _)| match *stmt {
+            ir::Statement::CooperativeStore { ref mut data, .. } => Some(data),
+            _ => None,
+        })
+        .unwrap()
+}
+
+fn global_expression(module: &Module, function: &Function, name: &str) -> naga::Handle<Expression> {
+    function
+        .expressions
+        .iter()
+        .find_map(|(handle, expr)| match *expr {
+            Expression::GlobalVariable(var)
+                if module.global_variables[var].name.as_deref() == Some(name) =>
+            {
+                Some(handle)
+            }
+            _ => None,
+        })
+        .unwrap()
+}
+
+#[test]
+fn cooperative_store_stride_not_emitted() {
+    let mut unemitted = None;
+    let err = cooperative_function_error(|module, function| {
+        let global = global_expression(module, function, "stride");
+        let stride = function
+            .expressions
+            .append(Expression::Load { pointer: global }, naga::Span::default());
+        cooperative_store_data(function).stride = stride;
+        unemitted = Some(stride);
+    });
+    assert!(
+        matches!(
+            err,
+            valid::FunctionError::Expression {
+                handle,
+                source: valid::ExpressionError::NotInScope,
+            } if Some(handle) == unemitted
+        ),
+        "unexpected error: {err:?}"
+    );
+}
+
+#[test]
+fn cooperative_store_pointer_not_emitted() {
+    let mut unemitted = None;
+    let err = cooperative_function_error(|module, function| {
+        let global = global_expression(module, function, "ext");
+        let pointer = function.expressions.append(
+            Expression::AccessIndex {
+                base: global,
+                index: 0,
+            },
+            naga::Span::default(),
+        );
+        cooperative_store_data(function).pointer = pointer;
+        unemitted = Some(pointer);
+    });
+    assert!(
+        matches!(
+            err,
+            valid::FunctionError::Expression {
+                handle,
+                source: valid::ExpressionError::NotInScope,
+            } if Some(handle) == unemitted
+        ),
+        "unexpected error: {err:?}"
+    );
+}
+
+#[test]
+fn cooperative_store_stride_not_u32() {
+    let mut bad = None;
+    let err = cooperative_function_error(|_, function| {
+        let stride = function.expressions.append(
+            Expression::Literal(ir::Literal::I32(8)),
+            naga::Span::default(),
+        );
+        cooperative_store_data(function).stride = stride;
+        bad = Some(stride);
+    });
+    assert!(
+        matches!(err, valid::FunctionError::InvalidCooperativeDataStride(handle) if Some(handle) == bad),
+        "unexpected error: {err:?}"
+    );
+}
+
+#[test]
+fn cooperative_multiply_add_reports_wrong_operand() {
+    for operand in 1..3 {
+        let mut bad = None;
+        let err = cooperative_function_error(|_, function| {
+            let (_, expr) = function
+                .expressions
+                .iter_mut()
+                .find(|(_, expr)| matches!(**expr, Expression::CooperativeMultiplyAdd { .. }))
+                .unwrap();
+            let Expression::CooperativeMultiplyAdd {
+                a,
+                ref mut b,
+                ref mut c,
+            } = *expr
+            else {
+                unreachable!()
+            };
+            *[b, c].into_iter().nth(operand - 1).unwrap() = a;
+            bad = Some(a);
+        });
+        assert!(
+            matches!(
+                err,
+                valid::FunctionError::Expression {
+                    source: valid::ExpressionError::InvalidCooperativeOperand(handle),
+                    ..
+                } if Some(handle) == bad
+            ),
+            "operand {operand}: unexpected error: {err:?}"
+        );
+    }
+}

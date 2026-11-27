@@ -1451,7 +1451,7 @@ impl super::Validator {
                         Ti::CooperativeMatrix { role, .. } if role == expected_role => {}
                         ref other => {
                             log::debug!("{expected_role:?} operand type: {other:?}");
-                            return Err(ExpressionError::InvalidCooperativeOperand(a));
+                            return Err(ExpressionError::InvalidCooperativeOperand(operand));
                         }
                     }
                 }
