@@ -85,7 +85,10 @@ void _ms_main(
 , uint __local_invocation_index [[thread_index_in_threadgroup]]
 , object_data TaskPayload const& taskPayload [[payload]]
 ) {
-    threadgroup MeshOutput mesh_output;
+    threadgroup struct {
+        MeshOutput mesh_output;
+    } nagaWorkgroupMemory;
+    threadgroup MeshOutput& mesh_output = nagaWorkgroupMemory.mesh_output;
     _ms_main(__local_invocation_index, taskPayload, mesh_output);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_object_data);

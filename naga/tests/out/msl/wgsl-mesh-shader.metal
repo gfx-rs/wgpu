@@ -74,8 +74,11 @@ metal::uint3 _ts_main(
   metal::mesh_grid_properties nagaMeshGrid
 , uint __local_invocation_index [[thread_index_in_threadgroup]]
 , object_data TaskPayload& taskPayload [[payload]]
-, threadgroup float& workgroupData
 ) {
+    threadgroup struct {
+        float workgroupData;
+    } nagaWorkgroupMemory;
+    threadgroup float& workgroupData = nagaWorkgroupMemory.workgroupData;
     uint3 nagaGridSize = _ts_main(__local_invocation_index, taskPayload, workgroupData);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_object_data);
@@ -184,8 +187,12 @@ void _ms_main(
 , uint __local_invocation_index [[thread_index_in_threadgroup]]
 , object_data TaskPayload const& taskPayload [[payload]]
 ) {
-    threadgroup float workgroupData;
-    threadgroup MeshOutput mesh_output;
+    threadgroup struct {
+        metal::uint4 mesh_output[9];
+        float workgroupData;
+    } nagaWorkgroupMemory_1;
+    threadgroup MeshOutput& mesh_output = *reinterpret_cast<threadgroup MeshOutput*>(nagaWorkgroupMemory_1.mesh_output);
+    threadgroup float& workgroupData = nagaWorkgroupMemory_1.workgroupData;
     _ms_main(__local_invocation_index, taskPayload, workgroupData, mesh_output);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_object_data);
@@ -247,8 +254,12 @@ void _ms_no_ts(
   metal::mesh<ms_no_tsVertexOutput, ms_no_tsPrimitiveOutput, 3, 1, metal::topology::triangle> meshOutput_1
 , uint __local_invocation_index [[thread_index_in_threadgroup]]
 ) {
-    threadgroup float workgroupData;
-    threadgroup MeshOutput mesh_output;
+    threadgroup struct {
+        metal::uint4 mesh_output[9];
+        float workgroupData;
+    } nagaWorkgroupMemory_2;
+    threadgroup MeshOutput& mesh_output = *reinterpret_cast<threadgroup MeshOutput*>(nagaWorkgroupMemory_2.mesh_output);
+    threadgroup float& workgroupData = nagaWorkgroupMemory_2.workgroupData;
     _ms_no_ts(__local_invocation_index, workgroupData, mesh_output);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_object_data);
@@ -318,8 +329,12 @@ void _ms_divergent(
 , metal::uint3 thread_id_1 [[thread_position_in_threadgroup]]
 , uint __local_invocation_index [[thread_index_in_threadgroup]]
 ) {
-    threadgroup float workgroupData;
-    threadgroup MeshOutput mesh_output;
+    threadgroup struct {
+        metal::uint4 mesh_output[9];
+        float workgroupData;
+    } nagaWorkgroupMemory_3;
+    threadgroup MeshOutput& mesh_output = *reinterpret_cast<threadgroup MeshOutput*>(nagaWorkgroupMemory_3.mesh_output);
+    threadgroup float& workgroupData = nagaWorkgroupMemory_3.workgroupData;
     _ms_divergent(thread_id_1, __local_invocation_index, workgroupData, mesh_output);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_object_data);

@@ -1224,9 +1224,6 @@ struct PipelineStageInfo {
 
     /// The workgroup size for compute, task or mesh stages
     raw_wg_size: MTLSize,
-
-    /// The workgroup memory sizes for compute task or mesh stages
-    work_group_memory_sizes: Vec<u32>,
 }
 
 // TODO(madsmtm): Derive this when a release with
@@ -1244,7 +1241,6 @@ impl Default for PipelineStageInfo {
                 height: 0,
                 depth: 0,
             },
-            work_group_memory_sizes: Default::default(),
         }
     }
 }
@@ -1256,7 +1252,6 @@ impl PipelineStageInfo {
         self.sized_bindings.clear();
         self.vertex_buffer_mappings = Default::default();
         self.library = None;
-        self.work_group_memory_sizes.clear();
         self.raw_wg_size = MTLSize {
             width: 0,
             height: 0,
@@ -1272,9 +1267,6 @@ impl PipelineStageInfo {
         self.vertex_buffer_mappings = Arc::clone(&other.vertex_buffer_mappings);
         self.library = Some(other.library.as_ref().unwrap().clone());
         self.raw_wg_size = other.raw_wg_size;
-        self.work_group_memory_sizes.clear();
-        self.work_group_memory_sizes
-            .extend_from_slice(&other.work_group_memory_sizes);
     }
 }
 

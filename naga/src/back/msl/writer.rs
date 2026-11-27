@@ -715,6 +715,24 @@ fn should_pack_struct_member(
     }
 }
 
+fn needs_untyped_workgroup_storage(
+    module: &crate::Module,
+    ty: Handle<crate::Type>,
+    matrices: bool,
+) -> bool {
+    match module.types[ty].inner {
+        crate::TypeInner::Matrix { .. } => matrices,
+        crate::TypeInner::Array { base, .. } => {
+            needs_untyped_workgroup_storage(module, base, matrices)
+        }
+        crate::TypeInner::Struct { ref members, span } => (0..members.len()).any(|index| {
+            should_pack_struct_member(members, span, index, module).is_some()
+                || needs_untyped_workgroup_storage(module, members[index].ty, matrices)
+        }),
+        _ => false,
+    }
+}
+
 impl crate::AddressSpace {
     /// Returns true if global variables in this address space are
     /// passed in function arguments. These arguments need to be
@@ -7408,6 +7426,11 @@ template <typename A>
             entry_point_names: Vec::with_capacity(ep_range.len()),
         };
 
+        let mut layouter = proc::Layouter::default();
+        layouter
+            .update(module.to_ctx())
+            .map_err(|e| Error::GenericValidation(format!("{e}")))?;
+
         for ep_index in ep_range {
             let ep = &module.entry_points[ep_index];
             let fun = &ep.function;
@@ -8143,9 +8166,8 @@ template <typename A>
                         });
                     }
                     _ => {
-                        if var.space == crate::AddressSpace::WorkGroup
-                            && ep.stage == crate::ShaderStage::Mesh
-                        {
+                        if var.space == crate::AddressSpace::WorkGroup {
+                            // Written later as function variables rather than entry point inputs.
                             continue;
                         }
                         let tyvar = TypedGlobalVariable {
@@ -8243,7 +8265,7 @@ template <typename A>
                 }
                 writeln!(self.out)?;
             }
-            if ep.stage == crate::ShaderStage::Mesh {
+            if is_wrapped {
                 for (handle, var) in module.global_variables.iter() {
                     if var.space != crate::AddressSpace::WorkGroup || fun_info[handle].is_empty() {
                         continue;
@@ -8435,6 +8457,10 @@ template <typename A>
                     // End the bounds check / attribute setting block.
                     writeln!(self.out, "{}}}", back::Level(1))?;
                 }
+            }
+
+            if !is_wrapped {
+                self.write_workgroup_memory(module, &layouter, fun_info, options.lang_version)?;
             }
 
             // Metal doesn't support private mutable variables outside of functions,
@@ -8661,6 +8687,7 @@ template <typename A>
                     ep,
                     module,
                     mod_info,
+                    layouter: &layouter,
                     fun_info,
                     args,
                     local_invocation_index,
@@ -8672,6 +8699,97 @@ template <typename A>
         }
 
         Ok(info)
+    }
+
+    /// Declare the workgroup variables used by an entry point as fields of
+    /// a single `threadgroup` struct, and alias each field by the
+    /// variable's name.
+    pub(super) fn write_workgroup_memory(
+        &mut self,
+        module: &crate::Module,
+        layouter: &proc::Layouter,
+        fun_info: &valid::FunctionInfo,
+        lang_version: (u8, u8),
+    ) -> BackendResult {
+        // Typed threadgroup storage containing a packed vector crashes the
+        // A10X compiler, and before MSL 3.0 it can't contain a matrix. Such
+        // variables are stored as a `uint4` or `ulong4` array instead.
+        let mut vars: Vec<_> = module
+            .global_variables
+            .iter()
+            .filter(|&(handle, var)| {
+                var.space == crate::AddressSpace::WorkGroup && !fun_info[handle].is_empty()
+            })
+            .map(|(handle, var)| {
+                let untyped =
+                    needs_untyped_workgroup_storage(module, var.ty, lang_version < (3, 0));
+                let mut alignment = layouter[var.ty].alignment;
+                if untyped {
+                    alignment = alignment.max(proc::Alignment::SIXTEEN);
+                }
+                (handle, var, untyped, alignment)
+            })
+            .collect();
+        if vars.is_empty() {
+            return Ok(());
+        }
+        // Separate threadgroup variables can crash the Metal compiler on some
+        // older Apple GPUs. Sorting by alignment minimizes padding.
+        vars.sort_by_key(|&(_, _, _, alignment)| core::cmp::Reverse(alignment));
+
+        let memory_name = self.namer.call("nagaWorkgroupMemory");
+        writeln!(self.out, "{}threadgroup struct {{", back::INDENT)?;
+        for &(handle, var, untyped, alignment) in &vars {
+            let name = &self.names[&NameKey::GlobalVariable(handle)];
+            if untyped {
+                let (element, element_size) = if alignment > proc::Alignment::SIXTEEN {
+                    ("metal::ulong4", 32)
+                } else {
+                    ("metal::uint4", 16)
+                };
+                let count = layouter[var.ty].size.div_ceil(element_size);
+                writeln!(self.out, "{}{element} {name}[{count}];", back::Level(2))?;
+            } else {
+                let ty = TypeContext {
+                    handle: var.ty,
+                    gctx: module.to_ctx(),
+                    names: &self.names,
+                    access: crate::StorageAccess::empty(),
+                    first_time: false,
+                };
+                writeln!(self.out, "{}{ty} {name};", back::Level(2))?;
+            }
+        }
+        writeln!(self.out, "{}}} {memory_name};", back::INDENT)?;
+
+        for &(handle, var, untyped, _) in &vars {
+            let tyvar = TypedGlobalVariable {
+                module,
+                names: &self.names,
+                handle,
+                usage: fun_info[handle],
+                reference: true,
+            };
+            write!(self.out, "{}", back::INDENT)?;
+            tyvar.try_fmt(&mut self.out)?;
+            let name = &self.names[&NameKey::GlobalVariable(handle)];
+            if untyped {
+                let ty = TypeContext {
+                    handle: var.ty,
+                    gctx: module.to_ctx(),
+                    names: &self.names,
+                    access: crate::StorageAccess::empty(),
+                    first_time: false,
+                };
+                writeln!(
+                    self.out,
+                    " = *reinterpret_cast<threadgroup {ty}*>({memory_name}.{name});"
+                )?;
+            } else {
+                writeln!(self.out, " = {memory_name}.{name};")?;
+            }
+        }
+        Ok(())
     }
 
     pub(super) fn write_barrier(
