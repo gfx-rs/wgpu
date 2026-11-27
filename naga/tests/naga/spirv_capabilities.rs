@@ -359,3 +359,51 @@ fn f16_io_polyfill_codegen() {
         "Expected 4 OpFConvert instructions for polyfilled I/O"
     );
 }
+
+/// Pointers derived from `Access`/`AccessIndex` can't be passed as call
+/// arguments yet; the writer must return an error rather than panic.
+///
+/// <https://github.com/gfx-rs/wgpu/issues/4540>
+#[test]
+fn derived_pointer_call_argument() {
+    use naga::back::spv;
+    use naga::valid;
+
+    fn write(source: &str) -> Result<(), spv::Error> {
+        let module = naga::front::wgsl::parse_str(source).unwrap();
+        let info = valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all())
+            .validate(&module)
+            .expect("validation failed");
+        let mut words = vec![];
+        spv::Writer::new(&spv::Options::default())
+            .unwrap()
+            .write(&module, &info, None, &None, &mut words)
+    }
+
+    let prelude = "
+        struct S { a: f32, b: array<f32, 4> }
+        fn take(p: ptr<function, f32>) -> f32 { return *p; }
+        fn forward(p: ptr<function, f32>) -> f32 { return take(p); }
+        fn take_value(x: f32) -> f32 { return x; }
+    ";
+
+    for body in [
+        "var s: S; return take(&s.a);",
+        "var s: S; let i = 2; return take(&s.b[i]);",
+    ] {
+        let source = format!("{prelude} fn f() -> f32 {{ {body} }}");
+        assert!(
+            matches!(write(&source), Err(spv::Error::FeatureNotImplemented(_))),
+            "{source}"
+        );
+    }
+
+    for body in [
+        "var x: f32; return take(&x);",
+        "var x: f32; return forward(&x);",
+        "var s: S; return take_value(s.a);",
+    ] {
+        let source = format!("{prelude} fn f() -> f32 {{ {body} }}");
+        write(&source).unwrap_or_else(|e| panic!("{e:?}\n{source}"));
+    }
+}
