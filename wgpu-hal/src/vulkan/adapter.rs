@@ -3011,10 +3011,15 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::GroupNonUniformQuad);
             }
 
+            // `ACCELERATION_STRUCTURE_BINDING_ARRAY` allows non-uniform indexing, which needs
+            // the `ShaderNonUniform` capability for the `NonUniform` decoration.
+            // `VK_KHR_acceleration_structure` requires Vulkan 1.2 or `VK_EXT_descriptor_indexing`,
+            // and either one provides that capability.
             if features.intersects(
                 wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
                     | wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-                    | wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS,
+                    | wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS
+                    | wgt::Features::ACCELERATION_STRUCTURE_BINDING_ARRAY,
             ) {
                 capabilities.push(spv::Capability::ShaderNonUniform);
             }

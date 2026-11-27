@@ -234,6 +234,8 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - Fix `max_task_workgroup_count` being misreported on pre-Apple7 devices. By @inner-daemons in [#10065](https://github.com/gfx-rs/wgpu/pull/10065).
 - The value of the `max_binding_array_sampler_elements_per_shader_stage` on Apple7, Apple8, and Mac2 hardware is reduced from 1024 to 996, to match the latest Metal documentation. By @andyleiserson in [#10649](https://github.com/gfx-rs/wgpu/pull/10649).
 - Added support for NV12 and P010 texture formats. Due to no native support, they're implemented using separate textures for each plane. By @jerzywilczek in [#9624](https://github.com/gfx-rs/wgpu/pull/9624)
+- Support `Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS` on Metal. Metal requires BLAS vertex strides to be at least the full vertex format size, so the packed 6 byte stride allowed for `Float16x4` and `Snorm16x4` elsewhere is rejected there. By @acoliver in [#10289](https://github.com/gfx-rs/wgpu/pull/10289).
+- Support `Features::ACCELERATION_STRUCTURE_BINDING_ARRAY` on Metal with tier 2 argument buffers. Naga's MSL backend now emits `binding_array<acceleration_structure>` for MSL 2.4 and later. By @acoliver in [#10289](https://github.com/gfx-rs/wgpu/pull/10289).
 
 #### GLES
 
@@ -329,6 +331,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 
 #### naga
 
+- Fix a panic in the validator when a binding array of acceleration structures is indexed with a non-constant index, and enable the SPIR-V `ShaderNonUniform` capability on Vulkan so these arrays can be indexed non-uniformly. By @acoliver in [#10288](https://github.com/gfx-rs/wgpu/pull/10288).
 - Reject unsigned integer arguments to WGSL `sign()` during Naga validation instead of allowing them to reach and panic in the SPIR-V backend. By @notferdon in [#10451](https://github.com/gfx-rs/wgpu/pull/10451).
 - Declare `LocalInvocationIndex` only once in SPIR-V mesh shader entry points that don't take `local_invocation_index` as an argument. Previously these shaders were invalid SPIR-V. By @apollo-2006 in [#10497](https://github.com/gfx-rs/wgpu/pull/10497).
 - Fix panics when shader `var<immediate>` size is larger than 256 bytes. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).

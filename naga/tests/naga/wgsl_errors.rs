@@ -3897,6 +3897,41 @@ fn binding_array_non_struct() {
     }
 }
 
+/// Indexing a binding array of acceleration structures with any non-constant
+/// index, uniform or not, used to reach an `unreachable!()` in the analyzer.
+#[test]
+fn acceleration_structure_binding_array_non_constant_index() {
+    let source = r#"
+        enable wgpu_ray_query;
+        enable wgpu_binding_array;
+
+        @group(0) @binding(0)
+        var tlas_array: binding_array<acceleration_structure, 4>;
+        @group(0) @binding(1)
+        var<uniform> uniform_index: u32;
+
+        fn trace(tlas: acceleration_structure) {
+            var rq: ray_query;
+            rayQueryInitialize(
+                &rq,
+                tlas,
+                RayDesc(0x04u, 0xFFu, 0.1, 100.0, vec3<f32>(0.0), vec3<f32>(0.0, 0.0, 1.0)),
+            );
+        }
+
+        @compute @workgroup_size(2)
+        fn main(@builtin(local_invocation_index) i: u32) {
+            trace(tlas_array[uniform_index]);
+            trace(tlas_array[i]);
+        }
+    "#;
+
+    no_validation_error(
+        source,
+        Capabilities::RAY_QUERY | Capabilities::ACCELERATION_STRUCTURE_BINDING_ARRAY,
+    );
+}
+
 #[test]
 fn compaction_preserves_spans() {
     let source = r#"
