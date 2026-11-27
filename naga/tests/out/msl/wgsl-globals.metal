@@ -52,6 +52,7 @@ void test_msl_packed_vec3_(
     metal::float3 l0_ = data.v3_;
     metal::float2 l1_ = metal::float3(data.v3_).zx;
     test_msl_packed_vec3_as_arg(data.v3_);
+    metal::uint3 bc = as_type<metal::uint3>(metal::float3(data.v3_));
     metal::float3 mvm0_ = metal::float3(data.v3_) * metal::float3x3 {};
     metal::float3 mvm1_ = metal::float3x3 {} * metal::float3(data.v3_);
     metal::float3 svm0_ = data.v3_ * 2.0;

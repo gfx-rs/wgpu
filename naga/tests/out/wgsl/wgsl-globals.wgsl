@@ -38,6 +38,7 @@ fn test_msl_packed_vec3_() {
     let l0_ = data.v3_;
     let l1_ = data.v3_.zx;
     test_msl_packed_vec3_as_arg(data.v3_);
+    let bc = bitcast<vec3<u32>>(data.v3_);
     let mvm0_ = (data.v3_ * mat3x3<f32>());
     let mvm1_ = (mat3x3<f32>() * data.v3_);
     let svm0_ = (data.v3_ * 2f);
