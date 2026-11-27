@@ -452,6 +452,10 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 
 - Cache adapter and device limits, features, and adapter info on the browser WebGPU backend, so repeated calls no longer re-read those JavaScript objects. By @apetrock in [#10513](https://github.com/gfx-rs/wgpu/pull/10513).
 
+#### Vulkan
+
+- Keep the framebuffers of render passes that are recorded again, instead of creating and destroying one for every render pass in every frame. With PowerVR's proprietary driver, as on TI's AM62P, that took about 1.6 ms of CPU time per render pass. By @tronical in [#11030](https://github.com/gfx-rs/wgpu/pull/11030).
+
 #### Metal
 
 - A render pipeline switch no longer allocates once per vertex buffer. By @samoylenkodmitry in [#10630](https://github.com/gfx-rs/wgpu/pull/10630).
