@@ -236,7 +236,10 @@ pub(crate) fn map_buffer(
     };
 
     if !mapping.is_coherent && kind == MapMode::Read {
-        #[allow(clippy::single_range_in_vec_init)]
+        #[expect(
+            clippy::single_range_in_vec_init,
+            reason = "the HAL method takes a slice of ranges, and one range is needed here"
+        )]
         unsafe {
             raw_device.invalidate_mapped_ranges(raw_buffer, &[offset..offset + size]);
         }

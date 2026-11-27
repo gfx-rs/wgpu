@@ -12,7 +12,6 @@ pub use wgt::markers::*;
 /// `Arc::as_ptr`. These IDs have the type [`crate::id::PointerId`]. The
 /// trace player uses hash maps to go from `PointerId`s to `Arc`s
 /// when replaying a trace.
-#[allow(dead_code)]
 #[cfg(feature = "serde")]
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum PointerId<T: Marker> {

@@ -179,7 +179,10 @@ impl<T: StorageItem> IntoTrace for Arc<T> {
 /// This will work as expected on heap-allocated types that are not moved around.
 pub(crate) unsafe fn to_trace<T: StorageItem>(t: &T) -> PointerId<T::Marker> {
     PointerId::PointerId(
-        #[expect(trivial_casts)]
+        #[expect(
+            trivial_casts,
+            reason = "the reference is cast to a raw pointer to use its address as an ID"
+        )]
         core::num::NonZeroUsize::new(t as *const T as usize).unwrap(),
         PhantomData,
     )

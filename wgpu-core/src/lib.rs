@@ -15,28 +15,48 @@
         not(all(feature = "dx12", windows)),
         not(feature = "gles"),
     ),
-    allow(unused, clippy::let_and_return)
+    allow(
+        unused,
+        clippy::let_and_return,
+        reason = "without a backend, much of the crate is dead code"
+    )
 )]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![allow(
-    // It is much clearer to assert negative conditions with eq! false
     clippy::bool_assert_comparison,
-    // We don't use syntax sugar where it's not necessary.
+    reason = "it is much clearer to assert negative conditions with eq! false"
+)]
+#![allow(
     clippy::match_like_matches_macro,
-    // Redundant matching is more explicit.
+    reason = "we don't use syntax sugar where it's not necessary"
+)]
+#![allow(
     clippy::redundant_pattern_matching,
-    // Explicit lifetimes are often easier to reason about.
+    reason = "redundant matching is more explicit"
+)]
+#![allow(
     clippy::needless_lifetimes,
-    // No need for defaults in the internal types.
+    reason = "explicit lifetimes are often easier to reason about"
+)]
+#![allow(
     clippy::new_without_default,
-    // Needless updates are more scalable, easier to play with features.
+    reason = "no need for defaults in the internal types"
+)]
+#![allow(
     clippy::needless_update,
-    // Need many arguments for some core functions to be able to re-use code in many situations.
+    reason = "needless updates are more scalable, easier to play with features"
+)]
+#![allow(
     clippy::too_many_arguments,
-    // It gets in the way a lot and does not prevent bugs in practice.
+    reason = "some core functions need many arguments to be reusable in many situations"
+)]
+#![allow(
     clippy::pattern_type_mismatch,
-    // `wgpu-core` isn't entirely user-facing, so it's useful to document internal items.
+    reason = "it gets in the way a lot and does not prevent bugs in practice"
+)]
+#![allow(
     rustdoc::private_intra_doc_links,
+    reason = "`wgpu-core` isn't entirely user-facing, so it's useful to document internal items"
 )]
 #![expect(missing_debug_implementations, reason = "TODO")]
 #![warn(
@@ -58,7 +78,13 @@
 // (the only reason to use wgpu-core on the web in the first place) that have atomics enabled.
 //
 // NOTE: Keep this in sync with `wgpu`.
-#![cfg_attr(not(send_sync), allow(clippy::arc_with_non_send_sync))]
+#![cfg_attr(
+    not(send_sync),
+    allow(
+        clippy::arc_with_non_send_sync,
+        reason = "wgpu-hal resources are not `Send`/`Sync` here, but are still kept in `Arc`s"
+    )
+)]
 
 extern crate alloc;
 extern crate naga_types as nt;

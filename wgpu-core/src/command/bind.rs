@@ -275,7 +275,14 @@ mod compat {
                 .filter_map(|(i, e)| if e.is_valid() { Some(i) } else { None })
         }
 
-        #[allow(clippy::result_large_err)]
+        // The error is only over the size threshold with 64-bit pointers.
+        #[cfg_attr(
+            target_pointer_width = "64",
+            expect(
+                clippy::result_large_err,
+                reason = "only returned on validation failure, so the error size does not matter"
+            )
+        )]
         pub fn get_invalid(&self) -> Result<(), (usize, Error)> {
             for (index, entry) in self.entries.iter().enumerate() {
                 entry.check().map_err(|e| (index, e))?;
