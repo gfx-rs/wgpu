@@ -359,3 +359,65 @@ fn f16_io_polyfill_codegen() {
         "Expected 4 OpFConvert instructions for polyfilled I/O"
     );
 }
+
+#[test]
+fn i16_io_polyfill_codegen() {
+    let source = r#"
+        enable wgpu_int16;
+
+        struct VertexOutput {
+            @builtin(position) position: vec4<f32>,
+            @location(0) @interpolate(flat) scalar_i16: i16,
+            @location(1) @interpolate(flat) vec2_u16: vec2<u16>,
+        }
+
+        @vertex
+        fn vs_main(@location(0) in_i16: i16, @location(1) in_u16: vec2<u16>) -> VertexOutput {
+            return VertexOutput(vec4(0.0), in_i16 + 1, in_u16 + 1);
+        }
+
+        @fragment
+        fn fs_main(input: VertexOutput) -> @location(0) vec2<u16> {
+            return input.vec2_u16 + u16(input.scalar_i16);
+        }
+    "#;
+
+    use naga::{back::spv, valid};
+
+    let module = naga::front::wgsl::parse_str(source).unwrap();
+    let info = valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all())
+        .validate(&module)
+        .unwrap();
+
+    let write = |use_storage_input_output_16| {
+        let options = spv::Options {
+            use_storage_input_output_16,
+            ..Default::default()
+        };
+        let mut words = vec![];
+        let mut writer = spv::Writer::new(&options).unwrap();
+        writer
+            .write(&module, &info, None, &None, &mut words)
+            .unwrap();
+        let caps = writer.get_capabilities_used().clone();
+        let dis = rspirv::dr::load_words(words).unwrap().disassemble();
+        (caps, dis)
+    };
+
+    // Native path: 16-bit I/O variables need the capability and no conversions.
+    let (caps_native, dis_native) = write(true);
+    assert!(caps_native.contains(&Ca::StorageInputOutput16));
+    assert!(!dis_native.contains("OpSConvert"));
+    assert!(!dis_native.contains("OpUConvert"));
+
+    // Polyfill path: the I/O variables are 32-bit, so the capability isn't needed,
+    // and every 16-bit value is converted when it is loaded or stored.
+    let (caps_polyfill, dis_polyfill) = write(false);
+    assert!(!caps_polyfill.contains(&Ca::StorageInputOutput16));
+    assert!(caps_polyfill.contains(&Ca::Int16));
+    // Vertex inputs (1), vertex outputs (1), fragment inputs (1).
+    assert_eq!(dis_polyfill.matches("OpSConvert").count(), 3);
+    // Vertex inputs (1), vertex outputs (1), fragment inputs (1), fragment output (1).
+    // `u16(input.scalar_i16)` is a bitcast, not a conversion.
+    assert_eq!(dis_polyfill.matches("OpUConvert").count(), 4);
+}
