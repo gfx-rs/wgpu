@@ -1054,7 +1054,7 @@ pub enum ColorStateError {
         factor: wgt::BlendFactor,
         target: u32,
     },
-    #[error("The {which} blend factor {factor:?} is not valid because the shader output does have an alpha channel.")]
+    #[error("The {which} blend factor {factor:?} is not valid because the shader output does not have an alpha channel.")]
     InvalidAlphaBlend {
         which: &'static str,
         factor: wgt::BlendFactor,
