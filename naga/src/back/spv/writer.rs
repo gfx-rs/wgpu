@@ -97,6 +97,7 @@ impl Writer {
             trace_ray_argument_validation: options.trace_ray_argument_validation,
             use_storage_input_output_16: options.use_storage_input_output_16,
             emit_int_div_checks: options.emit_int_div_checks,
+            passes: options.passes,
             void_type,
             tuple_of_u32s_ty_id: None,
             lookup_type: crate::FastHashMap::default(),
@@ -137,6 +138,7 @@ impl Writer {
         self.zero_initialize_workgroup_memory = options.zero_initialize_workgroup_memory;
         self.force_loop_bounding = options.force_loop_bounding;
         self.use_storage_input_output_16 = options.use_storage_input_output_16;
+        self.passes = options.passes;
         self.binding_map = options.binding_map.clone();
         self.io_f16_polyfills =
             super::f16_polyfill::F16IoPolyfill::new(options.use_storage_input_output_16);
@@ -184,6 +186,7 @@ impl Writer {
             task_dispatch_limits: self.task_dispatch_limits,
             mesh_shader_primitive_indices_clamp: self.mesh_shader_primitive_indices_clamp,
             emit_int_div_checks: self.emit_int_div_checks,
+            passes: self.passes,
 
             // Initialized afresh:
             id_gen,
@@ -4053,14 +4056,15 @@ impl Writer {
         Ok(())
     }
 
-    pub fn write(
+    pub fn write<'m>(
         &mut self,
-        ir_module: &crate::Module,
-        info: &ModuleInfo,
+        ir_module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
         pipeline_options: Option<&PipelineOptions>,
         debug_info: &Option<DebugInfo>,
         words: &mut Vec<Word>,
     ) -> Result<(), Error> {
+        let (ir_module, info) = crate::back::passes::run(ir_module.into(), &self.passes.into())?;
+        let (ir_module, info) = (&*ir_module, &info);
         self.reset();
 
         // Try to find the entry point and corresponding index
