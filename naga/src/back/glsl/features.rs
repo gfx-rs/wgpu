@@ -229,8 +229,13 @@ impl FeaturesManager {
         if (self.0.contains(Features::CLIP_DISTANCE) || self.0.contains(Features::CULL_DISTANCE))
             && options.version.is_es()
         {
-            // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_clip_cull_distance.txt
-            writeln!(out, "#extension GL_EXT_clip_cull_distance : require")?;
+            if options.version.is_webgl() {
+                // https://registry.khronos.org/webgl/extensions/WEBGL_clip_cull_distance/
+                writeln!(out, "#extension GL_ANGLE_clip_cull_distance : require")?;
+            } else {
+                // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_clip_cull_distance.txt
+                writeln!(out, "#extension GL_EXT_clip_cull_distance : require")?;
+            }
         }
 
         if self.0.contains(Features::SAMPLE_VARIABLES) && options.version.is_es() {

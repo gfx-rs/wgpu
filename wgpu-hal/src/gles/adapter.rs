@@ -519,9 +519,24 @@ impl super::Adapter {
             extensions.contains("GL_EXT_blend_func_extended")
                 || extensions.contains("GL_ARB_blend_func_extended"),
         );
+        // WebGL extensions must be enabled before shaders can use them.
+        #[cfg(webgl)]
+        let webgl_clip_cull_distance = extensions.contains("WEBGL_clip_cull_distance")
+            && context
+                .webgl2_context
+                .get_extension("WEBGL_clip_cull_distance")
+                .is_ok_and(|ext| ext.is_some());
+        #[cfg(Emscripten)]
+        let webgl_clip_cull_distance = (extensions.contains("WEBGL_clip_cull_distance")
+            || extensions.contains("GL_WEBGL_clip_cull_distance"))
+            && unsafe { super::emscripten::enable_extension("WEBGL_clip_cull_distance\0") };
+        #[cfg(not(any(webgl, Emscripten)))]
+        let webgl_clip_cull_distance = false;
         features.set(
             wgt::Features::CLIP_DISTANCES,
-            full_ver.is_some() || extensions.contains("GL_EXT_clip_cull_distance"),
+            full_ver.is_some()
+                || extensions.contains("GL_EXT_clip_cull_distance")
+                || webgl_clip_cull_distance,
         );
         features.set(
             wgt::Features::PRIMITIVE_INDEX,
