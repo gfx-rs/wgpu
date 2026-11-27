@@ -288,6 +288,10 @@ impl Drop for Queue {
                 self.device.handle_hal_error(hal::DeviceError::Lost);
             }
             Err(e) => {
+                log::error!("Unexpected error while waiting for queue idle on drop: {e:?}");
+                #[cfg(feature = "std")]
+                std::process::abort();
+                #[cfg(not(feature = "std"))]
                 panic!("Unexpected error while waiting for queue idle on drop: {e:?}");
             }
         }
