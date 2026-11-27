@@ -19,7 +19,8 @@ impl crate::Binding {
     ///   already set, then this function makes no changes.
     ///
     /// - If `ty` is a floating-point scalar, vector, or matrix type, then
-    ///   apply the default [`Perspective`] interpolation and [`Center`] sampling.
+    ///   apply the default [`Perspective`] interpolation, and [`Center`] sampling
+    ///   unless sampling is already set.
     ///
     /// - If `ty` is an integral scalar or vector, make no changes; if the interpolation was
     ///   `None`, it will remain so, and be rejected by the validator.
@@ -48,7 +49,7 @@ impl crate::Binding {
 
         if let Some(crate::ScalarKind::Float) = ty.scalar_kind() {
             *interpolation = Some(crate::Interpolation::Perspective);
-            *sampling = Some(crate::Sampling::Center);
+            sampling.get_or_insert(crate::Sampling::Center);
         }
     }
 }
