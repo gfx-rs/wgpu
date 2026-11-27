@@ -5147,18 +5147,13 @@ impl<W: Write> Writer<W> {
             match type_key {
                 &crate::PredeclaredType::ModfResult { size, scalar }
                 | &crate::PredeclaredType::FrexpResult { size, scalar } => {
+                    let scalar_name = scalar.to_msl_name();
                     let arg_type_name_owner;
                     let arg_type_name = if let Some(size) = size {
-                        arg_type_name_owner = format!(
-                            "{NAMESPACE}::{}{}",
-                            if scalar.width == 8 { "double" } else { "float" },
-                            size as u8
-                        );
+                        arg_type_name_owner = format!("{NAMESPACE}::{scalar_name}{}", size as u8);
                         &arg_type_name_owner
-                    } else if scalar.width == 8 {
-                        "double"
                     } else {
-                        "float"
+                        scalar_name
                     };
 
                     let other_type_name_owner;
