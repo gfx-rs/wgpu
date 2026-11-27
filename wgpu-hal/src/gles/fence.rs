@@ -131,7 +131,17 @@ impl Fence {
         let last_completed = self.last_completed.load(Ordering::Acquire);
 
         if self.fence_behavior.is_auto_finish() {
-            return Ok(last_completed >= wait_value);
+            // Under `AutoFinish` every submitted fence is complete by definition.
+            // A lower value means the submission was never published, and returning
+            // `false` would make an indefinite wait spin without blocking.
+            return if last_completed >= wait_value {
+                Ok(true)
+            } else {
+                log::error!(
+                    "Tried to wait for fence value {wait_value}, but only {last_completed} was submitted with AutoFinish fences (wgpu bookkeeping bug)"
+                );
+                Err(crate::DeviceError::Unexpected)
+            };
         }
 
         // We already know this fence has been signalled to that value. Return signalled.
@@ -145,8 +155,12 @@ impl Fence {
         let gl_fence = pending.iter().find(|gl_fence| gl_fence.value >= wait_value);
 
         let Some(gl_fence) = gl_fence else {
-            log::warn!("Tried to wait for {wait_value} but that value has not been signalled yet");
-            return Ok(false);
+            // This is a bookkeeping error, not a timeout: returning `false` here would
+            // make an indefinite wait retry forever.
+            log::error!(
+                "Tried to wait for fence value {wait_value}, but that value was never submitted (wgpu bookkeeping bug)"
+            );
+            return Err(crate::DeviceError::Unexpected);
         };
 
         // clone to show we're using the fence
@@ -165,20 +179,22 @@ impl Fence {
 
         drop(sync);
 
-        let signalled = match status {
-            glow::ALREADY_SIGNALED | glow::CONDITION_SATISFIED => true,
-            glow::TIMEOUT_EXPIRED | glow::WAIT_FAILED => false,
-            _ => {
-                log::warn!("Unexpected result from client_wait_sync: {status}");
-                false
+        match status {
+            glow::ALREADY_SIGNALED | glow::CONDITION_SATISFIED => {
+                self.last_completed.fetch_max(fence_value, Ordering::AcqRel);
+                Ok(true)
             }
-        };
-
-        if signalled {
-            self.last_completed.fetch_max(fence_value, Ordering::AcqRel);
+            // The only result that means the wait itself completed normally.
+            glow::TIMEOUT_EXPIRED => Ok(false),
+            glow::WAIT_FAILED => {
+                log::error!("client_wait_sync failed while waiting for fence value {wait_value}");
+                Err(crate::DeviceError::Unexpected)
+            }
+            _ => {
+                log::error!("Unexpected result from client_wait_sync: {status}");
+                Err(crate::DeviceError::Unexpected)
+            }
         }
-
-        Ok(signalled)
     }
 
     pub fn destroy(self, gl: &glow::Context) {
