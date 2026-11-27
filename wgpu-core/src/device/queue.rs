@@ -1704,7 +1704,7 @@ impl Queue {
                         .ok()
                         .and_then(|data| mem::take(&mut data.trace_commands));
 
-                    let mut baked = match cmd_buf_data {
+                    let baked = match cmd_buf_data {
                         Ok(cmd_buf_data) => {
                             let res = validate_command_buffer(
                                 command_buffer,
@@ -1747,12 +1747,6 @@ impl Queue {
                         }
                     };
 
-                    if let Err(e) = baked
-                        .process_deferred_query_set_resolves(&self.device, &submission.snatch_guard)
-                    {
-                        break 'error Err(e.into());
-                    }
-
                     baked_command_buffers.push(baked);
                 }
 
@@ -1779,6 +1773,12 @@ impl Queue {
 
                 for mut baked in baked_command_buffers {
                     profiling::scope!("process baked commands");
+
+                    if let Err(e) = baked
+                        .process_deferred_query_set_resolves(&self.device, &submission.snatch_guard)
+                    {
+                        break 'error Err(e.into());
+                    }
 
                     // execute resource transitions
                     if let Err(e) = baked.encoder.open_pass(hal_label(
