@@ -89,7 +89,7 @@ macro_rules! bitflags_array {
             $(#[$outer])*
             pub struct $name {
                 $(
-                    #[allow(missing_docs)]
+                    #[expect(missing_docs, reason = "the inner flag types are documented")]
                     $vis $lower_inner_name: $inner_name,
                 )*
             }
@@ -426,7 +426,6 @@ macro_rules! bitflags_array {
                 $(
                     $(
                         $(#[doc $($args)*])*
-                        #[allow(clippy::needless_update, reason = "only useless if there is 1 member")]
                         pub const $Flag: Self = Self {
                             $lower_inner_name: $inner_name::from_bits_truncate($value),
                             ..Self::empty()
@@ -437,7 +436,6 @@ macro_rules! bitflags_array {
 
             $(
                 impl From<$inner_name> for $name {
-                    #[allow(clippy::needless_update, reason = "only useless if there is 1 member")]
                     fn from($lower_inner_name: $inner_name) -> Self {
                         Self {
                             $lower_inner_name,

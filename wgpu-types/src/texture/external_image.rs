@@ -1,5 +1,5 @@
-#[allow(unused_imports, reason = "conditionally used, including in docs")]
-use crate::{DownlevelFlags, Origin2d};
+#[cfg(all(target_family = "wasm", feature = "web"))]
+use crate::Origin2d;
 
 /// View of an external texture that can be used to copy to a texture.
 ///
@@ -17,7 +17,8 @@ pub struct CopyExternalImageSourceInfo {
     ///
     /// Relative to the top left of the image.
     ///
-    /// Must be [`Origin2d::ZERO`] if [`DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES`] is not supported.
+    /// Must be [`Origin2d::ZERO`] if [`DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES`](crate::DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES)
+    /// is not supported.
     pub origin: Origin2d,
     /// If the Y coordinate of the image should be flipped. Even if this is
     /// true, `origin` is still relative to the top left.

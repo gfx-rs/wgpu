@@ -30,7 +30,7 @@ mod webgpu_impl {
     //!
     //! Bitmask feature encoding is not defined by the WebGPU specification, and the values
     //! are subject to change.
-    #![allow(missing_docs)]
+    #![allow(missing_docs, reason = "these constants are internal encoding details")]
 
     #[doc(hidden)]
     pub const WEBGPU_FEATURE_CORE_FEATURES_AND_LIMITS: u64 = 1 << 0;

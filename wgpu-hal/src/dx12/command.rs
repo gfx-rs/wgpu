@@ -13,9 +13,8 @@ use super::conv;
 use crate::{
     auxil::{
         self,
-        dxgi::{name::ObjectExt as _, result::HResult as _},
+        dxgi::{borrow_interface_temporarily, name::ObjectExt as _, result::HResult as _},
     },
-    dx12::borrow_interface_temporarily,
     AccelerationStructureEntries, CommandEncoder as _,
 };
 
@@ -376,6 +375,9 @@ impl super::CommandEncoder {
         if let Some(root_index) = layout.sampler_heap_root_index {
             self.pass.root_elements[root_index as usize] =
                 super::RootElement::SamplerHeapDescriptorTable;
+        }
+        if let Some(info) = layout.immediates_info.as_ref() {
+            self.pass.root_elements[info.root_index as usize] = super::RootElement::Immediates;
         }
         self.pass.layout = layout.clone();
         self.pass.dirty_root_elements = (1 << layout.total_root_elements) - 1;
