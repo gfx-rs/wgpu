@@ -50,10 +50,10 @@ use objc2_metal::{
     MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLArgumentBuffersTier,
     MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandQueue, MTLComputeCommandEncoder,
     MTLComputePipelineState, MTLCounterSampleBuffer, MTLCullMode, MTLDepthClipMode,
-    MTLDepthStencilState, MTLDevice, MTLDrawable, MTLIndexType, MTLLanguageVersion, MTLLibrary,
-    MTLPrimitiveType, MTLReadWriteTextureTier, MTLRenderCommandEncoder, MTLRenderPipelineState,
-    MTLRenderStages, MTLResource, MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize,
-    MTLTexture, MTLTextureType, MTLTriangleFillMode, MTLWinding,
+    MTLDepthStencilState, MTLDevice, MTLDrawable, MTLFence, MTLIndexType, MTLLanguageVersion,
+    MTLLibrary, MTLPrimitiveType, MTLReadWriteTextureTier, MTLRenderCommandEncoder,
+    MTLRenderPipelineState, MTLRenderStages, MTLResource, MTLResourceUsage, MTLSamplerState,
+    MTLSharedEvent, MTLSize, MTLTexture, MTLTextureType, MTLTriangleFillMode, MTLWinding,
 };
 use objc2_quartz_core::CAMetalLayer;
 use wgpu_sync::{atomic, Condvar, Mutex, OnceCell, RwLock};
@@ -1374,6 +1374,19 @@ struct CommandState {
     blit: Option<Retained<ProtocolObject<dyn MTLBlitCommandEncoder>>>,
     acceleration_structure_builder:
         Option<Retained<ProtocolObject<dyn MTLAccelerationStructureCommandEncoder>>>,
+    /// Fence used to order acceleration structure encoders split by
+    /// `CommandEncoder::split_acceleration_structure_builder`. Created lazily
+    /// and kept alive for the lifetime of the encoder. The HAL contract is
+    /// that command buffers must not outlive the encoder that recorded them,
+    /// so the fence outlives every command buffer that uses it.
+    acceleration_structure_fence: Option<Retained<ProtocolObject<dyn MTLFence>>>,
+    /// Whether the next acceleration structure encoder must wait on
+    /// [`Self::acceleration_structure_fence`] before encoding any commands.
+    pending_acceleration_structure_fence_wait: bool,
+    /// Whether the current acceleration structure encoder has encoded any
+    /// builds, i.e. whether commands consuming their results must split the
+    /// encoder first.
+    acceleration_structure_builder_has_builds: bool,
     render: Option<Retained<ProtocolObject<dyn MTLRenderCommandEncoder>>>,
     compute: Option<Retained<ProtocolObject<dyn MTLComputeCommandEncoder>>>,
     render_pipeline: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
