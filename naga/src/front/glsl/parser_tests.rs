@@ -860,3 +860,22 @@ fn expressions() {
         )
         .unwrap();
 }
+
+#[test]
+fn constant_index_out_of_range() {
+    for source in [
+        "#version 450\nvoid main() { float a[2]; a[2] = 1.0; }",
+        "#version 450\nvoid main() { float a[2]; float b = a[-1]; }",
+        "#version 450\nvoid main() { vec2 v; v[-1] = 1.0; }",
+    ] {
+        let errors = Frontend::default()
+            .parse(&Options::from(ShaderStage::Vertex), source)
+            .unwrap_err()
+            .errors;
+        let expected = ErrorKind::SemanticError("Constant index is out of range".into());
+        assert!(
+            errors.iter().any(|error| error.kind == expected),
+            "{source}: {errors:?}"
+        );
+    }
+}

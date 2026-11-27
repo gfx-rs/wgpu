@@ -554,16 +554,17 @@ impl<'a> Context<'a> {
 
         let handle = match *kind {
             HirExprKind::Access { base, index } => {
-                let (index, _) = self.lower_expect_inner(stmt, frontend, index, ExprPos::Rhs)?;
+                let (index, index_meta) =
+                    self.lower_expect_inner(stmt, frontend, index, ExprPos::Rhs)?;
+                let constant_index = self
+                    .module
+                    .to_ctx()
+                    .get_const_val_from::<u32, _>(index, &self.expressions);
                 let maybe_constant_index = match pos {
                     // Don't try to generate `AccessIndex` if in a LHS position, since it
                     // wouldn't produce a pointer.
                     ExprPos::Lhs => None,
-                    _ => self
-                        .module
-                        .to_ctx()
-                        .get_const_val_from(index, &self.expressions)
-                        .ok(),
+                    _ => constant_index.as_ref().ok().copied(),
                 };
 
                 let base = self
@@ -574,6 +575,24 @@ impl<'a> Context<'a> {
                         pos.maybe_access_base(maybe_constant_index.is_some()),
                     )?
                     .0;
+
+                // GLSL makes a constant index out of range a compile-time error. The
+                // validator accepts any `Access` index, so check it here.
+                let out_of_range = match constant_index {
+                    Err(crate::proc::ConstValueError::Negative) => true,
+                    Ok(value) => {
+                        self.typifier_grow(base, meta)?;
+                        let length = self.get_type(base).indexable_length_pending(self.module);
+                        matches!(length, Ok(crate::proc::IndexableLength::Known(len)) if value >= len)
+                    }
+                    Err(_) => false,
+                };
+                if out_of_range {
+                    frontend.errors.push(Error {
+                        kind: ErrorKind::SemanticError("Constant index is out of range".into()),
+                        meta: index_meta,
+                    });
+                }
 
                 let pointer = maybe_constant_index
                     .map(|index| self.add_expression(Expression::AccessIndex { base, index }, meta))
