@@ -3719,6 +3719,39 @@ var<storage> x : array<u32>;
 }
 
 #[test]
+fn resource_binding_on_non_var() {
+    check(
+        r#"
+@group(0) @binding(0)
+
+struct A {
+}
+"#,
+        r#"error: attributes `@group` and `@binding` are only valid on `var` declarations
+  ┌─ wgsl:2:2
+  │
+2 │ @group(0) @binding(0)
+  │  ^^^^^     ^^^^^^^
+
+"#,
+    );
+
+    check(
+        r#"
+@binding(1) @group(0) @compute @workgroup_size(1)
+fn main() {}
+"#,
+        r#"error: attributes `@group` and `@binding` are only valid on `var` declarations
+  ┌─ wgsl:2:2
+  │
+2 │ @binding(1) @group(0) @compute @workgroup_size(1)
+  │  ^^^^^^^     ^^^^^
+
+"#,
+    );
+}
+
+#[test]
 fn function_param_redefinition_as_param() {
     check(
         "

@@ -1900,13 +1900,13 @@ impl Parser {
             match name {
                 "binding" => {
                     lexer.expect(Token::Paren('('))?;
-                    bind_index.set(self.expression(lexer, &mut ctx)?, name_span)?;
+                    bind_index.set((self.expression(lexer, &mut ctx)?, name_span), name_span)?;
                     lexer.next_if(Token::Separator(','));
                     lexer.expect(Token::Paren(')'))?;
                 }
                 "group" => {
                     lexer.expect(Token::Paren('('))?;
-                    bind_group.set(self.expression(lexer, &mut ctx)?, name_span)?;
+                    bind_group.set((self.expression(lexer, &mut ctx)?, name_span), name_span)?;
                     lexer.next_if(Token::Separator(','));
                     lexer.expect(Token::Paren(')'))?;
                 }
@@ -2046,11 +2046,14 @@ impl Parser {
 
         let attrib_span = self.pop_rule_span(lexer);
         match (bind_group.value, bind_index.value) {
-            (Some(group), Some(index)) => {
-                binding = Some(ast::ResourceBinding {
-                    group,
-                    binding: index,
-                });
+            (Some((group, group_span)), Some((index, index_span))) => {
+                binding = Some((
+                    ast::ResourceBinding {
+                        group,
+                        binding: index,
+                    },
+                    [group_span, index_span],
+                ));
             }
             (Some(_), None) => {
                 return Err(Box::new(Error::MissingAttribute("binding", attrib_span)))
@@ -2137,7 +2140,7 @@ impl Parser {
                 ensure_no_diag_attrs("`var`s".into(), diagnostic_filters)?;
 
                 let mut var = self.variable_decl(lexer, &mut ctx)?;
-                var.binding = binding.take();
+                var.binding = binding.take().map(|(binding, _)| binding);
                 var.doc_comments = doc_comments;
                 var.memory_decorations = memory_decorations;
                 Some(ast::GlobalDeclKind::Var(var))
@@ -2237,9 +2240,7 @@ impl Parser {
 
         match binding {
             None => Ok(()),
-            Some(_) => Err(Box::new(Error::Internal(
-                "we had the attribute but no var?",
-            ))),
+            Some((_, attr_spans)) => Err(Box::new(Error::ResourceBindingOnNonVariable(attr_spans))),
         }
     }
 

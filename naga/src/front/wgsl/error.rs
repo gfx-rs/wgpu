@@ -524,6 +524,7 @@ pub(crate) enum Error<'a> {
     FunctionMustUseUnused(Span),
     FunctionMustUseReturnsVoid(Span, Span),
     FunctionMustUseOnNonFunction(Span),
+    ResourceBindingOnNonVariable([Span; 2]),
     InvalidWorkGroupUniformLoad(Span),
     InvalidStringLiteral {
         span: Span,
@@ -1371,6 +1372,12 @@ impl<'a> Error<'a> {
                     "place `@must_use` on a function declaration with a return type".into(),
                 ],
                 message: "attribute `@must_use` is only valid on function declarations".into(),
+            },
+            Error::ResourceBindingOnNonVariable(attrs) => ParseError {
+                labels: attrs.iter().map(|&attr| (attr, "".into())).collect(),
+                notes: vec![],
+                message: "attributes `@group` and `@binding` are only valid on `var` declarations"
+                    .into(),
             },
             Error::InvalidWorkGroupUniformLoad(span) => ParseError {
                 labels: vec![(*span, "".into())],
