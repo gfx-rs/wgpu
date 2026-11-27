@@ -283,6 +283,8 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - Added `naga::valid::Capabilities::LINEAR_INTERPOLATION`, which is now required in order to use `@interpolate(linear)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - The GLSL backend's `MissingFeatures` error now names the GLSL version that lacks the features, e.g. `GLSL 300 es doesn't support the required feature(s): NOPERSPECTIVE_QUALIFIER`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - Bit reinterpretation is now represented in the Naga IR by the new `naga::ir::Expression::Bitcast`, which names its result type. `naga::ir::Expression::As` now only converts, and its `kind` and `convert` fields are replaced by `target: Scalar`. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
+- The GLSL backend's `Writer` API now matches the other backends: `Writer::new(out, options, pipeline_options, policies)` no longer takes the module and cannot fail, and `Writer::write(module, info)` takes the module and returns all errors. By @inner-daemons in [#11045](https://github.com/gfx-rs/wgpu/pull/11045).
+- The GLSL backend's `ReflectionInfo` now reports resources by binding instead of `Handle<GlobalVariable>`, so it stays valid if the module is compacted before writing. `uniforms` is now a `Vec<BufferMapping>`, and `TextureMapping` carries a `GlobalResource` (binding and name) for the texture and sampler, plus the image's type. By @inner-daemons in [#11079](https://github.com/gfx-rs/wgpu/pull/11079).
 
 #### Hal
 

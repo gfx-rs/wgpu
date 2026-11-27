@@ -961,14 +961,11 @@ fn write_output(
             let mut buffer = String::new();
             let mut writer = glsl::Writer::new(
                 &mut buffer,
-                &module,
-                &info,
                 &params.glsl,
                 &pipeline_options,
                 params.bounds_check_policies,
-            )
-            .unwrap_pretty();
-            writer.write()?;
+            );
+            writer.write(&module, &info).unwrap_pretty();
             fs::write(output_path, buffer)?;
         }
         "dot" => {

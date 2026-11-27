@@ -1,8 +1,65 @@
 use super::*;
 
-/// Writer responsible for all code generation.
+/// Writes a [`Module`](crate::Module) as GLSL.
 #[expect(missing_debug_implementations, reason = "would be way too verbose?")]
 pub struct Writer<'a, W> {
+    out: W,
+    options: &'a Options,
+    pipeline_options: &'a PipelineOptions,
+    policies: proc::BoundsCheckPolicies,
+}
+
+impl<'a, W: Write> Writer<'a, W> {
+    /// Creates a new [`Writer`] instance.
+    pub const fn new(
+        out: W,
+        options: &'a Options,
+        pipeline_options: &'a PipelineOptions,
+        policies: proc::BoundsCheckPolicies,
+    ) -> Self {
+        Self {
+            out,
+            options,
+            pipeline_options,
+            policies,
+        }
+    }
+
+    /// Writes the entry point selected by the [`PipelineOptions`] of `module` as GLSL to the output.
+    ///
+    /// # Errors
+    /// - If the version specified is invalid or supported.
+    /// - If the entry point couldn't be found in the module.
+    /// - If the version specified doesn't support some used features.
+    ///
+    /// If an error occurs while writing, the output might have been written partially.
+    ///
+    /// # Panics
+    /// Might panic if the module is invalid
+    pub fn write(
+        &mut self,
+        module: &crate::Module,
+        info: &valid::ModuleInfo,
+    ) -> Result<ReflectionInfo, Error> {
+        ModuleWriter::new(
+            &mut self.out,
+            module,
+            info,
+            self.options,
+            self.pipeline_options,
+            self.policies,
+        )?
+        .write()
+    }
+
+    /// Consumes the writer and returns the output.
+    pub fn finish(self) -> W {
+        self.out
+    }
+}
+
+/// Writer responsible for all code generation for one module and entry point.
+pub(super) struct ModuleWriter<'a, W> {
     // Inputs
     /// The module being written.
     pub(in crate::back::glsl) module: &'a crate::Module,
@@ -47,14 +104,8 @@ pub struct Writer<'a, W> {
     clip_distance_count: u32,
 }
 
-impl<'a, W: Write> Writer<'a, W> {
-    /// Creates a new [`Writer`] instance.
-    ///
-    /// # Errors
-    /// - If the version specified is invalid or supported.
-    /// - If the entry point couldn't be found in the module.
-    /// - If the version specified doesn't support some used features.
-    pub fn new(
+impl<'a, W: Write> ModuleWriter<'a, W> {
+    fn new(
         out: W,
         module: &'a crate::Module,
         info: &'a valid::ModuleInfo,
@@ -122,14 +173,7 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(this)
     }
 
-    /// Writes the [`Module`](crate::Module) as glsl to the output
-    ///
-    /// # Notes
-    /// If an error occurs while writing, the output might have been written partially
-    ///
-    /// # Panics
-    /// Might panic if the module is invalid
-    pub fn write(&mut self) -> Result<ReflectionInfo, Error> {
+    fn write(&mut self) -> Result<ReflectionInfo, Error> {
         // We use `writeln!(self.out)` throughout the write to add newlines
         // to make the output more readable
 
@@ -741,7 +785,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // A global variable in the `Function` address space is a
             // contradiction in terms.
             crate::AddressSpace::Function => unreachable!(),
-            // Textures and samplers are handled directly in `Writer::write`.
+            // Textures and samplers are handled directly in `ModuleWriter::write`.
             crate::AddressSpace::Handle => unreachable!(),
             // ray tracing pipelines unsupported
             crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload => {
@@ -1061,7 +1105,7 @@ impl<'a, W: Write> Writer<'a, W> {
     /// shader stages are being connected, and choose the `in` or `out` storage
     /// qualifier.
     ///
-    /// [`self.entry_point`]: Writer::entry_point
+    /// [`self.entry_point`]: ModuleWriter::entry_point
     /// [`self.entry_point.stage`]: crate::EntryPoint::stage
     /// [`Location`]: crate::Binding::Location
     /// [`BuiltIn`]: crate::Binding::BuiltIn
@@ -4551,24 +4595,29 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
+    fn global_resource(&self, handle: Handle<crate::GlobalVariable>) -> GlobalResource {
+        let var = &self.module.global_variables[handle];
+        GlobalResource {
+            binding: var.binding,
+            name: var.name.clone(),
+        }
+    }
+
     /// Helper method used to produce the reflection info that's returned to the user
     fn collect_reflection_info(&mut self) -> Result<ReflectionInfo, Error> {
         let info = self.info.get_entry_point(self.entry_point_idx as usize);
-        let mut texture_mapping = crate::FastHashMap::default();
-        let mut uniforms = crate::FastHashMap::default();
+        let mut texture_handles = crate::FastHashMap::default();
+        let mut uniforms = Vec::new();
 
         for sampling in info.sampling_set.iter() {
             let tex_name = self.reflection_names_globals[&sampling.image].clone();
 
-            match texture_mapping.entry(tex_name) {
+            match texture_handles.entry(tex_name) {
                 hash_map::Entry::Vacant(v) => {
-                    v.insert(TextureMapping {
-                        texture: sampling.image,
-                        sampler: Some(sampling.sampler),
-                    });
+                    v.insert((sampling.image, Some(sampling.sampler)));
                 }
                 hash_map::Entry::Occupied(e) => {
-                    if e.get().sampler != Some(sampling.sampler) {
+                    if e.get().1 != Some(sampling.sampler) {
                         log::error!("Conflicting samplers for {}", e.key());
                         return Err(Error::ImageMultipleSamplers);
                     }
@@ -4584,31 +4633,50 @@ impl<'a, W: Write> Writer<'a, W> {
             match self.module.types[var.ty].inner {
                 TypeInner::Image { .. } => {
                     let tex_name = self.reflection_names_globals[&handle].clone();
-                    match texture_mapping.entry(tex_name) {
-                        hash_map::Entry::Vacant(v) => {
-                            v.insert(TextureMapping {
-                                texture: handle,
-                                sampler: None,
-                            });
-                        }
-                        hash_map::Entry::Occupied(_) => {
-                            // already used with a sampler, do nothing
-                        }
-                    }
+                    // If the texture was already used with a sampler, keep that entry.
+                    texture_handles.entry(tex_name).or_insert((handle, None));
                 }
-                _ => match var.space {
-                    crate::AddressSpace::Uniform | crate::AddressSpace::Storage { .. } => {
-                        let name = self.reflection_names_globals[&handle].clone();
-                        uniforms.insert(handle, name);
-                    }
-                    crate::AddressSpace::Immediate => {
-                        let name = self.reflection_names_globals[&handle].clone();
-                        immediates_info = Some((name, var.ty));
-                    }
-                    _ => (),
-                },
+                _ => {
+                    let kind = match var.space {
+                        crate::AddressSpace::Uniform => BufferKind::Uniform,
+                        crate::AddressSpace::Storage { .. } => BufferKind::Storage,
+                        crate::AddressSpace::Immediate => {
+                            let name = self.reflection_names_globals[&handle].clone();
+                            immediates_info = Some((name, var.ty));
+                            continue;
+                        }
+                        _ => continue,
+                    };
+                    uniforms.push(BufferMapping {
+                        name: self.reflection_names_globals[&handle].clone(),
+                        global: self.global_resource(handle),
+                        kind,
+                    });
+                }
             }
         }
+
+        let texture_mapping = texture_handles
+            .into_iter()
+            .map(|(name, (texture, sampler))| {
+                let TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class,
+                } = self.module.types[self.module.global_variables[texture].ty].inner
+                else {
+                    unreachable!("texture mapping for a non-image global");
+                };
+                let mapping = TextureMapping {
+                    texture: self.global_resource(texture),
+                    dim,
+                    arrayed,
+                    class,
+                    sampler: sampler.map(|sampler| self.global_resource(sampler)),
+                };
+                (name, mapping)
+            })
+            .collect();
 
         let mut immediates_segments = Vec::new();
         let mut immediates_items = vec![];
