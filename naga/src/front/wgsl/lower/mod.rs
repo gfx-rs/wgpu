@@ -276,7 +276,9 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             InvalidAssignmentType::ImmutableBinding(span)
         } else {
             match self.function.expressions[expr] {
-                ir::Expression::Swizzle { .. } => InvalidAssignmentType::Swizzle,
+                // Swizzles of memory views are lowered as swizzle views, so a
+                // `Swizzle` expression here applies to a value.
+                ir::Expression::Swizzle { vector, .. } => self.invalid_assignment_type(vector),
                 ir::Expression::Access { base, .. } => self.invalid_assignment_type(base),
                 ir::Expression::AccessIndex { base, .. } => self.invalid_assignment_type(base),
                 _ => InvalidAssignmentType::Other,
@@ -1167,6 +1169,44 @@ impl Components {
             Err(Box::new(Error::BadAccessor(name_span)))
         }
     }
+}
+
+/// A WGSL [swizzle view]: a pointer to a vector in memory, together with the
+/// components of that vector selected by a multi-letter swizzle.
+///
+/// With the [`swizzle_assignment`] language extension, applying a multi-letter
+/// swizzle to a reference or pointer to a vector does not load the vector
+/// right away. It forms a swizzle view, which can be assigned to, swizzled
+/// again, or turned into a reference to one of the selected components. Used
+/// anywhere else, the view is loaded, following the Swizzle View Load Rule.
+///
+/// [swizzle view]: https://www.w3.org/TR/WGSL/#swizzle-view-types
+/// [`swizzle_assignment`]: https://www.w3.org/TR/WGSL/#language_extension-swizzle_assignment
+#[derive(Clone, Copy, Debug)]
+struct SwizzleView {
+    /// A Naga pointer to the whole vector.
+    pointer: Handle<ir::Expression>,
+
+    /// The number of components the view selects.
+    size: ir::VectorSize,
+
+    /// The components of the vector the view selects, in order.
+    ///
+    /// Only the first `size` entries are meaningful.
+    pattern: [ir::SwizzleComponent; 4],
+}
+
+impl SwizzleView {
+    /// The components of the vector the view selects, in order.
+    fn selected(&self) -> &[ir::SwizzleComponent] {
+        &self.pattern[..self.size as usize]
+    }
+}
+
+/// The result of lowering an expression that may be a [`SwizzleView`].
+enum LoweredAccess {
+    Typed(Typed<Handle<ir::Expression>>),
+    SwizzleView(SwizzleView),
 }
 
 /// An `ast::GlobalDecl` for which we have built the Naga IR equivalent.
@@ -2237,7 +2277,28 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let target_span = ctx.ast_expressions.get_span(ast_target);
 
                 let mut ectx = ctx.as_expression(block, &mut emitter);
-                let target = self.expression_for_reference(ast_target, &mut ectx)?;
+                let target = match self.expression_for_swizzle_view(ast_target, &mut ectx)? {
+                    LoweredAccess::Typed(target) => target,
+                    LoweredAccess::SwizzleView(view) => {
+                        let value = self.swizzle_assignment_value(
+                            view,
+                            op,
+                            value,
+                            target_span,
+                            stmt.span,
+                            &mut ectx,
+                        )?;
+                        block.extend(emitter.finish(&ctx.function.expressions));
+                        block.push(
+                            ir::Statement::Store {
+                                pointer: view.pointer,
+                                value,
+                            },
+                            stmt.span,
+                        );
+                        return Ok(());
+                    }
+                };
                 let target_handle = match target {
                     Typed::Reference(handle) => handle,
                     Typed::Plain(handle) => {
@@ -2437,11 +2498,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
     fn expression_for_reference(
         &mut self,
-        expr: Handle<ast::Expression<'source>>,
+        expr_handle: Handle<ast::Expression<'source>>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, Typed<Handle<ir::Expression>>> {
-        let span = ctx.ast_expressions.get_span(expr);
-        let expr = &ctx.ast_expressions[expr];
+        let span = ctx.ast_expressions.get_span(expr_handle);
+        let expr = &ctx.ast_expressions[expr_handle];
 
         let expr: Typed<ir::Expression> = match *expr {
             ast::Expression::Literal(literal) => {
@@ -2555,92 +2616,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     .ok_or(Error::FunctionReturnsVoid(span))?;
                 return Ok(Typed::Plain(handle));
             }
-            ast::Expression::Index { base, index } => {
-                let mut lowered_base = self.expression_for_reference(base, ctx)?;
-                let index = self.expression(index, ctx)?;
-
-                // <https://www.w3.org/TR/WGSL/#language_extension-pointer_composite_access>
-                // Declare pointer as reference
-                if let Typed::Plain(handle) = lowered_base {
-                    if resolve_inner!(ctx, handle).pointer_space().is_some() {
-                        lowered_base = Typed::Reference(handle);
-                    }
-                }
-
-                lowered_base.try_map(|base| match ctx.get_const_val(index).ok() {
-                    Some(index) => Ok::<_, Box<Error>>(ir::Expression::AccessIndex { base, index }),
-                    None => {
-                        // When an abstract array value e is indexed by an expression
-                        // that is not a const-expression, then the array is concretized
-                        // before the index is applied.
-                        // https://www.w3.org/TR/WGSL/#array-access-expr
-                        // Also applies to vectors and matrices.
-                        let base = ctx.concretize(base)?;
-                        Ok(ir::Expression::Access { base, index })
-                    }
-                })?
-            }
-            ast::Expression::Member { base, ref field } => {
-                let mut lowered_base = self.expression_for_reference(base, ctx)?;
-
-                // <https://www.w3.org/TR/WGSL/#language_extension-pointer_composite_access>
-                // Declare pointer as reference
-                if let Typed::Plain(handle) = lowered_base {
-                    if resolve_inner!(ctx, handle).pointer_space().is_some() {
-                        lowered_base = Typed::Reference(handle);
-                    }
-                }
-
-                let temp_ty;
-                let composite_type: &ir::TypeInner = match lowered_base {
-                    Typed::Reference(handle) => {
-                        temp_ty = resolve_inner!(ctx, handle)
-                            .pointer_base_type()
-                            .expect("In Typed::Reference(handle), handle must be a Naga pointer");
-                        temp_ty.inner_with(&ctx.module.types)
-                    }
-
-                    Typed::Plain(handle) => {
-                        resolve_inner!(ctx, handle)
+            ast::Expression::Member { .. } | ast::Expression::Index { .. } => {
+                return match self.expression_for_swizzle_view(expr_handle, ctx)? {
+                    LoweredAccess::Typed(typed) => Ok(typed),
+                    // Apply the Swizzle View Load Rule.
+                    LoweredAccess::SwizzleView(view) => {
+                        Ok(Typed::Plain(self.load_swizzle_view(view, span, ctx)?))
                     }
                 };
-
-                let access = match *composite_type {
-                    ir::TypeInner::Struct { ref members, .. } => {
-                        let index = members
-                            .iter()
-                            .position(|m| m.name.as_deref() == Some(field.name))
-                            .ok_or(Error::BadAccessor(field.span))?
-                            as u32;
-
-                        lowered_base.map(|base| ir::Expression::AccessIndex { base, index })
-                    }
-                    ir::TypeInner::Vector { size: vec_size, .. } => {
-                        match Components::new(field.name, field.span)? {
-                            Components::Swizzle { size, pattern } => {
-                                for &component in pattern[..size as usize].iter() {
-                                    if component as u8 >= vec_size as u8 {
-                                        return Err(Box::new(Error::BadAccessor(field.span)));
-                                    }
-                                }
-                                Typed::Plain(ir::Expression::Swizzle {
-                                    size,
-                                    vector: ctx.apply_load_rule(lowered_base)?,
-                                    pattern,
-                                })
-                            }
-                            Components::Single(index) => {
-                                if index >= vec_size as u32 {
-                                    return Err(Box::new(Error::BadAccessor(field.span)));
-                                }
-                                lowered_base.map(|base| ir::Expression::AccessIndex { base, index })
-                            }
-                        }
-                    }
-                    _ => return Err(Box::new(Error::BadAccessor(field.span))),
-                };
-
-                access
             }
             ast::Expression::String(_) => {
                 return Err(Box::new(Error::InvalidStringLiteral {
@@ -2651,6 +2634,426 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         };
 
         expr.try_map(|handle| ctx.append_expression(handle, span))
+    }
+
+    /// Lower `expr`, keeping a multi-letter swizzle of a memory view as a
+    /// [`SwizzleView`] instead of loading it.
+    ///
+    /// Only member and index expressions can produce swizzle views. Anything
+    /// else is lowered by [`expression_for_reference`].
+    ///
+    /// [`expression_for_reference`]: Lowerer::expression_for_reference
+    fn expression_for_swizzle_view(
+        &mut self,
+        expr: Handle<ast::Expression<'source>>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, LoweredAccess> {
+        let span = ctx.ast_expressions.get_span(expr);
+        match ctx.ast_expressions[expr] {
+            ast::Expression::Member { base, ref field } => {
+                let base = self.expression_for_swizzle_view(base, ctx)?;
+                self.member_access(base, field, span, ctx)
+            }
+            ast::Expression::Index { base, index } => {
+                let base = self.expression_for_swizzle_view(base, ctx)?;
+                let index = self.expression(index, ctx)?;
+                self.index_access(base, index, span, ctx)
+                    .map(LoweredAccess::Typed)
+            }
+            _ => self
+                .expression_for_reference(expr, ctx)
+                .map(LoweredAccess::Typed),
+        }
+    }
+
+    /// Lower the member access `base.field`, where `base` is already lowered.
+    fn member_access(
+        &mut self,
+        base: LoweredAccess,
+        field: &ast::Ident<'source>,
+        span: Span,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, LoweredAccess> {
+        let mut lowered_base = match base {
+            LoweredAccess::Typed(typed) => typed,
+            LoweredAccess::SwizzleView(view) => {
+                // <https://www.w3.org/TR/WGSL/#swizzle-view-expr>
+                let selected = view.selected();
+                let selected_component = |component: ir::SwizzleComponent| {
+                    selected
+                        .get(component as usize)
+                        .copied()
+                        .ok_or_else(|| Box::new(Error::BadAccessor(field.span)))
+                };
+                return match Components::new(field.name, field.span)? {
+                    // A single letter gives a reference to one of the
+                    // components of the underlying vector.
+                    Components::Single(index) => {
+                        let component =
+                            selected_component(ir::SwizzleComponent::XYZW[index as usize])?;
+                        let reference = ctx.append_expression(
+                            ir::Expression::AccessIndex {
+                                base: view.pointer,
+                                index: component as u32,
+                            },
+                            span,
+                        )?;
+                        Ok(LoweredAccess::Typed(Typed::Reference(reference)))
+                    }
+                    // A swizzle of a swizzle view is another swizzle view of
+                    // the same vector.
+                    Components::Swizzle { size, pattern } => {
+                        let mut composed = [ir::SwizzleComponent::X; 4];
+                        for (out, &component) in
+                            composed.iter_mut().zip(pattern[..size as usize].iter())
+                        {
+                            *out = selected_component(component)?;
+                        }
+                        Ok(LoweredAccess::SwizzleView(SwizzleView {
+                            pointer: view.pointer,
+                            size,
+                            pattern: composed,
+                        }))
+                    }
+                };
+            }
+        };
+
+        // <https://www.w3.org/TR/WGSL/#language_extension-pointer_composite_access>
+        // Declare pointer as reference
+        if let Typed::Plain(handle) = lowered_base {
+            if resolve_inner!(ctx, handle).pointer_space().is_some() {
+                lowered_base = Typed::Reference(handle);
+            }
+        }
+
+        let temp_ty;
+        let composite_type: &ir::TypeInner = match lowered_base {
+            Typed::Reference(handle) => {
+                temp_ty = resolve_inner!(ctx, handle)
+                    .pointer_base_type()
+                    .expect("In Typed::Reference(handle), handle must be a Naga pointer");
+                temp_ty.inner_with(&ctx.module.types)
+            }
+
+            Typed::Plain(handle) => {
+                resolve_inner!(ctx, handle)
+            }
+        };
+
+        let access = match *composite_type {
+            ir::TypeInner::Struct { ref members, .. } => {
+                let index = members
+                    .iter()
+                    .position(|m| m.name.as_deref() == Some(field.name))
+                    .ok_or(Error::BadAccessor(field.span))? as u32;
+
+                lowered_base.map(|base| ir::Expression::AccessIndex { base, index })
+            }
+            ir::TypeInner::Vector { size: vec_size, .. } => {
+                match Components::new(field.name, field.span)? {
+                    Components::Swizzle { size, pattern } => {
+                        for &component in pattern[..size as usize].iter() {
+                            if component as u8 >= vec_size as u8 {
+                                return Err(Box::new(Error::BadAccessor(field.span)));
+                            }
+                        }
+                        // <https://www.w3.org/TR/WGSL/#language_extension-swizzle_assignment>
+                        // A multi-letter swizzle of a memory view is a swizzle view.
+                        if let Typed::Reference(pointer) = lowered_base {
+                            return Ok(LoweredAccess::SwizzleView(SwizzleView {
+                                pointer,
+                                size,
+                                pattern,
+                            }));
+                        }
+                        Typed::Plain(ir::Expression::Swizzle {
+                            size,
+                            vector: ctx.apply_load_rule(lowered_base)?,
+                            pattern,
+                        })
+                    }
+                    Components::Single(index) => {
+                        if index >= vec_size as u32 {
+                            return Err(Box::new(Error::BadAccessor(field.span)));
+                        }
+                        lowered_base.map(|base| ir::Expression::AccessIndex { base, index })
+                    }
+                }
+            }
+            _ => return Err(Box::new(Error::BadAccessor(field.span))),
+        };
+
+        let access = access.try_map(|expr| ctx.append_expression(expr, span))?;
+        Ok(LoweredAccess::Typed(access))
+    }
+
+    /// Lower the index expression `base[index]`, where `base` and `index` are
+    /// already lowered.
+    fn index_access(
+        &mut self,
+        base: LoweredAccess,
+        index: Handle<ir::Expression>,
+        span: Span,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, Typed<Handle<ir::Expression>>> {
+        let mut lowered_base = match base {
+            LoweredAccess::Typed(typed) => typed,
+            LoweredAccess::SwizzleView(view) => {
+                return self
+                    .swizzle_view_index(view, index, span, ctx)
+                    .map(Typed::Reference)
+            }
+        };
+
+        // <https://www.w3.org/TR/WGSL/#language_extension-pointer_composite_access>
+        // Declare pointer as reference
+        if let Typed::Plain(handle) = lowered_base {
+            if resolve_inner!(ctx, handle).pointer_space().is_some() {
+                lowered_base = Typed::Reference(handle);
+            }
+        }
+
+        let access = lowered_base.try_map(|base| match ctx.get_const_val(index).ok() {
+            Some(index) => Ok::<_, Box<Error>>(ir::Expression::AccessIndex { base, index }),
+            None => {
+                // When an abstract array value e is indexed by an expression
+                // that is not a const-expression, then the array is concretized
+                // before the index is applied.
+                // https://www.w3.org/TR/WGSL/#array-access-expr
+                // Also applies to vectors and matrices.
+                let base = ctx.concretize(base)?;
+                Ok(ir::Expression::Access { base, index })
+            }
+        })?;
+
+        access.try_map(|expr| ctx.append_expression(expr, span))
+    }
+
+    /// Lower `view[index]`, a reference to one of the components selected by a
+    /// swizzle view.
+    ///
+    /// The index chooses one of the selected components, so `v.zy[1]` is a
+    /// reference to `v.y`.
+    ///
+    /// <https://www.w3.org/TR/WGSL/#component-reference-from-vector-memory-view>
+    fn swizzle_view_index(
+        &mut self,
+        view: SwizzleView,
+        index: Handle<ir::Expression>,
+        span: Span,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, Handle<ir::Expression>> {
+        let selected = view.selected();
+        let index_span = ctx.get_expression_span(index);
+        let out_of_bounds = || {
+            Box::new(Error::SwizzleViewIndexOutOfBounds {
+                span: index_span,
+                size: view.size as u8,
+            })
+        };
+
+        match ctx.get_const_val::<u32>(index) {
+            Ok(i) => {
+                let component = *selected.get(i as usize).ok_or_else(out_of_bounds)?;
+                return ctx.append_expression(
+                    ir::Expression::AccessIndex {
+                        base: view.pointer,
+                        index: component as u32,
+                    },
+                    span,
+                );
+            }
+            Err(proc::ConstValueError::Negative) => return Err(out_of_bounds()),
+            Err(proc::ConstValueError::NonConst | proc::ConstValueError::InvalidType) => {}
+        }
+
+        // The index is only known at runtime. Map it to the component of the
+        // underlying vector with a chain of `select`s, which, unlike indexing
+        // a vector of the selected components, all backends accept as part of
+        // the pointer of a store.
+        //
+        // An index outside the view picks the first selected component. That
+        // is allowed, since the result is an invalid memory reference, which
+        // may access any memory location of the same variable.
+        let component_index = if selected
+            .iter()
+            .enumerate()
+            .all(|(i, &component)| component as usize == i)
+        {
+            index
+        } else {
+            let signed = matches!(
+                *resolve_inner!(ctx, index),
+                ir::TypeInner::Scalar(ir::Scalar::I32)
+            );
+            let literal = |value: u32| {
+                ir::Expression::Literal(if signed {
+                    ir::Literal::I32(value as i32)
+                } else {
+                    ir::Literal::U32(value)
+                })
+            };
+            let mut component_index = ctx.interrupt_emitter(literal(selected[0] as u32), span)?;
+            for (i, &component) in selected.iter().enumerate().skip(1) {
+                let i = ctx.interrupt_emitter(literal(i as u32), span)?;
+                let component = ctx.interrupt_emitter(literal(component as u32), span)?;
+                let condition = ctx.append_expression(
+                    ir::Expression::Binary {
+                        op: ir::BinaryOperator::Equal,
+                        left: index,
+                        right: i,
+                    },
+                    span,
+                )?;
+                component_index = ctx.append_expression(
+                    ir::Expression::Select {
+                        condition,
+                        accept: component,
+                        reject: component_index,
+                    },
+                    span,
+                )?;
+            }
+            component_index
+        };
+
+        ctx.append_expression(
+            ir::Expression::Access {
+                base: view.pointer,
+                index: component_index,
+            },
+            span,
+        )
+    }
+
+    /// Apply the Swizzle View Load Rule to `view`, giving the vector of the
+    /// selected components.
+    ///
+    /// <https://www.w3.org/TR/WGSL/#swizzle-view-load-rule>
+    fn load_swizzle_view(
+        &mut self,
+        view: SwizzleView,
+        span: Span,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, Handle<ir::Expression>> {
+        let vector = ctx.apply_load_rule(Typed::Reference(view.pointer))?;
+        ctx.append_expression(
+            ir::Expression::Swizzle {
+                size: view.size,
+                vector,
+                pattern: view.pattern,
+            },
+            span,
+        )
+    }
+
+    /// Lower the right-hand side of an assignment to the swizzle view `view`.
+    ///
+    /// `op` is the operator of a compound assignment, if any. Return the value
+    /// of the whole vector to store through `view.pointer`: the components the
+    /// view selects come from the right-hand side, and the rest from a read of
+    /// the vector done after evaluating the right-hand side.
+    ///
+    /// <https://www.w3.org/TR/WGSL/#swizzle-assignment-section>
+    fn swizzle_assignment_value(
+        &mut self,
+        view: SwizzleView,
+        op: Option<ir::BinaryOperator>,
+        value: Handle<ast::Expression<'source>>,
+        target_span: Span,
+        stmt_span: Span,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, Handle<ir::Expression>> {
+        let selected = view.selected();
+        for (i, component) in selected.iter().enumerate() {
+            if selected[..i].contains(component) {
+                return Err(Box::new(Error::InvalidAssignment {
+                    span: target_span,
+                    ty: InvalidAssignmentType::RepeatedSwizzleComponent,
+                }));
+            }
+        }
+
+        let (vector_size, scalar) = match resolve_inner!(ctx, view.pointer)
+            .pointer_base_type()
+            .as_ref()
+            .map(|ty| ty.inner_with(&ctx.module.types))
+        {
+            Some(&ir::TypeInner::Vector { size, scalar }) => (size, scalar),
+            _ => unreachable!("a swizzle view's pointer must point to a vector"),
+        };
+
+        // For a compound assignment, read the selected components before
+        // evaluating the right-hand side, which may change them.
+        let viewed = match op {
+            Some(_) => Some(self.load_swizzle_view(view, target_span, ctx)?),
+            None => None,
+        };
+
+        let value = self.expression_for_abstract(value, ctx)?;
+        let update = match (op, viewed) {
+            (Some(op), Some(mut left)) => {
+                // The bit shift operators take a `u32` or `vecN<u32>` right
+                // operand.
+                let right_scalar = match op {
+                    ir::BinaryOperator::ShiftLeft | ir::BinaryOperator::ShiftRight => {
+                        ir::Scalar::U32
+                    }
+                    _ => scalar,
+                };
+                let mut right =
+                    ctx.try_automatic_conversion_for_leaf_scalar(value, right_scalar, target_span)?;
+                ctx.binary_op_splat(op, &mut left, &mut right)?;
+                ctx.append_expression(ir::Expression::Binary { op, left, right }, stmt_span)?
+            }
+            _ => value,
+        };
+        let view_ty = proc::TypeResolution::Value(ir::TypeInner::Vector {
+            size: view.size,
+            scalar,
+        });
+        let update = ctx.try_automatic_conversions(update, &view_ty, target_span)?;
+
+        // If the view selects every component, the new vector is just the
+        // update, reordered.
+        if view.size == vector_size {
+            let mut pattern = [ir::SwizzleComponent::X; 4];
+            for (i, &component) in selected.iter().enumerate() {
+                pattern[component as usize] = ir::SwizzleComponent::XYZW[i];
+            }
+            if pattern[..selected.len()] == ir::SwizzleComponent::XYZW[..selected.len()] {
+                return Ok(update);
+            }
+            return ctx.append_expression(
+                ir::Expression::Swizzle {
+                    size: vector_size,
+                    vector: update,
+                    pattern,
+                },
+                stmt_span,
+            );
+        }
+
+        // Read the vector again: evaluating the right-hand side may have
+        // changed the components that the view does not select, and those
+        // must be preserved.
+        let old = ctx.apply_load_rule(Typed::Reference(view.pointer))?;
+        let mut components = Vec::with_capacity(vector_size as usize);
+        for i in 0..vector_size as u32 {
+            let (base, index) = match selected.iter().position(|&c| c as u32 == i) {
+                Some(j) => (update, j as u32),
+                None => (old, i),
+            };
+            components.push(
+                ctx.append_expression(ir::Expression::AccessIndex { base, index }, target_span)?,
+            );
+        }
+        let ty = ctx.ensure_type_exists(ir::TypeInner::Vector {
+            size: vector_size,
+            scalar,
+        });
+        ctx.append_expression(ir::Expression::Compose { ty, components }, stmt_span)
     }
 
     /// Generate IR for the short-circuiting operators `&&` and `||`.

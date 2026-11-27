@@ -19,6 +19,7 @@ pub mod language_extension {
         const UNRESTRICTED_POINTER_PARAMETERS: &'static str = "unrestricted_pointer_parameters";
         const POINTER_COMPOSITE_ACCESS: &'static str = "pointer_composite_access";
         const IMMEDIATE_ADDRESS_SPACE: &'static str = "immediate_address_space";
+        const SWIZZLE_ASSIGNMENT: &'static str = "swizzle_assignment";
 
         /// Convert from a sentinel word in WGSL into its associated [`LanguageExtension`], if possible.
         pub fn from_ident(s: &str) -> Option<Self> {
@@ -37,6 +38,9 @@ pub mod language_extension {
                 }
                 Self::IMMEDIATE_ADDRESS_SPACE => {
                     Self::Implemented(ImplementedLanguageExtension::ImmediateAddressSpace)
+                }
+                Self::SWIZZLE_ASSIGNMENT => {
+                    Self::Implemented(ImplementedLanguageExtension::SwizzleAssignment)
                 }
                 _ => return None,
             })
@@ -63,6 +67,7 @@ pub mod language_extension {
         Packed4x8IntegerDotProduct,
         PointerCompositeAccess,
         ImmediateAddressSpace,
+        SwizzleAssignment,
     }
 
     impl ImplementedLanguageExtension {
@@ -72,6 +77,7 @@ pub mod language_extension {
             Self::Packed4x8IntegerDotProduct,
             Self::PointerCompositeAccess,
             Self::ImmediateAddressSpace,
+            Self::SwizzleAssignment,
         ];
 
         /// Returns slice of all variants of [`ImplementedLanguageExtension`].
@@ -93,6 +99,9 @@ pub mod language_extension {
                 }
                 ImplementedLanguageExtension::ImmediateAddressSpace => {
                     LanguageExtension::IMMEDIATE_ADDRESS_SPACE
+                }
+                ImplementedLanguageExtension::SwizzleAssignment => {
+                    LanguageExtension::SWIZZLE_ASSIGNMENT
                 }
             }
         }

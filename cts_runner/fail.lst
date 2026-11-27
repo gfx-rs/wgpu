@@ -131,7 +131,6 @@ webgpu:shader,validation,parse,requires:have_all_language_features:feature="frag
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="linear_indexing" // https://github.com/gfx-rs/wgpu/issues/9296
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="subgroup_id"
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="subgroup_uniformity"
-webgpu:shader,validation,parse,requires:have_all_language_features:feature="swizzle_assignment" // https://github.com/gfx-rs/wgpu/issues/9159
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="texture_and_sampler_let"
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="texture_formats_tier1" // https://github.com/gfx-rs/wgpu/issues/8962
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="uniform_buffer_standard_layout"

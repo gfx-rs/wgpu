@@ -209,6 +209,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - Support WGSL `bitcast` between `vec2<f16>` and 32-bit scalars, between `vec4<f16>` and `vec2` of 32-bit scalars, between `f16` and `i16`/`u16` (with `wgpu_int16`), and the corresponding SPIR-V `OpBitcast`s. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
 - Support SPIR-V's `OpGroupNonUniformBallotFindLSB`/`MSB` and GLSL's `subgroupBallotFindLSB`/`MSB` with the new `Statement::SubgroupBallotFindBit`. HLSL, MSL, and WGSL output use a polyfill. The GLSL frontend now also accepts `gl_SubgroupSize` and `gl_SubgroupInvocationID`. By @nazar-pc in [#9966](https://github.com/gfx-rs/wgpu/pull/9966).
 - Parse `NonSemantic.DebugPrintf` instructions in SPIR-V shaders. By @evilpie in [#10561](https://github.com/gfx-rs/wgpu/pull/10561).
+- Implement the [`swizzle_assignment`](https://www.w3.org/TR/WGSL/#language_extension-swizzle_assignment) WGSL language extension, which allows assigning to a swizzle of a vector in memory, such as `v.xz = vec2(1, 2);` or `p.yx += d;`. Swizzles of swizzles, and single components or indices of a swizzle, can be assigned to as well. By @atorcam102 in [#9159](https://github.com/gfx-rs/wgpu/issues/9159).
 
 #### Hal
 

@@ -41,4 +41,3 @@ webgpu:shader,validation,expression,call,builtin,subgroupMinMax:* // subgroups, 
 webgpu:shader,validation,expression,call,builtin,subgroupMul:* // subgroups, https://github.com/gfx-rs/wgpu/issues/8722
 webgpu:shader,validation,expression,call,builtin,subgroupShuffle:* // subgroups, https://github.com/gfx-rs/wgpu/issues/8722
 webgpu:shader,validation,extension,subgroup_size_control:* // device feature 'subgroup-size-control' isn't implemented
-webgpu:shader,validation,statement,swizzle_assignment:* // swizzle assignment, https://github.com/gfx-rs/wgpu/issues/9159
