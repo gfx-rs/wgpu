@@ -1,4 +1,6 @@
-use alloc::{borrow::ToOwned as _, collections::BTreeMap, ffi::CString, sync::Arc, vec::Vec};
+use alloc::{
+    borrow::ToOwned as _, boxed::Box, collections::BTreeMap, ffi::CString, sync::Arc, vec::Vec,
+};
 use core::{
     ffi::CStr,
     mem::{self, MaybeUninit},
@@ -760,11 +762,56 @@ impl super::Device {
         Ok(raw)
     }
 
+    /// Assigns push constant slots to the storage buffers of a pipeline layout, for
+    /// [`super::Workarounds::BUFFER_SIZES_IN_PUSH_CONSTANTS`].
+    fn buffer_sizes_layout(
+        &self,
+        desc: &crate::PipelineLayoutDescriptor<super::BindGroupLayout>,
+    ) -> super::BufferSizesLayout {
+        let base = desc.immediate_size.next_multiple_of(4);
+        let available = (self
+            .shared
+            .private_caps
+            .max_push_constants_size
+            .saturating_sub(base)
+            / 4) as usize;
+        let mut offsets = BTreeMap::new();
+        let mut groups = Vec::with_capacity(desc.bind_group_layouts.len());
+        let mut slot = 0usize;
+        for (group, layout) in desc.bind_group_layouts.iter().enumerate() {
+            let first_slot = slot;
+            for entry in layout
+                .iter()
+                .flat_map(|layout| layout.entries.iter())
+                .filter(|entry| is_sized_storage_buffer(entry))
+                .take(available.saturating_sub(first_slot))
+            {
+                offsets.insert(
+                    naga::ResourceBinding {
+                        group: group as u32,
+                        binding: entry.binding,
+                    },
+                    base + 4 * slot as u32,
+                );
+                slot += 1;
+            }
+            groups.push((base + 4 * first_slot as u32, slot - first_slot));
+        }
+        super::BufferSizesLayout {
+            naga: naga::back::spv::BufferSizes {
+                push_constant_size: base + 4 * slot as u32,
+                offsets,
+            },
+            groups,
+        }
+    }
+
     fn compile_stage(
         &self,
         stage: &crate::ProgrammableStage<super::ShaderModule>,
         naga_stage: naga::ShaderStage,
         binding_map: &naga::back::spv::BindingMap,
+        buffer_sizes: Option<&naga::back::spv::BufferSizes>,
     ) -> Result<CompiledStage, crate::PipelineError> {
         let stage_flags = crate::auxil::map_naga_stage(naga_stage);
         let vk_module = match *stage.module {
@@ -787,6 +834,7 @@ impl super::Device {
                     && self.naga_options.zero_initialize_workgroup_memory
                         == naga::back::spv::ZeroInitializeWorkgroupMemoryMode::Native;
                 let needs_temp_options = polyfill_zero_init
+                    || buffer_sizes.is_some()
                     || !runtime_checks.bounds_checks
                     || !runtime_checks.force_loop_bounding
                     || !runtime_checks.ray_query_initialization_tracking
@@ -817,6 +865,7 @@ impl super::Device {
                     if !binding_map.is_empty() {
                         temp_options.binding_map = binding_map.clone();
                     }
+                    temp_options.buffer_sizes = buffer_sizes.cloned();
 
                     if let Some(ref debug) = naga_shader.debug_source {
                         temp_options.debug_info = Some(naga::back::spv::DebugInfo {
@@ -1730,11 +1779,23 @@ impl crate::Device for super::Device {
                 }
             })
             .collect::<Vec<_>>();
-        let vk_immediates_ranges: Option<vk::PushConstantRange> = if desc.immediate_size != 0 {
+        let buffer_sizes = self
+            .shared
+            .workarounds
+            .contains(super::Workarounds::BUFFER_SIZES_IN_PUSH_CONSTANTS)
+            .then(|| self.buffer_sizes_layout(desc));
+        // Vulkan keeps descriptor sets bound across pipeline layouts only if their
+        // push constant ranges match, so every layout gets the whole range.
+        let push_constant_size = if buffer_sizes.is_some() {
+            self.shared.private_caps.max_push_constants_size
+        } else {
+            desc.immediate_size
+        };
+        let vk_immediates_ranges: Option<vk::PushConstantRange> = if push_constant_size != 0 {
             Some(vk::PushConstantRange {
                 stage_flags: vk::ShaderStageFlags::ALL,
                 offset: 0,
-                size: desc.immediate_size,
+                size: push_constant_size,
             })
         } else {
             None
@@ -1782,7 +1843,11 @@ impl crate::Device for super::Device {
         }
 
         self.counters.pipeline_layouts.add(1);
-        Ok(super::PipelineLayout { raw, binding_map })
+        Ok(super::PipelineLayout {
+            raw,
+            binding_map,
+            buffer_sizes,
+        })
     }
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: super::PipelineLayout) {
         unsafe {
@@ -2055,7 +2120,30 @@ impl crate::Device for super::Device {
 
         self.counters.bind_groups.add(1);
 
-        Ok(super::BindGroup { set })
+        let buffer_sizes = if self
+            .shared
+            .workarounds
+            .contains(super::Workarounds::BUFFER_SIZES_IN_PUSH_CONSTANTS)
+        {
+            desc.layout
+                .entries
+                .iter()
+                .filter(|entry| is_sized_storage_buffer(entry))
+                .map(|layout_entry| {
+                    desc.entries
+                        .iter()
+                        .find(|entry| entry.binding == layout_entry.binding)
+                        .map_or(0, |entry| {
+                            let size = desc.buffers[entry.resource_index as usize].size.get();
+                            u32::try_from(size).unwrap_or(u32::MAX)
+                        })
+                })
+                .collect()
+        } else {
+            Box::default()
+        };
+
+        Ok(super::BindGroup { set, buffer_sizes })
     }
 
     unsafe fn destroy_bind_group(&self, group: super::BindGroup) {
@@ -2208,6 +2296,7 @@ impl crate::Device for super::Device {
                     vertex_stage,
                     naga::ShaderStage::Vertex,
                     &desc.layout.binding_map,
+                    desc.layout.buffer_sizes.as_ref().map(|sizes| &sizes.naga),
                 )?);
                 stages.push(compiled_vs.as_ref().unwrap().create_info);
             }
@@ -2220,6 +2309,7 @@ impl crate::Device for super::Device {
                         t,
                         naga::ShaderStage::Task,
                         &desc.layout.binding_map,
+                        desc.layout.buffer_sizes.as_ref().map(|sizes| &sizes.naga),
                     )?);
                     stages.push(compiled_ts.as_ref().unwrap().create_info);
                 }
@@ -2227,6 +2317,7 @@ impl crate::Device for super::Device {
                     mesh_stage,
                     naga::ShaderStage::Mesh,
                     &desc.layout.binding_map,
+                    desc.layout.buffer_sizes.as_ref().map(|sizes| &sizes.naga),
                 )?);
                 stages.push(compiled_ms.as_ref().unwrap().create_info);
             }
@@ -2237,6 +2328,7 @@ impl crate::Device for super::Device {
                     stage,
                     naga::ShaderStage::Fragment,
                     &desc.layout.binding_map,
+                    desc.layout.buffer_sizes.as_ref().map(|sizes| &sizes.naga),
                 )?;
                 stages.push(compiled.create_info);
                 Some(compiled)
@@ -2459,6 +2551,7 @@ impl crate::Device for super::Device {
             &desc.stage,
             naga::ShaderStage::Compute,
             &desc.layout.binding_map,
+            desc.layout.buffer_sizes.as_ref().map(|sizes| &sizes.naga),
         )?;
 
         let vk_infos = [{
@@ -2517,6 +2610,7 @@ impl crate::Device for super::Device {
             &desc.ray_generation,
             naga::ShaderStage::RayGeneration,
             &desc.layout.binding_map,
+            desc.layout.buffer_sizes.as_ref().map(|sizes| &sizes.naga),
         )?;
 
         groups.push(
@@ -2534,6 +2628,7 @@ impl crate::Device for super::Device {
             &desc.miss,
             naga::ShaderStage::Miss,
             &desc.layout.binding_map,
+            desc.layout.buffer_sizes.as_ref().map(|sizes| &sizes.naga),
         )?;
 
         groups.push(
@@ -2556,6 +2651,7 @@ impl crate::Device for super::Device {
                 &group.closest_hit,
                 naga::ShaderStage::ClosestHit,
                 &desc.layout.binding_map,
+                desc.layout.buffer_sizes.as_ref().map(|sizes| &sizes.naga),
             )?;
 
             let closest_idx = stages.len();
@@ -2577,6 +2673,7 @@ impl crate::Device for super::Device {
                     any_hit,
                     naga::ShaderStage::AnyHit,
                     &desc.layout.binding_map,
+                    desc.layout.buffer_sizes.as_ref().map(|sizes| &sizes.naga),
                 )?;
 
                 let any_idx = stages.len();
@@ -3360,4 +3457,17 @@ impl super::DeviceShared {
 struct ImageWithoutMemory {
     raw: vk::Image,
     requirements: vk::MemoryRequirements,
+}
+
+/// Whether `entry` is a storage buffer whose size shaders may need for
+/// [`super::Workarounds::BUFFER_SIZES_IN_PUSH_CONSTANTS`].
+fn is_sized_storage_buffer(entry: &wgt::BindGroupLayoutEntry) -> bool {
+    entry.count.is_none()
+        && matches!(
+            entry.ty,
+            wgt::BindingType::Buffer {
+                ty: wgt::BufferBindingType::Storage { .. },
+                ..
+            }
+        )
 }

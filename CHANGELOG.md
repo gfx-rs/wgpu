@@ -407,6 +407,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - Polyfill workgroup zero init in mesh and task shaders on AMD's proprietary driver, which fails with `VK_ERROR_INITIALIZATION_FAILED` when they use `OpVariable` initializers. By @apollo-2006 in [#10692](https://github.com/gfx-rs/wgpu/pull/10692).
 - Fix a fence data race between submitting and polling on devices without timeline semaphores. By @JasperDeSutter in [#10960](https://github.com/gfx-rs/wgpu/pull/10960).
 - Fix pass timestamp queries on Vulkan sometimes reporting a duration of almost zero for a render or compute pass, when the GPU was busy with other work. By @kikijiki in [#10837](https://github.com/gfx-rs/wgpu/pull/10837).
+- Work around two bugs in Qualcomm's proprietary driver for Adreno 5xx GPUs, such as on the Oculus Quest 1. Recording a draw or dispatch could crash when a shader used the length of a runtime-sized array, including for bounds checks; the sizes of storage buffer bindings are now passed in push constants there instead of using `OpArrayLength`. An indirect dispatch whose arguments were written by the GPU did not run if the shader read uniforms or immediates; compute shaders now always declare the `num_workgroups` builtin there. By @matthargett in [#10991](https://github.com/gfx-rs/wgpu/pull/10991).
 
 #### Metal
 

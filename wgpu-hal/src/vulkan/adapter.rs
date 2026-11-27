@@ -2546,6 +2546,14 @@ impl super::Instance {
                 phd_capabilities.is_driver(vk::DriverId::ARM_PROPRIETARY)
                     && arm_driver_leaks_timeline_semaphores(&info.driver_info),
             );
+            // Adreno device IDs hold the GPU generation in the top byte.
+            let adreno_5xx = phd_capabilities.is_driver(vk::DriverId::QUALCOMM_PROPRIETARY)
+                && phd_capabilities.properties.device_id >> 24 == 5;
+            workarounds.set(
+                super::Workarounds::BUFFER_SIZES_IN_PUSH_CONSTANTS,
+                adreno_5xx,
+            );
+            workarounds.set(super::Workarounds::FORCE_NUM_WORKGROUPS, adreno_5xx);
         };
 
         if let Some(driver) = phd_capabilities.driver {
@@ -2687,6 +2695,7 @@ impl super::Instance {
                 .properties
                 .limits
                 .max_sampler_allocation_count,
+            max_push_constants_size: phd_capabilities.properties.limits.max_push_constants_size,
             shader_integer_dot_product: phd_features
                 .shader_integer_dot_product
                 .is_some_and(|ext| ext.shader_integer_dot_product != 0),
@@ -3083,6 +3092,11 @@ impl super::Adapter {
                 self.phd_capabilities.properties.vendor_id != crate::auxil::db::qualcomm::VENDOR,
             );
             flags.set(
+                spv::WriterFlags::FORCE_NUM_WORKGROUPS,
+                self.workarounds
+                    .contains(super::Workarounds::FORCE_NUM_WORKGROUPS),
+            );
+            flags.set(
                 spv::WriterFlags::FORCE_POINT_SIZE,
                 //Note: we could technically disable this when we are compiling separate entry points,
                 // and we know exactly that the primitive topology is not `PointList`.
@@ -3188,6 +3202,7 @@ impl super::Adapter {
                 mesh_shader_primitive_indices_clamp: true,
                 trace_ray_argument_validation: true,
                 emit_int_div_checks: true,
+                buffer_sizes: None,
             }
         };
 

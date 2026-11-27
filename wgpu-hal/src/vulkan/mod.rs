@@ -495,6 +495,7 @@ struct PrivateCapabilities {
     zero_initialize_workgroup_memory: bool,
     image_format_list: bool,
     maximum_samplers: u32,
+    max_push_constants_size: u32,
 
     /// True if this adapter supports the [`VK_KHR_shader_integer_dot_product`] extension
     /// (promoted to Vulkan 1.3).
@@ -611,6 +612,16 @@ bitflags::bitflags!(
         /// [`Fence`]: super::Fence
         /// [`FencePool`]: super::FencePool
         const DISABLE_TIMELINE_SEMAPHORES = 1 << 4;
+        /// Qualcomm's proprietary driver for Adreno 5xx GPUs writes the result of
+        /// `OpArrayLength` through a corrupt index while recording some draws and
+        /// dispatches, and crashes. Pass storage buffer binding sizes in push
+        /// constants instead.
+        const BUFFER_SIZES_IN_PUSH_CONSTANTS = 1 << 5;
+        /// Qualcomm's proprietary driver for Adreno 5xx GPUs skips an indirect
+        /// dispatch whose arguments an earlier dispatch in the same command buffer
+        /// wrote, if the shader reads push constants or uniform buffers but doesn't
+        /// declare the `NumWorkgroups` builtin. Declare it in every compute shader.
+        const FORCE_NUM_WORKGROUPS = 1 << 6;
     }
 );
 
@@ -1115,6 +1126,21 @@ impl crate::DynBindGroupLayout for BindGroupLayout {}
 pub struct PipelineLayout {
     raw: vk::PipelineLayout,
     binding_map: naga::back::spv::BindingMap,
+    buffer_sizes: Option<BufferSizesLayout>,
+}
+
+/// Where a pipeline layout keeps storage buffer sizes, for
+/// [`Workarounds::BUFFER_SIZES_IN_PUSH_CONSTANTS`].
+///
+/// The sizes are `u32`s after any immediates, in bind group and binding order, so
+/// a bind group's sizes keep their offsets in layouts that share the preceding bind
+/// group layouts and immediate size. wgpu-core rebinds every bind group when the
+/// immediate size changes.
+#[derive(Debug)]
+struct BufferSizesLayout {
+    naga: naga::back::spv::BufferSizes,
+    /// For each bind group, the byte offset of its sizes and how many there are.
+    groups: Vec<(u32, usize)>,
 }
 
 impl crate::DynPipelineLayout for PipelineLayout {}
@@ -1122,6 +1148,9 @@ impl crate::DynPipelineLayout for PipelineLayout {}
 #[derive(Debug)]
 pub struct BindGroup {
     set: descriptor::DescriptorSet,
+    /// Storage buffer binding sizes in binding order, for
+    /// [`Workarounds::BUFFER_SIZES_IN_PUSH_CONSTANTS`].
+    buffer_sizes: Box<[u32]>,
 }
 
 impl crate::DynBindGroup for BindGroup {}
