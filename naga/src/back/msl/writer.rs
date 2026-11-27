@@ -7892,7 +7892,7 @@ template <typename A>
                 };
 
                 if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex) {
-                    local_invocation_index = Some(name_key);
+                    local_invocation_index = Some(name.clone());
                 }
 
                 let ty_name = TypeContext {
@@ -8516,7 +8516,7 @@ template <typename A>
                     module,
                     mod_info,
                     fun_info,
-                    local_invocation_index,
+                    local_invocation_index.as_deref(),
                     ep.stage,
                 )?;
             }
@@ -8663,7 +8663,7 @@ template <typename A>
                     mod_info,
                     fun_info,
                     args,
-                    local_invocation_index,
+                    local_invocation_index: local_invocation_index.as_deref(),
                     nested_name: &nested_fun_name,
                     outer_name: &fun_name,
                     out_mesh_info,
@@ -8817,7 +8817,7 @@ mod workgroup_mem_init {
             module: &crate::Module,
             module_info: &valid::ModuleInfo,
             fun_info: &valid::FunctionInfo,
-            local_invocation_index: Option<&NameKey>,
+            local_invocation_index: Option<&str>,
             stage: crate::ShaderStage,
         ) -> BackendResult {
             let level = back::Level(1);
@@ -8826,9 +8826,7 @@ mod workgroup_mem_init {
                 self.out,
                 "{}if ({} == 0u) {{",
                 level,
-                local_invocation_index
-                    .map(|name_key| self.names[name_key].as_str())
-                    .unwrap_or("__local_invocation_index"),
+                local_invocation_index.unwrap_or("__local_invocation_index"),
             )?;
 
             let mut access_stack = AccessStack::new();
