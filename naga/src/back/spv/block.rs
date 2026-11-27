@@ -3895,7 +3895,9 @@ impl BlockContext<'_> {
                 Statement::MemoryBarrier(flags) => {
                     self.writer.write_memory_barrier(flags, &mut block);
                 }
-                Statement::Store { pointer, value } => {
+                Statement::Store { pointer, value }
+                | Statement::NonAtomicStore { pointer, value } => {
+                    let atomic = matches!(*statement, Statement::Store { .. });
                     let value_id = self.cached[value];
                     match self.write_access_chain(
                         pointer,
@@ -3907,7 +3909,7 @@ impl BlockContext<'_> {
                                 .ty
                                 .inner_with(&self.ir_module.types)
                             {
-                                crate::TypeInner::Pointer { base, space } => {
+                                crate::TypeInner::Pointer { base, space } if atomic => {
                                     match self.ir_module.types[base].inner {
                                         crate::TypeInner::Atomic { .. } => Some(space),
                                         _ => None,

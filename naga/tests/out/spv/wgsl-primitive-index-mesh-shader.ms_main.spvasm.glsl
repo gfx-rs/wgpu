@@ -26,9 +26,29 @@ shared _13 _14;
 
 void _31()
 {
+    uint _45 = 0u;
+    uvec2 _60 = uvec2(4294967295u);
+    _45 = gl_LocalInvocationIndex;
+    for (;;)
+    {
+        if (all(equal(uvec2(0u), _60)))
+        {
+            break;
+        }
+        _60 -= uvec2(uint(_60.y == 0u), 1u);
+        if (_45 >= 3u)
+        {
+            break;
+        }
+        _14._m0[_45] = _5(vec4(0.0));
+        _45++;
+        continue;
+    }
+    _14._m1[gl_LocalInvocationIndex] = _8(uvec3(0u), 0u);
     if (gl_LocalInvocationIndex == 0u)
     {
-        _14 = _13(_5[](_5(vec4(0.0)), _5(vec4(0.0)), _5(vec4(0.0))), _8[](_8(uvec3(0u), 0u)), 0u, 0u);
+        _14._m2 = 0u;
+        _14._m3 = 0u;
     }
     barrier();
     _14._m2 = 3u;
@@ -44,17 +64,17 @@ void main()
 {
     _31();
     barrier();
-    uint _74 = min(_14._m2, 3u);
-    uint _77 = min(_14._m3, 1u);
-    SetMeshOutputsEXT(_74, _77);
-    for (uint _67 = gl_LocalInvocationIndex; _67 < _74; _67++)
+    uint _106 = min(_14._m2, 3u);
+    uint _109 = min(_14._m3, 1u);
+    SetMeshOutputsEXT(_106, _109);
+    for (uint _100 = gl_LocalInvocationIndex; _100 < _106; _100++)
     {
-        gl_MeshVerticesEXT[_67].gl_Position = _14._m0[_67]._m0;
+        gl_MeshVerticesEXT[_100].gl_Position = _14._m0[_100]._m0;
     }
-    for (uint _68 = gl_LocalInvocationIndex; _68 < _77; _68++)
+    for (uint _101 = gl_LocalInvocationIndex; _101 < _109; _101++)
     {
-        gl_PrimitiveTriangleIndicesEXT[_68] = _14._m1[_68]._m0;
-        gl_MeshPrimitivesEXT[_68].gl_PrimitiveID = _14._m1[_68]._m1;
+        gl_PrimitiveTriangleIndicesEXT[_101] = _14._m1[_101]._m0;
+        gl_MeshPrimitivesEXT[_101].gl_PrimitiveID = _14._m1[_101]._m1;
     }
 }
 

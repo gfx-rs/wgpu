@@ -1,0 +1,687 @@
+/*!
+Zero the workgroup memory used by compute, task and mesh entry points.
+
+Each entry point zeroes the [`WorkGroup`] variables (and, in task shaders, the
+[`TaskPayload`]) it uses, followed by a workgroup barrier. Arrays are
+flattened, and their elements are spread over the invocations of the
+workgroup, so that no single invocation writes a large aggregate.
+
+[`WorkGroup`]: crate::AddressSpace::WorkGroup
+[`TaskPayload`]: crate::AddressSpace::TaskPayload
+*/
+
+use alloc::{borrow::Cow, vec, vec::Vec};
+
+use super::emit::Emitting;
+
+use crate::{
+    arena::{Arena, Handle, HandleSet, UniqueArena},
+    proc::IndexableLength,
+    AddressSpace, BinaryOperator, Binding, Block, BuiltIn, Expression, FastHashMap, Function,
+    FunctionArgument, GlobalVariable, Literal, LocalVariable, Scalar, ShaderStage, Span, Statement,
+    Type, TypeInner,
+};
+
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum WorkgroupZeroInitError {
+    #[error("workgroup variable array size is not a resolved constant")]
+    UnresolvedArraySize,
+    #[error("workgroup variable type can't be zero initialized")]
+    UnsupportedType,
+    #[error("workgroup invocation count overflows u32")]
+    WorkgroupSizeOverflow,
+    #[error("workgroup variable element count overflows u32")]
+    ElementCountOverflow,
+}
+
+/// Run the pass on `module`.
+///
+/// Return whether the pass changed `module`. Leave `module` borrowed if no
+/// entry point uses memory the pass zeroes.
+pub(crate) fn run(module: &mut Cow<'_, crate::Module>) -> Result<bool, WorkgroupZeroInitError> {
+    let direct = module
+        .functions
+        .iter()
+        .map(|(_, function)| direct_uses(function, &module.global_variables))
+        .collect::<Vec<_>>();
+    let used = module
+        .entry_points
+        .iter()
+        .map(|ep| {
+            let mut used = used_globals(&ep.function, &direct, &module.global_variables);
+            used.insert_iter(ep.task_payload);
+            used.insert_iter(ep.mesh_info.as_ref().map(|info| info.output_variable));
+            let zeroes_any = ep.stage.compute_like()
+                && used
+                    .iter()
+                    .any(|handle| is_zeroed(&module.global_variables[handle], ep.stage));
+            zeroes_any.then_some(used)
+        })
+        .collect::<Vec<_>>();
+    if used.iter().all(Option::is_none) {
+        return Ok(false);
+    }
+    let module = module.to_mut();
+
+    let array_lengths = module
+        .types
+        .iter()
+        .filter_map(|(handle, ty)| match ty.inner {
+            TypeInner::Array { size, .. } => match size.resolve(module.to_ctx()) {
+                Ok(IndexableLength::Known(length)) => Some((handle, length)),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect::<FastHashMap<_, _>>();
+
+    let crate::Module {
+        ref mut types,
+        ref global_variables,
+        ref mut entry_points,
+        ..
+    } = *module;
+
+    let mut changed = false;
+    for (ep, used) in entry_points.iter_mut().zip(used) {
+        let Some(used) = used else {
+            continue;
+        };
+        let mut prologue = Block::new();
+        let mut wg = WorkgroupInit {
+            types,
+            array_lengths: &array_lengths,
+            global_variables,
+            used: &used,
+            stage: ep.stage,
+            workgroup_size: ep.workgroup_size,
+            function: &mut ep.function,
+            block: &mut prologue,
+            local_invocation_index: None,
+            counter: None,
+        };
+        wg.run()?;
+        changed |= prepend(&mut ep.function, prologue);
+    }
+
+    Ok(changed)
+}
+
+/// Whether the pass zeroes `var` in an entry point of stage `stage` that uses
+/// it.
+fn is_zeroed(var: &GlobalVariable, stage: ShaderStage) -> bool {
+    var.space == AddressSpace::WorkGroup
+        || (var.space == AddressSpace::TaskPayload && stage == ShaderStage::Task)
+}
+
+/// Put `prologue` at the start of `function`'s body, and return whether it
+/// wasn't empty.
+fn prepend(function: &mut Function, mut prologue: Block) -> bool {
+    if prologue.is_empty() {
+        return false;
+    }
+    prologue.append(&mut function.body);
+    function.body = prologue;
+    true
+}
+
+/// The global variables that `function` and the functions it calls use.
+///
+/// `direct` holds the result of [`direct_uses`] for each function.
+fn used_globals(
+    function: &Function,
+    direct: &[(HandleSet<GlobalVariable>, Vec<Handle<Function>>)],
+    global_variables: &Arena<GlobalVariable>,
+) -> HandleSet<GlobalVariable> {
+    let (mut used, mut pending) = direct_uses(function, global_variables);
+    let mut visited = vec![false; direct.len()];
+    while let Some(callee) = pending.pop() {
+        if !core::mem::replace(&mut visited[callee.index()], true) {
+            let (ref globals, ref callees) = direct[callee.index()];
+            used.insert_iter(globals.iter());
+            pending.extend_from_slice(callees);
+        }
+    }
+    used
+}
+
+/// The global variables that `function` uses itself, and the functions it
+/// calls.
+fn direct_uses(
+    function: &Function,
+    global_variables: &Arena<GlobalVariable>,
+) -> (HandleSet<GlobalVariable>, Vec<Handle<Function>>) {
+    let mut used = HandleSet::for_arena(global_variables);
+    let mut callees = Vec::new();
+    for (_, expression) in function.expressions.iter() {
+        if let Expression::GlobalVariable(handle) = *expression {
+            used.insert(handle);
+        }
+    }
+    let mut blocks = vec![&function.body];
+    while let Some(block) = blocks.pop() {
+        for statement in block.iter() {
+            match *statement {
+                Statement::Call { function, .. } => callees.push(function),
+                Statement::Block(ref block) => blocks.push(block),
+                Statement::If {
+                    ref accept,
+                    ref reject,
+                    ..
+                } => blocks.extend([accept, reject]),
+                Statement::Switch { ref cases, .. } => {
+                    blocks.extend(cases.iter().map(|case| &case.body));
+                }
+                Statement::Loop {
+                    ref body,
+                    ref continuing,
+                    ..
+                } => blocks.extend([body, continuing]),
+                _ => {}
+            }
+        }
+    }
+    (used, callees)
+}
+
+/// The zero value of `ty`, as a literal if it is a scalar.
+fn zero_value(types: &UniqueArena<Type>, ty: Handle<Type>) -> Expression {
+    match types[ty].inner {
+        TypeInner::Scalar(scalar) => Literal::zero(scalar)
+            .map(Expression::Literal)
+            .unwrap_or(Expression::ZeroValue(ty)),
+        _ => Expression::ZeroValue(ty),
+    }
+}
+
+/// One step from a variable to one of its parts.
+#[derive(Clone, Copy)]
+enum Step {
+    Member(u32),
+    /// Index into an array, by the position of the array's length in the dimension list.
+    Element(usize),
+}
+
+/// A part of a workgroup variable that is zeroed by a single [`Store`].
+///
+/// [`Store`]: Statement::Store
+struct Leaf {
+    steps: Vec<Step>,
+    /// The lengths of the arrays that contain this part, outermost first.
+    dimensions: Vec<u32>,
+    value: LeafValue,
+}
+
+enum LeafValue {
+    Zero(Handle<Type>),
+    Atomic(Scalar),
+}
+
+struct WorkgroupInit<'a> {
+    types: &'a mut UniqueArena<Type>,
+    array_lengths: &'a FastHashMap<Handle<Type>, u32>,
+    global_variables: &'a Arena<GlobalVariable>,
+    used: &'a HandleSet<GlobalVariable>,
+    stage: ShaderStage,
+    workgroup_size: [u32; 3],
+    function: &'a mut Function,
+    /// The prologue being built.
+    block: &'a mut Block,
+    local_invocation_index: Option<Handle<Expression>>,
+    counter: Option<Handle<LocalVariable>>,
+}
+
+impl WorkgroupInit<'_> {
+    fn run(&mut self) -> Result<(), WorkgroupZeroInitError> {
+        let invocations = self
+            .workgroup_size
+            .iter()
+            .try_fold(1u32, |total, &size| total.checked_mul(size))
+            .ok_or(WorkgroupZeroInitError::WorkgroupSizeOverflow)?;
+
+        let mut any = false;
+        let mut single = Vec::new();
+        for (handle, var) in self.global_variables.iter() {
+            if !self.used.contains(handle) || !is_zeroed(var, self.stage) {
+                continue;
+            }
+            any = true;
+            let mut leaves = Vec::new();
+            self.collect_leaves(var.ty, &mut Vec::new(), &mut Vec::new(), &mut leaves)?;
+            // Leaves in arrays of the same dimensions share one loop.
+            let mut groups: Vec<(Vec<u32>, Vec<Leaf>)> = Vec::new();
+            for leaf in leaves {
+                if leaf.dimensions.is_empty() {
+                    single.push((handle, leaf));
+                } else if let Some(&mut (_, ref mut group)) = groups
+                    .iter_mut()
+                    .find(|&&mut (ref d, _)| *d == leaf.dimensions)
+                {
+                    group.push(leaf);
+                } else {
+                    groups.push((leaf.dimensions.clone(), vec![leaf]));
+                }
+            }
+            for (dimensions, group) in groups {
+                self.write_distributed(handle, &dimensions, &group, invocations)?;
+            }
+        }
+
+        if !single.is_empty() {
+            let index = self.local_invocation_index();
+            let mut prologue = self.prologue();
+            let zero = prologue.pre_emit(Expression::Literal(Literal::U32(0)));
+            let condition = prologue.expr(Expression::Binary {
+                op: BinaryOperator::Equal,
+                left: index,
+                right: zero,
+            });
+            prologue.flush();
+            let mut accept = Block::new();
+            for (handle, leaf) in single {
+                self.write_store(&mut accept, handle, &leaf, &[]);
+            }
+            self.prologue().push(Statement::If {
+                condition,
+                accept,
+                reject: Block::new(),
+            });
+        }
+
+        if any {
+            self.prologue()
+                .push(Statement::ControlBarrier(crate::Barrier::WORK_GROUP));
+        }
+        Ok(())
+    }
+
+    fn collect_leaves(
+        &self,
+        ty: Handle<Type>,
+        steps: &mut Vec<Step>,
+        dimensions: &mut Vec<u32>,
+        leaves: &mut Vec<Leaf>,
+    ) -> Result<(), WorkgroupZeroInitError> {
+        if !self.contains_array_or_atomic(ty) {
+            leaves.push(Leaf {
+                steps: steps.clone(),
+                dimensions: dimensions.clone(),
+                value: LeafValue::Zero(ty),
+            });
+            return Ok(());
+        }
+        match self.types[ty].inner {
+            TypeInner::Atomic(scalar) => leaves.push(Leaf {
+                steps: steps.clone(),
+                dimensions: dimensions.clone(),
+                value: LeafValue::Atomic(scalar),
+            }),
+            TypeInner::Array { base, .. } => {
+                let &length = self
+                    .array_lengths
+                    .get(&ty)
+                    .ok_or(WorkgroupZeroInitError::UnresolvedArraySize)?;
+                steps.push(Step::Element(dimensions.len()));
+                dimensions.push(length);
+                self.collect_leaves(base, steps, dimensions, leaves)?;
+                dimensions.pop();
+                steps.pop();
+            }
+            TypeInner::Struct { ref members, .. } => {
+                for (index, member) in members.iter().enumerate() {
+                    steps.push(Step::Member(index as u32));
+                    self.collect_leaves(member.ty, steps, dimensions, leaves)?;
+                    steps.pop();
+                }
+            }
+            _ => return Err(WorkgroupZeroInitError::UnsupportedType),
+        }
+        Ok(())
+    }
+
+    fn contains_array_or_atomic(&self, ty: Handle<Type>) -> bool {
+        match self.types[ty].inner {
+            TypeInner::Array { .. } | TypeInner::Atomic(_) => true,
+            TypeInner::Struct { ref members, .. } => members
+                .iter()
+                .any(|member| self.contains_array_or_atomic(member.ty)),
+            _ => false,
+        }
+    }
+
+    /// Zero `leaves` of `var`, which are all in arrays of `dimensions`,
+    /// spreading their elements over the workgroup's invocations.
+    fn write_distributed(
+        &mut self,
+        var: Handle<GlobalVariable>,
+        dimensions: &[u32],
+        leaves: &[Leaf],
+        invocations: u32,
+    ) -> Result<(), WorkgroupZeroInitError> {
+        let count = dimensions
+            .iter()
+            .try_fold(1u32, |total, &length| total.checked_mul(length))
+            .ok_or(WorkgroupZeroInitError::ElementCountOverflow)?;
+        let index = self.local_invocation_index();
+
+        if count <= invocations {
+            let mut body = Block::new();
+            let indices = self.element_indices(&mut body, index, dimensions);
+            for leaf in leaves {
+                self.write_store(&mut body, var, leaf, &indices);
+            }
+            if count == invocations {
+                self.block.append(&mut body);
+            } else {
+                let mut prologue = self.prologue();
+                let count = prologue.pre_emit(Expression::Literal(Literal::U32(count)));
+                let condition = prologue.expr(Expression::Binary {
+                    op: BinaryOperator::Less,
+                    left: index,
+                    right: count,
+                });
+                prologue.push(Statement::If {
+                    condition,
+                    accept: body,
+                    reject: Block::new(),
+                });
+            }
+            return Ok(());
+        }
+
+        // Every invocation stores at least one element, since `index < invocations < count`.
+        let counter = self.counter();
+        let mut prologue = self.prologue();
+        let counter = prologue.pre_emit(Expression::LocalVariable(counter));
+        prologue.push(Statement::Store {
+            pointer: counter,
+            value: index,
+        });
+        let count = prologue.pre_emit(Expression::Literal(Literal::U32(count)));
+        let stride = prologue.pre_emit(Expression::Literal(Literal::U32(invocations)));
+
+        let mut body = Block::new();
+        let mut emitting =
+            Emitting::new(&mut self.function.expressions, &mut body, Span::UNDEFINED);
+        let current = emitting.expr(Expression::Load { pointer: counter });
+        let done = emitting.expr(Expression::Binary {
+            op: BinaryOperator::GreaterEqual,
+            left: current,
+            right: count,
+        });
+        emitting.push(Statement::If {
+            condition: done,
+            accept: Block::from_vec(vec![Statement::Break]),
+            reject: Block::new(),
+        });
+        let indices = self.element_indices(&mut body, current, dimensions);
+        for leaf in leaves {
+            self.write_store(&mut body, var, leaf, &indices);
+        }
+        let mut emitting =
+            Emitting::new(&mut self.function.expressions, &mut body, Span::UNDEFINED);
+        let next = emitting.expr(Expression::Binary {
+            op: BinaryOperator::Add,
+            left: current,
+            right: stride,
+        });
+        emitting.push(Statement::Store {
+            pointer: counter,
+            value: next,
+        });
+
+        self.prologue().push(Statement::Loop {
+            body,
+            continuing: Block::new(),
+            break_if: None,
+        });
+        Ok(())
+    }
+
+    /// Split the flat element index `flat` into one index per dimension.
+    fn element_indices(
+        &mut self,
+        block: &mut Block,
+        flat: Handle<Expression>,
+        dimensions: &[u32],
+    ) -> Vec<Handle<Expression>> {
+        let mut emitting = Emitting::new(&mut self.function.expressions, block, Span::UNDEFINED);
+        let mut literals = Vec::with_capacity(dimensions.len() * 2);
+        let mut stride = dimensions.iter().product::<u32>();
+        for &length in dimensions {
+            stride /= length;
+            let stride =
+                (stride != 1).then(|| emitting.pre_emit(Expression::Literal(Literal::U32(stride))));
+            literals.push((
+                stride,
+                emitting.pre_emit(Expression::Literal(Literal::U32(length))),
+            ));
+        }
+
+        let mut indices = Vec::with_capacity(dimensions.len());
+        for (i, (stride, length)) in literals.into_iter().enumerate() {
+            let mut value = flat;
+            if let Some(stride) = stride {
+                value = emitting.expr(Expression::Binary {
+                    op: BinaryOperator::Divide,
+                    left: value,
+                    right: stride,
+                });
+            }
+            // The flat index is in bounds, so the outermost index is too.
+            if i != 0 {
+                value = emitting.expr(Expression::Binary {
+                    op: BinaryOperator::Modulo,
+                    left: value,
+                    right: length,
+                });
+            }
+            indices.push(value);
+        }
+        emitting.flush();
+        indices
+    }
+
+    fn write_store(
+        &mut self,
+        block: &mut Block,
+        var: Handle<GlobalVariable>,
+        leaf: &Leaf,
+        indices: &[Handle<Expression>],
+    ) {
+        let mut emitting = Emitting::new(&mut self.function.expressions, block, Span::UNDEFINED);
+        let (value, atomic) = match leaf.value {
+            LeafValue::Zero(ty) => (emitting.pre_emit(zero_value(self.types, ty)), false),
+            LeafValue::Atomic(scalar) => (
+                emitting.pre_emit(Expression::Literal(Literal::zero(scalar).unwrap())),
+                true,
+            ),
+        };
+        let mut pointer = emitting.pre_emit(Expression::GlobalVariable(var));
+        for &step in &leaf.steps {
+            pointer = emitting.expr(match step {
+                Step::Member(index) => Expression::AccessIndex {
+                    base: pointer,
+                    index,
+                },
+                Step::Element(dimension) => Expression::Access {
+                    base: pointer,
+                    index: indices[dimension],
+                },
+            });
+        }
+        // Each element is stored by one invocation before the barrier, so
+        // atomics don't need atomic stores.
+        emitting.push(if atomic {
+            Statement::NonAtomicStore { pointer, value }
+        } else {
+            Statement::Store { pointer, value }
+        });
+    }
+
+    /// Return the entry point's local invocation index, adding an argument for it if needed.
+    fn local_invocation_index(&mut self) -> Handle<Expression> {
+        if let Some(index) = self.local_invocation_index {
+            return index;
+        }
+        let binding = Some(Binding::BuiltIn(BuiltIn::LocalInvocationIndex));
+        let mut found = None;
+        for (index, argument) in self.function.arguments.iter().enumerate() {
+            if argument.binding == binding {
+                found = Some((index, None));
+                break;
+            }
+            if let TypeInner::Struct { ref members, .. } = self.types[argument.ty].inner {
+                if let Some(member) = members.iter().position(|m| m.binding == binding) {
+                    found = Some((index, Some(member)));
+                    break;
+                }
+            }
+        }
+        let (argument, member) = found.unwrap_or_else(|| {
+            let ty = self.types.insert(
+                Type {
+                    name: None,
+                    inner: TypeInner::Scalar(Scalar::U32),
+                },
+                Span::UNDEFINED,
+            );
+            self.function.arguments.push(FunctionArgument {
+                name: Some("local_invocation_index".into()),
+                ty,
+                binding,
+            });
+            (self.function.arguments.len() - 1, None)
+        });
+        let mut prologue = self.prologue();
+        let mut index = prologue.pre_emit(Expression::FunctionArgument(argument as u32));
+        if let Some(member) = member {
+            index = prologue.expr(Expression::AccessIndex {
+                base: index,
+                index: member as u32,
+            });
+        }
+        prologue.flush();
+        self.local_invocation_index = Some(index);
+        index
+    }
+
+    fn counter(&mut self) -> Handle<LocalVariable> {
+        *self.counter.get_or_insert_with(|| {
+            let ty = self.types.insert(
+                Type {
+                    name: None,
+                    inner: TypeInner::Scalar(Scalar::U32),
+                },
+                Span::UNDEFINED,
+            );
+            self.function.local_variables.append(
+                LocalVariable {
+                    name: Some("zero_init_index".into()),
+                    ty,
+                    init: None,
+                },
+                Span::UNDEFINED,
+            )
+        })
+    }
+
+    /// Build statements at the end of the prologue.
+    const fn prologue(&mut self) -> Emitting<'_> {
+        Emitting::new(&mut self.function.expressions, self.block, Span::UNDEFINED)
+    }
+}
+
+#[cfg(all(test, feature = "wgsl-in"))]
+mod tests {
+    use super::{run, WorkgroupZeroInitError};
+    use crate::back::passes::{run_pass_on_wgsl, PassError};
+    use crate::{Barrier, Statement};
+
+    fn body(source: &str) -> crate::Block {
+        let module = run_pass_on_wgsl(source, run).unwrap().unwrap();
+        module.entry_points[0].function.body.clone()
+    }
+
+    fn has_barrier(body: &crate::Block) -> bool {
+        body.iter()
+            .any(|s| matches!(*s, Statement::ControlBarrier(b) if b.contains(Barrier::WORK_GROUP)))
+    }
+
+    /// An array with more elements than invocations is zeroed by a loop.
+    #[test]
+    fn large_array_uses_loop() {
+        let body = body(
+            "
+            var<workgroup> a: array<u32, 100>;
+            @compute @workgroup_size(64)
+            fn main() { a[0] = 1u; }
+            ",
+        );
+        assert!(body.iter().any(|s| matches!(*s, Statement::Loop { .. })));
+        assert!(has_barrier(&body));
+    }
+
+    fn has_non_atomic_store(block: &crate::Block) -> bool {
+        block.iter().any(|s| match *s {
+            Statement::NonAtomicStore { .. } => true,
+            Statement::If {
+                ref accept,
+                ref reject,
+                ..
+            } => has_non_atomic_store(accept) || has_non_atomic_store(reject),
+            Statement::Loop { ref body, .. } => has_non_atomic_store(body),
+            _ => false,
+        })
+    }
+
+    /// An array with no more elements than invocations needs no loop. Its
+    /// atomics are zeroed with non-atomic stores.
+    #[test]
+    fn small_array_uses_if() {
+        let body = body(
+            "
+            var<workgroup> a: array<atomic<u32>, 4>;
+            @compute @workgroup_size(64)
+            fn main() { atomicAdd(&a[0], 1u); }
+            ",
+        );
+        assert!(!body.iter().any(|s| matches!(*s, Statement::Loop { .. })));
+        assert!(body.iter().any(|s| matches!(*s, Statement::If { .. })));
+        assert!(has_non_atomic_store(&body));
+        assert!(has_barrier(&body));
+    }
+
+    /// Workgroup variables that the entry point doesn't use aren't zeroed, and
+    /// the module isn't copied.
+    #[test]
+    fn unused_variable_is_not_zeroed() {
+        let module = run_pass_on_wgsl(
+            "
+            var<workgroup> a: array<u32, 100>;
+            @compute @workgroup_size(64)
+            fn main() {}
+            ",
+            run,
+        )
+        .unwrap();
+        assert!(module.is_none());
+    }
+
+    #[test]
+    fn workgroup_size_overflow() {
+        let error = run_pass_on_wgsl(
+            "
+            var<workgroup> a: u32;
+            @compute @workgroup_size(16384, 16384, 16384)
+            fn main() { a = 1u; }
+            ",
+            run,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            PassError::WorkgroupZeroInit(WorkgroupZeroInitError::WorkgroupSizeOverflow)
+        ));
+    }
+}

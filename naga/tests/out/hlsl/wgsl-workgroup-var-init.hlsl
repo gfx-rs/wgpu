@@ -7,22 +7,45 @@ struct WStruct {
 groupshared WStruct w_mem;
 RWByteAddressBuffer output : register(u0);
 
+uint naga_div(uint lhs, uint rhs) {
+    return lhs / (rhs == 0u ? 1u : rhs);
+}
+
+uint naga_mod(uint lhs, uint rhs) {
+    return lhs % (rhs == 0u ? 1u : rhs);
+}
+
 [numthreads(1, 1, 1)]
 void main(uint local_invocation_index : SV_GroupIndex)
 {
-    [loop]
-    for (uint zero_flat_index = local_invocation_index; zero_flat_index < 512u; zero_flat_index += 1u) {
-        uint zero_index = zero_flat_index;
-        w_mem.arr[zero_index] = (uint)0;
+    uint zero_init_index = (uint)0;
+
+    zero_init_index = local_invocation_index;
+    uint2 loop_bound = uint2(4294967295u, 4294967295u);
+    while(true) {
+        if (all(loop_bound == uint2(0u, 0u))) { break; }
+        loop_bound -= uint2(loop_bound.y == 0u, 1u);
+        uint _e8 = zero_init_index;
+        if ((_e8 >= 512u)) {
+            break;
+        }
+        w_mem.arr[min(uint(_e8), 511u)] = 0u;
+        zero_init_index = (_e8 + 1u);
     }
-    if (local_invocation_index == 0) {
-        w_mem.atom = (int)0;
+    zero_init_index = local_invocation_index;
+    uint2 loop_bound_1 = uint2(4294967295u, 4294967295u);
+    while(true) {
+        if (all(loop_bound_1 == uint2(0u, 0u))) { break; }
+        loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
+        uint _e18 = zero_init_index;
+        if ((_e18 >= 64u)) {
+            break;
+        }
+        w_mem.atom_arr[min(uint(naga_div(_e18, 8u)), 7u)][min(uint(naga_mod(_e18, 8u)), 7u)] = int(0);
+        zero_init_index = (_e18 + 1u);
     }
-    [loop]
-    for (uint zero_flat_index_1 = local_invocation_index; zero_flat_index_1 < 64u; zero_flat_index_1 += 1u) {
-        uint zero_index_1 = zero_flat_index_1 / 8u;
-        uint zero_index_2 = zero_flat_index_1 % 8u;
-        w_mem.atom_arr[zero_index_1][zero_index_2] = (int)0;
+    if ((local_invocation_index == 0u)) {
+        w_mem.atom = int(0);
     }
     GroupMemoryBarrierWithGroupSync();
     uint _e3[512] = w_mem.arr;

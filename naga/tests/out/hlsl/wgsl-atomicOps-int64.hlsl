@@ -32,21 +32,11 @@ groupshared Struct workgroup_struct;
 [numthreads(2, 1, 1)]
 void cs_main(uint3 id : SV_GroupThreadID, uint local_invocation_index : SV_GroupIndex)
 {
-    if (local_invocation_index == 0) {
-        workgroup_atomic_scalar = (uint64_t)0;
-    }
-    [loop]
-    for (uint zero_flat_index = local_invocation_index; zero_flat_index < 2u; zero_flat_index += 2u) {
-        uint zero_index = zero_flat_index;
-        workgroup_atomic_arr[zero_index] = (int64_t)0;
-    }
-    if (local_invocation_index == 0) {
-        workgroup_struct.atomic_scalar = (uint64_t)0;
-    }
-    [loop]
-    for (uint zero_flat_index_1 = local_invocation_index; zero_flat_index_1 < 2u; zero_flat_index_1 += 2u) {
-        uint zero_index_1 = zero_flat_index_1;
-        workgroup_struct.atomic_arr[zero_index_1] = (int64_t)0;
+    workgroup_atomic_arr[min(uint(local_invocation_index), 1u)] = 0LL;
+    workgroup_struct.atomic_arr[min(uint(local_invocation_index), 1u)] = 0LL;
+    if ((local_invocation_index == 0u)) {
+        workgroup_atomic_scalar = 0ULL;
+        workgroup_struct.atomic_scalar = 0ULL;
     }
     GroupMemoryBarrierWithGroupSync();
     { uint64_t dummy = 0; storage_atomic_scalar.InterlockedExchange(0, 1ULL, dummy); }

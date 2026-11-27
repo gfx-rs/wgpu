@@ -153,31 +153,31 @@ int16_t _74(int16_t _73)
 
 void main()
 {
-    int16_t _386 = 0s;
-    uint16_t _388 = 0us;
+    int16_t _388 = 0s;
+    uint16_t _390 = 0us;
     if (gl_LocalInvocationIndex == 0u)
     {
         _41 = 0us;
     }
     barrier();
     _41 = 0us;
-    uint16_t _399 = _260(67us);
-    int16_t _400 = _74(60s);
-    _35._m0._m11 = _399 + uint16_t(_400);
-    _386 = int16_t(gl_SubgroupInvocationID);
-    _386 = subgroupAdd(_386);
-    _386 = subgroupMul(_386);
-    _386 = subgroupMin(_386);
-    _386 = subgroupMax(_386);
-    _386 = subgroupExclusiveAdd(_386);
-    _386 = subgroupInclusiveAdd(_386);
-    _386 = subgroupBroadcastFirst(_386);
-    _386 = subgroupShuffle(_386, 4u);
-    _388 = uint16_t(gl_SubgroupInvocationID);
+    uint16_t _397 = _260(67us);
+    int16_t _398 = _74(60s);
+    _35._m0._m11 = _397 + uint16_t(_398);
+    _388 = int16_t(gl_SubgroupInvocationID);
     _388 = subgroupAdd(_388);
+    _388 = subgroupMul(_388);
     _388 = subgroupMin(_388);
     _388 = subgroupMax(_388);
-    _35._m0._m7 = _386;
-    _35._m0._m3 = _388;
+    _388 = subgroupExclusiveAdd(_388);
+    _388 = subgroupInclusiveAdd(_388);
+    _388 = subgroupBroadcastFirst(_388);
+    _388 = subgroupShuffle(_388, 4u);
+    _390 = uint16_t(gl_SubgroupInvocationID);
+    _390 = subgroupAdd(_390);
+    _390 = subgroupMin(_390);
+    _390 = subgroupMax(_390);
+    _35._m0._m7 = _388;
+    _35._m0._m3 = _390;
 }
 

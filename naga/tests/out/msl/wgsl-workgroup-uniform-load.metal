@@ -13,11 +13,21 @@ struct test_workgroupUniformLoadInput {
 };
 kernel void test_workgroupUniformLoad(
   metal::uint3 workgroup_id [[threadgroup_position_in_grid]]
-, uint __local_invocation_index [[thread_index_in_threadgroup]]
+, uint local_invocation_index [[thread_index_in_threadgroup]]
 , threadgroup type_2& arr_i32_
 ) {
-    if (__local_invocation_index == 0u) {
-        arr_i32_ = {};
+    uint zero_init_index = {};
+    zero_init_index = local_invocation_index;
+    uint2 loop_bound = uint2(4294967295u);
+    while(true) {
+        if (metal::all(loop_bound == uint2(0u))) { break; }
+        loop_bound -= uint2(loop_bound.y == 0u, 1u);
+        uint _e11 = zero_init_index;
+        if (_e11 >= 128u) {
+            break;
+        }
+        arr_i32_.inner[_e11] = 0;
+        zero_init_index = _e11 + 4u;
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);

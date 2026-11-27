@@ -9,7 +9,8 @@ shared int a;
 
 
 void main() {
-    if (gl_LocalInvocationID == uvec3(0u)) {
+    uint local_invocation_index = gl_LocalInvocationIndex;
+    if ((local_invocation_index == 0u)) {
         a = 0;
     }
     memoryBarrierShared();

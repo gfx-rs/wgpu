@@ -1200,6 +1200,36 @@ impl super::Validator {
                         }
                     }
                 }
+                S::NonAtomicStore { pointer, value } => {
+                    let pointer_ty = context.resolve_pointer_type(pointer);
+                    if !matches!(
+                        pointer_ty.pointer_space(),
+                        Some(AddressSpace::WorkGroup | AddressSpace::TaskPayload)
+                    ) {
+                        return Err(
+                            FunctionError::InvalidStorePointer(pointer).with_span_static(
+                                context.expressions.get_span(pointer),
+                                "non-atomic stores must write workgroup or task payload memory",
+                            ),
+                        );
+                    }
+                    let value_tr = context.resolve_type(value, &self.valid_expression_set)?;
+                    let value_ty = value_tr.inner_with(context.types);
+                    let pointer_base_tr = pointer_ty.pointer_base_type();
+                    let good = match pointer_base_tr
+                        .as_ref()
+                        .map(|ty| ty.inner_with(context.types))
+                    {
+                        Some(&Ti::Atomic(scalar)) => *value_ty == Ti::Scalar(scalar),
+                        _ => false,
+                    };
+                    if !good {
+                        return Err(FunctionError::InvalidStoreTypes { pointer, value }
+                            .with_span()
+                            .with_handle(pointer, context.expressions)
+                            .with_handle(value, context.expressions));
+                    }
+                }
                 S::ImageStore {
                     image,
                     coordinate,

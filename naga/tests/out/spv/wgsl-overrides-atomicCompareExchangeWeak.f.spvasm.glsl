@@ -16,6 +16,6 @@ void main()
         _8 = 0u;
     }
     barrier();
-    uint _27 = atomicCompSwap(_8, 2u, 1u);
+    uint _25 = atomicCompSwap(_8, 2u, 1u);
 }
 

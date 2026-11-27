@@ -214,6 +214,11 @@ impl StatementGraph {
                     self.emits.push((id, pointer));
                     "Store"
                 }
+                S::NonAtomicStore { pointer, value } => {
+                    self.dependencies.push((id, value, "value"));
+                    self.emits.push((id, pointer));
+                    "NonAtomicStore"
+                }
                 S::ImageStore {
                     image,
                     coordinate,

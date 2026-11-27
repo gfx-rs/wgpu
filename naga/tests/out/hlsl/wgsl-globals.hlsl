@@ -7,20 +7,6 @@ float2 __get_col_of_mat3x2_f32(__mat3x2_f32 mat, uint idx) {
     default: { return (float2)0; }
     }
 }
-void __set_col_of_mat3x2_f32(__mat3x2_f32 mat, uint idx, float2 value) {
-    switch(idx) {
-    case 0: { mat._0 = value; break; }
-    case 1: { mat._1 = value; break; }
-    case 2: { mat._2 = value; break; }
-    }
-}
-void __set_el_of_mat3x2_f32(__mat3x2_f32 mat, uint idx, uint vec_idx, float value) {
-    switch(idx) {
-    case 0: { mat._0[vec_idx] = value; break; }
-    case 1: { mat._1[vec_idx] = value; break; }
-    case 2: { mat._2[vec_idx] = value; break; }
-    }
-}
 
 typedef struct { float2 _0; float2 _1; float2 _2; float2 _3; } __mat4x2_f32;
 float2 __get_col_of_mat4x2_f32(__mat4x2_f32 mat, uint idx) {
@@ -30,22 +16,6 @@ float2 __get_col_of_mat4x2_f32(__mat4x2_f32 mat, uint idx) {
     case 2: { return mat._2; }
     case 3: { return mat._3; }
     default: { return (float2)0; }
-    }
-}
-void __set_col_of_mat4x2_f32(__mat4x2_f32 mat, uint idx, float2 value) {
-    switch(idx) {
-    case 0: { mat._0 = value; break; }
-    case 1: { mat._1 = value; break; }
-    case 2: { mat._2 = value; break; }
-    case 3: { mat._3 = value; break; }
-    }
-}
-void __set_el_of_mat4x2_f32(__mat4x2_f32 mat, uint idx, uint vec_idx, float value) {
-    switch(idx) {
-    case 0: { mat._0[vec_idx] = value; break; }
-    case 1: { mat._1[vec_idx] = value; break; }
-    case 2: { mat._2[vec_idx] = value; break; }
-    case 3: { mat._3[vec_idx] = value; break; }
     }
 }
 
@@ -112,18 +82,26 @@ uint NagaBufferLength(ByteAddressBuffer buffer)
 [numthreads(1, 1, 1)]
 void main(uint local_invocation_index : SV_GroupIndex)
 {
-    [loop]
-    for (uint zero_flat_index = local_invocation_index; zero_flat_index < 10u; zero_flat_index += 1u) {
-        uint zero_index = zero_flat_index;
-        wg[zero_index] = (float)0;
-    }
-    if (local_invocation_index == 0) {
-        at_1 = (uint)0;
-    }
-    GroupMemoryBarrierWithGroupSync();
     float Foo = 1.0;
     bool at = true;
+    uint zero_init_index = (uint)0;
 
+    zero_init_index = local_invocation_index;
+    uint2 loop_bound = uint2(4294967295u, 4294967295u);
+    while(true) {
+        if (all(loop_bound == uint2(0u, 0u))) { break; }
+        loop_bound -= uint2(loop_bound.y == 0u, 1u);
+        uint _e60 = zero_init_index;
+        if ((_e60 >= 10u)) {
+            break;
+        }
+        wg[min(uint(_e60), 9u)] = 0.0;
+        zero_init_index = (_e60 + 1u);
+    }
+    if ((local_invocation_index == 0u)) {
+        at_1 = 0u;
+    }
+    GroupMemoryBarrierWithGroupSync();
     test_msl_packed_vec3_();
     float4x2 _e5 = ((float4x2)global_nested_arrays_of_matrices_4x2_[0][0]);
     float4 _e10 = global_nested_arrays_of_matrices_2x4_[0][0][0];

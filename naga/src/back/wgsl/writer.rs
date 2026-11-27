@@ -843,7 +843,8 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{level}")?;
                 writeln!(self.out, "discard;")?
             }
-            Statement::Store { pointer, value } => {
+            // WGSL can only store to an atomic with `atomicStore`.
+            Statement::Store { pointer, value } | Statement::NonAtomicStore { pointer, value } => {
                 write!(self.out, "{level}")?;
 
                 let is_atomic_pointer = func_ctx

@@ -31,14 +31,16 @@ shared Struct workgroup_struct;
 
 
 void main() {
-    if (gl_LocalInvocationID == uvec3(0u)) {
+    uvec3 id = gl_LocalInvocationID;
+    uint local_invocation_index = gl_LocalInvocationIndex;
+    workgroup_atomic_arr[local_invocation_index] = 0;
+    workgroup_struct.atomic_arr[local_invocation_index] = 0;
+    if ((local_invocation_index == 0u)) {
         workgroup_atomic_scalar = 0u;
-        workgroup_atomic_arr = int[2](0, 0);
-        workgroup_struct = Struct(0u, int[2](0, 0));
+        workgroup_struct.atomic_scalar = 0u;
     }
     memoryBarrierShared();
     barrier();
-    uvec3 id = gl_LocalInvocationID;
     atomicExchange(_group_0_binding_0_cs, 1u);
     atomicExchange(_group_0_binding_1_cs[1], 1);
     atomicExchange(_group_0_binding_2_cs.atomic_scalar, 1u);

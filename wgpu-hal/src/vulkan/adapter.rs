@@ -3150,6 +3150,7 @@ impl super::Adapter {
                 },
                 flags,
                 capabilities: Some(capabilities.iter().cloned().collect()),
+                passes: Default::default(),
                 bounds_check_policies: naga::proc::BoundsCheckPolicies {
                     index: naga::proc::BoundsCheckPolicy::Restrict,
                     buffer: if self.private_caps.robust_buffer_access2 {

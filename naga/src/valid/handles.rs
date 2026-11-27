@@ -758,7 +758,8 @@ impl super::Validator {
                 Ok(())
             }
             crate::Statement::Return { value } => validate_expr_opt(value),
-            crate::Statement::Store { pointer, value } => {
+            crate::Statement::Store { pointer, value }
+            | crate::Statement::NonAtomicStore { pointer, value } => {
                 validate_expr(pointer)?;
                 validate_expr(value)?;
                 Ok(())
