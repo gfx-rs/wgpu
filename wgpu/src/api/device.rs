@@ -406,6 +406,45 @@ impl Device {
         }
     }
 
+    /// Imports one linear plane of a Linux DMA-buf as a texture that can be
+    /// sampled and copied from, never written, on the Vulkan backend.
+    ///
+    /// Needs `VK_KHR_external_memory_fd`, `VK_EXT_external_memory_dma_buf`,
+    /// `VK_EXT_image_drm_format_modifier` and `VK_EXT_queue_family_foreign`,
+    /// each enabled whenever the driver supports it; without one, this returns
+    /// [`ImportDmabufError::MissingExtension`].
+    ///
+    /// Before the driver sees anything, this checks that `fd` is a DMA-buf,
+    /// that `desc.format` is one of [`DMABUF_FORMATS`], and that the plane
+    /// (`desc.offset`, `desc.pitch`, and its size) lies inside the buffer.
+    ///
+    /// The texture's contents belong to the DMA-buf's producer: each command
+    /// buffer that uses it acquires it from the producer first and releases it
+    /// back after, so a frame the producer wrote before the submission is the
+    /// one sampled. Wait for the submission to finish (for example with
+    /// [`Queue::on_submitted_work_done`]) before giving the buffer back to its
+    /// producer. NV12 is two imports of `dup`ed fds: an [`TextureFormat::R8Unorm`]
+    /// plane at offset 0, then an [`TextureFormat::Rg8Unorm`] plane at half size
+    /// and offset `pitch * height`, both at the same pitch (V4L2's
+    /// `bytesperline`, which may exceed the width).
+    ///
+    /// On success the device owns `fd`; on failure it is closed.
+    #[cfg(all(wgpu_core, vulkan, target_os = "linux", feature = "std"))]
+    pub fn import_dmabuf_texture(
+        &self,
+        fd: std::os::fd::OwnedFd,
+        desc: &DmabufTextureDescriptor<'_>,
+    ) -> Result<Texture, ImportDmabufError> {
+        let core_device = self
+            .inner
+            .as_core_opt()
+            .ok_or(ImportDmabufError::NotVulkan)?;
+        let wgpu_texture = core_device.wgpu_device.import_dmabuf_texture(fd, desc)?;
+        Ok(Texture {
+            inner: crate::backend::wgpu_core::CoreTexture { wgpu_texture }.into(),
+        })
+    }
+
     /// Wraps a foreign [`webgpu::GpuTexture`] (e.g. a canvas `getCurrentTexture()` result)
     /// as a [`Texture`] without any copy.
     ///

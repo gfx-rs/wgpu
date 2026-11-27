@@ -35,6 +35,7 @@ mod compute_pass_transition_resources;
 mod create_surface_error;
 mod device;
 mod dispatch_workgroups_indirect;
+mod dmabuf_import;
 mod draw_index;
 mod draw_indirect;
 mod dual_source_blending;
@@ -100,6 +101,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     let mut tests = Vec::new();
 
     adapter::all_tests(&mut tests);
+    dmabuf_import::all_tests(&mut tests);
     bgra8unorm_storage::all_tests(&mut tests);
     buffer_resource_limits::all_tests(&mut tests);
     bind_group_layout_dedup::all_tests(&mut tests);

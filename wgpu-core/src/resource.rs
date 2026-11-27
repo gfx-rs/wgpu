@@ -1852,6 +1852,36 @@ pub struct Texture {
     // Bind groups that reference this texture. May contain duplicates.
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
     pub(crate) texture_binding_view_dimension: Option<wgt::TextureViewDimension>,
+    /// Who owns the texture's memory between uses.
+    pub(crate) ownership: TextureOwnership,
+}
+
+/// Who owns a texture's memory between uses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TextureOwnership {
+    /// This device: the tracker's state is the image's state.
+    Device,
+    /// Another device or the kernel, as for an imported DMA-buf. Each
+    /// command buffer that uses the texture acquires it from the foreign
+    /// queue family first and releases it back after, and between command
+    /// buffers the tracker holds it at [`TextureOwnership::FOREIGN_RESTING`].
+    // Only a DMA-buf import makes one, and that builds only for Vulkan on Linux.
+    #[cfg_attr(
+        not(all(vulkan, target_os = "linux", feature = "std")),
+        allow(dead_code)
+    )]
+    Foreign {
+        /// This device's queue family, the other side of each transfer.
+        queue_family: u32,
+    },
+}
+
+impl TextureOwnership {
+    /// The state a foreign texture rests in between command buffers: read
+    /// only, and a union of uses, so Vulkan lays it out `GENERAL`, the one
+    /// layout that acquiring from a foreign queue family keeps the contents in.
+    pub(crate) const FOREIGN_RESTING: wgt::TextureUses =
+        wgt::TextureUses::RESOURCE.union(wgt::TextureUses::COPY_SRC);
 }
 
 impl Texture {
@@ -1890,6 +1920,7 @@ impl Texture {
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
             texture_binding_view_dimension,
+            ownership: TextureOwnership::Device,
         }
     }
 
@@ -1916,6 +1947,7 @@ impl Texture {
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
             texture_binding_view_dimension: None,
+            ownership: TextureOwnership::Device,
         })
     }
 

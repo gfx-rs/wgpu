@@ -347,10 +347,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
             );
             let (src_queue_family_index, dst_queue_family_index) =
                 match bar.queue_family_ownership_transfer.or(present_transfer) {
-                    Some(transfer) => (
-                        conv::map_queue_family(transfer.src),
-                        conv::map_queue_family(transfer.dst),
-                    ),
+                    Some(transfer) => {
+                        self.counters.queue_family_transfers.add(1);
+                        (
+                            conv::map_queue_family(transfer.src),
+                            conv::map_queue_family(transfer.dst),
+                        )
+                    }
                     None => (vk::QUEUE_FAMILY_IGNORED, vk::QUEUE_FAMILY_IGNORED),
                 };
 

@@ -222,6 +222,10 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - Add `wgpu_hal::dx12::Adapter::device_from_raw` to create a device from an existing `ID3D12Device` and `ID3D12CommandQueue`. By @rdeioris in [#10662](https://github.com/gfx-rs/wgpu/pull/10662).
 - Add `wgpu_hal::metal::Buffer::raw_handle`, returning the underlying `MTLBuffer`, mirroring `Texture::raw_handle`. By @jf--- in [#10924](https://github.com/gfx-rs/wgpu/pull/10924).
 
+#### Vulkan
+
+- Added `Device::import_dmabuf_texture`, a safe import of one linear plane of a Linux DMA-buf as a texture that can be sampled and copied from. Before the driver sees anything it checks the fd is a DMA-buf, the format, and that the plane lies inside the buffer; each command buffer that uses the texture acquires it from `VK_QUEUE_FAMILY_FOREIGN_EXT` and releases it after. Needs `VK_EXT_queue_family_foreign`, now enabled whenever supported. Also adds the `queue_family_transfers` hal counter. By @i-am-logger in [#11128](https://github.com/gfx-rs/wgpu/pull/11128).
+
 #### DX12
 
 - Support `Features::SHADER_EARLY_DEPTH_TEST` on DX12. Naga's HLSL backend now emits `[earlydepthstencil]` for `@early_depth_test(force)`, `SV_DepthGreaterEqual`/`SV_DepthLessEqual` for `@early_depth_test(greater_equal/less_equal)` on pipelines that are not multisampled, and discards the depth output for `@early_depth_test(unchanged)`. Callers of Naga's HLSL backend can set the new `naga::back::hlsl::PipelineOptions::multisampled`. By @DouglasDwyer in [#10624](https://github.com/gfx-rs/wgpu/pull/10624).
@@ -296,6 +300,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 
 #### Vulkan
 
+- `wgpu_hal::vulkan::Device::texture_from_dmabuf_fd` returns `ImportTextureError`, checks that the driver can import the format and modifier and that the image's memory fits in the DMA-buf, and reports a refused plane layout as its own error. By @i-am-logger in [#11128](https://github.com/gfx-rs/wgpu/pull/11128).
 - Removed the `VULKAN_GOOGLE_DISPLAY_TIMING`, `VULKAN_EXTERNAL_MEMORY_WIN32`, `VULKAN_EXTERNAL_MEMORY_FD`, and `VULKAN_EXTERNAL_MEMORY_DMA_BUF` features. wgpu enables the corresponding Vulkan extensions whenever the adapter supports them. To check for support, use `Adapter::as_hal::<wgpu::hal::api::Vulkan>()` and call `physical_device_capabilities().supports_extension()` with the extension name. By @andyleiserson in [#10635](https://github.com/gfx-rs/wgpu/pull/10635).
 - Sub-allocate `wgpu_hal::MemoryFlags::TRANSIENT` buffers and acceleration structure build scratch from a separate Vulkan memory pool, so short-lived allocations no longer pin memory blocks shared with long-lived resources. By @stuartparmenter in [#10232](https://github.com/gfx-rs/wgpu/pull/10232).
 - Allocate acceleration structures created with `AccelerationStructureFlags::ALLOW_COMPACTION` from the transient Vulkan memory pool, since they are usually replaced by their compacted copies. By @stuartparmenter in [#10233](https://github.com/gfx-rs/wgpu/pull/10233).

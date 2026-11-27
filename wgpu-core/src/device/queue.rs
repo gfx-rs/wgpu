@@ -1816,6 +1816,32 @@ impl Queue {
                         break 'error Err(e.into());
                     }
 
+                    // Release textures another device or the kernel owns back
+                    // to it after the command buffer's last use of them, in a
+                    // command buffer of their own after it; the Transit pass
+                    // above acquired them.
+                    let foreign = track::foreign::used(&baked.trackers.textures);
+                    if !foreign.is_empty() {
+                        if let Err(e) = baked.encoder.open_pass(hal_label(
+                            Some("(wgpu internal) Release foreign"),
+                            self.device.instance_flags,
+                        )) {
+                            break 'error Err(e.into());
+                        }
+                        let barriers = track::foreign::release(
+                            &mut trackers.textures,
+                            &foreign,
+                            &submission.snatch_guard,
+                        );
+                        unsafe {
+                            baked.encoder.raw.transition_textures(&barriers);
+                        };
+                        drop(barriers);
+                        if let Err(e) = baked.encoder.close() {
+                            break 'error Err(e.into());
+                        }
+                    }
+
                     if !depth_slice_discards.is_empty() || !used_surface_textures.is_empty() {
                         if let Err(e) = baked.encoder.open_pass(hal_label(
                             Some("(wgpu internal) Finalize"),

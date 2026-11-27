@@ -97,6 +97,7 @@ Device <- CommandBuffer = insert(device.start, device.end, buffer.start, buffer.
 
 mod blas;
 mod buffer;
+pub(crate) mod foreign;
 mod metadata;
 mod query_set;
 mod range;

@@ -1614,11 +1614,16 @@ impl Device {
     ) -> (Arc<Texture>, Option<resource::CreateTextureError>) {
         profiling::scope!("Device::create_texture_from_hal");
 
-        let (texture, error) =
-            match self.create_texture_from_hal_inner(hal_texture, desc, initial_state, cleared) {
-                Ok(texture) => (texture, None),
-                Err(e) => (Texture::invalid(self, desc), Some(e)),
-            };
+        let (texture, error) = match self.create_texture_from_hal_inner(
+            hal_texture,
+            desc,
+            initial_state,
+            cleared,
+            resource::TextureOwnership::Device,
+        ) {
+            Ok(texture) => (texture, None),
+            Err(e) => (Texture::invalid(self, desc), Some(e)),
+        };
 
         // NB: Any change done through the raw texture handle will not be
         // recorded in the replay
@@ -1644,6 +1649,7 @@ impl Device {
         desc: &resource::TextureDescriptor,
         initial_state: wgt::TextureUses,
         cleared: bool,
+        ownership: resource::TextureOwnership,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
         // Count the raw texture before validation so the error paths below can
         // hand it back through `destroy_texture`. Merely dropping a hal texture
@@ -1667,7 +1673,7 @@ impl Device {
             }
         };
 
-        let texture = Texture::new(
+        let mut texture = Texture::new(
             self,
             resource::TextureInner::Native { raw: hal_texture },
             conv::map_texture_usage(desc.usage, desc.format.into(), format_features.flags),
@@ -1677,6 +1683,7 @@ impl Device {
             !cleared, // inverted so it marks the tracker properly
             self.resolve_texture_binding_view_dimension(desc),
         );
+        texture.ownership = ownership;
 
         let texture = Arc::new(texture);
 
