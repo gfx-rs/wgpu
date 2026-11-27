@@ -1,0 +1,4 @@
+targets = "HLSL"
+
+[hlsl]
+special_constants_binding = { register = 0, space = 1 }

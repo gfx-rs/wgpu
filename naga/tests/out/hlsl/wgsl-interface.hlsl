@@ -26,6 +26,12 @@ struct Input2_ {
 
 groupshared uint output[1];
 
+struct VertexInput_vertex {
+    uint color_1 : LOC10;
+    uint instance_index_1 : SV_InstanceID;
+    uint vertex_index_1 : SV_VertexID;
+};
+
 struct VertexOutput_vertex {
     float _varying : LOC1;
     precise float4 position : SV_Position;
@@ -39,6 +45,11 @@ struct FragmentInput_fragment {
     uint sample_mask_1 : SV_Coverage;
 };
 
+struct VertexInput_vertex_two_structs {
+    uint index_2 : SV_InstanceID;
+    uint index_1 : SV_VertexID;
+};
+
 VertexOutput ConstructVertexOutput(float4 arg0, float arg1) {
     VertexOutput ret = (VertexOutput)0;
     ret.position = arg0;
@@ -46,9 +57,12 @@ VertexOutput ConstructVertexOutput(float4 arg0, float arg1) {
     return ret;
 }
 
-VertexOutput_vertex vertex(uint vertex_index : SV_VertexID, uint instance_index : SV_InstanceID, uint color : LOC10)
+VertexOutput_vertex vertex(VertexInput_vertex vertexinput_vertex)
 {
-    uint tmp = (((_NagaConstants.first_vertex + vertex_index) + (_NagaConstants.first_instance + instance_index)) + color);
+    uint vertex_index = (_NagaConstants.first_vertex + vertexinput_vertex.vertex_index_1);
+    uint instance_index = (_NagaConstants.first_instance + vertexinput_vertex.instance_index_1);
+    uint color = vertexinput_vertex.color_1;
+    uint tmp = ((vertex_index + instance_index) + color);
     const VertexOutput vertexoutput = ConstructVertexOutput((1.0).xxxx, float(tmp));
     const VertexOutput_vertex vertexoutput_1 = { vertexoutput._varying, vertexoutput.position };
     return vertexoutput_1;
@@ -69,8 +83,8 @@ FragmentOutput fragment(FragmentInput_fragment fragmentinput_fragment)
     uint sample_index = fragmentinput_fragment.sample_index_1;
     uint sample_mask = fragmentinput_fragment.sample_mask_1;
     uint mask = (sample_mask & (1u << sample_index));
-    float color_1 = (front_facing ? 1.0 : 0.0);
-    const FragmentOutput fragmentoutput = ConstructFragmentOutput(in_._varying, mask, color_1);
+    float color_2 = (front_facing ? 1.0 : 0.0);
+    const FragmentOutput fragmentoutput = ConstructFragmentOutput(in_._varying, mask, color_2);
     return fragmentoutput;
 }
 
@@ -87,10 +101,12 @@ void compute(uint3 global_id : SV_DispatchThreadID, uint3 local_id : SV_GroupThr
     return;
 }
 
-precise float4 vertex_two_structs(Input1_ in1_, Input2_ in2_) : SV_Position
+precise float4 vertex_two_structs(VertexInput_vertex_two_structs vertexinput_vertex_two_structs) : SV_Position
 {
+    Input1_ in1_ = { (_NagaConstants.first_vertex + vertexinput_vertex_two_structs.index_1) };
+    Input2_ in2_ = { (_NagaConstants.first_instance + vertexinput_vertex_two_structs.index_2) };
     uint index = 2u;
 
     uint _e8 = index;
-    return float4(float((_NagaConstants.first_vertex + in1_.index)), float((_NagaConstants.first_instance + in2_.index)), float(_e8), 0.0);
+    return float4(float(in1_.index), float(in2_.index), float(_e8), 0.0);
 }
