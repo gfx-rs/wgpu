@@ -346,15 +346,11 @@ impl super::Device {
                     _ => None,
                 }
                 .transpose()?;
-                let (module, info) = naga::back::pipeline_constants::process_overrides(
-                    &naga_shader.module,
-                    &naga_shader.info,
-                    Some((naga_stage, stage.entry_point)),
-                    stage.constants,
-                )
-                .map_err(|e| {
-                    crate::PipelineError::PipelineConstants(stage_bit, format!("HLSL: {e:?}"))
-                })?;
+                let (module, info) = naga_shader
+                    .process_overrides((naga_stage, stage.entry_point), stage.constants)
+                    .map_err(|e| {
+                        crate::PipelineError::PipelineConstants(stage_bit, format!("HLSL: {e:?}"))
+                    })?;
 
                 let pipeline_options = hlsl::PipelineOptions {
                     entry_point: Some((naga_stage, stage.entry_point.to_string())),

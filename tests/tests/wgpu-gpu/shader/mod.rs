@@ -20,6 +20,7 @@ pub mod compilation_messages;
 pub mod data_builtins;
 pub mod module_label;
 pub mod numeric_builtins;
+pub mod shared_module_overrides;
 pub mod struct_layout;
 pub mod workgroup_size_overrides;
 pub mod zero_init_workgroup_mem;
@@ -30,6 +31,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     data_builtins::all_tests(tests);
     module_label::all_tests(tests);
     numeric_builtins::all_tests(tests);
+    shared_module_overrides::all_tests(tests);
     struct_layout::all_tests(tests);
     workgroup_size_overrides::all_tests(tests);
     zero_init_workgroup_mem::all_tests(tests);

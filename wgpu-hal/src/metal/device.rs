@@ -195,15 +195,11 @@ impl super::Device {
         match stage.module.source {
             ShaderModuleSource::Naga(ref naga_shader) => {
                 let stage_bit = map_naga_stage(naga_stage);
-                let (module, module_info) = naga::back::pipeline_constants::process_overrides(
-                    &naga_shader.module,
-                    &naga_shader.info,
-                    Some((naga_stage, stage.entry_point)),
-                    stage.constants,
-                )
-                .map_err(|e| {
-                    crate::PipelineError::PipelineConstants(stage_bit, format!("MSL: {e:?}"))
-                })?;
+                let (module, module_info) = naga_shader
+                    .process_overrides((naga_stage, stage.entry_point), stage.constants)
+                    .map_err(|e| {
+                        crate::PipelineError::PipelineConstants(stage_bit, format!("MSL: {e:?}"))
+                    })?;
 
                 let ep_resources = &layout.per_stage_map[naga_stage];
 

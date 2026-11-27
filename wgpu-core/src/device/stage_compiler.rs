@@ -195,6 +195,7 @@ impl<'d> StageCompiler<'d> {
                     module: Cow::Owned(module.into_owned()),
                     info: info.into_owned(),
                     debug_source: shader.debug_source.clone(),
+                    overrides_resolved: true,
                 });
                 let hal_desc = hal::ShaderModuleDescriptor {
                     label: hal_label(

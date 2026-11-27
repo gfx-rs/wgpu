@@ -2689,6 +2689,34 @@ pub struct NagaShader {
     pub info: naga::valid::ModuleInfo,
     /// Source codes for debug
     pub debug_source: Option<DebugSource>,
+    /// `module` and `info` are already the output of [`process_overrides`], so
+    /// backends use them as is. Stages using this module must have empty `constants`.
+    ///
+    /// [`process_overrides`]: naga::back::pipeline_constants::process_overrides
+    pub overrides_resolved: bool,
+}
+
+#[cfg(any(dx12, gles, metal, vulkan))]
+impl NagaShader {
+    fn process_overrides<'a>(
+        &'a self,
+        entry_point: (naga::ShaderStage, &str),
+        constants: &naga::back::PipelineConstants,
+    ) -> Result<
+        (Cow<'a, naga::Module>, Cow<'a, naga::valid::ModuleInfo>),
+        naga::back::pipeline_constants::PipelineConstantError,
+    > {
+        if self.overrides_resolved {
+            debug_assert!(constants.is_empty());
+            return Ok((Cow::Borrowed(&self.module), Cow::Borrowed(&self.info)));
+        }
+        naga::back::pipeline_constants::process_overrides(
+            &self.module,
+            &self.info,
+            Some(entry_point),
+            constants,
+        )
+    }
 }
 
 // Custom implementation avoids the need to generate Debug impl code
