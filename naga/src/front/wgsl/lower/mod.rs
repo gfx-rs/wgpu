@@ -24,6 +24,7 @@ use crate::{common::ForDebugWithTypes, proc::LayoutErrorInner};
 use crate::{ir, proc};
 use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
 
+use crate::front::wgsl::lower::conversion::ScalarConversionExt;
 use construction::Constructor;
 use template_list::TemplateListIter;
 

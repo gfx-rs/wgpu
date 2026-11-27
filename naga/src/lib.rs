@@ -121,6 +121,7 @@ pub mod keywords;
 mod non_max_u32;
 pub mod proc;
 mod racy_lock;
+pub mod reflect;
 mod span;
 pub mod valid;
 
@@ -134,11 +135,7 @@ pub use nt::{FastHashMap, FastHashSet, FastIndexMap, FastIndexSet};
 // TODO: Eliminate this re-export and migrate uses of `crate::Foo` to `use crate::ir; ir::Foo`.
 pub use ir::*;
 
-/// Width of a boolean type, in bytes.
-pub const BOOL_WIDTH: Bytes = 1;
-
-/// Width of abstract types, in bytes.
-pub const ABSTRACT_WIDTH: Bytes = 8;
+pub use nt::{ABSTRACT_WIDTH, BOOL_WIDTH};
 
 /// Map of expressions that have associated variable names
 pub(crate) type NamedExpressions = FastIndexMap<Handle<Expression>, String>;

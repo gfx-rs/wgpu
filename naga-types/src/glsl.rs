@@ -236,3 +236,37 @@ impl GlslUniformType {
         }
     }
 }
+
+impl TryFrom<crate::ScalarKind> for GlslScalarKind {
+    type Error = ();
+
+    fn try_from(value: crate::ScalarKind) -> Result<Self, Self::Error> {
+        Ok(match value {
+            crate::ScalarKind::Sint => GlslScalarKind::Sint,
+            crate::ScalarKind::Uint => GlslScalarKind::Uint,
+            crate::ScalarKind::Float => GlslScalarKind::Float,
+            _ => return Err(()),
+        })
+    }
+}
+
+impl From<crate::VectorSize> for GlslVectorSize {
+    fn from(val: crate::VectorSize) -> Self {
+        match val {
+            crate::VectorSize::Bi => GlslVectorSize::Bi,
+            crate::VectorSize::Tri => GlslVectorSize::Tri,
+            crate::VectorSize::Quad => GlslVectorSize::Quad,
+        }
+    }
+}
+
+impl TryFrom<crate::Scalar> for GlslScalar {
+    type Error = ();
+
+    fn try_from(value: crate::Scalar) -> Result<Self, Self::Error> {
+        Ok(GlslScalar {
+            kind: value.kind.try_into()?,
+            width: value.width,
+        })
+    }
+}

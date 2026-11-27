@@ -6,6 +6,7 @@ use crate::{
 };
 
 use super::{Error, LookupExpression, LookupHelper as _};
+use crate::front::spv::ImageDimensionSpvExt;
 
 #[derive(Clone, Debug)]
 pub(super) struct LookupSampledImage {
