@@ -416,6 +416,7 @@ webgpu:shader,validation,decl,compound_statement:*
 webgpu:shader,validation,decl,const:*
 webgpu:shader,validation,decl,context_dependent_resolution:*
 webgpu:shader,validation,decl,immediate:*
+webgpu:shader,validation,decl,let:*
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_neg"
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_one"
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_zero_signed"
@@ -528,6 +529,7 @@ webgpu:shader,validation,parse,requires:have_all_language_features:feature="imme
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="packed_4x8_integer_dot_product"
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="pointer_composite_access"
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="readonly_and_readwrite_storage_textures"
+webgpu:shader,validation,parse,requires:have_all_language_features:feature="texture_and_sampler_let"
 webgpu:shader,validation,parse,requires:requires:*
 webgpu:shader,validation,parse,requires:wgsl_matches_api:*
 webgpu:shader,validation,parse,semicolon:*
