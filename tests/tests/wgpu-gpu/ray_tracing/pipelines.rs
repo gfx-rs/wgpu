@@ -48,7 +48,13 @@ fn pipeline_create_use(ctx: TestingContext) {
         .create_command_encoder(&CommandEncoderDescriptor::default());
 
     // Build the BLAS and the TLAS.
-    encoder.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas]);
+    encoder.build_acceleration_structures(
+        [&as_ctx.blas_build_entry()],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
 
     ctx.queue.submit([encoder.finish()]);
 
@@ -188,7 +194,13 @@ fn pipeline_create_use(ctx: TestingContext) {
     as_ctx.tlas[0].as_mut().unwrap().intersection_index = 1;
 
     // Build the TLAS with the other index.
-    encoder.build_acceleration_structures([], [&as_ctx.tlas]);
+    encoder.build_acceleration_structures(
+        [],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
 
     // Rerun with the new intersection index.
     {
@@ -206,7 +218,13 @@ fn pipeline_create_use(ctx: TestingContext) {
     as_ctx.tlas[0].as_mut().unwrap().intersection_index = 2;
 
     // Build the TLAS with the invalid index.
-    encoder.build_acceleration_structures([], [&as_ctx.tlas]);
+    encoder.build_acceleration_structures(
+        [],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
 
     // Rerun with the new intersection index (should fail).
     {
@@ -230,7 +248,13 @@ fn pipeline_create_use(ctx: TestingContext) {
     as_ctx.tlas[0] = None;
 
     // Build the TLAS with the other index.
-    encoder.build_acceleration_structures([], [&as_ctx.tlas]);
+    encoder.build_acceleration_structures(
+        [],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
 
     // Rerun with the new intersection index.
     {
@@ -412,7 +436,13 @@ fn invocation_reorder_output(ctx: TestingContext) {
     let mut encoder = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default());
-    encoder.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas]);
+    encoder.build_acceleration_structures(
+        [&as_ctx.blas_build_entry()],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
     ctx.queue.submit([encoder.finish()]);
 
     let ray_gen_source = "
@@ -589,7 +619,13 @@ fn pipeline_swap(ctx: TestingContext) {
         .create_command_encoder(&CommandEncoderDescriptor::default());
 
     // Build the BLAS and the TLAS.
-    encoder.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas]);
+    encoder.build_acceleration_structures(
+        [&as_ctx.blas_build_entry()],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
 
     ctx.queue.submit([encoder.finish()]);
 
@@ -796,7 +832,6 @@ fn mismatched_intersection_types(ctx: TestingContext) {
         &wgpu::CreateBlasDescriptor {
             label: Some("AABB BLAS"),
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
         },
         wgpu::BlasGeometrySizeDescriptors::AABBs {
             descriptors: vec![blas_size.clone()],
@@ -807,7 +842,6 @@ fn mismatched_intersection_types(ctx: TestingContext) {
         label: Some("TLAS"),
         max_instances: 1,
         flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-        update_mode: wgpu::AccelerationStructureUpdateMode::Build,
     });
     tlas[0] = Some(wgpu::TlasInstance::new(
         &blas,
@@ -825,6 +859,7 @@ fn mismatched_intersection_types(ctx: TestingContext) {
     encoder.build_acceleration_structures(
         [&wgpu::BlasBuildEntry {
             blas: &blas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
             geometry: wgpu::BlasGeometries::AabbGeometries(vec![wgpu::BlasAabbGeometry {
                 size: &blas_size,
                 stride: wgpu::AABB_GEOMETRY_MIN_STRIDE,
@@ -832,7 +867,10 @@ fn mismatched_intersection_types(ctx: TestingContext) {
                 primitive_offset: 0,
             }]),
         }],
-        [&tlas],
+        [&wgpu::TlasBuildEntry {
+            tlas: &tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
     );
     ctx.queue.submit([encoder.finish()]);
 
@@ -1002,7 +1040,13 @@ fn empty_pipeline_use(ctx: TestingContext) {
         .create_command_encoder(&CommandEncoderDescriptor::default());
 
     // Build the BLAS and the TLAS.
-    encoder.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas]);
+    encoder.build_acceleration_structures(
+        [&as_ctx.blas_build_entry()],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
 
     ctx.queue.submit([encoder.finish()]);
 
@@ -1076,7 +1120,13 @@ fn empty_pipeline_use(ctx: TestingContext) {
     as_ctx.tlas[0] = None;
 
     // Build the TLAS with the other index.
-    encoder.build_acceleration_structures([], [&as_ctx.tlas]);
+    encoder.build_acceleration_structures(
+        [],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
 
     // Rerun with the new intersection index.
     {
@@ -1115,7 +1165,13 @@ fn intersection_index_bounds(ctx: TestingContext) {
     let mut encoder = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default());
-    encoder.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas]);
+    encoder.build_acceleration_structures(
+        [&as_ctx.blas_build_entry()],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
     ctx.queue.submit([encoder.finish()]);
 
     let shader = ctx.device.create_shader_module(ShaderModuleDescriptor {
@@ -1219,7 +1275,13 @@ fn intersection_index_no_feature(ctx: TestingContext) {
     let mut encoder = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default());
-    encoder.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas]);
+    encoder.build_acceleration_structures(
+        [&as_ctx.blas_build_entry()],
+        [&wgpu::TlasBuildEntry {
+            tlas: &as_ctx.tlas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
+        }],
+    );
 
     fail(
         &ctx.device,

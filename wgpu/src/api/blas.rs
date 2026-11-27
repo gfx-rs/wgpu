@@ -31,9 +31,8 @@ static_assertions::assert_impl_all!(AccelerationStructureFlags: Send, Sync);
 pub type AccelerationStructureGeometryFlags = wgt::AccelerationStructureGeometryFlags;
 static_assertions::assert_impl_all!(AccelerationStructureGeometryFlags: Send, Sync);
 
-/// Update mode for acceleration structure builds.
-pub type AccelerationStructureUpdateMode = wgt::AccelerationStructureUpdateMode;
-static_assertions::assert_impl_all!(AccelerationStructureUpdateMode: Send, Sync);
+pub use wgt::AccelerationStructureBuildMode;
+static_assertions::assert_impl_all!(AccelerationStructureBuildMode: Send, Sync);
 
 /// Descriptor to create bottom level acceleration structures.
 pub type CreateBlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
@@ -201,6 +200,8 @@ pub struct BlasBuildEntry<'a> {
     pub blas: &'a Blas,
     /// Geometries.
     pub geometry: BlasGeometries<'a>,
+    /// Whether to build the acceleration structure from scratch or update it.
+    pub mode: AccelerationStructureBuildMode,
 }
 static_assertions::assert_impl_all!(BlasBuildEntry<'_>: WasmNotSendSync);
 

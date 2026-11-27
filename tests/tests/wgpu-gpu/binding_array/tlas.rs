@@ -102,7 +102,6 @@ async fn binding_array_tlas(ctx: TestingContext) {
         &wgpu::CreateBlasDescriptor {
             label: Some("BLAS"),
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
         },
         wgpu::BlasGeometrySizeDescriptors::Triangles {
             descriptors: vec![blas_geo_size_desc.clone()],
@@ -112,14 +111,12 @@ async fn binding_array_tlas(ctx: TestingContext) {
     let mut tlas_a = ctx.device.create_tlas(&wgpu::CreateTlasDescriptor {
         label: Some("TLAS A"),
         flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-        update_mode: wgpu::AccelerationStructureUpdateMode::Build,
         max_instances: 1,
     });
 
     let mut tlas_b = ctx.device.create_tlas(&wgpu::CreateTlasDescriptor {
         label: Some("TLAS B"),
         flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-        update_mode: wgpu::AccelerationStructureUpdateMode::Build,
         max_instances: 1,
     });
 
@@ -139,6 +136,7 @@ async fn binding_array_tlas(ctx: TestingContext) {
     encoder.build_acceleration_structures(
         std::iter::once(&wgpu::BlasBuildEntry {
             blas: &blas,
+            mode: wgpu::AccelerationStructureBuildMode::Build,
             geometry: wgpu::BlasGeometries::TriangleGeometries(vec![wgpu::BlasTriangleGeometry {
                 size: &blas_geo_size_desc,
                 vertex_buffer: &vertex_buf,
@@ -150,7 +148,16 @@ async fn binding_array_tlas(ctx: TestingContext) {
                 transform_buffer_offset: None,
             }]),
         }),
-        [&tlas_a, &tlas_b],
+        [
+            &wgpu::TlasBuildEntry {
+                tlas: &tlas_a,
+                mode: wgpu::AccelerationStructureBuildMode::Build,
+            },
+            &wgpu::TlasBuildEntry {
+                tlas: &tlas_b,
+                mode: wgpu::AccelerationStructureBuildMode::Build,
+            },
+        ],
     );
 
     ctx.queue.submit(Some(encoder.finish()));

@@ -3,9 +3,9 @@ use std::mem;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{include_wgsl, BufferUsages, IndexFormat, SamplerDescriptor};
 use wgpu::{
-    AccelerationStructureFlags, AccelerationStructureUpdateMode, BlasBuildEntry, BlasGeometries,
-    BlasGeometrySizeDescriptors, BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor,
-    CreateBlasDescriptor, CreateTlasDescriptor, Tlas, TlasInstance,
+    AccelerationStructureFlags, BlasBuildEntry, BlasGeometries, BlasGeometrySizeDescriptors,
+    BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor, CreateBlasDescriptor,
+    CreateTlasDescriptor, Tlas, TlasInstance,
 };
 
 use crate::utils;
@@ -138,7 +138,6 @@ impl crate::framework::Example for Example {
             &CreateBlasDescriptor {
                 label: None,
                 flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-                update_mode: AccelerationStructureUpdateMode::Build,
             },
             BlasGeometrySizeDescriptors::Triangles {
                 descriptors: vec![blas_size_desc.clone()],
@@ -149,7 +148,6 @@ impl crate::framework::Example for Example {
             label: None,
             max_instances: 3,
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: AccelerationStructureUpdateMode::Build,
         });
 
         tlas[0] = Some(TlasInstance::from_blas_transformed(
@@ -218,6 +216,7 @@ impl crate::framework::Example for Example {
         encoder.build_acceleration_structures(
             Some(&BlasBuildEntry {
                 blas: &blas,
+                mode: wgpu::AccelerationStructureBuildMode::Build,
                 geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
                     size: &blas_size_desc,
                     vertex_buffer: &vertex_buffer,
@@ -230,7 +229,10 @@ impl crate::framework::Example for Example {
                     transform_buffer_offset: None,
                 }]),
             }),
-            Some(&tlas),
+            Some(&wgpu::TlasBuildEntry {
+                tlas: &tlas,
+                mode: wgpu::AccelerationStructureBuildMode::Build,
+            }),
         );
 
         queue.submit(Some(encoder.finish()));
@@ -384,7 +386,13 @@ impl crate::framework::Example for Example {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        encoder.build_acceleration_structures(None, Some(&self.tlas));
+        encoder.build_acceleration_structures(
+            None,
+            Some(&wgpu::TlasBuildEntry {
+                tlas: &self.tlas,
+                mode: wgpu::AccelerationStructureBuildMode::Build,
+            }),
+        );
 
         {
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {

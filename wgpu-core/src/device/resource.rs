@@ -79,6 +79,9 @@ pub(crate) struct CommandIndices {
     /// [`last_successful_submission_index`]: Device::last_successful_submission_index
     pub(crate) active_submission_index: hal::FenceValue,
     pub(crate) next_acceleration_structure_build_command_index: u64,
+    /// The acceleration structures built by the submission being validated. Kept here to reuse
+    /// its allocation.
+    pub(crate) submission_as_builds: command::SubmissionAsBuilds,
 }
 
 /// Parameters provided to shaders via a uniform buffer of the type
@@ -705,6 +708,7 @@ impl Device {
                         active_submission_index: 0,
                         // By starting at one, we can put the result in a NonZeroU64.
                         next_acceleration_structure_build_command_index: 1,
+                        submission_as_builds: Default::default(),
                     },
                 ),
                 last_successful_submission_index: AtomicU64::new(0),

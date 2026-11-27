@@ -3729,7 +3729,7 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
     fn build_acceleration_structures<'a>(
         &self,
         _blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        _tlas: &mut dyn Iterator<Item = &'a crate::Tlas>,
+        _tlas: &mut dyn Iterator<Item = &'a crate::TlasBuildEntry<'a>>,
     ) {
         unimplemented!("Raytracing not implemented for web");
     }

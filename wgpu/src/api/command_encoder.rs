@@ -346,6 +346,9 @@ impl CommandEncoder {
     /// This function must only be used with the raw encoder API. When using the
     /// wgpu encoding API, acceleration structure build is tracked automatically.
     ///
+    /// The next build of a marked acceleration structure through the wgpu encoding API is a
+    /// full build, so it must use [`AccelerationStructureBuildMode::Build`].
+    ///
     /// # Panics
     ///
     /// - If the encoder is being used with the wgpu encoding API.
@@ -355,6 +358,9 @@ impl CommandEncoder {
     /// - All acceleration structures must have been build in this command encoder.
     /// - All BLASes inputted must have been built before all TLASes that were inputted here and
     ///   which use them.
+    /// - Every acceleration structure built through the raw encoder must be marked, even one
+    ///   that was built through the wgpu encoding API before. Otherwise, a later build through the
+    ///   wgpu encoding API may be encoded as an update of the earlier build.
     pub unsafe fn mark_acceleration_structures_built<'a>(
         &self,
         blas: impl IntoIterator<Item = &'a Blas>,
@@ -397,7 +403,7 @@ impl CommandEncoder {
     pub fn build_acceleration_structures<'a>(
         &mut self,
         blas: impl IntoIterator<Item = &'a BlasBuildEntry<'a>>,
-        tlas: impl IntoIterator<Item = &'a Tlas>,
+        tlas: impl IntoIterator<Item = &'a TlasBuildEntry<'a>>,
     ) {
         self.inner
             .build_acceleration_structures(&mut blas.into_iter(), &mut tlas.into_iter());

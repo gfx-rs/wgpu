@@ -185,7 +185,6 @@ impl crate::framework::Example for Example {
             &wgpu::CreateBlasDescriptor {
                 label: None,
                 flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-                update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             },
             wgpu::BlasGeometrySizeDescriptors::AABBs {
                 descriptors: vec![aabb_size_desc.clone()],
@@ -195,7 +194,6 @@ impl crate::framework::Example for Example {
         let mut tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
             label: None,
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             max_instances: 1,
         });
 
@@ -299,6 +297,7 @@ impl crate::framework::Example for Example {
         encoder.build_acceleration_structures(
             iter::once(&wgpu::BlasBuildEntry {
                 blas: &blas,
+                mode: wgpu::AccelerationStructureBuildMode::Build,
                 geometry: wgpu::BlasGeometries::AabbGeometries(vec![wgpu::BlasAabbGeometry {
                     size: &aabb_size_desc,
                     stride: mem::size_of::<GpuAabb>() as wgpu::BufferAddress,
@@ -306,7 +305,10 @@ impl crate::framework::Example for Example {
                     primitive_offset: 0,
                 }]),
             }),
-            iter::once(&tlas),
+            iter::once(&wgpu::TlasBuildEntry {
+                tlas: &tlas,
+                mode: wgpu::AccelerationStructureBuildMode::Build,
+            }),
         );
 
         queue.submit(Some(encoder.finish()));
@@ -348,7 +350,13 @@ impl crate::framework::Example for Example {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        encoder.build_acceleration_structures(iter::empty(), iter::once(&self.tlas));
+        encoder.build_acceleration_structures(
+            iter::empty(),
+            iter::once(&wgpu::TlasBuildEntry {
+                tlas: &self.tlas,
+                mode: wgpu::AccelerationStructureBuildMode::Build,
+            }),
+        );
 
         {
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {

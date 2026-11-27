@@ -27,6 +27,16 @@ pub struct Tlas {
 }
 static_assertions::assert_impl_all!(Tlas: WasmNotSendSync);
 
+/// Builds the instances of a [Tlas] into it.
+#[derive(Debug, Clone, Copy)]
+pub struct TlasBuildEntry<'a> {
+    /// Reference to the acceleration structure.
+    pub tlas: &'a Tlas,
+    /// Whether to build the acceleration structure from scratch or update it.
+    pub mode: crate::AccelerationStructureBuildMode,
+}
+static_assertions::assert_impl_all!(TlasBuildEntry<'_>: WasmNotSendSync);
+
 crate::cmp::impl_eq_ord_hash_proxy!(Tlas => .inner);
 
 impl Tlas {

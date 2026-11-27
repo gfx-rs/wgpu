@@ -1,7 +1,6 @@
 // Ray tracing
 // Major missing optimizations (no api surface changes needed):
 // - use custom tracker to track build state
-// - no forced rebuilt (build mode deduction)
 // - lazy instance buffer allocation
 // - maybe share scratch and instance staging buffer allocation
 // - partial instance buffer uploads (api surface already designed with this in mind)
@@ -211,6 +210,12 @@ pub enum BuildAccelerationStructureError {
         "Tlas {0:?} instance {1} contains an intersection index {2} which is greater than 2^24 - 1"
     )]
     TlasInvalidIntersectionIndex(ResourceErrorIdent, usize, u32),
+
+    #[error("{0:?} is built more than once in a single build call")]
+    DuplicateAccelerationStructure(ResourceErrorIdent),
+
+    #[error("{0:?} is updated, but was not created with AccelerationStructureFlags::ALLOW_UPDATE")]
+    UpdateWithoutAllowUpdate(ResourceErrorIdent),
 }
 
 impl WebGpuError for BuildAccelerationStructureError {
@@ -247,6 +252,8 @@ impl WebGpuError for BuildAccelerationStructureError {
             | Self::TlasInvalidIntersectionIndex(..)
             | Self::BlasGeometryKindMismatch(..)
             | Self::IncompatibleBlasAabbPrimitiveCount(..)
+            | Self::DuplicateAccelerationStructure(..)
+            | Self::UpdateWithoutAllowUpdate(..)
             | Self::UnalignedAabbPrimitiveOffset(..)
             | Self::InvalidAabbStride(..) => ErrorType::Validation,
         }
@@ -267,6 +274,9 @@ pub enum ValidateAsActionsError {
     #[error("Blas {0:?} is newer than the containing Tlas {1:?}")]
     BlasNewerThenTlas(ResourceErrorIdent, ResourceErrorIdent),
 
+    #[error("{0:?} is updated, but it was not built through `build_acceleration_structures` before, or its last build had different inputs")]
+    InvalidUpdateSource(ResourceErrorIdent),
+
     #[error("Tlas {0:?} has an intersection index {1:?} out of bounds of the length of the intersection array {2:?}")]
     TlasIntersectionInvalid(ResourceErrorIdent, u32, u32),
 
@@ -286,6 +296,7 @@ impl WebGpuError for ValidateAsActionsError {
             Self::UsedUnbuiltTlas(..)
             | Self::UsedUnbuiltBlas(..)
             | Self::BlasNewerThenTlas(..)
+            | Self::InvalidUpdateSource(..)
             | Self::TlasIntersectionInvalid(..)
             | Self::TlasInstancesIntersectionIndicesDiffer(..) => ErrorType::Validation,
         }
@@ -320,6 +331,7 @@ pub enum BlasGeometries<'a, Buffer = Arc<resource::Buffer>> {
 pub struct BlasBuildEntry<'a, Blas = Arc<resource::Blas>, Buffer = Arc<resource::Buffer>> {
     pub blas: Blas,
     pub geometries: BlasGeometries<'a, Buffer>,
+    pub mode: wgt::AccelerationStructureBuildMode,
 }
 
 #[derive(Debug, Clone)]
@@ -343,6 +355,31 @@ pub struct TlasPackage<'a, Tlas = Arc<resource::Tlas>, Blas = Arc<resource::Blas
     pub tlas: Tlas,
     pub instances: Box<dyn Iterator<Item = Option<TlasInstance<'a, Blas>>> + 'a>,
     pub lowest_unmodified: u32,
+    pub mode: wgt::AccelerationStructureBuildMode,
+}
+
+/// The parts of a BLAS build that an update must not change.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum BlasGeometrySignature {
+    Triangles {
+        size: wgt::BlasTriangleGeometrySizeDescriptor,
+        vertex_stride: BufferAddress,
+        has_transform: bool,
+    },
+    Aabbs {
+        size: wgt::BlasAABBGeometrySizeDescriptor,
+        stride: BufferAddress,
+    },
+}
+
+pub(crate) type BlasBuildSignature = Arc<[BlasGeometrySignature]>;
+
+#[derive(Debug, Clone)]
+pub(crate) struct BlasBuild {
+    pub blas: Arc<Blas>,
+    /// `None` if this build can never be the source of an update.
+    pub signature: Option<BlasBuildSignature>,
+    pub update: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -351,11 +388,14 @@ pub(crate) struct TlasBuild {
     pub dependencies: Vec<Arc<Blas>>,
     pub max_intersection_idx: Option<u32>,
     pub required_intersection_types: Vec<resource::TlasIntersectionType>,
+    /// `None` if this build can never be the source of an update.
+    pub instance_count: Option<u32>,
+    pub update: bool,
 }
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct AsBuild {
-    pub blas_s_built: Vec<Arc<Blas>>,
+    pub blas_s_built: Vec<BlasBuild>,
     pub tlas_s_built: Vec<TlasBuild>,
 }
 
@@ -431,6 +471,7 @@ pub type ArcBlasGeometries = OwnedBlasGeometries<ArcReferences>;
 pub struct OwnedBlasBuildEntry<R: ReferenceType> {
     pub blas: R::Blas,
     pub geometries: OwnedBlasGeometries<R>,
+    pub mode: wgt::AccelerationStructureBuildMode,
 }
 
 pub type ArcBlasBuildEntry = OwnedBlasBuildEntry<ArcReferences>;
@@ -453,6 +494,7 @@ pub struct OwnedTlasPackage<R: ReferenceType> {
     pub tlas: R::Tlas,
     pub instances: Vec<Option<OwnedTlasInstance<R>>>,
     pub lowest_unmodified: u32,
+    pub mode: wgt::AccelerationStructureBuildMode,
 }
 
 pub type ArcTlasPackage = OwnedTlasPackage<ArcReferences>;

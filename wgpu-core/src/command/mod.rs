@@ -77,6 +77,7 @@ pub(crate) use self::{
     clear::clear_texture,
     encoder::EncodingState,
     memory_init::CommandBufferTextureMemoryActions,
+    ray_tracing::SubmissionAsBuilds,
     render::{get_dst_stride_of_indirect_args, get_src_stride_of_indirect_args, VertexState},
     transfer::{
         validate_linear_texture_data, validate_texture_buffer_copy,

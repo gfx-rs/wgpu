@@ -1938,10 +1938,17 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         );
                 }
                 crate::AccelerationStructureBuildMode::Update => unsafe {
+                    let source = descriptor
+                        .source_acceleration_structure
+                        .unwrap_or(descriptor.destination_acceleration_structure);
+                    // A nil destination refits in place.
+                    let destination =
+                        (!core::ptr::eq(source, descriptor.destination_acceleration_structure))
+                            .then_some(&*descriptor.destination_acceleration_structure.raw);
                     command_encoder.refitAccelerationStructure_descriptor_destination_scratchBuffer_scratchBufferOffset(
-                        &descriptor.source_acceleration_structure.unwrap().raw,
+                        &source.raw,
                         &acceleration_structure_descriptor,
-                        Some(&descriptor.destination_acceleration_structure.raw),
+                        destination,
                         Some(&descriptor.scratch_buffer.raw),
                         descriptor.scratch_buffer_offset as usize,
                     );

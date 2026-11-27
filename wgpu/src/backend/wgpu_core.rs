@@ -2386,7 +2386,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
     fn build_acceleration_structures<'a>(
         &self,
         blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        tlas: &mut dyn Iterator<Item = &'a crate::Tlas>,
+        tlas: &mut dyn Iterator<Item = &'a crate::TlasBuildEntry<'a>>,
     ) {
         let blas = blas.map(|e: &crate::BlasBuildEntry<'_>| {
             let geometries = match e.geometry {
@@ -2425,10 +2425,12 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             wgc::ray_tracing::BlasBuildEntry {
                 blas: e.blas.inner.as_core().wgpu_blas.clone(),
                 geometries,
+                mode: e.mode,
             }
         });
 
-        let tlas = tlas.into_iter().map(|e| {
+        let tlas = tlas.into_iter().map(|entry| {
+            let e = entry.tlas;
             let instances = e
                 .instances
                 .iter()
@@ -2448,6 +2450,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 tlas: e.inner.as_core().wgpu_tlas.clone(),
                 instances,
                 lowest_unmodified: e.lowest_unmodified,
+                mode: entry.mode,
             }
         });
 

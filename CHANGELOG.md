@@ -66,6 +66,38 @@ let texture_view_desc = wgpu::TextureViewDescriptor {
 
 By @beicause in [#9553](https://github.com/gfx-rs/wgpu/pull/9553).
 
+#### Explicit acceleration structure updates (refits)
+
+Each acceleration structure build now says whether it is a full build or an update. `BlasBuildEntry` has a new `mode` field, and `build_acceleration_structures` takes `TlasBuildEntry`s instead of `Tlas`es. `AccelerationStructureBuildMode::Update` refits an acceleration structure created with `AccelerationStructureFlags::ALLOW_UPDATE` in place, which is much cheaper than a full build, e.g. for skinned meshes. The `update_mode` field of `CreateBlasDescriptor` and `CreateTlasDescriptor`, which had no effect, and `AccelerationStructureUpdateMode` are removed. Building the same BLAS or TLAS more than once in a single `build_acceleration_structures` call is now a validation error.
+
+```diff
+ let blas = device.create_blas(
+     &wgpu::CreateBlasDescriptor {
+         label: None,
+         flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+-        update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+     },
+     sizes,
+ );
+
+ encoder.build_acceleration_structures(
+     [&wgpu::BlasBuildEntry {
+         blas: &blas,
+         geometry,
++        mode: wgpu::AccelerationStructureBuildMode::Build,
+     }],
+-    [&tlas],
++    [&wgpu::TlasBuildEntry {
++        tlas: &tlas,
++        mode: wgpu::AccelerationStructureBuildMode::Build,
++    }],
+ );
+```
+
+**Breaking for custom backends:** `CommandEncoderInterface::build_acceleration_structures` takes `TlasBuildEntry`s.
+
+By @JMS55 in [#11078](https://github.com/gfx-rs/wgpu/pull/11078).
+
 #### `DeviceDescriptor` has new field `default_queue`
 
 `DeviceDescriptor` has new field `default_queue` of type `QueueDescriptor`, which allows setting label for default device queue:
