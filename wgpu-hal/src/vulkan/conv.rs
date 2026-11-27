@@ -1,6 +1,7 @@
 use alloc::vec::Vec;
 
 use ash::vk;
+use wgt::AccelerationStructureInstanceFlags;
 
 impl super::PrivateCapabilities {
     pub fn map_texture_format(&self, format: wgt::TextureFormat) -> vk::Format {
@@ -1187,6 +1188,26 @@ pub fn map_texture_component_swizzle(
         b: map_component_swizzle(swizzle.b),
         a: map_component_swizzle(swizzle.a),
     }
+}
+
+pub fn map_acceleration_structure_instance_flags(
+    flags: &AccelerationStructureInstanceFlags,
+) -> vk::GeometryInstanceFlagsKHR {
+    let mut conv_flags = vk::GeometryInstanceFlagsKHR::default();
+
+    if flags.contains(AccelerationStructureInstanceFlags::FRONT_FACE_CCW) {
+        conv_flags |= vk::GeometryInstanceFlagsKHR::TRIANGLE_FLIP_FACING;
+    }
+
+    if flags.contains(AccelerationStructureInstanceFlags::FORCE_OPAQUE) {
+        conv_flags |= vk::GeometryInstanceFlagsKHR::FORCE_OPAQUE;
+    }
+
+    if flags.contains(AccelerationStructureInstanceFlags::FORCE_NO_OPAQUE) {
+        conv_flags |= vk::GeometryInstanceFlagsKHR::FORCE_NO_OPAQUE;
+    }
+
+    conv_flags
 }
 
 #[cfg(test)]

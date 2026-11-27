@@ -3,9 +3,9 @@ use objc2_foundation::{NSArray, NSRange};
 use objc2_metal::{
     MTLAccelerationStructureBoundingBoxGeometryDescriptor, MTLAccelerationStructureDescriptor,
     MTLAccelerationStructureGeometryDescriptor, MTLAccelerationStructureInstanceDescriptorType,
-    MTLAccelerationStructureTriangleGeometryDescriptor, MTLAccelerationStructureUsage,
-    MTLAttributeFormat, MTLBlendFactor, MTLBlendOperation, MTLBlitOption, MTLClearColor,
-    MTLColorWriteMask, MTLCompareFunction, MTLCullMode, MTLIndexType,
+    MTLAccelerationStructureInstanceOptions, MTLAccelerationStructureTriangleGeometryDescriptor,
+    MTLAccelerationStructureUsage, MTLAttributeFormat, MTLBlendFactor, MTLBlendOperation,
+    MTLBlitOption, MTLClearColor, MTLColorWriteMask, MTLCompareFunction, MTLCullMode, MTLIndexType,
     MTLInstanceAccelerationStructureDescriptor, MTLOrigin,
     MTLPrimitiveAccelerationStructureDescriptor, MTLPrimitiveTopologyClass, MTLPrimitiveType,
     MTLRenderStages, MTLResourceUsage, MTLSamplerAddressMode, MTLSamplerBorderColor,
@@ -519,4 +519,24 @@ pub fn map_texture_component_swizzle(
         blue: map_component_swizzle(swizzle.b),
         alpha: map_component_swizzle(swizzle.a),
     }
+}
+
+pub fn map_acceleration_structure_instance_flags(
+    flags: wgt::AccelerationStructureInstanceFlags,
+) -> MTLAccelerationStructureInstanceOptions {
+    let mut base = MTLAccelerationStructureInstanceOptions::None;
+
+    if flags.contains(wgt::AccelerationStructureInstanceFlags::FRONT_FACE_CCW) {
+        base |= MTLAccelerationStructureInstanceOptions::TriangleFrontFacingWindingCounterClockwise;
+    }
+
+    if flags.contains(wgt::AccelerationStructureInstanceFlags::FORCE_OPAQUE) {
+        base |= MTLAccelerationStructureInstanceOptions::Opaque;
+    }
+
+    if flags.contains(wgt::AccelerationStructureInstanceFlags::FORCE_NO_OPAQUE) {
+        base |= MTLAccelerationStructureInstanceOptions::NonOpaque;
+    }
+
+    base
 }

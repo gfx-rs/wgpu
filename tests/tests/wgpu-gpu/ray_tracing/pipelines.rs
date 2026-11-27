@@ -809,13 +809,7 @@ fn mismatched_intersection_types(ctx: TestingContext) {
         flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
         update_mode: wgpu::AccelerationStructureUpdateMode::Build,
     });
-    tlas[0] = Some(wgpu::TlasInstance::new(
-        &blas,
-        [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
-        0,
-        0xFF,
-        0,
-    ));
+    tlas[0] = Some(wgpu::TlasInstance::from_blas_untransformed(&blas));
 
     let mut encoder = ctx
         .device

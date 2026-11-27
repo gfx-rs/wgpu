@@ -197,3 +197,23 @@ pub const TRANSFORM_BUFFER_ALIGNMENT: crate::BufferAddress = 16;
 
 /// Alignment requirement for instance buffers used in acceleration structure builds (`build_acceleration_structures_unsafe_tlas`)
 pub const INSTANCE_BUFFER_ALIGNMENT: crate::BufferAddress = 16;
+
+bitflags::bitflags! {
+    /// Flags for the instances in top level acceleration structures
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    pub struct AccelerationStructureInstanceFlags: u8 {
+        /// Changes the front face from the default of clockwise
+        /// to counterclockwise.
+        const FRONT_FACE_CCW = 1 << 0;
+        /// Forces the instance to be treated as if it was opaque. This overrides
+        /// [AccelerationStructureGeometryFlags] and is in turn overridden by the ray flags in
+        /// the shader.
+        const FORCE_OPAQUE = 1 << 1;
+        /// Forces the instance to be treated as if it was not opaque. This overrides
+        /// [AccelerationStructureGeometryFlags] and is in turn overridden by the ray flags in
+        /// the shader.
+        const FORCE_NO_OPAQUE = 1 << 2;
+    }
+}

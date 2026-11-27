@@ -46,6 +46,11 @@ a [`Blas`] with AABBs, the "leaves" might not exist or might contain only a smal
 because there is no requirement to store the AABBs as this might require a third intersection type. However,
 the "branches" will probably be fairly closely approximating the AABBs to maintain fairly good trace performance.
 
+#### Coordinate systems and back faces
+
+Acceleration structures use a left handed coordinate system. This is not typically visible, but does affect the
+calculations of back faces. In this coordinate space, front faces are clockwise by default
+
 #### Building
 
 Building an acceleration structure is a slow operation as it is likely to require building a tree-like structure.

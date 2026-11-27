@@ -8,6 +8,8 @@ use wgt::{WasmNotSend, WasmNotSendSync};
 use crate::dispatch;
 use crate::{Buffer, Label};
 
+pub use wgt::AccelerationStructureInstanceFlags;
+
 /// Descriptor for the size defining attributes of a triangle geometry, for a bottom level acceleration structure.
 pub type BlasTriangleGeometrySizeDescriptor = wgt::BlasTriangleGeometrySizeDescriptor;
 static_assertions::assert_impl_all!(BlasTriangleGeometrySizeDescriptor: Send, Sync);
@@ -72,6 +74,9 @@ pub struct TlasInstance {
     ///
     /// [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`]: wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES
     pub intersection_index: u32,
+    /// The flags on the instance. If both [AccelerationStructureInstanceFlags::FORCE_OPAQUE] and
+    /// [AccelerationStructureInstanceFlags::FORCE_NO_OPAQUE] are both specified the `TlasInstance` becomes invalid.
+    pub flags: AccelerationStructureInstanceFlags,
 }
 
 impl TlasInstance {
@@ -92,7 +97,14 @@ impl TlasInstance {
     /// is set in a way that will mean the objects within the [Blas]
     /// appear in their positions transformed by `transform`.
     pub fn from_blas_transformed(blas: &Blas, transform: [f32; 12]) -> Self {
-        Self::new(blas, transform, 0, 0xff, 0)
+        Self::new(
+            blas,
+            transform,
+            0,
+            0xff,
+            0,
+            AccelerationStructureInstanceFlags::empty(),
+        )
     }
     /// Construct TlasInstance.
     /// - blas: Reference to the bottom level acceleration structure
@@ -100,6 +112,7 @@ impl TlasInstance {
     /// - custom_data: Custom index for the instance used inside the shader (max 24 bits)
     /// - mask: Mask for the instance used inside the shader to filter instances
     /// - intersection_index: Either an index into an intersection group in a ray tracing pipeline or data for ray queries
+    /// - flags: The flags for the instance.
     ///
     /// Note: while one of these contains a reference to a BLAS that BLAS will not be dropped,
     /// but it can still be destroyed. Destroying a BLAS that is referenced by one or more
@@ -112,6 +125,7 @@ impl TlasInstance {
         custom_data: u32,
         mask: u8,
         intersection_index: u32,
+        flags: AccelerationStructureInstanceFlags,
     ) -> Self {
         Self {
             blas: blas.inner.clone(),
@@ -119,6 +133,7 @@ impl TlasInstance {
             custom_data,
             mask,
             intersection_index,
+            flags,
         }
     }
 

@@ -2441,6 +2441,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                             custom_data: instance.custom_data,
                             mask: instance.mask,
                             intersection_index: instance.intersection_index,
+                            flags: instance.flags,
                         })
                 })
                 .collect();

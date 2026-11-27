@@ -9,10 +9,9 @@ use objc2::{
 };
 use objc2_foundation::{ns_string, NSError, NSRange, NSString, NSUInteger};
 use objc2_metal::{
-    MTLAccelerationStructure, MTLAccelerationStructureInstanceOptions, MTLBuffer,
-    MTLCaptureManager, MTLCaptureScope, MTLCompileOptions, MTLComputePipelineDescriptor,
-    MTLComputePipelineState, MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode,
-    MTLDepthStencilDescriptor, MTLDevice, MTLFunction,
+    MTLAccelerationStructure, MTLBuffer, MTLCaptureManager, MTLCaptureScope, MTLCompileOptions,
+    MTLComputePipelineDescriptor, MTLComputePipelineState, MTLCounterSampleBufferDescriptor,
+    MTLCounterSet, MTLDepthClipMode, MTLDepthStencilDescriptor, MTLDevice, MTLFunction,
     MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion, MTLLibrary,
     MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
     MTLPipelineBufferDescriptorArray, MTLPipelineOption, MTLPixelFormat, MTLPrimitiveTopologyClass,
@@ -2356,7 +2355,7 @@ impl crate::Device for super::Device {
                     },
                 ],
             },
-            options: MTLAccelerationStructureInstanceOptions::None,
+            options: conv::map_acceleration_structure_instance_flags(instance.flags),
             mask: instance.mask as u32,
             intersectionFunctionTableOffset: instance.pipeline_intersection_data_offset,
             userID: instance.custom_data,
