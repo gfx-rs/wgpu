@@ -1,4 +1,10 @@
-use core::fmt;
+use core::{
+    fmt,
+    ops::{Bound, RangeBounds},
+};
+
+/// A `(major, minor, patch)` version.
+pub type Version = (u32, u32, u32);
 
 /// Conditions under which a test should fail or be skipped.
 ///
@@ -17,6 +23,7 @@ use core::fmt;
 ///     vendor: None,
 ///     adapter: Some("RTX"),
 ///     driver: None,
+///     driver_version: None,
 ///     reasons: vec![FailureReason::validation_error().with_message("Some error substring")],
 ///     behavior: FailureBehavior::AssertFailure,
 /// }
@@ -70,6 +77,20 @@ pub struct FailureCase {
     ///
     /// [`AdapterInfo::driver`]: wgpu::AdapterInfo::driver
     pub driver: Option<&'static str>,
+
+    /// Driver versions expected to fail, or `None` for any driver version.
+    ///
+    /// The driver version is the first number in [`AdapterInfo::driver_info`],
+    /// read as up to three components with `.` between them. On the GL
+    /// backend, the OpenGL version at the start is not used. If this is
+    /// `Some` and no version is found, this `FailureCase` does not apply.
+    /// Metal, DX12 and WebGL give no version.
+    ///
+    /// Some drivers give a wrong version. For example, ARM Mali
+    /// (`v1.r32p1-...`) reads as `(1, 0, 0)`.
+    ///
+    /// [`AdapterInfo::driver_info`]: wgpu::AdapterInfo::driver_info
+    pub driver_version: Option<(Bound<Version>, Bound<Version>)>,
 
     /// Reason why the test is expected to fail.
     ///
@@ -191,6 +212,39 @@ impl FailureCase {
         }
     }
 
+    /// Restrict this case to driver versions in `versions`.
+    ///
+    /// See [`FailureCase::driver_version`] for the source of the driver version.
+    pub fn driver_version(mut self, versions: impl RangeBounds<Version>) -> Self {
+        self.driver_version = Some((
+            versions.start_bound().cloned(),
+            versions.end_bound().cloned(),
+        ));
+        self
+    }
+
+    /// Restrict this case to macOS versions in `versions`.
+    ///
+    /// On other targets, and on other macOS versions, return [`FailureCase::never()`].
+    pub fn macos_version(self, versions: impl RangeBounds<Version>) -> Self {
+        /// macOS version, or `None` if it is unknown.
+        static MACOS_VERSION: std::sync::LazyLock<Option<Version>> =
+            std::sync::LazyLock::new(|| {
+                let output = std::process::Command::new("sw_vers")
+                    .arg("-productVersion")
+                    .output()
+                    .ok()?;
+                parse_version(&String::from_utf8(output.stdout).ok()?)
+            });
+        if cfg!(target_os = "macos")
+            && MACOS_VERSION.is_some_and(|current| versions.contains(&current))
+        {
+            self
+        } else {
+            FailureCase::never()
+        }
+    }
+
     /// Return the reasons why this case should fail.
     pub fn reasons(&self) -> &[FailureReason] {
         if self.reasons.is_empty() {
@@ -288,6 +342,12 @@ impl FailureCase {
             }
             reasons.set(FailureApplicationReasons::DRIVER, true);
         }
+        if let Some(versions) = self.driver_version {
+            if !versions.contains(&driver_version(info)?) {
+                return None;
+            }
+            reasons.set(FailureApplicationReasons::DRIVER_VERSION, true);
+        }
 
         // If we got this far but no specific reasons were triggered, then this
         // must be a wildcard.
@@ -319,6 +379,33 @@ impl FailureCase {
     }
 }
 
+/// Return the driver version of the adapter, or `None` if it is unknown.
+fn driver_version(info: &wgpu::AdapterInfo) -> Option<Version> {
+    if info.backend != wgpu::Backend::Gl {
+        return parse_version(&info.driver_info);
+    }
+    // The string is `[OpenGL ES ]<GL version> <vendor information>`.
+    let text = &*info.driver_info;
+    if text.starts_with("WebGL ") {
+        return None;
+    }
+    let after_es = text.rfind(" ES ").map_or(text, |pos| &text[pos + 4..]);
+    parse_version(after_es.split_once(' ')?.1)
+}
+
+/// Parse the first number in `text` as `(major, minor, patch)`.
+///
+/// Missing components are 0. Components after the third are not used.
+fn parse_version(text: &str) -> Option<Version> {
+    let start = text.find(|c: char| c.is_ascii_digit())?;
+    let number = text[start..]
+        .split(|c: char| !c.is_ascii_digit() && c != '.')
+        .next()?;
+    let mut parts = number.trim_end_matches('.').split('.').map(str::parse);
+    let mut next = || parts.next().unwrap_or(Ok(0)).ok();
+    Some((next()?, next()?, next()?))
+}
+
 bitflags::bitflags! {
     /// Reason why a test matches a given failure case.
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -327,7 +414,8 @@ bitflags::bitflags! {
         const VENDOR = 1 << 1;
         const ADAPTER = 1 << 2;
         const DRIVER = 1 << 3;
-        const ALWAYS = 1 << 4;
+        const DRIVER_VERSION = 1 << 4;
+        const ALWAYS = 1 << 5;
     }
 }
 
@@ -670,5 +758,46 @@ mod test {
             super::expectations_match_failures(&expectation, actual),
             ExpectationMatchResult::Complete
         );
+    }
+
+    #[test]
+    fn driver_version_range() {
+        let parse = super::parse_version;
+        assert_eq!(parse("1.4.2"), Some((1, 4, 2)));
+        assert_eq!(parse("mesa 26.2.6 (llvm 22.1.2)"), Some((26, 2, 6)));
+        assert_eq!(
+            parse("vulkan-sdk-1.4.363 (git-269a955c89)"),
+            Some((1, 4, 363))
+        );
+        assert_eq!(parse("565.77"), Some((565, 77, 0)));
+        assert_eq!(parse("27.2.1\n"), Some((27, 2, 1)));
+        assert_eq!(parse(""), None);
+
+        let info = |driver_info: &str| wgpu::AdapterInfo {
+            driver_info: driver_info.to_string(),
+            ..wgpu::AdapterInfo::new(wgpu::DeviceType::Other, wgpu::Backend::Vulkan)
+        };
+        let case = FailureCase::always().driver_version((1, 4, 2)..(1, 5, 0));
+        assert!(case.applies_to_adapter(&info("1.4.1")).is_none());
+        assert!(case.applies_to_adapter(&info("1.4.2")).is_some());
+        assert!(case.applies_to_adapter(&info("1.4.20")).is_some());
+        assert!(case.applies_to_adapter(&info("1.5.0")).is_none());
+        assert!(case.applies_to_adapter(&info("")).is_none());
+
+        let gl_version = |driver_info: &str| {
+            super::driver_version(&wgpu::AdapterInfo {
+                driver_info: driver_info.to_string(),
+                ..wgpu::AdapterInfo::new(wgpu::DeviceType::Other, wgpu::Backend::Gl)
+            })
+        };
+        assert_eq!(gl_version("OpenGL ES 3.2 Mesa 26.2.6"), Some((26, 2, 6)));
+        assert_eq!(
+            gl_version("4.6 (Core Profile) Mesa 26.2.6"),
+            Some((26, 2, 6))
+        );
+        assert_eq!(gl_version("4.6.0 NVIDIA 565.77"), Some((565, 77, 0)));
+        assert_eq!(gl_version("OpenGL ES 3.1"), None);
+        assert_eq!(gl_version("WebGL 2.0 (OpenGL ES 3.0 Chromium)"), None);
+        assert_eq!(gl_version("WebGL 2.0"), None);
     }
 }
