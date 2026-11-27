@@ -235,40 +235,15 @@ bitflags::bitflags! {
 }
 
 impl Capabilities {
-    /// Returns the extension corresponding to this capability, if there is one.
+    /// Returns the WGSL enable-extensions that each permit some capability in `self`.
     ///
     /// This is used by integration tests.
-    #[cfg(feature = "wgsl-in")]
     #[doc(hidden)]
-    pub const fn extension(&self) -> Option<crate::front::wgsl::ImplementedEnableExtension> {
-        use crate::front::wgsl::ImplementedEnableExtension as Ext;
-        match *self {
-            Self::DUAL_SOURCE_BLENDING => Some(Ext::DualSourceBlending),
-            // NOTE: `SHADER_FLOAT16_IN_FLOAT32` _does not_ require the `f16` extension
-            Self::SHADER_FLOAT16 => Some(Ext::F16),
-            Self::FLOAT64 => Some(Ext::WgpuF64),
-            Self::SHADER_INT16 => Some(Ext::WgpuInt16),
-            Self::CLIP_DISTANCES => Some(Ext::ClipDistances),
-            Self::MESH_SHADER => Some(Ext::WgpuMeshShader),
-            Self::RAY_QUERY => Some(Ext::WgpuRayQuery),
-            Self::RAY_HIT_VERTEX_POSITION => Some(Ext::WgpuRayQueryVertexReturn),
-            Self::COOPERATIVE_MATRIX => Some(Ext::WgpuCooperativeMatrix),
-            Self::RAY_TRACING_PIPELINE => Some(Ext::WgpuRayTracingPipeline),
-            Self::RAY_TRACING_INVOCATION_REORDER => Some(Ext::WgpuRayTracingInvocationReorder),
-            Self::PER_VERTEX => Some(Ext::WgpuPerVertex),
-            Self::BUFFER_BINDING_ARRAY
-            | Self::BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
-            | Self::STORAGE_BUFFER_BINDING_ARRAY
-            | Self::STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
-            | Self::STORAGE_TEXTURE_BINDING_ARRAY
-            | Self::STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING
-            | Self::TEXTURE_AND_SAMPLER_BINDING_ARRAY
-            | Self::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING => {
-                Some(Ext::WgpuBindingArray)
-            }
-            Self::DEBUG_PRINTF => Some(Ext::WgpuDebugPrintf),
-            _ => None,
-        }
+    pub fn extension(&self) -> crate::common::wgsl::EnableExtensions {
+        crate::common::wgsl::EnableExtensions::all()
+            .iter()
+            .filter(|ext| self.intersects(ext.capabilities()))
+            .collect()
     }
 }
 

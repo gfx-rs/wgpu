@@ -7,11 +7,9 @@ use alloc::{
 };
 use core::{matches, num::NonZeroU32};
 
+use crate::common::wgsl::EnableExtensions;
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
-use crate::front::wgsl::parse::directive::enable_extension::{
-    EnableExtensions, ImplementedEnableExtension,
-};
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::parse::{ast, conv};
 use crate::front::wgsl::Result;
@@ -3987,15 +3985,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     return Ok(None);
                 }
                 "debugPrintf" => {
-                    if !ctx
-                        .enable_extensions
-                        .contains(ImplementedEnableExtension::WgpuDebugPrintf)
-                    {
-                        return Err(Box::new(Error::EnableExtensionNotEnabled {
-                            span: function_span,
-                            kind: ImplementedEnableExtension::WgpuDebugPrintf.into(),
-                        }));
-                    }
+                    ctx.enable_extensions
+                        .require(EnableExtensions::WGPU_DEBUG_PRINTF, function_span)?;
 
                     if arguments.is_empty() {
                         return Err(Box::new(Error::WrongArgumentCount {
@@ -5202,7 +5193,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, Option<ir::Expression>> {
         ctx.enable_extensions.require(
-            ImplementedEnableExtension::WgpuRayTracingInvocationReorder,
+            EnableExtensions::WGPU_RAY_TRACING_INVOCATION_REORDER,
             function_span,
         )?;
 
