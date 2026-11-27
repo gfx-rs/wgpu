@@ -820,7 +820,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::STORAGE_TEXTURE_BINDING_ARRAY
         // No STORAGE_BUFFER_BINDING_ARRAY
         | Caps::ACCELERATION_STRUCTURE_BINDING_ARRAY
-        // No CLIP_DISTANCES
+        | Caps::CLIP_DISTANCES
         // No CULL_DISTANCE
         | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
         | Caps::MULTIVIEW

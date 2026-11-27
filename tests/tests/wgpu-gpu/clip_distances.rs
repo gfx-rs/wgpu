@@ -4,6 +4,7 @@ use wgpu_test::{
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(CLIP_DISTANCES);
+    vec.push(CLIP_DISTANCES_SPLIT);
 }
 
 #[apply(gpu_test!)]
@@ -19,15 +20,31 @@ static CLIP_DISTANCES: GpuTestConfiguration = GpuTestConfiguration::new()
                     .unexpected_error("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
             ),
     )
-    .run_async(clip_distances);
+    .run_async(|ctx| clip_distances(ctx, SHADER_SRC));
 
-async fn clip_distances(ctx: TestingContext) {
+/// Uses more than four clip distances, which DX12 splits across two signature rows.
+#[apply(gpu_test!)]
+static CLIP_DISTANCES_SPLIT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::CLIP_DISTANCES)
+            // https://github.com/gfx-rs/wgpu/issues/9184
+            .expect_fail(
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("Shader library compile failed")
+                    .validation_error("could not be compiled into pipeline")
+                    .unexpected_error("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
+            ),
+    )
+    .run_async(|ctx| clip_distances(ctx, SHADER_SPLIT_SRC));
+
+async fn clip_distances(ctx: TestingContext, shader_src: &str) {
     // Create pipeline
     let shader = ctx
         .device
         .create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
+            source: wgpu::ShaderSource::Wgsl(shader_src.into()),
         });
     let pipeline = ctx
         .device
@@ -186,5 +203,30 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 @fragment
 fn fs_main() -> @location(0) vec4f {
     return vec4f(1.0);
+}
+";
+
+const SHADER_SPLIT_SRC: &str = "
+enable clip_distances;
+struct VertexOutput {
+    @builtin(position) pos: vec4f,
+    @location(0) color: f32,
+    @builtin(clip_distances) clip_distances: array<f32, 6>,
+}
+
+@vertex
+fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
+    var out: VertexOutput;
+    let x = f32(i32(vertex_index) / 2) * 4.0 - 1.0;
+    let y = f32(i32(vertex_index) & 1) * 4.0 - 1.0;
+    out.pos = vec4f(x, y, 0.5, 1.0);
+    out.color = 1.0;
+    out.clip_distances = array(1.0, x + y, 1.0, 1.0, 1.0, y - x);
+    return out;
+}
+
+@fragment
+fn fs_main(@location(0) color: f32) -> @location(0) vec4f {
+    return vec4f(color);
 }
 ";

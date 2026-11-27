@@ -347,7 +347,7 @@ const UPLEVEL: Bucket = Bucket {
         .union(Features::BGRA8UNORM_STORAGE)
         .union(Features::FLOAT32_FILTERABLE)
         .union(Features::FLOAT32_BLENDABLE)
-        // CLIP_DISTANCES not implemented in wgpu dx12 backend; https://github.com/gfx-rs/wgpu/issues/6236
+        .union(Features::CLIP_DISTANCES)
         .union(Features::DUAL_SOURCE_BLENDING)
         // TIER1/TIER2 not implemented in wgpu; https://github.com/gfx-rs/wgpu/issues/8122
         .union(Features::PRIMITIVE_INDEX)
@@ -379,8 +379,7 @@ const BUCKET_M1: Bucket = Bucket {
         .union(Features::TEXTURE_COMPRESSION_ASTC)
         .union(Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D)
         .union(Features::TEXTURE_COMPRESSION_ETC2)
-        .union(Features::SHADER_F16)
-        .union(Features::CLIP_DISTANCES),
+        .union(Features::SHADER_F16),
 };
 
 // e.g. Radeon Vega
@@ -506,10 +505,7 @@ const BUCKET_LLVMPIPE: Bucket = Bucket {
         subgroup_min_size: 8,
         subgroup_max_size: 8,
     },
-    features: UPLEVEL
-        .features
-        .union(Features::SHADER_F16)
-        .union(Features::CLIP_DISTANCES),
+    features: UPLEVEL.features.union(Features::SHADER_F16),
 };
 
 // a.k.a. Microsoft Basic Render Driver

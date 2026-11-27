@@ -1,0 +1,5 @@
+capabilities = "MESH_SHADER | CLIP_DISTANCES"
+targets = "WGSL | HLSL"
+
+[hlsl]
+shader_model = "V6_5"
