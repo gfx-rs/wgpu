@@ -329,6 +329,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 
 #### naga
 
+- HLSL: stores to `matCx2` members of structs that are not in a storage buffer, and to their columns and elements, are no longer lost. By @inner-daemons in [#11058](https://github.com/gfx-rs/wgpu/pull/11058).
 - Reject unsigned integer arguments to WGSL `sign()` during Naga validation instead of allowing them to reach and panic in the SPIR-V backend. By @notferdon in [#10451](https://github.com/gfx-rs/wgpu/pull/10451).
 - Declare `LocalInvocationIndex` only once in SPIR-V mesh shader entry points that don't take `local_invocation_index` as an argument. Previously these shaders were invalid SPIR-V. By @apollo-2006 in [#10497](https://github.com/gfx-rs/wgpu/pull/10497).
 - Fix panics when shader `var<immediate>` size is larger than 256 bytes. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
