@@ -1898,28 +1898,52 @@ fn map_host_oom_and_ioca_err(err: vk::Result) -> crate::DeviceError {
     map_host_oom_err(err)
 }
 
-/// Maps
+/// Maps the result of a failed `vkCreate*Pipelines` call.
 ///
 /// - VK_ERROR_OUT_OF_HOST_MEMORY
 /// - VK_ERROR_OUT_OF_DEVICE_MEMORY
 /// - VK_PIPELINE_COMPILE_REQUIRED_EXT
 /// - VK_ERROR_INVALID_SHADER_NV
-fn map_pipeline_err(err: vk::Result) -> crate::DeviceError {
+///
+/// Drivers also return other codes, such as `VK_ERROR_INITIALIZATION_FAILED`
+/// or `VK_ERROR_UNKNOWN`, for a shader they cannot compile. Only the pipeline
+/// is affected and the device stays usable, so these are reported as
+/// [`crate::PipelineError::Linkage`], like a failed pipeline creation on the
+/// other backends, and not as [`crate::DeviceError::Unexpected`].
+///
+/// `command` is the name of the Vulkan command and `stages` the stages of the
+/// pipeline.
+fn map_pipeline_err(
+    err: vk::Result,
+    command: &str,
+    stages: wgt::ShaderStages,
+) -> crate::PipelineError {
     // We don't use VK_EXT_pipeline_creation_cache_control
     // VK_PIPELINE_COMPILE_REQUIRED_EXT
     // We don't use VK_NV_glsl_shader
     // VK_ERROR_INVALID_SHADER_NV
-    map_host_device_oom_err(err)
+    match err {
+        vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
+            get_oom_err(err).into()
+        }
+        // Any command may return this.
+        vk::Result::ERROR_DEVICE_LOST => get_lost_err().into(),
+        other => crate::PipelineError::Linkage(stages, format!("{command} failed: {other:?}")),
+    }
 }
 
 /// Returns [`crate::DeviceError::Unexpected`] or panics if the `internal_error_panic`
 /// feature flag is enabled.
-fn get_unexpected_err(_err: vk::Result) -> crate::DeviceError {
+fn get_unexpected_err(err: vk::Result) -> crate::DeviceError {
     #[cfg(feature = "internal_error_panic")]
-    panic!("Unexpected Vulkan error: {_err:?}");
+    panic!("Unexpected Vulkan error: {err:?}");
 
+    // `DeviceError::Unexpected` cannot carry the result, so log it here.
     #[allow(unreachable_code)]
-    crate::DeviceError::Unexpected
+    {
+        log::error!("Unexpected Vulkan error: {err:?}");
+        crate::DeviceError::Unexpected
+    }
 }
 
 /// Returns [`crate::DeviceError::OutOfMemory`].
@@ -2012,3 +2036,41 @@ where
 /// - Callback must not change anything to what the instance does not support.
 pub type CreateInstanceCallback<'this> =
     dyn for<'arg, 'pnext> FnOnce(CreateInstanceCallbackArgs<'arg, 'pnext, 'this>) + 'this;
+
+#[cfg(test)]
+mod tests {
+    use alloc::string::String;
+
+    use ash::vk;
+
+    use super::map_pipeline_err;
+    use crate::{DeviceError, PipelineError};
+
+    #[test]
+    fn pipeline_creation_errors() {
+        let stages = wgt::ShaderStages::COMPUTE;
+        let map = |result| map_pipeline_err(result, "vkCreateComputePipelines", stages);
+
+        assert_eq!(
+            map(vk::Result::ERROR_OUT_OF_HOST_MEMORY),
+            PipelineError::Device(DeviceError::OutOfMemory)
+        );
+        assert_eq!(
+            map(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY),
+            PipelineError::Device(DeviceError::OutOfMemory)
+        );
+        #[cfg(not(feature = "device_lost_panic"))]
+        assert_eq!(
+            map(vk::Result::ERROR_DEVICE_LOST),
+            PipelineError::Device(DeviceError::Lost)
+        );
+        // A shader the driver cannot compile fails the pipeline, not the device.
+        assert_eq!(
+            map(vk::Result::ERROR_INITIALIZATION_FAILED),
+            PipelineError::Linkage(
+                stages,
+                String::from("vkCreateComputePipelines failed: ERROR_INITIALIZATION_FAILED")
+            )
+        );
+    }
+}

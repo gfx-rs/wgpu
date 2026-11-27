@@ -26,7 +26,7 @@ static RESTRICT_WORKGROUP_PRIVATE_FUNCTION_LET: GpuTestConfiguration = GpuTestCo
                 FailureCase::molten_vk()
                     .validation_error("Shader library compile failed")
                     .validation_error("could not be compiled into pipeline")
-                    .unexpected_error("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
+                    .panic("vkCreateComputePipelines failed: ERROR_INITIALIZATION_FAILED"),
             ),
     )
     .run_async(|ctx| async move {

@@ -86,7 +86,7 @@ pub enum GPUError {
   #[class("GPUOutOfMemoryError")]
   OutOfMemory,
   #[class("GPUInternalError")]
-  Internal,
+  Internal(String),
 }
 
 impl Display for GPUError {
@@ -95,7 +95,7 @@ impl Display for GPUError {
       GPUError::Lost => Ok(()),
       GPUError::Validation(s) => f.write_str(s),
       GPUError::OutOfMemory => f.write_str("not enough memory left"),
-      GPUError::Internal => Ok(()),
+      GPUError::Internal(s) => f.write_str(s),
     }
   }
 }
@@ -105,7 +105,7 @@ impl std::error::Error for GPUError {}
 impl GPUError {
   pub(crate) fn from_webgpu(e: impl WebGpuError) -> Self {
     match e.webgpu_error_type() {
-      ErrorType::Internal => GPUError::Internal,
+      ErrorType::Internal => GPUError::Internal(fmt_err(&e)),
       ErrorType::DeviceLost => GPUError::Lost, // this will be ignored by handle_error in wgpu-core
       ErrorType::OutOfMemory => GPUError::OutOfMemory,
       ErrorType::Validation => GPUError::Validation(fmt_err(&e)),
@@ -127,7 +127,16 @@ impl From<wgpu_types::error::Error> for GPUError {
         }
       }
       wgpu_types::error::Error::OutOfMemory { .. } => GPUError::OutOfMemory,
-      wgpu_types::error::Error::Internal { .. } => GPUError::Internal,
+      wgpu_types::error::Error::Internal {
+        description,
+        source,
+      } => {
+        if let Some(e) = source.source() {
+          GPUError::Internal(fmt_err(e))
+        } else {
+          GPUError::Internal(description)
+        }
+      }
     }
   }
 }
@@ -138,7 +147,7 @@ impl WebGpuError for GPUError {
       GPUError::Lost => ErrorType::DeviceLost,
       GPUError::Validation(_) => ErrorType::Validation,
       GPUError::OutOfMemory => ErrorType::OutOfMemory,
-      GPUError::Internal => ErrorType::Internal,
+      GPUError::Internal(_) => ErrorType::Internal,
     }
   }
 }
@@ -318,8 +327,17 @@ pub enum GPUGenericError {
 
 pub enum GPUPipelineErrorReason {
   Validation,
-  #[expect(dead_code)]
   Internal,
+}
+
+impl GPUPipelineErrorReason {
+  /// The reason a pipeline creation that failed with `err` is rejected with.
+  pub(crate) fn of(err: &impl WebGpuError) -> Self {
+    match err.webgpu_error_type() {
+      ErrorType::Internal => Self::Internal,
+      _ => Self::Validation,
+    }
+  }
 }
 
 impl Display for GPUPipelineErrorReason {

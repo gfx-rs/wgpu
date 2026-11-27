@@ -276,6 +276,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - `Device::poll` now always returns `PollError::CantWait` if called with `PollType::Wait` on the WebGPU backend. By @teoxoy in [#10218](https://github.com/gfx-rs/wgpu/pull/10218).
 - `DownlevelFlags::SHADER_F16_IN_F32` has been removed. It previously blocked broken `quantizeToF16`, `pack2x16float`, and `unpack2x16float` on older llvmpipe / lavapipe. Using wgpu with an up-to-date Mesa version is always recommended. By @szymros in [#10957](https://github.com/gfx-rs/wgpu/pull/10957)
 - Texture copy extents are now correctly validated for subsampled chroma planes. Copying is now supported between a plane of a multi-planar texture and other textures or buffers, in either direction. By @andyleiserson in [#10776](https://github.com/gfx-rs/wgpu/pull/10776).
+- When a device is lost because of a backend error, wgpu-core now logs an error with the location in wgpu-core that reported it, the adapter name and the driver name and version. The Vulkan backend also logs the `VkResult` of an error it did not expect. The message passed to the device-lost callback is unchanged. By @matthargett in [#11135](https://github.com/gfx-rs/wgpu/pull/11135).
 
 #### naga
 
@@ -407,6 +408,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - Polyfill workgroup zero init in mesh and task shaders on AMD's proprietary driver, which fails with `VK_ERROR_INITIALIZATION_FAILED` when they use `OpVariable` initializers. By @apollo-2006 in [#10692](https://github.com/gfx-rs/wgpu/pull/10692).
 - Fix a fence data race between submitting and polling on devices without timeline semaphores. By @JasperDeSutter in [#10960](https://github.com/gfx-rs/wgpu/pull/10960).
 - Fix pass timestamp queries on Vulkan sometimes reporting a duration of almost zero for a render or compute pass, when the GPU was busy with other work. By @kikijiki in [#10837](https://github.com/gfx-rs/wgpu/pull/10837).
+- A `vkCreateGraphicsPipelines`, `vkCreateComputePipelines` or `vkCreateRayTracingPipelinesKHR` call that fails with a result other than out-of-memory or device-lost (drivers return `VK_ERROR_INITIALIZATION_FAILED` or `VK_ERROR_UNKNOWN` for shaders they cannot compile) now fails that pipeline with an internal error naming the command and the result. It used to lose the device. By @matthargett in [#11135](https://github.com/gfx-rs/wgpu/pull/11135).
 
 #### Metal
 
@@ -441,6 +443,10 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - Fix `pop_error_scope` panics when it returns `null`. By @beicause in [#10039](https://github.com/gfx-rs/wgpu/pull/10039).
 - Fix `Device::on_uncaptured_error` never firing in browsers that do not implement `GPUDevice.onuncapturederror`, such as Safari, by listening for the `uncapturederror` event instead of assigning to that attribute. By @zemse in [#10270](https://github.com/gfx-rs/wgpu/pull/10270).
 - Pass `RenderPassColorAttachment::depth_slice` to the browser, so a render pass into a 3D texture no longer fails validation with "depthSlice is required for a 3D attachment". By @jheising in [#10693](https://github.com/gfx-rs/wgpu/pull/10693).
+
+#### deno_webgpu
+
+- `GPUInternalError` now has the message of the error; it used to be `undefined`. `createComputePipelineAsync()` and `createRenderPipelineAsync()` now reject with reason `"internal"` instead of `"validation"` when the failure is an internal error. By @matthargett in [#11135](https://github.com/gfx-rs/wgpu/pull/11135).
 
 ### Performance
 

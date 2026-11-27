@@ -118,9 +118,14 @@ class GPUOutOfMemoryError extends GPUError {
 core.registerErrorClass("GPUOutOfMemoryError", GPUOutOfMemoryError);
 
 class GPUInternalError extends GPUError {
-  constructor() {
+  /** @param {string} message */
+  constructor(message) {
+    const prefix = "Failed to construct 'GPUInternalError'";
+    webidl.requiredArguments(arguments.length, 1, prefix);
+    message = webidl.converters.DOMString(message, prefix, "Argument 1");
     super(illegalConstructorKey);
     this[webidl.brand] = webidl.brand;
+    this[_message] = message;
   }
 }
 core.registerErrorClass("GPUInternalError", GPUInternalError);

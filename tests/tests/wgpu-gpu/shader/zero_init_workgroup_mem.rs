@@ -26,7 +26,7 @@ static ZERO_INIT_WORKGROUP_MEMORY_PARALLEL: GpuTestConfiguration = GpuTestConfig
                 wgpu_test::FailureCase::molten_vk()
                     .validation_error("Shader library compile failed")
                     .validation_error("could not be compiled into pipeline")
-                    .unexpected_error("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
+                    .panic("vkCreateComputePipelines failed: ERROR_INITIALIZATION_FAILED"),
             ),
     )
     .run_async(parallel_zero_init);
@@ -42,7 +42,7 @@ static ZERO_INIT_WORKGROUP_MEMORY_PARALLEL_F16: GpuTestConfiguration = GpuTestCo
                 wgpu_test::FailureCase::molten_vk()
                     .validation_error("Shader library compile failed")
                     .validation_error("could not be compiled into pipeline")
-                    .unexpected_error("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
+                    .panic("vkCreateComputePipelines failed: ERROR_INITIALIZATION_FAILED"),
             ),
     )
     .run_async(parallel_zero_init);
@@ -137,7 +137,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 wgpu_test::FailureCase::molten_vk()
                     .validation_error("Shader library compile failed")
                     .validation_error("could not be compiled into pipeline")
-                    .unexpected_error("Unexpected Vulkan error: ERROR_INITIALIZATION_FAILED"),
+                    .panic("vkCreateComputePipelines failed: ERROR_INITIALIZATION_FAILED"),
             ),
     )
     .run_async(|ctx| async move {
