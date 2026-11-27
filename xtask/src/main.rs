@@ -83,16 +83,9 @@ Commands:
 
     All extra arguments will be forwarded to cargo-nextest (NOT wgpu-info)
 
-  changelog [from_branch] [to_commit]
-    Audit changes in the `CHANGELOG.md` at the root of the repo. Ensure that:
-
-    1. All changes are in an `Unreleased` section.
-
-        `<from_branch>` is used to determine the base of the diff to be performed. The base is set to fork point between `<to_commit>` and this branch.
-
-        `<to_commit>` is the tip of the `git diff` that will be used for checking (1).
-
-    --allow-released-changes  Only reports issues as warnings, rather than reporting errors and forcing a non-zero exit code.
+  changelog <COMMAND>
+    Create, preview, check, or release changelog fragments.
+    Run cargo xtask changelog --help for all changelog commands.
 
   miri
     Run all miri-compatible tests under miri. Requires a nightly toolchain
@@ -158,14 +151,19 @@ fn main() -> anyhow::Result<ExitCode> {
         .map(|pos| args.drain(pos..).skip(1).collect());
     let mut args = Arguments::from_vec(args);
 
-    if args.contains(["-h", "--help"]) {
-        eprint!("{HELP}");
-        return Ok(ExitCode::FAILURE);
-    }
-
+    let help = args.contains(["-h", "--help"]);
     let subcommand = args
         .subcommand()
         .context("Expected subcommand to be UTF-8")?;
+
+    if help {
+        if subcommand.as_deref() == Some("changelog") {
+            changelog::print_help();
+            return Ok(ExitCode::SUCCESS);
+        }
+        eprint!("{HELP}");
+        return Ok(ExitCode::FAILURE);
+    }
 
     // -- Shell Creation --
 
@@ -173,7 +171,7 @@ fn main() -> anyhow::Result<ExitCode> {
     shell.change_dir(String::from(env!("CARGO_MANIFEST_DIR")) + "/..");
 
     match subcommand.as_deref() {
-        Some("changelog") => changelog::check_changelog(shell, args)?,
+        Some("changelog") => changelog::run(shell, args)?,
         Some("cts") => cts::run_cts(shell, args, passthrough_args)?,
         Some("run-wasm") => run_wasm::run_wasm(shell, args, passthrough_args)?,
         Some("miri") => miri::run_miri(shell, args)?,

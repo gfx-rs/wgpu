@@ -10,16 +10,26 @@ We do a patch releases as needed in the weeks between major releases. Once a new
 
 Anyone in the @gfx-rs/wgpu team can perform these steps.
 
+## Changelog workflow
+
+The [fragment workflow](../changelog.d/README.md) starts immediately after v31.0.0, when the Unreleased section is empty.
+After publication, cherry-pick the cutover onto the v31 release branch. If the branch does not have the fragment tooling, cherry-pick that change first.
+Older release branches keep their existing changelog workflow.
+
+Before a release, update your local trunk history. The release tool uses that history to find the original PRs, including for backports.
+If your local trunk ref has a different name, pass `--trunk <ref>` to `preview` and `release`.
+The release command needs `gh` and network access for attribution lookup.
+
 ## Major Release Process
 
 Approx 1 Week Before:
 
 - Determine if `glow` (@groves), `rspirv` (@gfx-rs/wgpu) or any other dependant crates will need a release. If so, coordinate with their maintainers.
-- Go through the changelog:
+- Run `cargo xtask changelog preview` and review the fragments:
   - Re-categorize miscategorized items.
   - Edit major changes so a user can easily understand what they need to do.
-  - Add missing major changes that users need to know about.
-  - Copy-edit the changelog for clarity.
+  - Merge fragments for any missing major changes into trunk.
+  - Copy-edit the fragments for clarity.
 
 Day of Release:
 
@@ -30,8 +40,10 @@ Day of Release:
 - Grep for the previous version to ensure various documentation links are updated.
   - For example, if the previous version was v24.0.0, grep for `v24` and `24.0`
 - Ensure `glow` and `rspirv` are updated to the latest version if needed.
-- Add a new header for the changelog with the release version and date.
+- Commit any fragment edits, then run `cargo xtask changelog release vX.Y.Z` to assemble the release notes and delete the fragments.
+- Copy-edit the assembled notes in `CHANGELOG.md`.
 - Create a PR with all of the version changes and changelog updates.
+  - Add the `changelog: released entry changed` label.
 - While waiting on the PR, do a dry run of publishing.
   ```bash
     cargo publish --dry-run --workspace --all-features --exclude deno_webgpu
@@ -67,12 +79,15 @@ Day of Release:
 ## Patch Release Process
 
 - Enumerate all PRs that haven't been backported yet. These use the `PR: needs back-porting` label. [GH Link](https://github.com/gfx-rs/wgpu/pulls?q=sort%3Aupdated-desc+is%3Apr+label%3A%22PR%3A+needs+back-porting%22)
-- Enumerate all open PRs that target the release branch. Review them, then include the approved ones.
-- On _your own branch_ based on the latest release branch. Cherry-pick the PRs that need to be backported. Keep the original author of each commit.
+- Review open PRs that target the release branch. If an approved PR has a fragment, merge it into trunk first so the release tool can find its original PR.
+- On _your own branch_ based on the latest release branch. Cherry-pick the PRs that need to be backported, including their fragments. Keep the original author of each commit.
 - Remove the `PR: needs back-porting` label from the PRs.
-- Fix the changelogs items and add a new header for the patch release with the release version and date.
+- Run `cargo xtask changelog release vX.Y.Z` to assemble the release notes and delete the fragments.
+  - Copy-edit only the assembled notes in `CHANGELOG.md`. Do not edit fragments on the release branch; those edits can cause conflicts when the release notes return to trunk.
+  - Commit the release notes and fragment deletions in their own commit, separate from version changes.
 - Update the version number in the root `Cargo.toml` to the new version. Do not change the versions of the workspace dependencies, so that users can roll back a single crate.
 - Create a PR with all of the version changes and changelog updates into the release branch.
+  - Add the `changelog: released entry changed` label.
   - If CI on the release branch fails for causes that are not related to the release, such as retired runner images, fix it in this PR.
 - While waiting on the PR, do a dry run of publishing.
   ```bash
@@ -88,6 +103,6 @@ Day of Release:
   - For each crate released, also create a tag `{crate_name}-vX.Y.Z`.
   - Push at most 25 tags in one push. A repository setting rejects a push that updates more.
 - Close the PRs into the release branch that the release PR replaced.
-- Forward port the changelog and any release checklist changes to the `trunk` branch.
-  - Ensure that any items in the newly-released changelog don't appear in the "unreleased" section of the trunk changelog.
+- After publication, cherry-pick the release notes commit to `trunk`. It adds the release section and deletes the same fragments from trunk.
+- Forward port any release checklist changes to `trunk`.
 - Update the release checklist with any needed changes.
