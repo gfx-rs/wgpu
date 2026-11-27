@@ -351,6 +351,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - In the MSL backend, `subgroupBallot` now keeps lanes 32-63, which were lost on GPUs with 64-wide SIMD groups (AMD GPUs on macOS). By @ErkoRisthein in [#10797](https://github.com/gfx-rs/wgpu/pull/10797).
 - Report a WGSL error instead of panicking when the condition of a `const_assert` is a composite value, such as `const_assert(vec2i());`. By @MilosLord in [#10897](https://github.com/gfx-rs/wgpu/pull/10897).
 - Fix WGSL `continuing` blocks falsely rejecting declarations that shadow variables from the loop body (e.g., `loop { let x = a; continuing { let x = b; } }`) as redefinitions. By @ekarad1um in [#10980](https://github.com/gfx-rs/wgpu/pull/10980).
+- Stop emitting `ArrayStride`, `Offset` and `MatrixStride` decorations in SPIR-V for arrays and structs that contain a `bool`. Such types are never host-shareable, and the decorations described a one-byte `bool`. Arm's proprietary Mali driver (seen with `r20p0` on a Mali-G52) honored them, so an `array<bool, N>` element read as `a[i] || a[i + 1]`. By @matthargett in [#11132](https://github.com/gfx-rs/wgpu/pull/11132).
 
 #### Validation
 

@@ -392,7 +392,6 @@ OpDecorate %33 ArrayStride 4
 OpDecorate %35 ArrayStride 16
 OpMemberDecorate %37 0 Offset 0
 OpDecorate %39 ArrayStride 4
-OpDecorate %43 ArrayStride 1
 OpMemberDecorate %45 0 Offset 0
 OpMemberDecorate %46 0 Offset 0
 OpMemberDecorate %47 0 Offset 0
