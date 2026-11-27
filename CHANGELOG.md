@@ -406,6 +406,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - Fix a crash in `vkQueueSubmit` on Imagination's proprietary driver and on the Android 16 emulator by passing a timeline value for every semaphore whenever a submission uses timeline semaphore values. By @laurenz-canva in [#10677](https://github.com/gfx-rs/wgpu/pull/10677).
 - Polyfill workgroup zero init in mesh and task shaders on AMD's proprietary driver, which fails with `VK_ERROR_INITIALIZATION_FAILED` when they use `OpVariable` initializers. By @apollo-2006 in [#10692](https://github.com/gfx-rs/wgpu/pull/10692).
 - Fix a fence data race between submitting and polling on devices without timeline semaphores. By @JasperDeSutter in [#10960](https://github.com/gfx-rs/wgpu/pull/10960).
+- If the Vulkan loader lists `VK_EXT_debug_utils` but instance creation rejects it, retry without it. Previously `InstanceFlags::DEBUG`, which debug builds enable by default, made the Vulkan backend unavailable on devices such as the Oculus Quest 1. By @matthargett in [#10979](https://github.com/gfx-rs/wgpu/pull/10979).
 - Fix pass timestamp queries on Vulkan sometimes reporting a duration of almost zero for a render or compute pass, when the GPU was busy with other work. By @kikijiki in [#10837](https://github.com/gfx-rs/wgpu/pull/10837).
 
 #### Metal
@@ -441,6 +442,10 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - Fix `pop_error_scope` panics when it returns `null`. By @beicause in [#10039](https://github.com/gfx-rs/wgpu/pull/10039).
 - Fix `Device::on_uncaptured_error` never firing in browsers that do not implement `GPUDevice.onuncapturederror`, such as Safari, by listening for the `uncapturederror` event instead of assigning to that attribute. By @zemse in [#10270](https://github.com/gfx-rs/wgpu/pull/10270).
 - Pass `RenderPassColorAttachment::depth_slice` to the browser, so a render pass into a 3D texture no longer fails validation with "depthSlice is required for a 3D attachment". By @jheising in [#10693](https://github.com/gfx-rs/wgpu/pull/10693).
+
+#### deno_webgpu
+
+- Timestamp queries are reported in nanoseconds, as WebGPU requires, on GPUs whose timestamp period is not 1 ns. By @matthargett in [#10979](https://github.com/gfx-rs/wgpu/pull/10979).
 
 ### Performance
 

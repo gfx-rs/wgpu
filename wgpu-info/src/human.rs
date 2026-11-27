@@ -84,7 +84,8 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         limits,
         downlevel_caps:
         downlevel,
-        texture_format_features
+        texture_format_features,
+        vulkan_api_version,
     } = &report;
 
     //////////////////
@@ -120,6 +121,9 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t                  Type: {device_type:?}")?;
     writeln!(output, "\t                Driver: {}", print_empty_string(driver))?;
     writeln!(output, "\t           Driver Info: {}", print_empty_string(driver_info))?;
+    if let Some([major, minor, patch]) = vulkan_api_version {
+        writeln!(output, "\t    Vulkan API Version: {major}.{minor}.{patch}")?;
+    }
     writeln!(output, "\t     Subgroup Min Size: {subgroup_min_size}")?;
     writeln!(output, "\t     Subgroup Max Size: {subgroup_max_size}")?;
     writeln!(output, "\tTransient Saves Memory: {transient_saves_memory:?}")?;

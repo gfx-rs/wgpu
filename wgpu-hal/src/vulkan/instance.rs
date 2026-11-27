@@ -1044,7 +1044,8 @@ impl super::Instance {
         if extensions.contains(&khr::portability_enumeration::NAME) {
             flags |= vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR;
         }
-        let vk_instance = {
+        let base_create_info = create_info;
+        let vk_instance = loop {
             let str_pointers = layers
                 .iter()
                 .chain(extensions.iter())
@@ -1054,7 +1055,7 @@ impl super::Instance {
                 })
                 .collect::<Vec<_>>();
 
-            create_info = create_info
+            let mut create_info = base_create_info
                 .flags(flags)
                 .application_info(&app_info)
                 .enabled_layer_names(&str_pointers[..layers.len()])
@@ -1094,16 +1095,30 @@ impl super::Instance {
                 create_info = create_info.push_next(&mut validation_features);
             }
 
-            unsafe {
+            let result = unsafe {
                 profiling::scope!("vkCreateInstance");
                 entry.create_instance(&create_info, None)
+            };
+            match result {
+                // Some loaders, such as the Oculus Quest 1's, list VK_EXT_debug_utils but
+                // reject it. Without a retry, instances created with `InstanceFlags::DEBUG`
+                // silently lose the Vulkan backend.
+                Err(vk::Result::ERROR_EXTENSION_NOT_PRESENT)
+                    if extensions.contains(&ext::debug_utils::NAME) =>
+                {
+                    log::warn!("vkCreateInstance rejected VK_EXT_debug_utils, retrying without it");
+                    extensions.retain(|&e| e != ext::debug_utils::NAME);
+                    debug_utils = None;
+                }
+                result => {
+                    break result.map_err(|e| {
+                        crate::InstanceError::with_source(
+                            String::from("Entry::create_instance() failed"),
+                            e,
+                        )
+                    })?;
+                }
             }
-            .map_err(|e| {
-                crate::InstanceError::with_source(
-                    String::from("Entry::create_instance() failed"),
-                    e,
-                )
-            })?
         };
 
         let swapchain_kind = desc.backend_options.vulkan.swapchain_kind;
