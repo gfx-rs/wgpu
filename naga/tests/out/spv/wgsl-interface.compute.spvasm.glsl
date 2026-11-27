@@ -28,9 +28,9 @@ shared uint _14[1];
 
 void main()
 {
-    if (gl_LocalInvocationIndex == 0u)
+    for (uint _38 = gl_LocalInvocationIndex; _38 < 1u; _38++)
     {
-        _14 = uint[](0u);
+        _14[_38] = 0u;
     }
     barrier();
     _14[0u] = (((gl_GlobalInvocationID.x + gl_LocalInvocationID.x) + gl_LocalInvocationIndex) + gl_WorkGroupID.x) + gl_NumWorkGroups.x;

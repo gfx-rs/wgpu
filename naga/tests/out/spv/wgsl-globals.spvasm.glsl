@@ -88,9 +88,12 @@ void main()
 {
     float _131 = 1.0;
     bool _133 = true;
+    for (uint _145 = gl_LocalInvocationIndex; _145 < 10u; _145++)
+    {
+        _30[_145] = 0.0;
+    }
     if (gl_LocalInvocationIndex == 0u)
     {
-        _30 = float[](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
         _32 = 0u;
     }
     barrier();

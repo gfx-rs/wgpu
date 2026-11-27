@@ -23,9 +23,9 @@ OpDecorate %13 BuiltIn LocalInvocationIndex
 %13 = OpVariable  %14  Input
 %17 = OpTypeFunction %2
 %18 = OpConstant  %3  2
-%20 = OpConstantNull  %3
-%21 = OpConstant  %3  0
-%23 = OpTypeBool
+%20 = OpTypeBool
+%21 = OpConstantNull  %3
+%22 = OpConstant  %3  0
 %26 = OpConstant  %3  264
 %16 = OpFunction  %2  None %17
 %8 = OpLabel
@@ -34,11 +34,11 @@ OpDecorate %13 BuiltIn LocalInvocationIndex
 %9 = OpCompositeConstruct  %5  %12 %15
 OpBranch %19
 %19 = OpLabel
-%22 = OpIEqual  %23  %15 %21
+%23 = OpIEqual  %20  %15 %22
 OpSelectionMerge %24 None
-OpBranchConditional %22 %25 %24
+OpBranchConditional %23 %25 %24
 %25 = OpLabel
-OpStore %6 %20
+OpStore %6 %21
 OpBranch %24
 %24 = OpLabel
 OpControlBarrier %18 %18 %26
