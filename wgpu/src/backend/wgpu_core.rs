@@ -2910,6 +2910,17 @@ impl dispatch::RayTracingPassInterface for CoreRayTracingPass {
     fn trace_rays(&mut self, x: u32, y: u32, z: u32) {
         self.pass.trace_rays(x, y, z)
     }
+
+    fn trace_rays_indirect(
+        &mut self,
+        indirect_buffer: &dispatch::DispatchBuffer,
+        indirect_offset: crate::BufferAddress,
+    ) {
+        let indirect_buffer = indirect_buffer.as_core();
+
+        self.pass
+            .trace_rays_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset)
+    }
 }
 
 impl Drop for CoreRayTracingPass {

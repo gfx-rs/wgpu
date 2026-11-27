@@ -1059,9 +1059,19 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::BufferDescriptor,
     ) -> Result<(super::Buffer, wgt::BufferAddress), crate::DeviceError> {
+        let mut usage = conv::map_buffer_usage(desc.usage);
+        if desc.usage.contains(wgt::BufferUses::INDIRECT)
+            && self
+                .shared
+                .features
+                .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT)
+        {
+            // `vkCmdTraceRaysIndirectKHR` takes the address of the indirect buffer.
+            usage |= vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
+        }
         let vk_info = vk::BufferCreateInfo::default()
             .size(desc.size)
-            .usage(conv::map_buffer_usage(desc.usage))
+            .usage(usage)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
         let raw = unsafe {

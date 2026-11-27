@@ -1996,6 +1996,27 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         intersection_group_data: PipelineGroupData<'a, <Self::A as Api>::Buffer>,
     );
 
+    /// Same as [`trace_rays`](CommandEncoder::trace_rays), but the ray counts are read
+    /// from `buffer` at `offset` as three `u32`s.
+    ///
+    /// # Safety
+    ///
+    /// - The device must have been created with
+    ///   [`wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT`].
+    /// - `buffer` must have been created with [`wgt::BufferUses::INDIRECT`] and must be in the
+    ///   [`wgt::BufferUses::INDIRECT`] state.
+    /// - `offset` must be a multiple of 4, and `offset + 12` must not exceed the buffer size.
+    /// - The ray counts in the buffer must not exceed the per-dimension and total ray dispatch
+    ///   limits of the device.
+    unsafe fn trace_rays_indirect<'a>(
+        &mut self,
+        buffer: &<Self::A as Api>::Buffer,
+        offset: wgt::BufferAddress,
+        ray_generation_group_data: PipelineGroupData<'a, <Self::A as Api>::Buffer>,
+        miss_group_data: PipelineGroupData<'a, <Self::A as Api>::Buffer>,
+        intersection_group_data: PipelineGroupData<'a, <Self::A as Api>::Buffer>,
+    );
+
     /// To get the required sizes for the buffer allocations use `get_acceleration_structure_build_sizes` per descriptor
     /// All buffers must be synchronized externally
     /// All buffer regions, which are written to may only be passed once per function call,

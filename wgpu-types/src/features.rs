@@ -943,7 +943,21 @@ features! {
         #[name("wgpu-shader-int64-atomic-all-ops")]
         const SHADER_INT64_ATOMIC_ALL_OPS = 1 << 43;
 
-        // Bit 44 is available.
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
+        /// major bugs in it and are expected to be subject to breaking changes, suggestions
+        /// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040)
+        ///
+        /// Allows `RayTracingPass::trace_rays_indirect`, which reads the number of rays from a
+        /// buffer.
+        ///
+        /// Requires [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`].
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with `rayTracingPipelineTraceRaysIndirect`)
+        ///
+        /// This is a native only feature.
+        #[name("wgpu-ray-tracing-pipelines-indirect")]
+        const EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT = 1 << 44;
 
         // Bit 45 is available.
 
@@ -1620,7 +1634,8 @@ impl Features {
                     | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
                     | FeaturesWGPU::EXPERIMENTAL_COOPERATIVE_MATRIX.bits()
                     | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_PIPELINES.bits()
-                    | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER.bits(),
+                    | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER.bits()
+                    | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT.bits(),
             ),
             FeaturesWebGPU::empty(),
         )

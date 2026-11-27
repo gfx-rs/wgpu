@@ -205,6 +205,8 @@ bitflags::bitflags! {
         ///
         /// - When calling `dispatch_workgroups_indirect`, all 3 indirect arguments encoded in the buffer
         /// must be less than the `max_compute_workgroups_per_dimension` device limit.
+        /// - When calling `trace_rays_indirect`, the 3 indirect arguments encoded in the buffer must be
+        /// within the same per-dimension and `max_ray_dispatch_count` limits that `trace_rays` checks.
         /// - When calling `draw_indirect`/`draw_indexed_indirect`/`multi_draw_indirect`/`multi_draw_indexed_indirect`:
         ///   - If `Features::INDIRECT_FIRST_INSTANCE` is not enabled on the device, the `first_instance` indirect argument must be 0.
         ///   - The `first_instance` & `instance_count` indirect arguments must form a range that fits within all bound vertex buffers with `step_mode` set to `Instance`.

@@ -676,6 +676,10 @@ impl IntoTrace for ArcRayTracingCommand {
             C::SetPipeline(id) => C::SetPipeline(id.into_trace()),
             C::SetImmediate { offset, data } => C::SetImmediate { offset, data },
             C::TraceRays(groups) => C::TraceRays(groups),
+            C::TraceRaysIndirect { buffer, offset } => C::TraceRaysIndirect {
+                buffer: buffer.into_trace(),
+                offset,
+            },
             C::PushDebugGroup { color, len } => C::PushDebugGroup { color, len },
             C::PopDebugGroup => C::PopDebugGroup,
             C::InsertDebugMarker { color, len } => C::InsertDebugMarker { color, len },

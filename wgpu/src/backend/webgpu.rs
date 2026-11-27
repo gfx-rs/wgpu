@@ -4168,6 +4168,14 @@ impl dispatch::RayTracingPassInterface for WebRayTracingPassEncoder {
     fn trace_rays(&mut self, _x: u32, _y: u32, _z: u32) {
         unreachable!("Ray tracing pipelines are unavailable on the web.")
     }
+
+    fn trace_rays_indirect(
+        &mut self,
+        _indirect_buffer: &dispatch::DispatchBuffer,
+        _indirect_offset: crate::BufferAddress,
+    ) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
 }
 
 impl Drop for WebRayTracingPassEncoder {

@@ -606,6 +606,11 @@ pub trait RayTracingPassInterface: CommonTraits + Drop {
     fn pop_debug_group(&mut self);
 
     fn trace_rays(&mut self, x: u32, y: u32, z: u32);
+    fn trace_rays_indirect(
+        &mut self,
+        indirect_buffer: &DispatchBuffer,
+        indirect_offset: crate::BufferAddress,
+    );
 }
 
 pub trait RenderBundleEncoderInterface: CommonTraits {

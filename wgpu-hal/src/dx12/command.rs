@@ -2033,4 +2033,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) {
         unreachable!("Ray tracing pipelines not supported")
     }
+
+    unsafe fn trace_rays_indirect(
+        &mut self,
+        _buffer: &super::Buffer,
+        _offset: wgt::BufferAddress,
+        _ray_generation_group_data: crate::PipelineGroupData<super::Buffer>,
+        _miss_group_data: crate::PipelineGroupData<super::Buffer>,
+        _intersection_group_data: crate::PipelineGroupData<super::Buffer>,
+    ) {
+        unreachable!("Ray tracing pipelines not supported")
+    }
 }

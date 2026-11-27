@@ -23,7 +23,8 @@ const INDEXING_FEATURES: wgt::Features = wgt::Features::TEXTURE_BINDING_ARRAY
 /// Features that need `VK_KHR_ray_tracing_pipeline`, either directly or as a dependency.
 const RAY_TRACING_PIPELINE_FEATURES: wgt::Features =
     wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES
-        .union(wgt::Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER);
+        .union(wgt::Features::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER)
+        .union(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT);
 
 /// `VK_EXT_ray_tracing_invocation_reorder`, which provides `SPV_EXT_shader_invocation_reorder`.
 ///
@@ -585,7 +586,12 @@ impl PhysicalDeviceFeatures {
             ray_tracing_pipeline: if enabled_extensions.contains(&khr::ray_tracing_pipeline::NAME) {
                 Some(
                     vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::default()
-                        .ray_tracing_pipeline(true),
+                        .ray_tracing_pipeline(true)
+                        .ray_tracing_pipeline_trace_rays_indirect(
+                            requested_features.contains(
+                                wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT,
+                            ),
+                        ),
                 )
             } else {
                 None
@@ -1119,6 +1125,13 @@ impl PhysicalDeviceFeatures {
                 features.set(
                     F::EXPERIMENTAL_RAY_TRACING_INVOCATION_REORDER,
                     reorder.ray_tracing_invocation_reorder != 0,
+                );
+            }
+
+            if let Some(ref ray_tracing_pipeline) = self.ray_tracing_pipeline {
+                features.set(
+                    F::EXPERIMENTAL_RAY_TRACING_PIPELINES_INDIRECT,
+                    ray_tracing_pipeline.ray_tracing_pipeline_trace_rays_indirect != 0,
                 );
             }
         }
@@ -2334,6 +2347,13 @@ impl super::InstanceShared {
                 let next = features
                     .acceleration_structure
                     .insert(vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default());
+                features2 = features2.push_next(next);
+            }
+
+            if capabilities.supports_extension(khr::ray_tracing_pipeline::NAME) {
+                let next = features
+                    .ray_tracing_pipeline
+                    .insert(vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::default());
                 features2 = features2.push_next(next);
             }
 
