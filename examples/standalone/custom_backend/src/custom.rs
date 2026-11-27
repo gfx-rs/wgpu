@@ -188,6 +188,13 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
+    fn create_render_pipeline_async(
+        &self,
+        _desc: &wgpu::RenderPipelineDescriptor<'_>,
+    ) -> Pin<Box<dyn wgpu::custom::CreateRenderPipelineFuture>> {
+        unimplemented!()
+    }
+
     fn create_mesh_pipeline(
         &self,
         _desc: &wgpu::MeshPipelineDescriptor<'_>,
@@ -201,6 +208,14 @@ impl DeviceInterface for CustomDevice {
     ) -> wgpu::custom::DispatchComputePipeline {
         let module = desc.module.as_custom::<CustomShaderModule>().unwrap();
         wgpu::custom::DispatchComputePipeline::custom(CustomComputePipeline(module.0.clone()))
+    }
+
+    fn create_compute_pipeline_async(
+        &self,
+        desc: &wgpu::ComputePipelineDescriptor<'_>,
+    ) -> Pin<Box<dyn wgpu::custom::CreateComputePipelineFuture>> {
+        let pipeline = self.create_compute_pipeline(desc);
+        Box::pin(core::future::ready(Ok(pipeline)))
     }
 
     fn create_ray_tracing_pipeline(

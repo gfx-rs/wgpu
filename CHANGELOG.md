@@ -201,6 +201,11 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - Added `TextureDescriptor::default_view_dimension` to get the view dimension a texture's views default to. By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Added `Queue` getter on `Device`. By @sagudev in [#10895](https://github.com/gfx-rs/wgpu/pull/10895).
 - Add `Queue::present_with_damage`, which takes the regions that changed since the last present as a hint for the compositor. Implemented for Vulkan (`VK_KHR_incremental_present`) and EGL (`EGL_KHR_swap_buffers_with_damage` / `EGL_EXT_swap_buffers_with_damage`); ignored elsewhere. Adds `wgpu::Rect`, moved from `wgpu_core::command::Rect`. By @sauliusvl in [#10152](https://github.com/gfx-rs/wgpu/pull/10152).
+- Added `Device::create_render_pipeline_async` and `Device::create_compute_pipeline_async`, which map to `createRenderPipelineAsync()`/`createComputePipelineAsync()` on WebGPU. Errors are returned through the future instead of the error scope. On native backends the returned future is already resolved. Resolves [#3794](https://github.com/gfx-rs/wgpu/issues/3794).
+
+  **Breaking for custom backends:** Implementations of `DeviceInterface` must implement `create_render_pipeline_async` and `create_compute_pipeline_async`.
+
+  By @abdymazhit in [#10438](https://github.com/gfx-rs/wgpu/pull/10438).
 
 #### Naga
 

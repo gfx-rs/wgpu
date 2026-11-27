@@ -25,8 +25,8 @@
 
 #![allow(unused_imports, non_snake_case)]
 use web_sys::{
-    Event, EventTarget, HtmlCanvasElement, HtmlImageElement, HtmlVideoElement, ImageBitmap,
-    ImageData, OffscreenCanvas, VideoFrame,
+    DomException, Event, EventTarget, HtmlCanvasElement, HtmlImageElement, HtmlVideoElement,
+    ImageBitmap, ImageData, OffscreenCanvas, VideoFrame,
 };
 mod gen_Gpu;
 pub use gen_Gpu::*;
@@ -174,6 +174,12 @@ mod gen_GpuOutOfMemoryError;
 pub use gen_GpuOutOfMemoryError::*;
 mod gen_GpuPipelineDescriptorBase;
 pub use gen_GpuPipelineDescriptorBase::*;
+mod gen_GpuPipelineError;
+pub use gen_GpuPipelineError::*;
+mod gen_GpuPipelineErrorInit;
+pub use gen_GpuPipelineErrorInit::*;
+mod gen_GpuPipelineErrorReason;
+pub use gen_GpuPipelineErrorReason::*;
 mod gen_GpuPipelineLayout;
 pub use gen_GpuPipelineLayout::*;
 mod gen_GpuPipelineLayoutDescriptor;
