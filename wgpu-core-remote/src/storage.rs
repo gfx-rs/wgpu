@@ -83,19 +83,6 @@ where
             }
         }
     }
-
-    #[allow(dead_code)]
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (Id<T::Marker>, &T)> {
-        self.map
-            .iter()
-            .enumerate()
-            .filter_map(move |(index, x)| match *x {
-                Element::Occupied(ref value, storage_epoch) => {
-                    Some((Id::zip(index as Index, storage_epoch), value))
-                }
-                _ => None,
-            })
-    }
 }
 
 impl<T> Storage<T>
