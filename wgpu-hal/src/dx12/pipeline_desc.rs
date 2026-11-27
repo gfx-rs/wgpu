@@ -96,7 +96,7 @@ implement_stream_object! { unsafe D3D12_VIEW_INSTANCING_DESC => D3D12_PIPELINE_S
 /// Implementaation of a pipeline state stream, which is a sequence of subobjects put into
 /// a byte array according to some basic alignment rules.
 ///
-/// Each subobject must start on an 8 byte boundary. Each subobject contains a 32 bit
+/// Each subobject starts at native pointer alignment. Each subobject contains a 32 bit
 /// type identifier, followed by the actual subobject data, aligned as required by the
 /// subobject's structure.
 ///
@@ -131,8 +131,7 @@ impl<'a> RenderPipelineStateStream<'a> {
 
     /// Adds a subobject to the pipeline state stream.
     fn add_object<T: RenderPipelineStreamObject>(&mut self, object: T) {
-        // Ensure 8-byte alignment for the subobject start.
-        self.align_to(8);
+        self.align_to(align_of::<*const c_void>());
 
         // Append the type tag (u32)
         let tag: u32 = T::SUBOBJECT_TYPE.0 as u32;
@@ -322,7 +321,7 @@ mod tests {
         assert_eq!(&stream.bytes[0..4], &1u32.to_ne_bytes());
         // Data tucked in, aligned to the natural alignment of u16
         assert_eq!(&stream.bytes[4..6], &42u16.to_ne_bytes());
-        // Padding to align the next subobject to an 8 byte boundary.
+        // Padding to align the next subobject to the native word boundary.
         assert_eq!(&stream.bytes[6..8], &[0, 0]);
 
         // Object 2: u32
@@ -340,5 +339,57 @@ mod tests {
         assert_eq!(&stream.bytes[20..24], &[0, 0, 0, 0]);
         // Data tucked in, aligned to the natural alignment of u64
         assert_eq!(&stream.bytes[24..32], &168u64.to_ne_bytes());
+    }
+
+    #[test]
+    fn stream_d3d12_subobjects() {
+        let mut stream = RenderPipelineStateStream::new();
+        let code = [1u8, 2, 3];
+        let shader = D3D12_SHADER_BYTECODE {
+            pShaderBytecode: code.as_ptr().cast(),
+            BytecodeLength: code.len(),
+        };
+        stream.add_object(DXGI_SAMPLE_DESC {
+            Count: 4,
+            Quality: 7,
+        });
+        stream.add_object(D3D12_PIPELINE_STATE_FLAG_TOOL_DEBUG);
+        stream.add_object(PixelShader(shader));
+
+        // Native D3D12 enum/payload pairs with alignas(void*).
+        let (flags_offset, shader_offset, shader_data, stream_size) =
+            if cfg!(target_pointer_width = "32") {
+                (12, 20, 24, 32)
+            } else {
+                (16, 24, 32, 48)
+            };
+        let tag_at = |offset: usize| {
+            i32::from_ne_bytes(stream.bytes[offset..offset + 4].try_into().unwrap())
+        };
+        assert_eq!(tag_at(0), D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC.0);
+        assert_eq!(
+            tag_at(flags_offset),
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS.0
+        );
+        assert_eq!(
+            tag_at(shader_offset),
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS.0
+        );
+        assert_eq!(stream.bytes.len(), stream_size);
+        assert_eq!(&stream.bytes[4..8], &4u32.to_ne_bytes());
+        assert_eq!(&stream.bytes[8..12], &7u32.to_ne_bytes());
+        assert_eq!(
+            &stream.bytes[flags_offset + 4..flags_offset + 8],
+            &D3D12_PIPELINE_STATE_FLAG_TOOL_DEBUG.0.to_ne_bytes()
+        );
+        let shader_length = shader_data + size_of::<*const c_void>();
+        assert_eq!(
+            &stream.bytes[shader_data..shader_length],
+            &shader.pShaderBytecode.addr().to_ne_bytes()
+        );
+        assert_eq!(
+            &stream.bytes[shader_length..],
+            &shader.BytecodeLength.to_ne_bytes()
+        );
     }
 }
