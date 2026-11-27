@@ -327,7 +327,8 @@ pub enum NumberError {
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum InvalidAssignmentType {
     Other,
-    Swizzle,
+    /// A swizzle assignment that writes the same component more than once.
+    RepeatedSwizzleComponent,
     ImmutableBinding(Span),
 }
 
@@ -537,6 +538,12 @@ pub(crate) enum Error<'a> {
     ExpectedConstExprConcreteIntegerScalar(Span),
     ExpectedNonNegative(Span),
     ExpectedPositiveArrayLength(Span),
+    /// A const-expression index of a swizzle view is not less than the
+    /// number of components the view selects.
+    SwizzleViewIndexOutOfBounds {
+        span: Span,
+        size: u8,
+    },
     MissingWorkgroupSize(Span),
     ConstantEvaluatorError(Box<ConstantEvaluatorError>, Span),
     TypeMismatch(Box<TypeMismatchError>),
@@ -1189,11 +1196,8 @@ impl<'a> Error<'a> {
             },
             Error::InvalidAssignment { span, ty } => {
                 let (notes, extra_label) = match ty {
-                    InvalidAssignmentType::Swizzle => (
-                        vec![
-                            "WGSL does not support assignments to swizzles".into(),
-                            "consider assigning each component individually".into(),
-                        ],
+                    InvalidAssignmentType::RepeatedSwizzleComponent => (
+                        vec!["a swizzle that is assigned to must not repeat a component".into()],
                         None,
                     ),
                     InvalidAssignmentType::ImmutableBinding(binding_span) => (
@@ -1557,6 +1561,15 @@ impl<'a> Error<'a> {
                         ).into(),
                     ]
                 },
+            },
+            Error::SwizzleViewIndexOutOfBounds { span, size } => ParseError {
+                message: format!(
+                    "index `{}` is out of bounds for a swizzle of {size} components",
+                    &source[*span]
+                )
+                .into(),
+                labels: vec![(*span, "out of bounds index".into())],
+                notes: vec![],
             },
             Error::LanguageExtensionNotYetImplemented { kind, span } => ParseError {
                 message: format!(

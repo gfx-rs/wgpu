@@ -21,6 +21,7 @@ pub mod data_builtins;
 pub mod module_label;
 pub mod numeric_builtins;
 pub mod struct_layout;
+pub mod swizzle_assignment;
 pub mod workgroup_size_overrides;
 pub mod zero_init_workgroup_mem;
 
@@ -31,6 +32,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     module_label::all_tests(tests);
     numeric_builtins::all_tests(tests);
     struct_layout::all_tests(tests);
+    swizzle_assignment::all_tests(tests);
     workgroup_size_overrides::all_tests(tests);
     zero_init_workgroup_mem::all_tests(tests);
 }

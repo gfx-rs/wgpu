@@ -3304,24 +3304,248 @@ fn break_if_bad_condition() {
 }
 
 #[test]
-fn swizzle_assignment() {
+fn swizzle_assignment_repeated_component() {
     check(
         "
         fn f() {
-            var v = vec2(0);
-            v.xy = vec2(1);
+            var v = vec4(0);
+            v.xx = vec2(1);
         }
     ",
         r###"error: invalid left-hand side of assignment
   ┌─ wgsl:4:13
   │
-4 │             v.xy = vec2(1);
+4 │             v.xx = vec2(1);
   │             ^^^^ cannot assign to this expression
   │
-  = note: WGSL does not support assignments to swizzles
-  = note: consider assigning each component individually
+  = note: a swizzle that is assigned to must not repeat a component
 
 "###,
+    );
+}
+
+#[test]
+fn swizzle_assignment_repeated_component_chained() {
+    check(
+        "
+        fn f() {
+            var v = vec4(0);
+            v.xxyy.xy = vec2(1);
+        }
+    ",
+        r###"error: invalid left-hand side of assignment
+  ┌─ wgsl:4:13
+  │
+4 │             v.xxyy.xy = vec2(1);
+  │             ^^^^^^^^^ cannot assign to this expression
+  │
+  = note: a swizzle that is assigned to must not repeat a component
+
+"###,
+    );
+}
+
+#[test]
+fn swizzle_assignment_component_mismatch() {
+    check(
+        "
+        fn f() {
+            var v = vec4f();
+            v.xy = vec3f();
+        }
+    ",
+        r###"error: expected `vec2<f32>`, found `vec3<f32>`
+  ┌─ wgsl:4:13
+  │
+4 │             v.xy = vec3f();
+  │             ^^^^   ^^^^^^^ this expression has type `vec3<f32>`
+  │             │       
+  │             a value of type `vec2<f32>` is required here
+
+"###,
+    );
+}
+
+#[test]
+fn swizzle_assignment_type_mismatch() {
+    check(
+        "
+        fn f() {
+            var v = vec4f();
+            v.xy = vec2i();
+        }
+    ",
+        r###"error: expected `vec2<f32>`, found `vec2<i32>`
+  ┌─ wgsl:4:13
+  │
+4 │             v.xy = vec2i();
+  │             ^^^^   ^^^^^^^ this expression has type `vec2<i32>`
+  │             │       
+  │             a value of type `vec2<f32>` is required here
+
+"###,
+    );
+}
+
+#[test]
+fn swizzle_assignment_to_value() {
+    check(
+        "
+        const c = vec4f();
+
+        fn f() {
+            c.xyz = vec3(0.0);
+        }
+    ",
+        r###"error: invalid left-hand side of assignment
+  ┌─ wgsl:5:13
+  │
+5 │             c.xyz = vec3(0.0);
+  │             ^^^^^ cannot assign to this expression
+
+"###,
+    );
+}
+
+#[test]
+fn swizzle_assignment_to_let() {
+    check(
+        "
+        fn f() {
+            let v = vec4f();
+            v.xyz = vec3(0.0);
+        }
+    ",
+        r###"error: invalid left-hand side of assignment
+  ┌─ wgsl:3:17
+  │
+3 │             let v = vec4f();
+  │                 ^ this is an immutable binding
+4 │             v.xyz = vec3(0.0);
+  │             ^^^^^ cannot assign to this expression
+  │
+  = note: consider declaring `v` with `var` instead of `let`
+
+"###,
+    );
+}
+
+#[test]
+fn swizzle_view_index_out_of_bounds() {
+    check(
+        "
+        fn f() {
+            var v = vec4u();
+            v.zy[2] = 1u;
+        }
+    ",
+        r###"error: index `2` is out of bounds for a swizzle of 2 components
+  ┌─ wgsl:4:18
+  │
+4 │             v.zy[2] = 1u;
+  │                  ^ out of bounds index
+
+"###,
+    );
+}
+
+#[test]
+fn swizzle_view_negative_index() {
+    check(
+        "
+        fn f() {
+            var v = vec4u();
+            v.zy[-1] = 1u;
+        }
+    ",
+        r###"error: index `-1` is out of bounds for a swizzle of 2 components
+  ┌─ wgsl:4:18
+  │
+4 │             v.zy[-1] = 1u;
+  │                  ^^ out of bounds index
+
+"###,
+    );
+}
+
+#[test]
+fn swizzle_view_component_out_of_bounds() {
+    check(
+        "
+        fn f() {
+            var v = vec4u();
+            v.zy.z = 1u;
+        }
+    ",
+        r###"error: invalid field accessor `z`
+  ┌─ wgsl:4:18
+  │
+4 │             v.zy.z = 1u;
+  │                  ^ invalid accessor
+
+"###,
+    );
+}
+
+#[test]
+fn swizzle_view_address_of() {
+    check(
+        "
+        fn f() {
+            var v = vec4f();
+            let p = &v.xy;
+        }
+    ",
+        r###"error: the operand of the `&` operator must be a reference
+  ┌─ wgsl:4:21
+  │
+4 │             let p = &v.xy;
+  │                     ^^^^^ expression is not a reference
+
+"###,
+    );
+}
+
+#[test]
+fn swizzle_view_component_address_of() {
+    check(
+        "
+        fn f() {
+            var v = vec4f();
+            let p = &v.xy.x;
+        }
+    ",
+        r###"error: cannot take the address of a vector component
+  ┌─ wgsl:4:22
+  │
+4 │             let p = &v.xy.x;
+  │                      ^^^^^^ invalid operand for address-of
+
+"###,
+    );
+}
+
+#[test]
+fn swizzle_assignment() {
+    check_success(
+        "
+        fn f(p: ptr<function, vec4u>, i: u32) {
+            var v = vec4u();
+            v.xy = vec2(1);
+            v.zx = vec2u(1, 2);
+            v.xyzw = vec4(1);
+            v.wzyx += vec4(1);
+            v.yz.yx = vec2(1);
+            v.xxyy.zxy.xy = vec2(1);
+            v.xx.x = 1;
+            v.zy[1] = 1;
+            v.xx[i] = 1;
+            v.zx.y++;
+            p.xy = vec2(1);
+            (*p).zw *= 2;
+            p.yz.x = 1;
+        }
+    ",
     );
 }
 

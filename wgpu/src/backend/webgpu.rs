@@ -1769,6 +1769,7 @@ impl dispatch::InstanceInterface for ContextWebGpu {
                     "immediate_address_space" => {
                         Some(crate::WgslLanguageFeatures::ImmediateAddressSpace)
                     }
+                    "swizzle_assignment" => Some(crate::WgslLanguageFeatures::SwizzleAssignment),
                     _ => None,
                 })
                 .for_each(|wlf| {

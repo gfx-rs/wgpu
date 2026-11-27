@@ -410,6 +410,7 @@ webgpu:shader,execution,shader_io,fragment_builtins:subgroup_invocation_id:*
 webgpu:shader,execution,shader_io,fragment_builtins:subgroup_size:*
 webgpu:shader,execution,shader_io,vertex_builtins:outputs,clip_distances:*
 webgpu:shader,execution,statement,compound:*
+webgpu:shader,execution,statement,swizzle_assignment:*
 webgpu:shader,validation,const_assert,const_assert:*
 webgpu:shader,validation,decl,assignment_statement:*
 webgpu:shader,validation,decl,compound_statement:*
@@ -528,6 +529,7 @@ webgpu:shader,validation,parse,requires:have_all_language_features:feature="imme
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="packed_4x8_integer_dot_product"
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="pointer_composite_access"
 webgpu:shader,validation,parse,requires:have_all_language_features:feature="readonly_and_readwrite_storage_textures"
+webgpu:shader,validation,parse,requires:have_all_language_features:feature="swizzle_assignment"
 webgpu:shader,validation,parse,requires:requires:*
 webgpu:shader,validation,parse,requires:wgsl_matches_api:*
 webgpu:shader,validation,parse,semicolon:*
@@ -565,5 +567,6 @@ webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="l
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="loop8"
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="switch1"
 webgpu:shader,validation,statement,switch:*
+webgpu:shader,validation,statement,swizzle_assignment:*
 webgpu:shader,validation,statement,while:*
 webgpu:util,texture,texture_ok:*
