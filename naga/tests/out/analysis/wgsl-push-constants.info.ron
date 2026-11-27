@@ -155,6 +155,7 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            inlined_size: 16,
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -234,6 +235,7 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            inlined_size: 9,
         ),
     ],
     const_expression_types: [],

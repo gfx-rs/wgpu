@@ -201,6 +201,7 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            inlined_size: 25,
         ),
     ],
     const_expression_types: [

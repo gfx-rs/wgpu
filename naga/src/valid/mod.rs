@@ -40,6 +40,14 @@ use self::handles::InvalidHandleError;
 /// Maximum size of a type, in bytes.
 pub const MAX_TYPE_SIZE: u32 = i32::MAX as u32;
 
+/// Maximum number of statements and expressions a function may contain if
+/// every call it makes, directly or indirectly, were inlined.
+///
+/// Nested calls can grow the inlined size of a function exponentially in its
+/// source size. Many shader compilers inline all calls, so such a shader could
+/// stall them or exhaust their memory.
+pub const MAX_INLINED_FUNCTION_SIZE: u64 = 128 * 1024 * 1024;
+
 bitflags::bitflags! {
     /// Validation flags.
     ///
