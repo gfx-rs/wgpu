@@ -1,0 +1,5 @@
+targets = "SPIRV"
+capabilities = "SHADER_FLOAT16"
+
+[spv]
+version = [1, 0]
