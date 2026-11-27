@@ -391,7 +391,25 @@ impl Queue {
         // If the texture was never rendered to, clear it and transition to
         // PRESENT state before presenting.
         // Fixes <https://github.com/gfx-rs/wgpu/issues/6748>
-        self.prepare_surface_texture_for_present(&texture)?;
+        //
+        // A texture that was rendered to is already transitioned to PRESENT by the
+        // submission that rendered it. A texture with a queued `Queue::write_texture`
+        // still needs this: the copy is parked in `pending_writes` and only this
+        // call submits it before the present.
+        let never_rendered = {
+            let status = texture.initialization_status.read();
+            status
+                .mips
+                .first()
+                .is_some_and(|mip| mip.check(0..1).is_some())
+        };
+        let has_pending_writes = {
+            let pending_writes = self.pending_writes.lock();
+            pending_writes.contains_texture(&texture)
+        };
+        if never_rendered || has_pending_writes {
+            self.prepare_surface_texture_for_present(&texture)?;
+        }
 
         let device = &self.device;
 
