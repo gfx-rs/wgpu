@@ -2137,45 +2137,80 @@ fn invalid_functions() {
         })
     }
 
-    // Pointers of these address spaces cannot be passed as arguments.
+    // `unrestricted_pointer_parameters` permits these address spaces.
     check_validation! {
-        "fn unacceptable_ptr_space(arg: ptr<storage, array<f32>>) { }":
-        Err(naga::valid::ValidationError::Function {
-            name: function_name,
-            source: naga::valid::FunctionError::InvalidArgumentPointerSpace {
-                index: 0,
-                name: argument_name,
-                space: naga::AddressSpace::Storage { .. },
-            },
-            ..
-        })
-        if function_name == "unacceptable_ptr_space" && argument_name == "arg"
+        "fn acceptable_ptr_space(arg: ptr<storage, array<f32>>) { }",
+        "fn acceptable_ptr_space(arg: ptr<uniform, f32>) { }",
+        "fn acceptable_ptr_space(arg: ptr<workgroup, f32>) { }",
+        "fn acceptable_ptr_space(arg: ptr<immediate, f32>) { }",
+        "
+        enable wgpu_mesh_shader;
+        fn acceptable_ptr_space(arg: ptr<task_payload, f32>) { }
+        ":
+        Ok(_)
     }
+
+    // A mesh shader may not write the task payload through a pointer argument.
     check_validation! {
-        "fn unacceptable_ptr_space(arg: ptr<uniform, f32>) { }":
-        Err(naga::valid::ValidationError::Function {
-            name: function_name,
-            source: naga::valid::FunctionError::InvalidArgumentPointerSpace {
-                index: 0,
-                name: argument_name,
-                space: naga::AddressSpace::Uniform,
-            },
+        "
+        enable wgpu_mesh_shader;
+        struct Payload { a: u32 }
+        struct Vertex { @builtin(position) position: vec4<f32> }
+        struct Primitive { @builtin(triangle_indices) indices: vec3<u32> }
+        struct MeshOutput {
+            @builtin(vertices) vertices: array<Vertex, 3>,
+            @builtin(primitives) primitives: array<Primitive, 1>,
+            @builtin(vertex_count) vertex_count: u32,
+            @builtin(primitive_count) primitive_count: u32,
+        }
+        var<task_payload> payload: Payload;
+        var<workgroup> mesh_output: MeshOutput;
+        fn store(p: ptr<task_payload, u32>) { *p = 1u; }
+        fn forward(p: ptr<task_payload, u32>) { store(p); }
+        @mesh(mesh_output) @payload(payload) @workgroup_size(1)
+        fn main() { forward(&payload.a); }
+        ":
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::InvalidGlobalUsage(_, usage),
             ..
         })
-        if function_name == "unacceptable_ptr_space" && argument_name == "arg"
+        if usage.contains(naga::valid::GlobalUse::WRITE),
+        naga::valid::Capabilities::all()
     }
+
+    // Binding arrays of textures and samplers may be passed to functions.
     check_validation! {
-        "fn unacceptable_ptr_space(arg: ptr<workgroup, f32>) { }":
+        "
+        enable wgpu_binding_array;
+        fn acceptable_binding_array(arg: binding_array<texture_2d<f32>, 2>) { }
+        ",
+        "
+        enable wgpu_binding_array;
+        fn acceptable_binding_array(arg: binding_array<texture_2d<f32>>) { }
+        ",
+        "
+        enable wgpu_binding_array;
+        fn acceptable_binding_array(arg: binding_array<sampler, 2>) { }
+        ":
+        Ok(_)
+    }
+
+    check_validation! {
+        "
+        enable wgpu_binding_array;
+        enable wgpu_ray_query;
+        fn unacceptable_binding_array(arg: binding_array<acceleration_structure, 2>) { }
+        ":
         Err(naga::valid::ValidationError::Function {
             name: function_name,
-            source: naga::valid::FunctionError::InvalidArgumentPointerSpace {
+            source: naga::valid::FunctionError::InvalidArgumentType {
                 index: 0,
                 name: argument_name,
-                space: naga::AddressSpace::WorkGroup,
             },
             ..
         })
-        if function_name == "unacceptable_ptr_space" && argument_name == "arg"
+        if function_name == "unacceptable_binding_array" && argument_name == "arg",
+        naga::valid::Capabilities::all()
     }
 
     check_validation! {
@@ -7095,5 +7130,21 @@ fn main() {
   │                        ^^^ hit object pointer is invalid
 
 ",
+    );
+}
+
+/// Every implemented language extension may be named in a `requires`
+/// directive, and an unknown name is still an error.
+#[test]
+fn requires_language_extensions() {
+    for extension in naga::front::wgsl::ImplementedLanguageExtension::all() {
+        check_success(&format!(
+            "requires {};\n@compute @workgroup_size(1) fn main() {{}}",
+            extension.to_ident()
+        ));
+    }
+    check_error_matches(
+        "requires no_such_extension;\n@compute @workgroup_size(1) fn main() {}",
+        "unknown language extension `no_such_extension`",
     );
 }

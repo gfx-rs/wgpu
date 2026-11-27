@@ -161,6 +161,8 @@ const BITS_PER_BYTE: crate::Bytes = 8;
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {
+    #[error(transparent)]
+    Pass(#[from] crate::back::passes::PassError),
     #[error("The requested entry point couldn't be found")]
     EntryPointNotFound,
     #[error("target SPIRV-{0}.{1} is not supported")]
@@ -169,6 +171,8 @@ pub enum Error {
     MissingCapabilities(&'static str, Vec<Capability>),
     #[error("unimplemented {0}")]
     FeatureNotImplemented(&'static str),
+    #[error("function `{0}` has pointer parameters or arguments that must be inlined by `naga::inline::process`")]
+    NeedsInline(String),
     #[error("module is not validated properly: {0}")]
     Validation(&'static str),
     #[error("overrides should not be present at this stage")]
@@ -954,6 +958,7 @@ pub struct Writer {
     force_loop_bounding: bool,
     use_storage_input_output_16: bool,
     emit_int_div_checks: bool,
+    passes: crate::back::PassOptions,
     void_type: Word,
     tuple_of_u32s_ty_id: Option<Word>,
     //TODO: convert most of these into vectors, addressable by handle indices
@@ -1129,6 +1134,9 @@ pub struct Options<'a> {
     /// implementation-defined results when the divisor is zero. Appropriate
     /// for compute shaders where the developer guarantees non-zero divisors.
     pub emit_int_div_checks: bool,
+
+    /// Options for the IR passes the backend runs before writing the module.
+    pub passes: crate::back::PassOptions,
 }
 
 impl Default for Options<'_> {
@@ -1155,6 +1163,7 @@ impl Default for Options<'_> {
             task_dispatch_limits: None,
             mesh_shader_primitive_indices_clamp: true,
             emit_int_div_checks: true,
+            passes: Default::default(),
         }
     }
 }
@@ -1172,22 +1181,15 @@ pub struct PipelineOptions {
     pub entry_point: String,
 }
 
-pub fn write_vec(
-    module: &crate::Module,
-    info: &crate::valid::ModuleInfo,
+pub fn write_vec<'m>(
+    module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
     options: &Options,
     pipeline_options: Option<&PipelineOptions>,
 ) -> Result<Vec<u32>, Error> {
     let mut words: Vec<u32> = Vec::new();
     let mut w = Writer::new(options)?;
 
-    w.write(
-        module,
-        info,
-        pipeline_options,
-        &options.debug_info,
-        &mut words,
-    )?;
+    w.write(module, pipeline_options, &options.debug_info, &mut words)?;
     Ok(words)
 }
 

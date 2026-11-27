@@ -253,6 +253,7 @@ impl Display for TypeContext<'_> {
             crate::TypeInner::Pointer { base, space } => {
                 let sub = Self {
                     handle: base,
+                    access: crate::StorageAccess::empty(),
                     first_time: false,
                     ..*self
                 };
@@ -260,7 +261,15 @@ impl Display for TypeContext<'_> {
                     Some(name) => name,
                     None => return Ok(()),
                 };
-                write!(out, "{space_name} {sub}&")
+                // `access` is only set for function parameters.
+                let constness = if self.access == crate::StorageAccess::LOAD
+                    && space.needs_access_qualifier()
+                {
+                    " const"
+                } else {
+                    ""
+                };
+                write!(out, "{space_name} {sub}{constness}&")
             }
             crate::TypeInner::ValuePointer {
                 size,
@@ -4830,13 +4839,25 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    pub fn write(
+    pub fn write<'m>(
         &mut self,
-        module: &crate::Module,
-        info: &valid::ModuleInfo,
+        module: impl Into<alloc::borrow::Cow<'m, crate::Module>>,
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
+        let (module, info) = back::passes::run(
+            module.into(),
+            &back::passes::Passes {
+                inline: crate::inline::InlineStrategy::OnlyNeeded(crate::inline::InlineTarget::Msl),
+                ..options.passes.into()
+            },
+        )?;
+        let (module, info) = (&*module, &info);
+        if let Some(name) =
+            crate::inline::find_needs_inline(module, crate::inline::InlineTarget::Msl)
+        {
+            return Err(Error::NeedsInline(name));
+        }
         self.emit_int_div_checks = options.emit_int_div_checks;
         self.names.clear();
         self.namer.reset(
@@ -7329,6 +7350,11 @@ template <typename A>
                             class: crate::ImageClass::Storage { access, .. },
                             ..
                         } => access,
+                        // The argument may be a read-only global, so the
+                        // parameter must be `const` unless it is written.
+                        crate::TypeInner::Pointer { .. } if !fun_info.writes_argument(index) => {
+                            crate::StorageAccess::LOAD
+                        }
                         _ => crate::StorageAccess::empty(),
                     },
                     first_time: false,

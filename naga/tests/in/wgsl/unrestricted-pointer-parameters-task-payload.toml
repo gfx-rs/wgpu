@@ -1,0 +1,10 @@
+capabilities = "MESH_SHADER"
+# DXC crashes copying a task payload that contains an array, so no HLSL
+targets = "WGSL | SPIRV | METAL"
+
+[spv]
+version = [1, 4]
+capabilities = ["MeshShadingEXT"]
+
+[msl]
+lang_version = [3, 0]

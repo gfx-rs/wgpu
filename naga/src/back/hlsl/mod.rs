@@ -575,6 +575,8 @@ pub struct Options {
     /// if set, ray queries will get a variable to track their state to prevent
     /// misuse.
     pub ray_query_initialization_tracking: bool,
+    /// Options for the IR passes the backend runs before writing the module.
+    pub passes: back::PassOptions,
 }
 
 impl Default for Options {
@@ -595,6 +597,7 @@ impl Default for Options {
             task_dispatch_limits: None,
             mesh_shader_primitive_indices_clamp: true,
             ray_query_initialization_tracking: true,
+            passes: Default::default(),
         }
     }
 }
@@ -676,12 +679,16 @@ pub struct PipelineOptions {
 pub enum Error {
     #[error(transparent)]
     IoError(#[from] FmtError),
+    #[error(transparent)]
+    Pass(#[from] back::passes::PassError),
     #[error("A scalar with an unsupported width was requested: {0:?}")]
     UnsupportedScalar(crate::Scalar),
     #[error("{0}")]
     Unimplemented(String), // TODO: Error used only during development
     #[error("{0}")]
     Custom(String),
+    #[error("function `{0}` has pointer parameters or arguments that must be inlined by `naga::inline::process`")]
+    NeedsInline(String),
     #[error("overrides should not be present at this stage")]
     Override,
     #[error(transparent)]
