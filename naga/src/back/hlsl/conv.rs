@@ -5,8 +5,13 @@ use alloc::{borrow::Cow, format, string::String};
 use super::Error;
 use crate::proc::Alignment;
 
-impl crate::ScalarKind {
-    pub(super) fn to_hlsl_cast(self) -> &'static str {
+pub(super) trait ScalarKindHlslExt {
+    fn to_hlsl_cast(self) -> &'static str;
+    fn to_hlsl_cast_16bit(self) -> &'static str;
+}
+
+impl ScalarKindHlslExt for crate::ScalarKind {
+    fn to_hlsl_cast(self) -> &'static str {
         match self {
             Self::Float => "asfloat",
             Self::Sint => "asint",
@@ -15,7 +20,7 @@ impl crate::ScalarKind {
         }
     }
 
-    pub(super) fn to_hlsl_cast_16bit(self) -> &'static str {
+    fn to_hlsl_cast_16bit(self) -> &'static str {
         match self {
             Self::Float => "asfloat16",
             Self::Sint => "asint16",
@@ -25,11 +30,15 @@ impl crate::ScalarKind {
     }
 }
 
-impl crate::Scalar {
+pub(super) trait ScalarHlslExt {
+    fn to_hlsl_str(self) -> Result<&'static str, Error>;
+}
+
+impl ScalarHlslExt for crate::Scalar {
     /// Helper function that returns scalar related strings
     ///
     /// <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-scalar>
-    pub(super) const fn to_hlsl_str(self) -> Result<&'static str, Error> {
+    fn to_hlsl_str(self) -> Result<&'static str, Error> {
         match self.kind {
             crate::ScalarKind::Sint => match self.width {
                 2 => Ok("int16_t"),
@@ -128,8 +137,12 @@ impl crate::TypeInner {
     }
 }
 
-impl crate::StorageFormat {
-    pub(super) const fn to_hlsl_str(self) -> &'static str {
+pub(super) trait StorageFormatHlslExt {
+    fn to_hlsl_str(self) -> &'static str;
+}
+
+impl StorageFormatHlslExt for crate::StorageFormat {
+    fn to_hlsl_str(self) -> &'static str {
         match self {
             Self::R16Float | Self::R32Float => "float",
             Self::R8Unorm | Self::R16Unorm => "unorm float",
@@ -159,10 +172,14 @@ impl crate::StorageFormat {
     }
 }
 
-impl crate::BuiltIn {
+pub(super) trait BuiltInHlslExt {
+    fn to_hlsl_str(self) -> Result<Option<&'static str>, Error>;
+}
+
+impl BuiltInHlslExt for crate::BuiltIn {
     /// Returns `None` for "virtual" builtins, i.e. mesh shader builtins that are
     /// used by naga but not recognized by HLSL.
-    pub(super) fn to_hlsl_str(self) -> Result<Option<&'static str>, Error> {
+    fn to_hlsl_str(self) -> Result<Option<&'static str>, Error> {
         Ok(Some(match self {
             Self::Position { .. } => "SV_Position",
             // vertex
@@ -225,9 +242,13 @@ impl crate::BuiltIn {
     }
 }
 
-impl crate::Interpolation {
+pub(super) trait InterpolationHlslExt {
+    fn to_hlsl_str(self) -> Option<&'static str>;
+}
+
+impl InterpolationHlslExt for crate::Interpolation {
     /// Return the string corresponding to the HLSL interpolation qualifier.
-    pub(super) const fn to_hlsl_str(self) -> Option<&'static str> {
+    fn to_hlsl_str(self) -> Option<&'static str> {
         match self {
             // Would be "linear", but it's the default interpolation in SM4 and up
             // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-struct#interpolation-modifiers-introduced-in-shader-model-4
@@ -239,9 +260,13 @@ impl crate::Interpolation {
     }
 }
 
-impl crate::Sampling {
+pub(super) trait SamplingHlslExt {
+    fn to_hlsl_str(self) -> Option<&'static str>;
+}
+
+impl SamplingHlslExt for crate::Sampling {
     /// Return the HLSL auxiliary qualifier for the given sampling value.
-    pub(super) const fn to_hlsl_str(self) -> Option<&'static str> {
+    fn to_hlsl_str(self) -> Option<&'static str> {
         match self {
             Self::Center | Self::First | Self::Either => None,
             Self::Centroid => Some("centroid"),

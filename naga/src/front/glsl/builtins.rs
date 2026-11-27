@@ -14,8 +14,12 @@ use crate::{
     SampleLevel, Scalar, ScalarKind as Sk, Span, Type, TypeInner, UnaryOperator, VectorSize,
 };
 
-impl crate::ScalarKind {
-    const fn dummy_storage_format(&self) -> crate::StorageFormat {
+trait ScalarKindGlslExt {
+    fn dummy_storage_format(&self) -> crate::StorageFormat;
+}
+
+impl ScalarKindGlslExt for crate::ScalarKind {
+    fn dummy_storage_format(&self) -> crate::StorageFormat {
         match *self {
             Sk::Sint => crate::StorageFormat::R16Sint,
             Sk::Uint => crate::StorageFormat::R16Uint,

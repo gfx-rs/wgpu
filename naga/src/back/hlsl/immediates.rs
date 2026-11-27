@@ -37,6 +37,8 @@ use alloc::{format, string::String};
 use core::fmt::Write;
 
 use super::{help::WrappedConstructor, BackendResult, Error};
+use crate::back::hlsl::conv::ScalarHlslExt;
+use crate::back::hlsl::conv::ScalarKindHlslExt;
 use crate::{
     back,
     proc::{Alignment, NameKey},

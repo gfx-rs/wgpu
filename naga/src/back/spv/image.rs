@@ -9,6 +9,7 @@ use super::{
     Block, BlockContext, Error, IdGenerator, Instruction, LocalType, LookupType, NumericType,
 };
 use crate::arena::Handle;
+use crate::back::spv::helpers::AddressSpaceSpvExt;
 
 /// Information about a vector of coordinates.
 ///

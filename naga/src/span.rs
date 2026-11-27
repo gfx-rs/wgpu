@@ -304,6 +304,22 @@ impl<E> WithSpan<E> {
         }
     }
 
+    /// Emits a summary of the error to the given writer.
+    #[cfg(feature = "stderr")]
+    pub fn emit_to_writer_with_path(
+        &self,
+        writer: &mut impl crate::error::ErrorWrite,
+        source: &str,
+        path: &str,
+    ) where
+        E: Error,
+    {
+        let files = codespan_reporting::files::SimpleFile::new(path, replace_control_chars(source));
+        let config = codespan_reporting::term::Config::default();
+        crate::error::emit_to_writer(writer, &config, &files, &self.diagnostic())
+            .expect("cannot write error");
+    }
+
     /// Emits a summary of the error to a string.
     pub fn emit_to_string(&self, source: &str) -> String
     where

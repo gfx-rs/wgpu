@@ -1,0 +1,283 @@
+{
+  "version": 1,
+  "success": true,
+  "diagnostics": [],
+  "reflection": {
+    "types": [
+      {
+        "name": null,
+        "size": 16,
+        "align": 16,
+        "inner": {
+          "vector": {
+            "size": "Quad",
+            "scalar": {
+              "kind": "Float",
+              "width": 4
+            }
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 4,
+        "align": 4,
+        "inner": {
+          "scalar": {
+            "kind": "Uint",
+            "width": 4
+          }
+        }
+      },
+      {
+        "name": "Immediates",
+        "size": 32,
+        "align": 16,
+        "inner": {
+          "struct": {
+            "members": [
+              {
+                "name": "tint",
+                "ty": 0,
+                "offset": 0
+              },
+              {
+                "name": "index",
+                "ty": 1,
+                "offset": 16
+              }
+            ],
+            "span": 32
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 0,
+        "align": 1,
+        "inner": {
+          "image": {
+            "dim": "D2",
+            "arrayed": false,
+            "class": {
+              "Sampled": {
+                "kind": "Float",
+                "multi": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 0,
+        "align": 1,
+        "inner": {
+          "bindingArray": {
+            "base": 3,
+            "size": {
+              "constant": 4
+            }
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 0,
+        "align": 1,
+        "inner": {
+          "sampler": {
+            "comparison": false
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 0,
+        "align": 1,
+        "inner": {
+          "bindingArray": {
+            "base": 5,
+            "size": "dynamic"
+          }
+        }
+      },
+      {
+        "name": "BlendOutput",
+        "size": 32,
+        "align": 16,
+        "inner": {
+          "struct": {
+            "members": [
+              {
+                "name": "color",
+                "ty": 0,
+                "offset": 0
+              },
+              {
+                "name": "blend",
+                "ty": 0,
+                "offset": 16
+              }
+            ],
+            "span": 32
+          }
+        }
+      },
+      {
+        "name": null,
+        "size": 8,
+        "align": 8,
+        "inner": {
+          "vector": {
+            "size": "Bi",
+            "scalar": {
+              "kind": "Float",
+              "width": 4
+            }
+          }
+        }
+      }
+    ],
+    "resources": [
+      {
+        "name": "textures",
+        "binding": {
+          "group": 0,
+          "binding": 0
+        },
+        "space": "Handle",
+        "ty": 4,
+        "kind": {
+          "texture": {
+            "dim": "D2",
+            "arrayed": false,
+            "class": {
+              "Sampled": {
+                "kind": "Float",
+                "multi": false
+              }
+            }
+          }
+        },
+        "bindingArraySize": {
+          "constant": 4
+        }
+      },
+      {
+        "name": "samplers",
+        "binding": {
+          "group": 0,
+          "binding": 1
+        },
+        "space": "Handle",
+        "ty": 6,
+        "kind": {
+          "sampler": {
+            "comparison": false
+          }
+        },
+        "bindingArraySize": "dynamic"
+      }
+    ],
+    "overrides": [],
+    "entryPoints": [
+      {
+        "name": "fs_main",
+        "stage": "Fragment",
+        "inputs": [
+          {
+            "location": {
+              "name": "uv",
+              "location": 0,
+              "ty": {
+                "vector": {
+                  "size": "Bi",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "interpolation": "Perspective",
+              "sampling": "Center",
+              "perPrimitive": false,
+              "blendSrc": null
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "location": {
+              "name": "color",
+              "location": 0,
+              "ty": {
+                "vector": {
+                  "size": "Quad",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "interpolation": "Perspective",
+              "sampling": "Center",
+              "perPrimitive": false,
+              "blendSrc": 0
+            }
+          },
+          {
+            "location": {
+              "name": "blend",
+              "location": 0,
+              "ty": {
+                "vector": {
+                  "size": "Quad",
+                  "scalar": {
+                    "kind": "Float",
+                    "width": 4
+                  }
+                }
+              },
+              "interpolation": "Perspective",
+              "sampling": "Center",
+              "perPrimitive": false,
+              "blendSrc": 1
+            }
+          }
+        ],
+        "resources": [
+          0,
+          1
+        ],
+        "samplingPairs": [
+          [
+            0,
+            1
+          ]
+        ],
+        "workgroupSize": [
+          0,
+          0,
+          0
+        ],
+        "workgroupSizeFromOverrides": [
+          false,
+          false,
+          false
+        ],
+        "workgroupStorageSize": 0,
+        "dualSourceBlending": true,
+        "taskPayloadSize": null,
+        "meshInfo": null,
+        "immediateUsage": {
+          "Valid": {
+            "slots": 31,
+            "size": 32
+          }
+        },
+        "rayTracingPayload": null
+      }
+    ]
+  }
+}

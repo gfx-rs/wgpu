@@ -38,6 +38,10 @@ use super::{
     },
     BackendResult, WrappedType,
 };
+use crate::back::hlsl::conv::ScalarHlslExt;
+use crate::back::hlsl::conv::ScalarKindHlslExt;
+use crate::back::hlsl::conv::StorageFormatHlslExt;
+use crate::back::hlsl::ImageDimensionHlslExt;
 use crate::{arena::Handle, proc::NameKey, ScalarKind};
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -2199,7 +2203,7 @@ impl<W: Write> super::Writer<'_, W> {
 
         let bind_target = match self.options.sampler_buffer_binding_map.get(&key) {
             Some(&bind_target) => bind_target,
-            None if self.options.fake_missing_bindings => super::BindTarget {
+            None if self.options.common.fake_missing_bindings => super::BindTarget {
                 space: u8::MAX,
                 register: key.group,
                 binding_array_size: None,
@@ -2455,9 +2459,13 @@ impl<W: Write> super::Writer<'_, W> {
     }
 }
 
-impl crate::StorageFormat {
+pub(super) trait StorageFormatComponentsExt {
+    fn single_component(&self) -> bool;
+}
+
+impl StorageFormatComponentsExt for crate::StorageFormat {
     /// Returns `true` if there is just one component, otherwise `false`
-    pub(super) const fn single_component(&self) -> bool {
+    fn single_component(&self) -> bool {
         match *self {
             crate::StorageFormat::R16Float
             | crate::StorageFormat::R32Float
