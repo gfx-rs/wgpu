@@ -2200,3 +2200,45 @@ fn spv_longest_entry_point_name() {
 fn spv_entry_point_name_too_long() {
     write_spv_with_entry_point_name_len(LONGEST_SPV_ENTRY_POINT_NAME_LEN + 1);
 }
+
+/// Naga validation should reject a `Call` statement whose callee does not
+/// precede the caller in `Module::functions`, rather than panicking.
+#[test]
+fn call_statement_rejects_forward_and_recursive_calls() {
+    let span = naga::Span::UNDEFINED;
+
+    let mut self_rec = Module::default();
+    let f0 = self_rec.functions.append(Function::default(), span);
+    self_rec.functions[f0].body.push(
+        ir::Statement::Call {
+            function: f0,
+            arguments: Vec::new(),
+            result: None,
+        },
+        span,
+    );
+
+    let mut forward = Module::default();
+    let caller = forward.functions.append(Function::default(), span);
+    let callee = forward.functions.append(Function::default(), span);
+    forward.functions[caller].body.push(
+        ir::Statement::Call {
+            function: callee,
+            arguments: Vec::new(),
+            result: None,
+        },
+        span,
+    );
+
+    let mut validator = valid::Validator::new(ValidationFlags::all(), Capabilities::all());
+    for module in [&self_rec, &forward] {
+        let err = validator
+            .validate(module)
+            .expect_err("module should be invalid")
+            .into_inner();
+        assert!(
+            matches!(err, valid::ValidationError::InvalidHandle(_)),
+            "{err:?}"
+        );
+    }
+}
