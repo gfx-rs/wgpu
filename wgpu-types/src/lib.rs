@@ -46,6 +46,7 @@ mod macros;
 pub mod markers;
 pub mod math;
 mod origin_extent;
+pub mod passthrough;
 mod ray_tracing;
 mod render;
 #[doc(hidden)] // without this we get spurious missing_docs warnings
