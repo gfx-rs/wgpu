@@ -132,6 +132,12 @@ impl ScalarSet {
     /// Floating-point scalars, with the abstract floats omitted for
     /// #7405.
     pub const FLOAT_ABSTRACT_UNIMPLEMENTED: Self = Self::CONCRETE_FLOAT;
+
+    /// Floating-point scalars other than `f64`.
+    ///
+    /// The SPIR-V `GLSL.std.450` trigonometric, exponential and
+    /// logarithmic instructions accept only 16- and 32-bit floats (#6087).
+    pub const FLOAT_NOT_F64: Self = Self::FLOAT.difference(Self::F64);
 }
 
 macro_rules! scalar_set {

@@ -27,6 +27,17 @@ impl ir::MathFunction {
             Mf::Clamp => regular!(3, SCALAR|VECN of NUMERIC).into(),
 
             // Component-wise unary floating-point operations
+            Mf::Saturate
+            | Mf::Ceil
+            | Mf::Floor
+            | Mf::Round
+            | Mf::Fract
+            | Mf::Trunc
+            | Mf::Sqrt
+            | Mf::InverseSqrt => regular!(1, SCALAR|VECN of FLOAT).into(),
+
+            // Component-wise unary floating-point operations without
+            // `f64` overloads
             Mf::Sin
             | Mf::Cos
             | Mf::Tan
@@ -39,23 +50,16 @@ impl ir::MathFunction {
             | Mf::Asinh
             | Mf::Acosh
             | Mf::Atanh
-            | Mf::Saturate
             | Mf::Radians
             | Mf::Degrees
-            | Mf::Ceil
-            | Mf::Floor
-            | Mf::Round
-            | Mf::Fract
-            | Mf::Trunc
             | Mf::Exp
             | Mf::Exp2
             | Mf::Log
-            | Mf::Log2
-            | Mf::Sqrt
-            | Mf::InverseSqrt => regular!(1, SCALAR|VECN of FLOAT).into(),
+            | Mf::Log2 => regular!(1, SCALAR|VECN of FLOAT_NOT_F64).into(),
 
             // Component-wise binary floating-point operations
-            Mf::Atan2 | Mf::Pow | Mf::Step => regular!(2, SCALAR|VECN of FLOAT).into(),
+            Mf::Step => regular!(2, SCALAR|VECN of FLOAT).into(),
+            Mf::Atan2 | Mf::Pow => regular!(2, SCALAR|VECN of FLOAT_NOT_F64).into(),
 
             // Component-wise ternary floating-point operations
             Mf::Fma | Mf::SmoothStep => regular!(3, SCALAR|VECN of FLOAT).into(),
