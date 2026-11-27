@@ -482,6 +482,14 @@ impl TextureTracker {
         self.end_set.tracker_assert_in_bounds(index);
     }
 
+    /// Removes all textures from the tracker, keeping the capacity of its storage.
+    pub fn clear(&mut self) {
+        self.start_set.clear();
+        self.end_set.clear();
+        self.metadata.clear();
+        self.temp.clear();
+    }
+
     /// Sets the size of all the vectors inside the tracker.
     ///
     /// Must be called with the highest possible Texture ID before

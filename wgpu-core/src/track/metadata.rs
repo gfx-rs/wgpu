@@ -34,9 +34,10 @@ impl<T: Clone> ResourceMetadata<T> {
         resize_bitvec(&mut self.owned, size);
     }
 
+    /// Removes all resources and sets the size to zero, keeping the capacity of the vectors.
     pub(super) fn clear(&mut self) {
         self.resources.clear();
-        self.owned.fill(false);
+        self.owned.truncate(0);
     }
 
     /// Ensures a given index is in bounds for all arrays and does
