@@ -11,7 +11,7 @@ use wgt::{math::align_to, BufferUsages, BufferUses, Features};
 use crate::{
     command::encoder::EncodingState,
     ray_tracing::{AsAction, AsBuild, TlasBuild, ValidateAsActionsError},
-    resource::{Buffer, InvalidResourceError},
+    resource::{Buffer, ParentDevice},
 };
 use crate::{command::EncoderStateError, device::resource::CommandIndices};
 use crate::{
@@ -121,20 +121,23 @@ impl super::CommandEncoder {
                                 .map(|tg| {
                                     let vertex_buffer = tg.vertex_buffer;
                                     vertex_buffer.check_is_valid()?;
+                                    vertex_buffer.same_device(&self.device)?;
                                     Ok(ArcBlasTriangleGeometry {
                                         size: tg.size.clone(),
                                         vertex_buffer,
                                         index_buffer: tg
                                             .index_buffer
-                                            .map(|index_buffer| -> Result<_, InvalidResourceError> {
+                                            .map(|index_buffer| -> Result<_, BuildAccelerationStructureError> {
                                                 index_buffer.check_is_valid()?;
+                                                index_buffer.same_device(&self.device)?;
                                                 Ok(index_buffer)
                                             })
                                             .transpose()?,
                                         transform_buffer: tg
                                             .transform_buffer
-                                            .map(|transform_buffer| -> Result<_, InvalidResourceError> {
+                                            .map(|transform_buffer| -> Result<_, BuildAccelerationStructureError> {
                                                 transform_buffer.check_is_valid()?;
+                                                transform_buffer.same_device(&self.device)?;
                                                 Ok(transform_buffer)
                                             })
                                             .transpose()?,
@@ -151,6 +154,7 @@ impl super::CommandEncoder {
                             let aabb_geo = aabb_geometries
                                 .map(|ag| {
                                     ag.aabb_buffer.check_is_valid()?;
+                                    ag.aabb_buffer.same_device(&self.device)?;
                                     Ok(ArcBlasAabbGeometry {
                                         size: ag.size.clone(),
                                         stride: ag.stride,
@@ -164,14 +168,17 @@ impl super::CommandEncoder {
                     };
                     let blas = blas_entry.blas;
                     blas.check_is_valid()?;
+                    blas.same_device(&self.device)?;
                     Ok(ArcBlasBuildEntry { blas, geometries })
                 })
                 .collect::<Result<_, BuildAccelerationStructureError>>()?;
 
             for tlas_package in &tlases {
                 tlas_package.tlas.check_is_valid()?;
+                tlas_package.tlas.same_device(&self.device)?;
                 for instance in tlas_package.instances.iter().flatten() {
                     instance.blas.check_is_valid()?;
+                    instance.blas.same_device(&self.device)?;
                 }
             }
 
@@ -249,6 +256,11 @@ pub(crate) fn build_acceleration_structures(
             .enumerate()
             .flat_map(|(idx, instance)| instance.map(|inst| (idx, inst)))
         {
+            if instance.transform.iter().any(|value| !value.is_finite()) {
+                return Err(BuildAccelerationStructureError::TlasNonFiniteTransform(
+                    tlas.error_ident(),
+                ));
+            }
             if instance.custom_data >= (1u32 << 24u32) {
                 return Err(BuildAccelerationStructureError::TlasInvalidCustomData(
                     tlas.error_ident(),

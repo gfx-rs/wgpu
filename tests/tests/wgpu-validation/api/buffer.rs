@@ -21,3 +21,26 @@ fn destroyed_buffer() {
 
     queue.submit([encoder.finish()]);
 }
+
+#[test]
+fn acceleration_structure_inputs_require_features() {
+    let (device, _) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    for usage in [
+        wgpu::BufferUsages::BLAS_INPUT,
+        wgpu::BufferUsages::TLAS_INPUT,
+        wgpu::BufferUsages::BLAS_INPUT | wgpu::BufferUsages::TLAS_INPUT,
+    ] {
+        wgpu_test::fail(
+            &device,
+            || {
+                let _ = device.create_buffer(&wgpu::BufferDescriptor {
+                    label: None,
+                    size: 36,
+                    usage,
+                    mapped_at_creation: false,
+                });
+            },
+            Some("required but not enabled"),
+        );
+    }
+}

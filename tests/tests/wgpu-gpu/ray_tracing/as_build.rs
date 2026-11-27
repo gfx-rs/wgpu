@@ -19,6 +19,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
         OUT_OF_ORDER_AS_BUILD_USE,
         EMPTY_BUILD,
         BUILD_WITH_TRANSFORM,
+        TLAS_NON_FINITE_TRANSFORM,
         ONLY_BLAS_VERTEX_RETURN,
         ONLY_TLAS_VERTEX_RETURN,
         EXTRA_FORMAT_BUILD,
@@ -495,6 +496,48 @@ fn empty_build(ctx: TestingContext) {
     encoder_safe.build_acceleration_structures(iter::empty(), iter::empty());
 
     ctx.queue.submit([encoder_safe.finish()]);
+}
+
+#[apply(gpu_test!)]
+static TLAS_NON_FINITE_TRANSFORM: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .limits(acceleration_structure_limits())
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            .enable_noop(),
+    )
+    .run_sync(tlas_non_finite_transform);
+
+fn tlas_non_finite_transform(ctx: TestingContext) {
+    let mut as_ctx = AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::empty(),
+        AccelerationStructureFlags::empty(),
+    );
+
+    for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        for component in 0..12 {
+            let mut instance = TlasInstance::from_blas_untransformed(&as_ctx.blas);
+            instance.transform[component] = value;
+            as_ctx.tlas[0] = Some(instance);
+
+            let mut encoder = ctx
+                .device
+                .create_command_encoder(&CommandEncoderDescriptor::default());
+            fail(
+                &ctx.device,
+                || {
+                    encoder.build_acceleration_structures(
+                        [&as_ctx.blas_build_entry()],
+                        [&as_ctx.tlas],
+                    );
+                    let _ = encoder.finish();
+                },
+                Some("instance transform contains a non-finite value"),
+            );
+        }
+    }
 }
 
 #[apply(gpu_test!)]

@@ -1501,8 +1501,20 @@ fn filter_features_and_limits(
     limits: &mut wgt::Limits,
 ) {
     if flags.contains(InstanceFlags::STRICT_WEBGPU_COMPLIANCE) {
-        *features &= wgt::Features::all_webgpu_mask() | limits::EXEMPT_FEATURES;
+        let mut allowed = wgt::Features::all_webgpu_mask() | limits::EXEMPT_FEATURES;
+        if flags.contains(InstanceFlags::ALLOW_EXPERIMENTAL_RAY_QUERY) {
+            allowed |= wgt::Features::EXPERIMENTAL_RAY_QUERY;
+        }
+        *features &= allowed;
+        let ray_query_limits = features
+            .contains(wgt::Features::EXPERIMENTAL_RAY_QUERY)
+            .then(|| limits.clone());
         limits.zero_native_only();
+        if let Some(ray_query_limits) = ray_query_limits {
+            *limits = limits
+                .clone()
+                .using_acceleration_structure_values(ray_query_limits);
+        }
     }
 }
 
@@ -1556,6 +1568,63 @@ fn normalize_max_resource_per_shader_stage_limits(limits: &mut wgt::Limits) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn strict_compliance_filters_ray_queries_by_default() {
+        let mut features = wgt::Features::EXPERIMENTAL_RAY_QUERY;
+        let mut limits =
+            wgt::Limits::defaults().using_minimum_supported_acceleration_structure_values();
+        filter_features_and_limits(
+            InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
+            &mut features,
+            &mut limits,
+        );
+        assert!(features.is_empty());
+        assert_eq!(limits.max_blas_primitive_count, 0);
+        assert_eq!(
+            limits.max_buffers_and_acceleration_structures_per_shader_stage,
+            0
+        );
+    }
+
+    #[test]
+    fn browser_ray_queries_preserve_only_their_features_and_limits() {
+        let mut features = wgt::Features::EXPERIMENTAL_RAY_QUERY
+            | wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES
+            | wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN;
+        let mut limits =
+            wgt::Limits::defaults().using_minimum_supported_acceleration_structure_values();
+        limits.max_ray_recursion_depth = 8;
+        limits.max_ray_dispatch_count = 1024;
+        filter_features_and_limits(
+            InstanceFlags::STRICT_WEBGPU_COMPLIANCE | InstanceFlags::ALLOW_EXPERIMENTAL_RAY_QUERY,
+            &mut features,
+            &mut limits,
+        );
+        assert_eq!(features, wgt::Features::EXPERIMENTAL_RAY_QUERY);
+        assert!(limits.max_blas_primitive_count > 0);
+        assert!(limits.max_blas_geometry_count > 0);
+        assert!(limits.max_tlas_instance_count > 0);
+        assert!(limits.max_acceleration_structures_per_shader_stage > 0);
+        assert!(limits.max_buffers_and_acceleration_structures_per_shader_stage > 0);
+        assert_eq!(limits.max_ray_recursion_depth, 0);
+        assert_eq!(limits.max_ray_dispatch_count, 0);
+    }
+
+    #[test]
+    fn browser_ray_query_policy_does_not_enable_unrequested_limits() {
+        let mut features = wgt::Features::empty();
+        let mut limits =
+            wgt::Limits::defaults().using_minimum_supported_acceleration_structure_values();
+        filter_features_and_limits(
+            InstanceFlags::STRICT_WEBGPU_COMPLIANCE | InstanceFlags::ALLOW_EXPERIMENTAL_RAY_QUERY,
+            &mut features,
+            &mut limits,
+        );
+        assert!(features.is_empty());
+        assert_eq!(limits.max_blas_primitive_count, 0);
+        assert_eq!(limits.max_acceleration_structures_per_shader_stage, 0);
+    }
 
     #[test]
     fn non_power_of_two_uniform_alignment_always_rejected() {

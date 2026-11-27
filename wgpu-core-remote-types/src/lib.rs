@@ -29,6 +29,7 @@ pub mod binding_model;
 pub mod encoders;
 pub mod ffi;
 pub mod pipelines;
+pub mod ray_tracing;
 
 pub type Label<'a> = Option<Cow<'a, str>>;
 

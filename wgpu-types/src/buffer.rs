@@ -58,7 +58,7 @@ crate::bitflags_array! {
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpubufferusageflags).
     #[repr(C)]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct (BufferUsages, BufferUsagesBits): [u32; 2];
+    pub struct (BufferUsages, BufferUsagesBits): [u32; 1];
 
     /// Buffer usages that are defined in the WebGPU specification.
     /// For all usages, see [`BufferUsages`].
@@ -100,19 +100,10 @@ crate::bitflags_array! {
         const INDIRECT = 1 << 8;
         /// Allow a buffer to be the destination buffer for a `CommandEncoder::resolve_query_set` operation.
         const QUERY_RESOLVE = 1 << 9;
-    }
-
-    /// Buffer usages that are available in WGPU only when targeting native.
-    /// For all usages, see [`BufferUsages`].
-    #[repr(transparent)]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    #[cfg_attr(feature = "serde", serde(transparent))]
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct BufferUsagesWGPU buffer_usages_wgpu {
-        /// Allows a buffer to be used as input for a bottom level acceleration structure build
-        const BLAS_INPUT = 1 << 0;
-        /// Allows a buffer to be used as input for a top level acceleration structure build
-        const TLAS_INPUT = 1 << 1;
+        /// Allows a buffer to be used as input for a bottom level acceleration structure build.
+        const BLAS_INPUT = 1 << 10;
+        /// Allows a buffer to be used as input for a top level acceleration structure build.
+        const TLAS_INPUT = 1 << 11;
     }
 }
 

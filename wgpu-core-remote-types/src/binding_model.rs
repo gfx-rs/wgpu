@@ -33,6 +33,7 @@ pub enum BindingResource {
     Sampler(SamplerId),
     TextureView(TextureViewId),
     ExternalTexture(ExternalTextureId),
+    AccelerationStructure(crate::id::TlasId),
 }
 
 assert_ffi_safe!(BindingResource);
@@ -216,6 +217,7 @@ pub struct BindGroupLayoutEntry {
     pub texture: FfiOption<TextureBindingLayout>,
     pub storage_texture: FfiOption<StorageTextureBindingLayout>,
     pub external_texture: bool,
+    pub acceleration_structure: bool,
 }
 
 assert_ffi_safe!(BindGroupLayoutEntry);

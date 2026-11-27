@@ -35,7 +35,7 @@ const NEEDS_MAPPABLE_PRIMARY_BUFFERS: &[Bu; 7] = &[
     // these two require acceleration_structures feature
     Bu::all().intersection(Bu::BLAS_INPUT.union(Bu::TLAS_INPUT).complement()),
 ];
-const INVALID_BITS: Bu = Bu::from_bits_retain(wgpu::wgt::BufferUsagesBits([u32::MAX, u32::MAX]));
+const INVALID_BITS: Bu = Bu::from_bits_retain(wgpu::wgt::BufferUsagesBits([u32::MAX]));
 const ALWAYS_FAIL: &[Bu; 2] = &[Bu::empty(), INVALID_BITS];
 
 fn try_create(ctx: TestingContext, usages: &[(bool, &[wgpu::BufferUsages])]) {

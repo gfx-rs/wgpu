@@ -251,6 +251,9 @@ bitflags::bitflags! {
         ///
         /// When `Self::from_env()` is used takes value from `WGPU_DEBUG_PRINTF` environment variable.
         const DEBUG_PRINTF = 1 << 8;
+
+        /// Permit experimental browser ray queries while retaining strict WebGPU filtering.
+        const ALLOW_EXPERIMENTAL_RAY_QUERY = 1 << 9;
     }
 }
 

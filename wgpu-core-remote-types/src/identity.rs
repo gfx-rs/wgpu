@@ -118,6 +118,8 @@ pub struct IdentityHub {
     pub pipeline_caches: IdentityManager<markers::PipelineCache>,
     pub query_sets: IdentityManager<markers::QuerySet>,
     pub buffers: IdentityManager<markers::Buffer>,
+    pub blases: IdentityManager<markers::Blas>,
+    pub tlases: IdentityManager<markers::Tlas>,
     pub textures: IdentityManager<markers::Texture>,
     pub texture_views: IdentityManager<markers::TextureView>,
     pub external_textures: IdentityManager<markers::ExternalTexture>,

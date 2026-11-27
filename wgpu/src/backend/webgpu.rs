@@ -2640,7 +2640,6 @@ impl dispatch::DeviceInterface for WebDevice {
     }
 
     fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> dispatch::DispatchBuffer {
-        assert!(desc.usage.buffer_usages_wgpu.is_empty());
         let mapped_desc = webgpu_sys::GpuBufferDescriptor::new_with_f64(
             desc.size as f64,
             desc.usage.buffer_usages_webgpu.bits(),
@@ -2987,7 +2986,6 @@ impl dispatch::QueueInterface for WebQueue {
 
         let usage = wgt::BufferUsages::from_internal_flags(
             wgt::BufferUsagesWebGPU::from_bits_truncate(buffer.inner.usage()),
-            wgt::BufferUsagesWGPU::empty(),
         );
         // TODO: actually send this down the error scope
         if !usage.contains(wgt::BufferUsages::COPY_DST) {
