@@ -977,6 +977,8 @@ pub enum ConstantEvaluatorError {
     CooperativeOperation,
     #[error("Type is too large")]
     TypeTooLarge(Handle<Type>),
+    #[error("Cannot bitcast `{from}` to `{to}`. Types should be the same size")]
+    InvalidBitcastArgs { from: String, to: String },
 }
 
 impl<'a> ConstantEvaluator<'a> {
@@ -1317,9 +1319,10 @@ impl<'a> ConstantEvaluator<'a> {
                 let expr = self.check_and_get(expr)?;
                 self.cast(expr, target, span)
             }
-            Expression::Bitcast { .. } => Err(ConstantEvaluatorError::NotImplemented(
-                "bitcast built-in function".into(),
-            )),
+            Expression::Bitcast { expr, ty } => {
+                let expr = self.check_and_get(expr)?;
+                self.bitcast(expr, ty, span)
+            }
             Expression::Select {
                 reject,
                 accept,
@@ -2711,6 +2714,142 @@ impl<'a> ConstantEvaluator<'a> {
         };
 
         self.register_evaluated_expr(expr, span)
+    }
+
+    pub fn expression_to_bytes(
+        &mut self,
+        expr: Handle<Expression>,
+        span: Span,
+    ) -> Result<Vec<u8>, ConstantEvaluatorError> {
+        let expr = self.eval_zero_value_and_splat(expr, span)?;
+        let mut out = Vec::new();
+        match self.expressions[expr].clone() {
+            Expression::Literal(literal) => match literal {
+                Literal::F64(v) => out.extend_from_slice(&v.to_le_bytes()),
+                Literal::F32(v) => out.extend_from_slice(&v.to_le_bytes()),
+                Literal::F16(v) => out.extend_from_slice(&v.to_le_bytes()),
+                Literal::U16(v) => out.extend_from_slice(&v.to_le_bytes()),
+                Literal::I16(v) => out.extend_from_slice(&v.to_le_bytes()),
+                Literal::U32(v) => out.extend_from_slice(&v.to_le_bytes()),
+                Literal::I32(v) => out.extend_from_slice(&v.to_le_bytes()),
+                Literal::U64(v) => out.extend_from_slice(&v.to_le_bytes()),
+                Literal::I64(v) => out.extend_from_slice(&v.to_le_bytes()),
+                _ => {
+                    return Err(ConstantEvaluatorError::NotImplemented(format!(
+                        "Extracting bytes from {:?} is not implemented",
+                        literal
+                    )));
+                }
+            },
+            Expression::Compose { ty, components } => {
+                let components =
+                    crate::proc::flatten_compose(ty, &components, self.expressions, self.types)
+                        .collect::<Vec<_>>();
+                for component in components {
+                    out.extend_from_slice(&self.expression_to_bytes(component, span)?);
+                }
+            }
+            _ => {
+                return Err(ConstantEvaluatorError::NotImplemented(format!(
+                    "Extracting bytes from {:?} is not implemented",
+                    self.expressions[expr]
+                )));
+            }
+        };
+        Ok(out)
+    }
+
+    pub fn literal_from_bytes(
+        &mut self,
+        scalar: crate::Scalar,
+        bytes: &[u8],
+    ) -> Result<Literal, ConstantEvaluatorError> {
+        match (scalar.kind, scalar.width) {
+            (ScalarKind::Uint, 2) => {
+                Ok(Literal::U16(u16::from_le_bytes(bytes.try_into().unwrap())))
+            }
+            (ScalarKind::Sint, 2) => {
+                Ok(Literal::I16(i16::from_le_bytes(bytes.try_into().unwrap())))
+            }
+            (ScalarKind::Float, 2) => {
+                let v = f16::from_le_bytes(bytes.try_into().unwrap());
+                if v.is_infinite() || v.is_nan() {
+                    Err(ConstantEvaluatorError::TypeNotConstructible)
+                } else {
+                    Ok(Literal::F16(v))
+                }
+            }
+            (ScalarKind::Uint, 4) => {
+                Ok(Literal::U32(u32::from_le_bytes(bytes.try_into().unwrap())))
+            }
+            (ScalarKind::Sint, 4) => {
+                Ok(Literal::I32(i32::from_le_bytes(bytes.try_into().unwrap())))
+            }
+            (ScalarKind::Float, 4) => {
+                let v = f32::from_le_bytes(bytes.try_into().unwrap());
+                if v.is_infinite() || v.is_nan() {
+                    Err(ConstantEvaluatorError::TypeNotConstructible)
+                } else {
+                    Ok(Literal::F32(v))
+                }
+            }
+            (ScalarKind::Uint, 8) => {
+                Ok(Literal::U64(u64::from_le_bytes(bytes.try_into().unwrap())))
+            }
+            (ScalarKind::Sint, 8) => {
+                Ok(Literal::I64(i64::from_le_bytes(bytes.try_into().unwrap())))
+            }
+            (ScalarKind::Float, 8) => {
+                let v = f64::from_le_bytes(bytes.try_into().unwrap());
+                if v.is_infinite() || v.is_nan() {
+                    Err(ConstantEvaluatorError::TypeNotConstructible)
+                } else {
+                    Ok(Literal::F64(v))
+                }
+            }
+            _ => Err(ConstantEvaluatorError::NotImplemented(format!(
+                "Building {:?} literal with width {:?} is not implemented",
+                scalar.kind, scalar.width
+            ))),
+        }
+    }
+
+    pub fn bitcast(
+        &mut self,
+        expr: Handle<Expression>,
+        ty: Handle<Type>,
+        span: Span,
+    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        let expr = self.eval_zero_value_and_splat(expr, span)?;
+        let target_ty = &self.types[ty].inner.clone();
+        let bytes = self.expression_to_bytes(expr, span)?;
+        let error = ConstantEvaluatorError::InvalidBitcastArgs {
+            from: format!("{:?}", expr),
+            to: format!("{:?}", target_ty),
+        };
+        match *target_ty {
+            TypeInner::Scalar(scalar) => {
+                if scalar.width as usize != bytes.len() {
+                    return Err(error);
+                }
+                let lit = self.literal_from_bytes(scalar, &bytes)?;
+                self.register_evaluated_expr(Expression::Literal(lit), span)
+            }
+            TypeInner::Vector { size, scalar } => {
+                if size as usize * scalar.width as usize != bytes.len() {
+                    return Err(error);
+                }
+                let components = bytes
+                    .chunks_exact(scalar.width as usize)
+                    .map(|chunk| {
+                        let lit = self.literal_from_bytes(scalar, chunk)?;
+                        self.register_evaluated_expr(Expression::Literal(lit), span)
+                    })
+                    .collect::<Result<Vec<Handle<Expression>>, _>>()?;
+                self.register_evaluated_expr(Expression::Compose { ty, components }, span)
+            }
+            _ => Err(error),
+        }
     }
 
     /// Convert the scalar leaves of  `expr` to `target`, handling arrays.
@@ -4923,6 +5062,66 @@ mod tests {
         assert_eq!(
             global_expressions[res],
             Expression::Literal(Literal::Bool(true))
+        );
+    }
+
+    #[test]
+    fn bitcast() {
+        let mut types = UniqueArena::new();
+        let mut constants = Arena::new();
+        let overrides = Arena::new();
+        let mut global_expressions = Arena::new();
+
+        let scalar_f32 = types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Scalar(crate::Scalar::F32),
+            },
+            Default::default(),
+        );
+        let scalar_u32 = types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Scalar(crate::Scalar::U32),
+            },
+            Default::default(),
+        );
+
+        let h = constants.append(
+            Constant {
+                name: None,
+                ty: scalar_f32,
+                init: global_expressions
+                    .append(Expression::Literal(Literal::F32(4.0)), Default::default()),
+            },
+            Default::default(),
+        );
+
+        let expr = global_expressions.append(Expression::Constant(h), Default::default());
+
+        let root = Expression::Bitcast {
+            expr,
+            ty: scalar_u32,
+        };
+
+        let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);
+        let mut solver = ConstantEvaluator {
+            behavior: Behavior::Wgsl(WgslRestrictions::Const(None)),
+            types: &mut types,
+            constants: &constants,
+            overrides: &overrides,
+            expressions: &mut global_expressions,
+            expression_kind_tracker,
+            layouter: &mut crate::proc::Layouter::default(),
+        };
+
+        let res = solver
+            .try_eval_and_append(root, Default::default())
+            .unwrap();
+
+        assert_eq!(
+            global_expressions[res],
+            Expression::Literal(Literal::U32(4.0_f32.to_bits()))
         );
     }
 

@@ -14,6 +14,10 @@ const phi_sun: f32 = 6.282f;
 const DIV: vec4<f32> = vec4<f32>(0.44444445f, 0f, 0f, 0f);
 const add_vec: vec2<f32> = vec2<f32>(4f, 5f);
 const compare_vec: vec2<bool> = vec2<bool>(true, false);
+const bitcast_id: f32 = 1f;
+const bitcast_scalar: u32 = 1065353216u;
+const bitcast_vec2_to_vec2_: vec2<u32> = vec2<u32>(1065353216u, 1065353216u);
+const bitcast_vec4_to_vec4_: vec4<u32> = vec4<u32>(1065353216u, 1065353216u, 1065353216u, 1065353216u);
 
 fn swizzle_of_compose() {
     var out: vec4<i32> = vec4<i32>(4i, 3i, 2i, 1i);
