@@ -2126,19 +2126,24 @@ impl crate::Device for super::Device {
             return Ok(true);
         }
 
-        let gl = &self.shared.context.lock();
         // MAX_CLIENT_WAIT_TIMEOUT_WEBGL is:
         // - 1s in Gecko https://searchfox.org/mozilla-central/rev/754074e05178e017ef6c3d8e30428ffa8f1b794d/dom/canvas/WebGLTypes.h#1386
         // - 0 in WebKit https://github.com/WebKit/WebKit/blob/4ef90d4672ca50267c0971b85db403d9684508ea/Source/WebCore/html/canvas/WebGL2RenderingContext.cpp#L110
         // - 0 in Chromium https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/modules/webgl/webgl2_rendering_context_base.cc;l=112;drc=a3cb0ac4c71ec04abfeaed199e5d63230eca2551
-        let timeout_ns = if cfg!(any(webgl, Emscripten)) {
-            0
-        } else {
-            timeout
-                .map(|t| t.as_nanos().min(u32::MAX as u128) as u32)
-                .unwrap_or(u32::MAX)
-        };
-        fence.wait(gl, wait_value, timeout_ns)
+        if cfg!(any(webgl, Emscripten)) {
+            // Waiting is not allowed to block on WebGL.
+            let gl = &self.shared.context.lock();
+            return fence.wait(gl, wait_value, 0);
+        }
+
+        // glow exposes `glClientWaitSync` with an `i32` timeout, so one call cannot
+        // express "wait forever" or a timeout longer than `i32::MAX` ns (~2.1 s).
+        // Wait in chunks, and take the context lock for one chunk at a time so a
+        // slow fence does not keep every other user of the context out.
+        wait_in_chunks(timeout, |chunk_ns| {
+            let gl = &self.shared.context.lock();
+            fence.wait(gl, wait_value, chunk_ns)
+        })
     }
 
     unsafe fn start_graphics_debugger_capture(&self) -> bool {
@@ -2198,3 +2203,167 @@ impl crate::Device for super::Device {
 unsafe impl Sync for super::Device {}
 #[cfg(send_sync)]
 unsafe impl Send for super::Device {}
+
+/// Longest single `glClientWaitSync` call, in nanoseconds.
+///
+/// A chunk must stay well below the 1 s timeout after which the WGL context lock
+/// panics (`gles/wgl.rs`), so that a slow fence makes the wait release the
+/// context often enough for another thread to acquire it. EGL allows 6 s. A
+/// shorter chunk only costs more `client_wait_sync` calls while a fence is slow;
+/// it changes nothing on the fast path.
+const MAX_WAIT_CHUNK_NS: u32 = 500_000_000;
+
+/// Timeout for the next `glClientWaitSync`, or `None` once `timeout` has passed.
+///
+/// Splitting the wait is needed for two reasons: glow's `client_wait_sync` takes
+/// an `i32` timeout, so a single call cannot exceed `i32::MAX` ns, and it cannot
+/// express "wait indefinitely" at all. `timeout` is `None` for an indefinite
+/// wait, and `elapsed` is measured from the start of the wait.
+fn wait_chunk_ns(
+    timeout: Option<core::time::Duration>,
+    elapsed: core::time::Duration,
+) -> Option<u32> {
+    match timeout {
+        Some(timeout) => {
+            // Saturating, so a timeout that has already passed cannot underflow
+            // and an elapsed time past the timeout cannot either.
+            let left = timeout.saturating_sub(elapsed);
+            if left.is_zero() {
+                None
+            } else {
+                Some(left.as_nanos().min(MAX_WAIT_CHUNK_NS as u128) as u32)
+            }
+        }
+        None => Some(MAX_WAIT_CHUNK_NS),
+    }
+}
+
+/// Wait in chunks until `wait_chunk` reports completion, `timeout` runs out, or
+/// `wait_chunk` fails.
+fn wait_in_chunks(
+    timeout: Option<core::time::Duration>,
+    mut wait_chunk: impl FnMut(u32) -> Result<bool, crate::DeviceError>,
+) -> Result<bool, crate::DeviceError> {
+    let start = std::time::Instant::now();
+    loop {
+        let Some(chunk_ns) = wait_chunk_ns(timeout, start.elapsed()) else {
+            return Ok(false);
+        };
+        if wait_chunk(chunk_ns)? {
+            return Ok(true);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{wait_chunk_ns, wait_in_chunks, MAX_WAIT_CHUNK_NS};
+    use core::time::Duration;
+
+    #[test]
+    fn chunk_sizes_are_capped_and_bounded() {
+        let zero = Duration::ZERO;
+
+        // An indefinite wait still uses chunks a single call can express.
+        assert_eq!(wait_chunk_ns(None, zero), Some(MAX_WAIT_CHUNK_NS));
+
+        // A timeout longer than one chunk is split, and never overflows.
+        assert_eq!(
+            wait_chunk_ns(Some(Duration::MAX), zero),
+            Some(MAX_WAIT_CHUNK_NS)
+        );
+        assert_eq!(
+            wait_chunk_ns(Some(Duration::MAX), Duration::MAX),
+            None,
+            "an elapsed time as large as the timeout must not underflow"
+        );
+
+        // Short timeouts are passed through unchanged, but never as 0.
+        assert_eq!(wait_chunk_ns(Some(Duration::from_nanos(1)), zero), Some(1));
+        assert_eq!(
+            wait_chunk_ns(Some(Duration::from_millis(499)), zero),
+            Some(499_000_000)
+        );
+        assert_eq!(
+            wait_chunk_ns(Some(Duration::from_millis(501)), zero),
+            Some(MAX_WAIT_CHUNK_NS)
+        );
+        assert_eq!(
+            wait_chunk_ns(Some(Duration::from_millis(501)), Duration::from_millis(500)),
+            Some(1_000_000)
+        );
+
+        // The remaining time is recomputed from the elapsed time, so a driver
+        // that returns early does not shorten the wait.
+        assert_eq!(
+            wait_chunk_ns(Some(Duration::from_secs(3)), Duration::from_secs(4)),
+            None
+        );
+        assert_eq!(
+            wait_chunk_ns(Some(Duration::from_secs(3)), Duration::from_secs(3)),
+            None
+        );
+
+        // A zero timeout must not wait at all.
+        assert_eq!(wait_chunk_ns(Some(zero), zero), None);
+    }
+
+    #[test]
+    fn indefinite_wait_loops_in_capped_chunks() {
+        let mut chunks = [0; 3];
+        let mut calls = 0;
+        let result = wait_in_chunks(None, |chunk_ns| {
+            if let Some(slot) = chunks.get_mut(calls) {
+                *slot = chunk_ns;
+            }
+            calls += 1;
+            Ok(calls == 3)
+        });
+        assert_eq!(result, Ok(true));
+        assert_eq!(chunks, [MAX_WAIT_CHUNK_NS; 3]);
+    }
+
+    /// `Duration::MAX` reaches the wait from wgpu's own `poll` tests and from the
+    /// other backends' "infinite" sentinel. It must be accepted as an ordinary
+    /// long timeout rather than overflowing an `Instant`.
+    #[test]
+    fn huge_timeout_does_not_overflow() {
+        let mut chunk = 0;
+        let result = wait_in_chunks(Some(Duration::MAX), |chunk_ns| {
+            chunk = chunk_ns;
+            Ok(true)
+        });
+        assert_eq!(result, Ok(true));
+        assert_eq!(chunk, MAX_WAIT_CHUNK_NS);
+    }
+
+    #[test]
+    fn zero_timeout_does_not_wait() {
+        let result = wait_in_chunks(Some(Duration::ZERO), |_| {
+            panic!("a zero timeout must not wait");
+        });
+        assert_eq!(result, Ok(false));
+    }
+
+    #[test]
+    fn finite_timeout_returns_false() {
+        let mut last_chunk = 0;
+        let result = wait_in_chunks(Some(Duration::from_millis(1)), |chunk_ns| {
+            last_chunk = chunk_ns;
+            Ok(false)
+        });
+        assert_eq!(result, Ok(false));
+        assert!((1..=1_000_000).contains(&last_chunk));
+    }
+
+    #[test]
+    fn error_is_propagated() {
+        let mut calls = 0;
+        let result = wait_in_chunks(None, |_| {
+            calls += 1;
+            Err(crate::DeviceError::Unexpected)
+        });
+        assert_eq!(result, Err(crate::DeviceError::Unexpected));
+        assert_eq!(calls, 1);
+    }
+}
