@@ -2625,10 +2625,14 @@ impl super::Instance {
         let private_caps = super::PrivateCapabilities {
             image_view_usage: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(khr::maintenance2::NAME),
-            // VeriSilicon's proprietary driver, as on NXP's i.MX 8 SoCs, advertises timeline
-            // semaphores but crashes in `vkQueueSubmit` when wgpu uses them. It reports
-            // `VK_DRIVER_ID_MESA_RADV` as its driver ID, so only the vendor ID identifies it.
+            // Two proprietary drivers advertise timeline semaphores that we can't rely on:
+            // - VeriSilicon's, as on NXP's i.MX 8 SoCs, crashes in `vkQueueSubmit` with them.
+            //   It reports `VK_DRIVER_ID_MESA_RADV` as its driver ID, so only the vendor ID
+            //   identifies it.
+            // - Imagination's, as on TI's AM62P, sometimes returns from `vkWaitSemaphores`
+            //   while `vkGetSemaphoreCounterValue` still reports a lower value.
             timeline_semaphores: phd_capabilities.properties.vendor_id != db::verisilicon::VENDOR
+                && !phd_capabilities.is_driver(vk::DriverId::IMAGINATION_PROPRIETARY)
                 && !workarounds.contains(super::Workarounds::DISABLE_TIMELINE_SEMAPHORES)
                 && match phd_features.timeline_semaphore {
                     Some(features) => features.timeline_semaphore == vk::TRUE,
