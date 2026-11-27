@@ -1295,6 +1295,25 @@ impl Adapter {
         Ok((device, queue))
     }
 
+    /// Implements the part of <https://gpuweb.github.io/gpuweb/#a-new-device>
+    /// for applying the [default feature level](https://gpuweb.github.io/gpuweb/#feature-level-string)
+    /// to the requested features and limits of a device descriptor.
+    fn apply_default_feature_level(&self, features: &mut wgt::Features, limits: &mut wgt::Limits) {
+        if self
+            .raw
+            .features
+            .contains(wgt::Features::CORE_FEATURES_AND_LIMITS)
+        {
+            *features |= wgt::Features::CORE_FEATURES_AND_LIMITS;
+            let mut default_limits = wgt::Limits::defaults();
+            default_limits.zero_native_only();
+            *limits = default_limits.or_better_values_from(limits);
+        } else {
+            // here we should apply compatibility mode default limits
+            // but we do not implement compatibility yet: https://github.com/gfx-rs/wgpu/issues/8124
+        }
+    }
+
     /// Validate a device descriptor.
     ///
     /// This validates the provided device descriptor as if it were passed to
@@ -1313,6 +1332,8 @@ impl Adapter {
             &mut desc.required_features,
             &mut desc.required_limits,
         );
+
+        self.apply_default_feature_level(&mut desc.required_features, &mut desc.required_limits);
 
         // Verify all features were exposed by the adapter
         if !self.raw.features.contains(desc.required_features) {
