@@ -1353,12 +1353,12 @@ impl Device {
             usage,
             memory_flags: hal::MemoryFlags::empty(),
         };
-        let (buffer, final_size) = unsafe { self.raw().create_buffer(&hal_desc) }
+        let (buffer, final_size) = unsafe { self.create_raw_buffer(&hal_desc) }
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         debug_assert!(final_size >= padded_size);
 
-        let timestamp_normalization_bind_group = Snatchable::new(unsafe {
+        let timestamp_normalization_bind_group = unsafe {
             // SAFETY: The size passed here must be 4B aligned, >= the application size, and
             // <= the buffer size.
             self.timestamp_normalizer
@@ -1366,19 +1366,19 @@ impl Device {
                 .unwrap()
                 .create_normalization_bind_group(
                     self,
-                    &*buffer,
+                    &**buffer,
                     desc.label.as_deref(),
                     wgt::BufferSize::new(hal_desc.size).unwrap(),
                     desc.usage,
                 )
-        }?);
+        }?;
 
         let indirect_validation_bind_groups =
             self.create_indirect_validation_bind_groups(buffer.as_ref(), desc.size, desc.usage)?;
 
         let buffer = Buffer {
             state: ResourceState::Valid(BufferState {
-                raw: Snatchable::new(buffer),
+                raw: Snatchable::new(ScopeGuard::into_inner(buffer)),
             }),
             device: self.clone(),
             usage: desc.usage,
@@ -1394,7 +1394,9 @@ impl Device {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
-            timestamp_normalization_bind_group,
+            timestamp_normalization_bind_group: Snatchable::new(ScopeGuard::into_inner(
+                timestamp_normalization_bind_group,
+            )),
             indirect_validation_bind_groups,
         };
 
@@ -1725,7 +1727,7 @@ impl Device {
         hal_buffer: Box<dyn hal::DynBuffer>,
         desc: &resource::BufferDescriptor,
     ) -> Result<Arc<Buffer>, resource::CreateBufferError> {
-        let timestamp_normalization_bind_group = Snatchable::new(unsafe {
+        let timestamp_normalization_bind_group = unsafe {
             // SAFETY: The size passed here must be 4B aligned, >= the application size, and
             // <= the buffer size.
             self.timestamp_normalizer
@@ -1738,7 +1740,7 @@ impl Device {
                     wgt::BufferSize::new(desc.size).unwrap(),
                     desc.usage,
                 )?
-        });
+        };
 
         let indirect_validation_bind_groups = self.create_indirect_validation_bind_groups(
             hal_buffer.as_ref(),
@@ -1766,7 +1768,9 @@ impl Device {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
-            timestamp_normalization_bind_group,
+            timestamp_normalization_bind_group: Snatchable::new(ScopeGuard::into_inner(
+                timestamp_normalization_bind_group,
+            )),
             indirect_validation_bind_groups,
         };
 
@@ -2194,7 +2198,7 @@ impl Device {
             texture_binding_view_dimension,
         };
 
-        let raw_texture = unsafe { self.raw().create_texture(&hal_desc) }
+        let raw_texture = unsafe { self.create_raw_texture(&hal_desc) }
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let clear_mode = if hal_usage
@@ -2223,7 +2227,7 @@ impl Device {
                 desc.mip_level_count,
                 desc.size.depth_or_array_layers,
                 |desc| {
-                    unsafe { self.raw().create_texture_view(raw_texture.as_ref(), desc) }
+                    unsafe { self.create_raw_texture_view(raw_texture.as_ref(), desc) }
                         .map_err(|e| self.handle_hal_error(e))
                 },
             )?;
@@ -2237,7 +2241,9 @@ impl Device {
 
         let texture = Texture::new(
             self,
-            resource::TextureInner::Native { raw: raw_texture },
+            resource::TextureInner::Native {
+                raw: ScopeGuard::into_inner(raw_texture),
+            },
             hal_usage,
             desc,
             format_features,

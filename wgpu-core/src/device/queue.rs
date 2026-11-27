@@ -7,6 +7,7 @@ use core::{
     ptr::NonNull,
     sync::atomic::Ordering,
 };
+use scopeguard::ScopeGuard;
 use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{
@@ -629,6 +630,9 @@ impl PendingWrites {
 
             let cmd_buf = unsafe { self.command_encoder.end_encoding() }
                 .map_err(|e| device.handle_hal_error(e))?;
+            let cmd_buf = scopeguard::guard(cmd_buf, |buf| unsafe {
+                self.command_encoder.reset_all(vec![buf]);
+            });
             self.is_recording = false;
 
             let new_encoder = command_allocator
@@ -637,8 +641,8 @@ impl PendingWrites {
 
             let mut encoder = EncoderInFlight {
                 inner: crate::command::InnerCommandEncoder {
+                    list: vec![ScopeGuard::into_inner(cmd_buf)],
                     raw: ManuallyDrop::new(mem::replace(&mut self.command_encoder, new_encoder)),
-                    list: vec![cmd_buf],
                     device: device.clone(),
                     is_open: false,
                     api: crate::command::EncodingApi::InternalUse,

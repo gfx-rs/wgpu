@@ -32,6 +32,7 @@ use core::num::NonZeroU64;
 use alloc::{boxed::Box, string::String, sync::Arc};
 
 use hashbrown::HashMap;
+use scopeguard::ScopeGuard;
 
 use crate::{
     device::{Device, DeviceError},
@@ -49,6 +50,7 @@ struct InternalState {
     temporary_bind_group_layout: Box<dyn hal::DynBindGroupLayout>,
     pipeline_layout: Box<dyn hal::DynPipelineLayout>,
     pipeline: Box<dyn hal::DynComputePipeline>,
+    module: Box<dyn hal::DynShaderModule>,
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -110,8 +112,7 @@ impl TimestampNormalizer {
             }
 
             let temporary_bind_group_layout = device
-                .raw()
-                .create_bind_group_layout(&hal::BindGroupLayoutDescriptor {
+                .create_raw_bind_group_layout(&hal::BindGroupLayoutDescriptor {
                     label: hal_label(
                         Some("(wgpu internal) Timestamp Normalization Bind Group Layout"),
                         device.instance_flags,
@@ -176,8 +177,7 @@ impl TimestampNormalizer {
                 runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
             };
             let module = device
-                .raw()
-                .create_shader_module(&hal_desc, hal_shader)
+                .create_raw_shader_module(&hal_desc, hal_shader)
                 .map_err(|error| match error {
                     hal::ShaderError::Device(error) => {
                         CreateShaderModuleError::Device(device.handle_hal_error(error))
@@ -189,8 +189,7 @@ impl TimestampNormalizer {
                 })?;
 
             let pipeline_layout = device
-                .raw()
-                .create_pipeline_layout(&hal::PipelineLayoutDescriptor {
+                .create_raw_pipeline_layout(&hal::PipelineLayoutDescriptor {
                     label: hal_label(
                         Some("(wgpu internal) Timestamp normalizer pipeline layout"),
                         device.instance_flags,
@@ -230,9 +229,12 @@ impl TimestampNormalizer {
 
             Ok(Self {
                 state: Some(InternalState {
-                    temporary_bind_group_layout,
-                    pipeline_layout,
+                    temporary_bind_group_layout: ScopeGuard::into_inner(
+                        temporary_bind_group_layout,
+                    ),
+                    pipeline_layout: ScopeGuard::into_inner(pipeline_layout),
                     pipeline,
+                    module: ScopeGuard::into_inner(module),
                 }),
             })
         }
@@ -250,21 +252,35 @@ impl TimestampNormalizer {
     /// not used to check the destination range of query resolution requests. That
     /// uses the application-requested buffer size, obtained from the `wgpu_core`
     /// `Buffer`.
-    pub unsafe fn create_normalization_bind_group(
+    pub unsafe fn create_normalization_bind_group<'a>(
         &self,
-        device: &Device,
+        device: &'a Device,
         buffer: &dyn hal::DynBuffer,
         buffer_label: Option<&str>,
         buffer_size: wgt::BufferSize,
         buffer_usages: wgt::BufferUsages,
-    ) -> Result<TimestampNormalizationBindGroup, DeviceError> {
+    ) -> Result<
+        ScopeGuard<
+            TimestampNormalizationBindGroup,
+            impl FnOnce(TimestampNormalizationBindGroup) + 'a,
+        >,
+        DeviceError,
+    > {
+        let destroy_fn = |bg: TimestampNormalizationBindGroup| bg.dispose(device.raw());
+
         unsafe {
             let Some(ref state) = &self.state else {
-                return Ok(TimestampNormalizationBindGroup { raw: None });
+                return Ok(ScopeGuard::with_strategy(
+                    TimestampNormalizationBindGroup { raw: None },
+                    destroy_fn,
+                ));
             };
 
             if !buffer_usages.contains(wgt::BufferUsages::QUERY_RESOLVE) {
-                return Ok(TimestampNormalizationBindGroup { raw: None });
+                return Ok(ScopeGuard::with_strategy(
+                    TimestampNormalizationBindGroup { raw: None },
+                    destroy_fn,
+                ));
             }
 
             // If this buffer is large enough that we wouldn't be able to bind the entire thing
@@ -302,7 +318,10 @@ impl TimestampNormalizer {
                 })
                 .map_err(|e| device.handle_hal_error(e))?;
 
-            Ok(TimestampNormalizationBindGroup { raw: Some(bg) })
+            Ok(ScopeGuard::with_strategy(
+                TimestampNormalizationBindGroup { raw: Some(bg) },
+                destroy_fn,
+            ))
         }
     }
 
@@ -362,6 +381,7 @@ impl TimestampNormalizer {
             device.destroy_compute_pipeline(state.pipeline);
             device.destroy_pipeline_layout(state.pipeline_layout);
             device.destroy_bind_group_layout(state.temporary_bind_group_layout);
+            device.destroy_shader_module(state.module);
         }
     }
 

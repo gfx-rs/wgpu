@@ -83,6 +83,7 @@ pub mod pipeline;
 mod pipeline_cache;
 mod pool;
 pub mod present;
+mod raw_resource;
 pub mod ray_tracing;
 pub mod ray_tracing_pipeline;
 pub mod resource;

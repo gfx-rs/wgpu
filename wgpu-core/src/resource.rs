@@ -13,6 +13,7 @@ use core::{
     ops::Range,
     ptr::NonNull,
 };
+use scopeguard::ScopeGuard;
 use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{
@@ -1511,13 +1512,13 @@ impl StagingBuffer {
             memory_flags: hal::MemoryFlags::TRANSIENT,
         };
 
-        let (raw, _) = unsafe { device.raw().create_buffer(&stage_desc) }
+        let (raw, _) = unsafe { device.create_raw_buffer(&stage_desc) }
             .map_err(|e| device.handle_hal_error(e))?;
         let mapping = unsafe { device.raw().map_buffer(raw.as_ref(), 0..size.get()) }
             .map_err(|e| device.handle_hal_error(e))?;
 
         let staging_buffer = StagingBuffer {
-            raw,
+            raw: ScopeGuard::into_inner(raw),
             device: device.clone(),
             size,
             is_coherent: mapping.is_coherent,
@@ -1706,7 +1707,7 @@ pub struct ClearViews {
 impl ClearViews {
     /// Creates [`ClearViews`] by calling the provided `create_view` closure with `(mip_level,
     /// array_layer, aspect)` for each clear view of the texture.
-    pub(crate) fn new<E>(
+    pub(crate) fn new<'a, E, F: FnOnce(Box<dyn hal::DynTextureView>) + 'a>(
         label: hal::Label<'_>,
         usage: wgt::TextureUses,
         format: wgt::TextureFormat,
@@ -1714,7 +1715,7 @@ impl ClearViews {
         array_layer_count: u32,
         mut create_view: impl FnMut(
             &hal::TextureViewDescriptor,
-        ) -> Result<Box<dyn hal::DynTextureView>, E>,
+        ) -> Result<ScopeGuard<Box<dyn hal::DynTextureView>, F>, E>,
     ) -> Result<Self, E> {
         const PLANES: [wgt::TextureAspect; 3] = [
             wgt::TextureAspect::Plane0,
@@ -1726,7 +1727,7 @@ impl ClearViews {
             None => &[wgt::TextureAspect::All],
         };
 
-        let mut views = SmallVec::new();
+        let mut views: SmallVec<[ScopeGuard<Box<dyn hal::DynTextureView>, F>; 1]> = SmallVec::new();
         for mip_level in 0..mip_level_count {
             for array_layer in 0..array_layer_count {
                 for &aspect in aspects {
@@ -1749,7 +1750,10 @@ impl ClearViews {
             }
         }
         Ok(Self {
-            views,
+            views: views
+                .into_iter()
+                .map(|guard| ScopeGuard::into_inner(guard))
+                .collect(),
             mip_level_count,
             array_layer_count,
             aspects,

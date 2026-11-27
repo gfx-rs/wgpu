@@ -98,13 +98,23 @@ impl BindGroups {
             buffer,
             device.instance_flags,
         )?;
-        let draw = indirect_validation.draw.create_src_bind_group(
+        let draw = match indirect_validation.draw.create_src_bind_group(
             device.raw(),
             &device.adapter.limits(),
             buffer_size,
             buffer,
             device.instance_flags,
-        )?;
+        ) {
+            Ok(draw) => draw,
+            Err(e) => {
+                if let Some(bind_group) = dispatch {
+                    unsafe {
+                        device.raw().destroy_bind_group(bind_group);
+                    }
+                }
+                return Err(e);
+            }
+        };
 
         match (dispatch, draw) {
             (None, None) => Ok(None),

@@ -1,5 +1,6 @@
 use alloc::{string::ToString, sync::Arc, vec::Vec};
 use core::mem::{size_of, ManuallyDrop};
+use scopeguard::ScopeGuard;
 
 use crate::device::stage_compiler::StageCompiler;
 #[cfg(feature = "trace")]
@@ -187,15 +188,14 @@ impl Device {
         };
 
         let raw = unsafe {
-            self.raw()
-                .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
-                    label: hal_label(blas_desc.label.as_deref(), self.instance_flags),
-                    size: size_info.acceleration_structure_size,
-                    format: hal::AccelerationStructureFormat::BottomLevel,
-                    allow_compaction: blas_desc
-                        .flags
-                        .contains(wgpu_types::AccelerationStructureFlags::ALLOW_COMPACTION),
-                })
+            self.create_raw_acceleration_structure(&hal::AccelerationStructureDescriptor {
+                label: hal_label(blas_desc.label.as_deref(), self.instance_flags),
+                size: size_info.acceleration_structure_size,
+                format: hal::AccelerationStructureFormat::BottomLevel,
+                allow_compaction: blas_desc
+                    .flags
+                    .contains(wgpu_types::AccelerationStructureFlags::ALLOW_COMPACTION),
+            })
         }
         .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
@@ -203,21 +203,20 @@ impl Device {
             .flags
             .contains(wgpu_types::AccelerationStructureFlags::ALLOW_COMPACTION)
         {
-            Some(ManuallyDrop::new(unsafe {
-                self.raw()
-                    .create_buffer(&hal::BufferDescriptor {
-                        label: hal_label(
-                            Some("(wgpu internal) compaction read-back buffer"),
-                            self.instance_flags,
-                        ),
-                        size: size_of::<wgpu_types::BufferAddress>() as wgpu_types::BufferAddress,
-                        usage: wgpu_types::BufferUses::ACCELERATION_STRUCTURE_QUERY
-                            | wgpu_types::BufferUses::MAP_READ,
-                        memory_flags: hal::MemoryFlags::PREFER_COHERENT,
-                    })
-                    .map_err(DeviceError::from_hal)?
-                    .0
-            }))
+            Some(unsafe {
+                self.create_raw_buffer(&hal::BufferDescriptor {
+                    label: hal_label(
+                        Some("(wgpu internal) compaction read-back buffer"),
+                        self.instance_flags,
+                    ),
+                    size: size_of::<wgpu_types::BufferAddress>() as wgpu_types::BufferAddress,
+                    usage: wgpu_types::BufferUses::ACCELERATION_STRUCTURE_QUERY
+                        | wgpu_types::BufferUses::MAP_READ,
+                    memory_flags: hal::MemoryFlags::PREFER_COHERENT,
+                })
+                .map_err(DeviceError::from_hal)?
+                .0
+            })
         } else {
             None
         };
@@ -229,7 +228,7 @@ impl Device {
 
         Ok(Arc::new(resource::Blas {
             state: ResourceState::Valid(resource::BlasState {
-                raw: Snatchable::new(raw),
+                raw: Snatchable::new(ScopeGuard::into_inner(raw)),
             }),
             device: self.clone(),
             size_info,
@@ -240,7 +239,8 @@ impl Device {
             label: blas_desc.label.to_string(),
             built_index: RwLock::new(rank::BLAS_BUILT_INDEX, None),
             tracking_data: TrackingData::new(self.tracker_indices.blas_s.clone()),
-            compaction_buffer,
+            compaction_buffer: compaction_buffer
+                .map(|v| ManuallyDrop::new(ScopeGuard::into_inner(v))),
             compacted_state: Mutex::new(rank::BLAS_COMPACTION_STATE, BlasCompactState::Idle),
         }))
     }
@@ -312,13 +312,12 @@ impl Device {
         };
 
         let raw = unsafe {
-            self.raw()
-                .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
-                    label: hal_label(desc.label.as_deref(), self.instance_flags),
-                    size: size_info.acceleration_structure_size,
-                    format: hal::AccelerationStructureFormat::TopLevel,
-                    allow_compaction: false,
-                })
+            self.create_raw_acceleration_structure(&hal::AccelerationStructureDescriptor {
+                label: hal_label(desc.label.as_deref(), self.instance_flags),
+                size: size_info.acceleration_structure_size,
+                format: hal::AccelerationStructureFormat::TopLevel,
+                allow_compaction: false,
+            })
         }
         .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
@@ -328,7 +327,7 @@ impl Device {
             .checked_mul(desc.max_instances.max(1))
             .expect("max_tlas_instance_count should not allow excessive buffer size");
         let (instance_buffer, _) = unsafe {
-            self.raw().create_buffer(&hal::BufferDescriptor {
+            self.create_raw_buffer(&hal::BufferDescriptor {
                 label: hal_label(Some("(wgpu-core) instances_buffer"), self.instance_flags),
                 size: u64::from(instance_buffer_size),
                 usage: wgt::BufferUses::COPY_DST
@@ -340,8 +339,8 @@ impl Device {
 
         Ok(Arc::new(resource::Tlas {
             state: ResourceState::Valid(resource::TlasState {
-                raw: Snatchable::new(raw),
-                instance_buffer,
+                raw: Snatchable::new(ScopeGuard::into_inner(raw)),
+                instance_buffer: ScopeGuard::into_inner(instance_buffer),
             }),
             device: self.clone(),
             size_info,
