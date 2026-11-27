@@ -66,6 +66,14 @@ let texture_view_desc = wgpu::TextureViewDescriptor {
 
 By @beicause in [#9553](https://github.com/gfx-rs/wgpu/pull/9553).
 
+#### Naga implements the WGSL uniformity analysis
+
+Naga now checks uniformity with the [uniformity analysis](https://www.w3.org/TR/WGSL/#uniformity) of the WGSL specification. Shader module creation fails if barriers, `workgroupUniformLoad`, derivatives, texture samples with an implicit level of detail, or subgroup operations may execute in non-uniform control flow. Previously, most of these were not checked.
+
+Diagnostics for derivatives and subgroup operations can be turned off with `diagnostic(off, derivative_uniformity)` and the newly supported `diagnostic(off, subgroup_uniformity)`. The analysis also applies to shaders from SPIR-V and GLSL. To skip it, set the new `ShaderRuntimeChecks::uniformity_analysis` to `false` and use `Device::create_shader_module_trusted`.
+
+By @inner-daemons in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
+
 #### `DeviceDescriptor` has new field `default_queue`
 
 `DeviceDescriptor` has new field `default_queue` of type `QueueDescriptor`, which allows setting label for default device queue:

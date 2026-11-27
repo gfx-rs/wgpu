@@ -1,4 +1,7 @@
 capabilities = "SUBGROUP"
+# The SPIR-V frontend loses the uniformity of built-in inputs, which makes the
+# `subgroupShuffleXor` mask non-uniform: https://github.com/gfx-rs/wgpu/issues/4317
+skip_uniformity_analysis = true
 targets = "METAL | GLSL | HLSL | WGSL"
 
 [msl]

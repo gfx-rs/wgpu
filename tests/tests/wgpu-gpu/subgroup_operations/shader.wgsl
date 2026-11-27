@@ -10,6 +10,7 @@ fn add_result_to_mask(mask: ptr<function, vec2<u32>>, index: u32, value: bool) {
 
 @compute
 @workgroup_size(128)
+@diagnostic(off, subgroup_uniformity)
 fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(num_subgroups) num_subgroups: u32,

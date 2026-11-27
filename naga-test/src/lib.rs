@@ -212,6 +212,9 @@ pub struct Parameters {
     //
     // Capabilities to enable. Defaults to `Capabilities::default()`.
     pub capabilities: Option<naga::valid::Capabilities>,
+    // Skip the uniformity analysis, for inputs that are uniform but that the
+    // analysis can't prove uniform.
+    pub skip_uniformity_analysis: bool,
 
     // -- wgsl-in options --
     #[serde(rename = "wgsl-in")]

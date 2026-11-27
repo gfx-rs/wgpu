@@ -56,6 +56,17 @@ pub struct ShaderRuntimeChecks {
     /// (`INT_MIN / -1`). The caller **MUST** ensure that all divisors are non-zero
     /// and that no signed overflow occurs.
     pub int_div_checks: bool,
+
+    /// If false, `wgpu` does not run the [uniformity analysis] of the WGSL
+    /// specification on the shader.
+    ///
+    /// The caller **MUST** ensure that barriers, derivatives, texture samples
+    /// with an implicit level of detail, and subgroup operations only execute
+    /// in uniform control flow. Otherwise, the behavior is undefined. Shaders
+    /// translated from other languages may not follow WGSL's uniformity rules.
+    ///
+    /// [uniformity analysis]: https://www.w3.org/TR/WGSL/#uniformity
+    pub uniformity_analysis: bool,
 }
 
 impl ShaderRuntimeChecks {
@@ -82,6 +93,7 @@ impl ShaderRuntimeChecks {
             task_shader_dispatch_tracking: all_checks,
             mesh_shader_primitive_indices_clamp: all_checks,
             int_div_checks: all_checks,
+            uniformity_analysis: all_checks,
         }
     }
 }

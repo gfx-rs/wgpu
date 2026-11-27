@@ -50,11 +50,14 @@ Note: this is an issue with snapshot configuration, not code. If you added a new
         }
     }
 
-    let validation_flags = if targets.contains(Targets::NO_VALIDATION) {
+    let mut validation_flags = if targets.contains(Targets::NO_VALIDATION) {
         naga::valid::ValidationFlags::empty()
     } else {
         naga::valid::ValidationFlags::all()
     };
+    if params.skip_uniformity_analysis {
+        validation_flags -= naga::valid::ValidationFlags::CONTROL_FLOW_UNIFORMITY;
+    }
 
     let info = naga::valid::Validator::new(validation_flags, capabilities)
         .validate(module)
