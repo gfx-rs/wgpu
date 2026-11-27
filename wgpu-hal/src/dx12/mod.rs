@@ -634,6 +634,8 @@ struct PassState {
     vertex_buffers: [Direct3D12::D3D12_VERTEX_BUFFER_VIEW; crate::MAX_VERTEX_BUFFERS],
     dirty_vertex_buffers: usize,
     kind: PassKind,
+    /// Number of views of the current multiview render pass, or 1.
+    multiview_view_count: u32,
 }
 
 // `root_elements` size must match `dirty_root_elements` bit size
@@ -658,6 +660,7 @@ impl PassState {
             vertex_buffers: [Default::default(); crate::MAX_VERTEX_BUFFERS],
             dirty_vertex_buffers: 0,
             kind: PassKind::Transfer,
+            multiview_view_count: 1,
         }
     }
 

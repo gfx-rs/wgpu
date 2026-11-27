@@ -5287,8 +5287,17 @@ impl Device {
         // Multiview is only supported if the feature is enabled
         if let Some(mv_mask) = desc.multiview_mask {
             self.require_features(wgt::Features::MULTIVIEW)?;
-            if !(mv_mask.get() + 1).is_power_of_two() {
+            if mv_mask.get().count_ones() != mv_mask.get().trailing_ones() {
                 self.require_features(wgt::Features::SELECTIVE_MULTIVIEW)?;
+            }
+            let highest_layer = 31 - mv_mask.get().leading_zeros();
+            if highest_layer >= self.limits.max_multiview_view_count {
+                return Err(pipeline::RenderError::TooManyMultiviewViews {
+                    mask: mv_mask.get(),
+                    highest_layer,
+                    limit: self.limits.max_multiview_view_count,
+                }
+                .into());
             }
         }
 

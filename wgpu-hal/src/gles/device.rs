@@ -660,9 +660,13 @@ impl super::Device {
             let pipeline_options = glsl::PipelineOptions {
                 shader_stage: naga_stage,
                 entry_point: stage.entry_point.to_owned(),
+                // Single-view passes attach single-layer textures without multiview, and the
+                // number of views of the shader must match the framebuffer.
                 multiview: context
                     .multiview_mask
-                    .map(|a| NonZeroU32::new(a.get().count_ones()).unwrap()),
+                    .map(|a| a.get().count_ones())
+                    .filter(|&views| views > 1)
+                    .and_then(NonZeroU32::new),
             };
 
             let naga = match stage.module.source {

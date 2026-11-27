@@ -904,8 +904,8 @@ pub struct RenderPipelineDescriptor<
     pub multisample: wgt::MultisampleState,
     /// The fragment processing state for this pipeline.
     pub fragment: Option<FragmentState<'a, SM>>,
-    /// If the pipeline will be used with a multiview render pass, this indicates how many array
-    /// layers the attachments will have.
+    /// The multiview mask of the render passes this pipeline will be used in, or `None` if it
+    /// will not be used with multiview.
     pub multiview_mask: Option<NonZeroU32>,
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<PLC>,
@@ -937,9 +937,9 @@ pub struct MeshPipelineDescriptor<
     pub multisample: wgt::MultisampleState,
     /// The fragment processing state for this pipeline.
     pub fragment: Option<FragmentState<'a, SM>>,
-    /// If the pipeline will be used with a multiview render pass, this indicates how many array
-    /// layers the attachments will have.
-    pub multiview: Option<NonZeroU32>,
+    /// The multiview mask of the render passes this pipeline will be used in, or `None` if it
+    /// will not be used with multiview.
+    pub multiview_mask: Option<NonZeroU32>,
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<PLC>,
 }
@@ -976,8 +976,8 @@ pub struct GeneralRenderPipelineDescriptor<
     pub multisample: wgt::MultisampleState,
     /// The fragment processing state for this pipeline.
     pub fragment: Option<FragmentState<'a, SM>>,
-    /// If the pipeline will be used with a multiview render pass, this indicates how many array
-    /// layers the attachments will have.
+    /// The multiview mask of the render passes this pipeline will be used in, or `None` if it
+    /// will not be used with multiview.
     pub multiview_mask: Option<NonZeroU32>,
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<PLC>,
@@ -1011,7 +1011,7 @@ impl<'a, PLL, SM, PLC> From<MeshPipelineDescriptor<'a, PLL, SM, PLC>>
             depth_stencil: value.depth_stencil,
             multisample: value.multisample,
             fragment: value.fragment,
-            multiview_mask: value.multiview,
+            multiview_mask: value.multiview_mask,
             cache: value.cache,
         }
     }
@@ -1115,6 +1115,12 @@ pub enum RenderError {
     TooManyVertexAttributes { given: u32, limit: u32 },
     #[error("Vertex attribute location {given} must be less than limit {limit}")]
     VertexAttributeLocationTooLarge { given: u32, limit: u32 },
+    #[error("Multiview mask {mask:#b} uses layer {highest_layer}, which is not less than the multiview view count limit {limit}")]
+    TooManyMultiviewViews {
+        mask: u32,
+        highest_layer: u32,
+        limit: u32,
+    },
     #[error("Vertex buffer {index} stride {given} exceeds the limit {limit}")]
     VertexStrideTooLarge { index: u32, given: u32, limit: u32 },
     #[error("Vertex attribute at location {location} stride {given} exceeds the limit {limit}")]
@@ -1165,6 +1171,7 @@ impl WebGpuError for RenderError {
             | Self::TooManyBuffersAndAccelerationStructuresInVertexStage { .. }
             | Self::TooManyVertexAttributes { .. }
             | Self::VertexAttributeLocationTooLarge { .. }
+            | Self::TooManyMultiviewViews { .. }
             | Self::VertexStrideTooLarge { .. }
             | Self::UnalignedVertexStride { .. }
             | Self::InvalidVertexAttributeOffset { .. }

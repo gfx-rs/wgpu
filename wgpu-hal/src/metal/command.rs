@@ -45,6 +45,7 @@ impl Default for super::CommandState {
             vertex_buffer_size_map: Default::default(),
             immediates: Vec::new(),
             pending_timer_queries: Vec::new(),
+            multiview_view_count: 1,
         }
     }
 }
@@ -155,6 +156,63 @@ impl Encoder<'_> {
 }
 
 impl super::CommandEncoder {
+    fn write_timestamp_slot(&mut self, set: &super::QuerySet, index: u32) {
+        let support = self.shared.private_caps.timestamp_query_support;
+        debug_assert!(
+            support.contains(TimestampQuerySupport::STAGE_BOUNDARIES),
+            "Timestamp queries are not supported"
+        );
+        let sample_buffer = set.counter_sample_buffer.as_ref().unwrap();
+        let with_barrier = true;
+
+        // Try to use an existing encoder for timestamp query if possible.
+        // This works only if it's supported for the active encoder.
+        if let (true, Some(encoder)) = (
+            support.contains(TimestampQuerySupport::ON_BLIT_ENCODER),
+            self.state.blit.as_ref(),
+        ) {
+            unsafe {
+                encoder.sampleCountersInBuffer_atSampleIndex_withBarrier(
+                    sample_buffer,
+                    index as _,
+                    with_barrier,
+                )
+            };
+        } else if let (true, Some(encoder)) = (
+            support.contains(TimestampQuerySupport::ON_RENDER_ENCODER),
+            self.state.render.as_ref(),
+        ) {
+            unsafe {
+                encoder.sampleCountersInBuffer_atSampleIndex_withBarrier(
+                    sample_buffer,
+                    index as _,
+                    with_barrier,
+                )
+            };
+        } else if let (true, Some(encoder)) = (
+            support.contains(TimestampQuerySupport::ON_COMPUTE_ENCODER),
+            self.state.compute.as_ref(),
+        ) {
+            unsafe {
+                encoder.sampleCountersInBuffer_atSampleIndex_withBarrier(
+                    sample_buffer,
+                    index as _,
+                    with_barrier,
+                )
+            };
+        } else {
+            // If we're here it means we either have no encoder open, or it's not supported to sample within them.
+            // If this happens with render/compute open, this is an invalid usage!
+            debug_assert!(self.state.render.is_none() && self.state.compute.is_none());
+
+            // But otherwise it means we'll put defer this to the next created encoder.
+            self.state.pending_timer_queries.push((set.clone(), index));
+
+            // Ensure we didn't already have a blit open.
+            self.leave_blit();
+        };
+    }
+
     pub fn raw_command_buffer(&self) -> Option<&ProtocolObject<dyn MTLCommandBuffer>> {
         self.raw_cmd_buf.as_deref()
     }
@@ -547,6 +605,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             encoder.endEncoding();
         }
         self.state.pending_timer_queries.clear();
+        self.state.multiview_view_count = 1;
         self.deferred_multi_draws.clear();
         self.deferred_multi_draw_resources.clear();
         let had_command_buffer = self.raw_cmd_buf.is_some();
@@ -813,73 +872,27 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn end_query(&mut self, set: &super::QuerySet, index: u32) {
         match set.ty {
             wgt::QueryType::Occlusion => {
-                self.state
-                    .render
-                    .as_ref()
-                    .unwrap()
-                    .setVisibilityResultMode_offset(
-                        MTLVisibilityResultMode::Disabled,
-                        index as usize * crate::QUERY_SIZE as usize,
-                    );
+                let encoder = self.state.render.as_ref().unwrap();
+                encoder.setVisibilityResultMode_offset(
+                    MTLVisibilityResultMode::Disabled,
+                    index as usize * crate::QUERY_SIZE as usize,
+                );
+                // The query counts all views, so the other slots of a multiview query hold zero.
+                for extra in index + 1..index + self.state.multiview_view_count {
+                    let offset = extra as usize * crate::QUERY_SIZE as usize;
+                    encoder
+                        .setVisibilityResultMode_offset(MTLVisibilityResultMode::Boolean, offset);
+                    encoder
+                        .setVisibilityResultMode_offset(MTLVisibilityResultMode::Disabled, offset);
+                }
             }
             _ => {}
         }
     }
     unsafe fn write_timestamp(&mut self, set: &super::QuerySet, index: u32) {
-        let support = self.shared.private_caps.timestamp_query_support;
-        debug_assert!(
-            support.contains(TimestampQuerySupport::STAGE_BOUNDARIES),
-            "Timestamp queries are not supported"
-        );
-        let sample_buffer = set.counter_sample_buffer.as_ref().unwrap();
-        let with_barrier = true;
-
-        // Try to use an existing encoder for timestamp query if possible.
-        // This works only if it's supported for the active encoder.
-        if let (true, Some(encoder)) = (
-            support.contains(TimestampQuerySupport::ON_BLIT_ENCODER),
-            self.state.blit.as_ref(),
-        ) {
-            unsafe {
-                encoder.sampleCountersInBuffer_atSampleIndex_withBarrier(
-                    sample_buffer,
-                    index as _,
-                    with_barrier,
-                )
-            };
-        } else if let (true, Some(encoder)) = (
-            support.contains(TimestampQuerySupport::ON_RENDER_ENCODER),
-            self.state.render.as_ref(),
-        ) {
-            unsafe {
-                encoder.sampleCountersInBuffer_atSampleIndex_withBarrier(
-                    sample_buffer,
-                    index as _,
-                    with_barrier,
-                )
-            };
-        } else if let (true, Some(encoder)) = (
-            support.contains(TimestampQuerySupport::ON_COMPUTE_ENCODER),
-            self.state.compute.as_ref(),
-        ) {
-            unsafe {
-                encoder.sampleCountersInBuffer_atSampleIndex_withBarrier(
-                    sample_buffer,
-                    index as _,
-                    with_barrier,
-                )
-            };
-        } else {
-            // If we're here it means we either have no encoder open, or it's not supported to sample within them.
-            // If this happens with render/compute open, this is an invalid usage!
-            debug_assert!(self.state.render.is_none() && self.state.compute.is_none());
-
-            // But otherwise it means we'll put defer this to the next created encoder.
-            self.state.pending_timer_queries.push((set.clone(), index));
-
-            // Ensure we didn't already have a blit open.
-            self.leave_blit();
-        };
+        for slot in index..index + self.state.multiview_view_count {
+            self.write_timestamp_slot(set, slot);
+        }
     }
 
     unsafe fn reset_queries(&mut self, _set: &super::QuerySet, _range: Range<u32>) {}
@@ -933,6 +946,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
         assert!(self.state.compute.is_none());
         assert!(self.state.render.is_none());
 
+        // Vertex amplification ignores the view mapping when there is only one view, so a
+        // single-view pass renders to the view's layer directly.
+        let amplified_multiview_mask = desc.multiview_mask.filter(|mv| mv.get().count_ones() > 1);
+        let single_view_layer = match desc.multiview_mask {
+            Some(mv) if amplified_multiview_mask.is_none() => mv.get().trailing_zeros(),
+            _ => 0,
+        };
+
         autoreleasepool(|_| {
             let descriptor = MTLRenderPassDescriptor::new();
 
@@ -942,7 +963,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         unsafe { descriptor.colorAttachments().objectAtIndexedSubscript(i) };
                     at_descriptor.setTexture(Some(&at.target.view.attachment.texture));
                     at_descriptor.setLevel(at.target.view.attachment.base_mip_level as _);
-                    at_descriptor.setSlice(at.target.view.attachment.base_array_layer as _);
+                    at_descriptor.setSlice(
+                        (at.target.view.attachment.base_array_layer + single_view_layer) as _,
+                    );
 
                     if let Some(depth_slice) = at.depth_slice {
                         at_descriptor.setDepthPlane(depth_slice as usize);
@@ -950,8 +973,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     if let Some(ref resolve) = at.resolve_target {
                         at_descriptor.setResolveTexture(Some(&resolve.view.attachment.texture));
                         at_descriptor.setResolveLevel(resolve.view.attachment.base_mip_level as _);
-                        at_descriptor
-                            .setResolveSlice(resolve.view.attachment.base_array_layer as _);
+                        at_descriptor.setResolveSlice(
+                            (resolve.view.attachment.base_array_layer + single_view_layer) as _,
+                        );
                     }
                     let load_action = if at.ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
@@ -977,7 +1001,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     let at_descriptor = descriptor.depthAttachment();
                     at_descriptor.setTexture(Some(&at.target.view.attachment.texture));
                     at_descriptor.setLevel(at.target.view.attachment.base_mip_level as _);
-                    at_descriptor.setSlice(at.target.view.attachment.base_array_layer as _);
+                    at_descriptor.setSlice(
+                        (at.target.view.attachment.base_array_layer + single_view_layer) as _,
+                    );
 
                     let load_action = if at.depth_ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
@@ -1006,7 +1032,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     let at_descriptor = descriptor.stencilAttachment();
                     at_descriptor.setTexture(Some(&at.target.view.attachment.texture));
                     at_descriptor.setLevel(at.target.view.attachment.base_mip_level as _);
-                    at_descriptor.setSlice(at.target.view.attachment.base_array_layer as _);
+                    at_descriptor.setSlice(
+                        (at.target.view.attachment.base_array_layer + single_view_layer) as _,
+                    );
 
                     let load_action = if at.stencil_ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
@@ -1087,12 +1115,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
             // also say "The number of active layers that all attachments must have for layered rendering," implying it is only for layered rendering.
             // However, when I don't set this, I get undefined behavior in nonzero layers, and all non-apple examples of vertex amplification set it.
             // So this is just one of those undocumented requirements.
-            if let Some(mv) = desc.multiview_mask {
+            if let Some(mv) = amplified_multiview_mask {
                 descriptor.setRenderTargetArrayLength(32 - mv.leading_zeros() as usize);
             }
             let raw = self.raw_cmd_buf.as_ref().unwrap();
             let encoder = raw.renderCommandEncoderWithDescriptor(&descriptor).unwrap();
-            if let Some(mv) = desc.multiview_mask {
+            if let Some(mv) = amplified_multiview_mask {
                 // Most likely the API just wasn't thought about enough. It's not like they ever allow you
                 // to use enough views to overflow a 32-bit bitmask.
                 let mv = mv.get();
@@ -1113,6 +1141,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     )
                 };
             }
+            if let Some(mv) = desc.multiview_mask {
+                self.state.multiview_view_count = mv.get().count_ones();
+            }
             if let Some(label) = desc.label {
                 encoder.setLabel(Some(&NSString::from_str(label)));
             }
@@ -1124,6 +1155,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn end_render_pass(&mut self) {
         self.state.render.take().unwrap().endEncoding();
+        self.state.multiview_view_count = 1;
     }
 
     unsafe fn set_bind_group(

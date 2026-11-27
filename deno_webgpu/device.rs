@@ -701,7 +701,7 @@ impl GPUDevice {
         }
       }),
       sample_count: descriptor.sample_count,
-      multiview: None,
+      multiview_mask: None,
     };
 
     // 1. Validate texture format required features of each non-null element of descriptor.colorFormats with this.[[device]].

@@ -265,7 +265,7 @@ pub struct ResolvedRenderPassDescriptor<'a> {
     pub timestamp_writes: Option<PassTimestampWrites<Arc<QuerySet>>>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<Arc<QuerySet>>,
-    /// The multiview array layers that will be used
+    /// The multiview mask of the render pass, or `None` if it does not use multiview.
     pub multiview_mask: Option<NonZeroU32>,
 }
 
@@ -282,7 +282,7 @@ struct ArcRenderPassDescriptor<'a> {
     pub timestamp_writes: Option<PassTimestampWrites>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<Arc<QuerySet>>,
-    /// The multiview array layers that will be used
+    /// The multiview mask of the render pass, or `None` if it does not use multiview.
     pub multiview_mask: Option<NonZeroU32>,
 }
 
@@ -990,6 +990,10 @@ pub enum RenderPassErrorInner {
     MultiViewDimensionMismatch,
     #[error("Multiview view count limit violated")]
     TooManyMultiviewViews,
+    #[error("Attachments with more than one array layer require a multiview mask")]
+    MissingMultiviewMask,
+    #[error("Multiview pass attachments with more than one array layer must be of textures whose `texture_binding_view_dimension` is `D2Array` on this device")]
+    MultiViewTextureNotD2Array,
     #[error("missing occlusion query set")]
     MissingOcclusionQuerySet,
     #[error(transparent)]
@@ -1095,6 +1099,8 @@ impl WebGpuError for RenderPassError {
             | RenderPassErrorInner::MultiViewMismatch
             | RenderPassErrorInner::MultiViewDimensionMismatch
             | RenderPassErrorInner::TooManyMultiviewViews
+            | RenderPassErrorInner::MissingMultiviewMask
+            | RenderPassErrorInner::MultiViewTextureNotD2Array
             | RenderPassErrorInner::MissingOcclusionQuerySet
             | RenderPassErrorInner::PassEnded => ErrorType::Validation,
         }
@@ -1132,6 +1138,57 @@ struct RenderPassInfo {
     multiview_mask: Option<NonZeroU32>,
 }
 
+/// The array layers of `view` that a render pass with `multiview_mask` is guaranteed to write.
+///
+/// Backends may also write the other layers of the view.
+fn written_layer_ranges(
+    view: &TextureView,
+    multiview_mask: Option<NonZeroU32>,
+) -> ArrayVec<TextureInitRange, 16> {
+    let full = TextureInitRange::from(view);
+    let mask = match multiview_mask {
+        Some(mask) if view.parent.desc.dimension != wgt::TextureDimension::D3 => mask.get(),
+        _ => return [full].into_iter().collect(),
+    };
+    let mut ranges = ArrayVec::new();
+    let mut bit = mask.trailing_zeros();
+    while bit < 32 {
+        let end = bit + (mask >> bit).trailing_ones();
+        ranges.push(TextureInitRange {
+            mip_range: full.mip_range.clone(),
+            layer_range: full.layer_range.start + bit..full.layer_range.start + end,
+        });
+        bit = end + (mask.checked_shr(end).unwrap_or(0)).trailing_zeros();
+    }
+    ranges
+}
+
+/// Records that the contents of `view` are discarded.
+///
+/// Every layer of the view is discarded, because backends may discard layers outside the multiview
+/// mask.
+fn discard_view(
+    texture_memory_actions: &mut CommandBufferTextureMemoryActions,
+    view: &TextureView,
+    depth_slice: Option<u32>,
+) {
+    if let Some(depth_slice) = depth_slice {
+        texture_memory_actions.discard(TextureSurfaceDiscard {
+            texture: view.parent.clone(),
+            mip_level: view.selector.mips.start,
+            layer_or_depth_slice: depth_slice,
+        });
+    } else {
+        for layer in view.selector.layers.clone() {
+            texture_memory_actions.discard(TextureSurfaceDiscard {
+                texture: view.parent.clone(),
+                mip_level: view.selector.mips.start,
+                layer_or_depth_slice: layer,
+            });
+        }
+    }
+}
+
 impl RenderPassInfo {
     fn add_pass_texture_init_actions<V>(
         load_op: LoadOp<V>,
@@ -1139,6 +1196,7 @@ impl RenderPassInfo {
         texture_memory_actions: &mut CommandBufferTextureMemoryActions,
         view: &TextureView,
         depth_slice: Option<u32>,
+        multiview_mask: Option<NonZeroU32>,
         pending_discard_init_fixups: &mut SurfacesInDiscardState,
     ) {
         match (
@@ -1194,8 +1252,9 @@ impl RenderPassInfo {
                 ));
             } else {
                 // Clear + Store
-                texture_memory_actions
-                    .register_implicit_init(&view.parent, TextureInitRange::from(view));
+                for range in written_layer_ranges(view, multiview_mask) {
+                    texture_memory_actions.register_implicit_init(&view.parent, range);
+                }
             }
         }
         if store_op == StoreOp::Discard {
@@ -1208,11 +1267,7 @@ impl RenderPassInfo {
             // textures will be reinitialized at the end of the command buffer
             // (by [`BakedCommands::initialize_discarded_depth_slices`]),
             // because the primary init tracker does not track individual slices.
-            texture_memory_actions.discard(TextureSurfaceDiscard {
-                texture: view.parent.clone(),
-                mip_level: view.selector.mips.start,
-                layer_or_depth_slice: depth_slice.unwrap_or(view.selector.layers.start),
-            });
+            discard_view(texture_memory_actions, view, depth_slice);
         }
     }
 
@@ -1268,6 +1323,18 @@ impl RenderPassInfo {
             if this_multiview.is_some() && view.desc.dimension != TextureViewDimension::D2Array {
                 return Err(RenderPassErrorInner::MultiViewDimensionMismatch);
             }
+            // Without arbitrary view dimensions, the texture's binding view dimension fixes how
+            // it can be attached. GL can only attach 2D array textures with multiple views.
+            if this_multiview.is_some()
+                && !device
+                    .downlevel
+                    .flags
+                    .contains(wgt::DownlevelFlags::ARBITRARY_BINDING_VIEW_DIMENSIONS)
+                && view.parent.texture_binding_view_dimension()
+                    != Some(TextureViewDimension::D2Array)
+            {
+                return Err(RenderPassErrorInner::MultiViewTextureNotD2Array);
+            }
 
             // Validate matching first, or store the first one
             if let Some(multiview) = detected_multiview {
@@ -1278,7 +1345,7 @@ impl RenderPassInfo {
                 // Multiview is only supported if the feature is enabled
                 if let Some(this_multiview) = this_multiview {
                     device.require_features(wgt::Features::MULTIVIEW)?;
-                    if this_multiview.get() > device.limits.max_multiview_view_count {
+                    if this_multiview.get() > device.limits.max_multiview_view_count.min(32) {
                         return Err(RenderPassErrorInner::TooManyMultiviewViews);
                     }
                 }
@@ -1337,6 +1404,7 @@ impl RenderPassInfo {
                     texture_memory_actions,
                     view,
                     None,
+                    multiview_mask,
                     pending_discard_init_fixups,
                 );
             } else if !ds_aspects.contains(hal::FormatAspects::DEPTH) {
@@ -1346,6 +1414,7 @@ impl RenderPassInfo {
                     texture_memory_actions,
                     view,
                     None,
+                    multiview_mask,
                     pending_discard_init_fixups,
                 );
             } else {
@@ -1396,10 +1465,9 @@ impl RenderPassInfo {
                 // (possible optimization: Delay and potentially drop this zeroing)
                 if at.depth.store_op() != at.stencil.store_op() {
                     if !need_init_beforehand {
-                        texture_memory_actions.register_implicit_init(
-                            &view.parent,
-                            TextureInitRange::from(view.as_ref()),
-                        );
+                        for range in written_layer_ranges(view, multiview_mask) {
+                            texture_memory_actions.register_implicit_init(&view.parent, range);
+                        }
                     }
                     divergent_discarded_depth_stencil_aspect = Some((
                         if at.depth.store_op() == StoreOp::Discard {
@@ -1411,11 +1479,7 @@ impl RenderPassInfo {
                     ));
                 } else if at.depth.store_op() == StoreOp::Discard {
                     // Both are discarded using the regular path.
-                    texture_memory_actions.discard(TextureSurfaceDiscard {
-                        texture: view.parent.clone(),
-                        mip_level: view.selector.mips.start,
-                        layer_or_depth_slice: view.selector.layers.start,
-                    });
+                    discard_view(texture_memory_actions, view, None);
                 }
             }
 
@@ -1587,6 +1651,7 @@ impl RenderPassInfo {
                 texture_memory_actions,
                 color_view,
                 at.depth_slice,
+                multiview_mask,
                 pending_discard_init_fixups,
             );
             render_attachments
@@ -1652,10 +1717,9 @@ impl RenderPassInfo {
                     });
                 }
 
-                texture_memory_actions.register_implicit_init(
-                    &resolve_view.parent,
-                    TextureInitRange::from(resolve_view.as_ref()),
-                );
+                for range in written_layer_ranges(resolve_view, multiview_mask) {
+                    texture_memory_actions.register_implicit_init(&resolve_view.parent, range);
+                }
                 render_attachments
                     .push(resolve_view.to_render_attachment(wgt::TextureUses::COLOR_TARGET));
 
@@ -1682,15 +1746,18 @@ impl RenderPassInfo {
         let detected_multiview =
             detected_multiview.expect("Multiview was not detected, no attachments");
         if let Some(mask) = multiview_mask {
+            device.require_features(wgt::Features::MULTIVIEW)?;
             // 0x01 will have msb 0
             let mask_msb = 31 - mask.leading_zeros();
             let detected_mv = detected_multiview.map(NonZeroU32::get).unwrap_or(1);
             if mask_msb >= detected_mv {
                 return Err(RenderPassErrorInner::MultiViewMismatch);
             }
-            if mask.get() != (1 << detected_mv) - 1 {
+            if detected_mv > 32 || mask.get() != u32::MAX >> (32 - detected_mv) {
                 device.require_features(wgt::Features::SELECTIVE_MULTIVIEW)?;
             }
+        } else if detected_multiview.is_some() {
+            return Err(RenderPassErrorInner::MissingMultiviewMask);
         }
 
         let attachment_formats = AttachmentData {
@@ -1855,7 +1922,11 @@ impl RenderPassInfo {
                     depth_read_only: false,
                     stencil_read_only: false,
                 }),
-                multiview_mask: self.multiview_mask,
+                // Clear every layer, because the pass may have discarded layers outside its mask.
+                multiview_mask: match view.selector.layers.end - view.selector.layers.start {
+                    1 => self.multiview_mask,
+                    layers => NonZeroU32::new(u32::MAX >> (32 - layers)),
+                },
                 timestamp_writes: None,
                 occlusion_query_set: None,
             };
@@ -2369,6 +2440,11 @@ pub(super) fn encode_render_pass(
             active_pipeline_statistics_query: None,
         };
 
+        let multiview_view_count = state
+            .info
+            .multiview_mask
+            .map_or(1, |mask| mask.get().count_ones());
+
         for command in base.commands.drain(..) {
             match command {
                 ArcRenderCommand::SetBindGroup {
@@ -2568,6 +2644,7 @@ pub(super) fn encode_render_pass(
                         Some(&mut pending_query_resets),
                         query_set,
                         query_index,
+                        multiview_view_count,
                     )
                     .map_pass_err(scope)?;
                 }
@@ -2585,6 +2662,7 @@ pub(super) fn encode_render_pass(
                         state.pass.base.raw_encoder,
                         &mut state.pass.base.tracker.query_sets,
                         query_index,
+                        multiview_view_count,
                         Some(&mut pending_query_resets),
                         &mut state.active_occlusion_query,
                         state.pass.base.snatch_guard,
@@ -2598,6 +2676,7 @@ pub(super) fn encode_render_pass(
                     end_occlusion_query(
                         state.pass.base.raw_encoder,
                         &mut state.active_occlusion_query,
+                        multiview_view_count,
                         state.pass.base.snatch_guard,
                         state.pass.base.query_set_writes,
                     )
@@ -2619,6 +2698,7 @@ pub(super) fn encode_render_pass(
                         &mut state.pass.base.tracker.query_sets,
                         device,
                         query_index,
+                        multiview_view_count,
                         Some(&mut pending_query_resets),
                         &mut state.active_pipeline_statistics_query,
                         state.pass.base.snatch_guard,
@@ -2632,6 +2712,7 @@ pub(super) fn encode_render_pass(
                     end_pipeline_statistics_query(
                         state.pass.base.raw_encoder,
                         &mut state.active_pipeline_statistics_query,
+                        multiview_view_count,
                         state.pass.base.snatch_guard,
                         state.pass.base.query_set_writes,
                     )
