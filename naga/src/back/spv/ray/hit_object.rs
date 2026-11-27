@@ -48,11 +48,12 @@ impl Writer {
                 .expect("ray desc should be set if `hitObjectTraceRay` is called"),
         );
 
-        let (func_id, mut function, arg_ids) = self.write_function_signature(
+        let (mut function, func_id, arg_ids) = self.write_function_signature(
+            "hit_object_trace_ray",
             &[
-                hit_object_pointer_type_id,
-                acceleration_structure_type_id,
-                ray_desc_type_id,
+                (hit_object_pointer_type_id, "hit_object"),
+                (acceleration_structure_type_id, "as"),
+                (ray_desc_type_id, "ray_desc"),
             ],
             self.void_type,
         );
@@ -180,8 +181,12 @@ impl Writer {
                 .expect("ray desc should be set if `hitObjectRecordMiss` is called"),
         );
 
-        let (func_id, mut function, arg_ids) = self.write_function_signature(
-            &[hit_object_pointer_type_id, ray_desc_type_id],
+        let (mut function, func_id, arg_ids) = self.write_function_signature(
+            "hit_object_record_miss",
+            &[
+                (hit_object_pointer_type_id, "hit_object"),
+                (ray_desc_type_id, "ray_desc"),
+            ],
             self.void_type,
         );
 
@@ -278,12 +283,13 @@ impl Writer {
 
         let attribute_var_id = self.get_hit_object_attribute_var();
 
-        let (func_id, mut function, arg_ids) = self.write_function_signature(
+        let (mut function, func_id, arg_ids) = self.write_function_signature(
+            "hit_object_record_from_query",
             &[
-                hit_object_pointer_type_id,
-                ray_query_pointer_type_id,
-                u32_pointer_type_id,
-                f32_pointer_type_id,
+                (hit_object_pointer_type_id, "hit_object"),
+                (ray_query_pointer_type_id, "ray_query"),
+                (u32_pointer_type_id, "sbt_record_index"),
+                (f32_pointer_type_id, "attributes"),
             ],
             self.void_type,
         );
@@ -503,8 +509,11 @@ impl Writer {
 
         let hit_object_pointer_type_id = self.get_hit_object_pointer_id();
 
-        let (func_id, mut function, arg_ids) =
-            self.write_function_signature(&[hit_object_pointer_type_id], self.void_type);
+        let (mut function, func_id, arg_ids) = self.write_function_signature(
+            "hit_object_execute_shader",
+            &[(hit_object_pointer_type_id, "hit_object")],
+            self.void_type,
+        );
 
         let hit_object_id = arg_ids[0];
         let payload_id = self.global_variables[payload].access_id;
@@ -584,8 +593,11 @@ impl Writer {
 
         let argument_type_id = self.get_hit_object_pointer_id();
 
-        let (func_id, mut function, arg_ids) =
-            self.write_function_signature(&[argument_type_id], intersection_type_id);
+        let (mut function, func_id, arg_ids) = self.write_function_signature(
+            "hit_object_get_intersection",
+            &[(argument_type_id, "hit_object")],
+            intersection_type_id,
+        );
 
         let hit_object_id = arg_ids[0];
 
