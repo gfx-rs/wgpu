@@ -1,0 +1,6 @@
+error: expected statement, found "3"
+  ┌─ wgsl:2:5
+  │
+2 │     3 + 5 = 10;
+  │     ^ expected statement
+

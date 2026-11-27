@@ -1,0 +1,6 @@
+error: type can't be inferred
+  ┌─ wgsl:2:9
+  │
+2 │     _ = mat2x2();
+  │         ^^^^^^ type can't be inferred
+

@@ -1,0 +1,8 @@
+error: redefinition of `foo`
+  ┌─ wgsl:3:7
+  │
+3 │ const foo: bool = true;
+  │       ^^^ previous definition of `foo`
+4 │ const foo: bool = true;
+  │       ^^^ redefinition of `foo`
+

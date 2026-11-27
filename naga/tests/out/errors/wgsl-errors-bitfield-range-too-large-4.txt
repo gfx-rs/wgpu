@@ -1,0 +1,6 @@
+error: `offset` + `count` must be at most 32, the bit width of the operand of the insertBits built-in function, but 4294967295 + 4294967295 is greater
+  ┌─ wgsl:4:11
+  │
+4 │ const x = insertBits(vec2(0u), vec2(0u), 4294967295u, 4294967295u);
+  │           ^^^^^^^^^^ see msg
+

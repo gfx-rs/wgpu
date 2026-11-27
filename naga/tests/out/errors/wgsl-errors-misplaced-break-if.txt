@@ -1,0 +1,6 @@
+error: A break if is only allowed in a continuing block
+  ┌─ wgsl:3:9
+  │
+3 │         break if true;
+  │         ^^^^^^^^ not in a continuing block
+

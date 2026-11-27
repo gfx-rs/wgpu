@@ -1,0 +1,8 @@
+error: redefinition of `Foo`
+  ┌─ wgsl:1:8
+  │
+1 │ struct Foo { a: u32 };
+  │        ^^^ previous definition of `Foo`
+2 │ struct Foo { a: u32 };
+  │        ^^^ redefinition of `Foo`
+

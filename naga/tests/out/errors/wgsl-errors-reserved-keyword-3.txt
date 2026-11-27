@@ -1,0 +1,6 @@
+error: name `enable` is a reserved keyword
+  ┌─ wgsl:4:9
+  │
+4 │     let enable: f32 = 1.0;
+  │         ^^^^^^ definition of `enable`
+

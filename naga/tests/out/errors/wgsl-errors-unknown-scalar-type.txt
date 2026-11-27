@@ -1,0 +1,8 @@
+error: unknown scalar type: `vec2f`
+  ┌─ wgsl:1:16
+  │
+1 │ const a = vec2<vec2f>();
+  │                ^^^^^ unknown scalar type
+  │
+  = note: Valid scalar types are f32, f64, i32, u32, bool
+

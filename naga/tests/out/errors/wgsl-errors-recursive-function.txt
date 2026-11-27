@@ -1,0 +1,8 @@
+error: declaration of `f` is recursive
+  ┌─ wgsl:1:4
+  │
+1 │ fn f() {
+  │    ^
+2 │     f();
+  │     ^ uses itself here
+

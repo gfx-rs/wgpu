@@ -1,0 +1,6 @@
+error: unterminated block comment
+  ┌─ wgsl:1:20
+  │
+1 │ const N: u32 = 1u; /* Trailing unterminated
+  │                    ^^^^^^^^^^^^^^^^^^^^^^^^ must be closed with `*/`
+

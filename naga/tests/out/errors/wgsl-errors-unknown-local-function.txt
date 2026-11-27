@@ -1,0 +1,6 @@
+error: no definition in scope for identifier: `a`
+  ┌─ wgsl:2:10
+  │
+2 │     for (a();;) {}
+  │          ^ unknown identifier
+

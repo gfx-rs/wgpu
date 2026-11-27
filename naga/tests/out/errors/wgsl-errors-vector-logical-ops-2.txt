@@ -1,0 +1,6 @@
+error: Cannot apply the binary op to the arguments
+  ┌─ wgsl:1:12
+  │
+1 │ const or = vec2(true, false) || vec2(false, false);
+  │            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ see msg
+

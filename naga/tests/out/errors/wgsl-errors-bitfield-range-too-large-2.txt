@@ -1,0 +1,6 @@
+error: `offset` + `count` must be at most 32, the bit width of the operand of the extractBits built-in function, but 33 + 0 is greater
+  ┌─ wgsl:4:11
+  │
+4 │ const x = extractBits(0u, 33u, 0u);
+  │           ^^^^^^^^^^^ see msg
+

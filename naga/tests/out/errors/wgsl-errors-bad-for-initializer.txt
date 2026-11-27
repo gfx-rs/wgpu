@@ -1,0 +1,6 @@
+error: expected for loop initializer statement (`var`/`let`/`const` declaration, assignment, `i++`/`i--` statement, function call), found "{"
+  ┌─ wgsl:2:10
+  │
+2 │     for ({};;) {}
+  │          ^ expected for loop initializer statement (`var`/`let`/`const` declaration, assignment, `i++`/`i--` statement, function call)
+

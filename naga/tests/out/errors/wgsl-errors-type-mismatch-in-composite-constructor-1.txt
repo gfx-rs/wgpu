@@ -1,0 +1,8 @@
+error: expected `vec2<u32>`, found `u32`
+  ┌─ wgsl:6:13
+  │
+6 │     var a = array<vec2<u32>, 2>(1u, 2u);
+  │             ^^^^^^^^^^^^^^^^^^^ ^^ this expression has type `u32`
+  │             │                    
+  │             a value of type `vec2<u32>` is required here
+

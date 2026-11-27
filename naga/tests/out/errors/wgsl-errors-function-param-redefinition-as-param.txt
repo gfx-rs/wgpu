@@ -1,0 +1,8 @@
+error: redefinition of `a`
+  ┌─ wgsl:1:6
+  │
+1 │ fn x(a: f32, a: vec2<f32>) {}
+  │      ^       ^ redefinition of `a`
+  │      │        
+  │      previous definition of `a`
+

@@ -1,0 +1,9 @@
+error: expected `array<u32, 4>`, found `u32`
+  ┌─ wgsl:5:1
+  │
+5 │ struct S { inner: array<u32, 4> }
+  │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ a value of type `array<u32, 4>` is required here
+6 │ fn main() {
+7 │     var s = S(1u);
+  │               ^^ this expression has type `u32`
+

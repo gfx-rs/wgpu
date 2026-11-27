@@ -1,0 +1,6 @@
+error: unknown storage format: `rgba`
+  ┌─ wgsl:1:34
+  │
+1 │ var storage1: texture_storage_1d<rgba>;
+  │                                  ^^^^ unknown storage format
+

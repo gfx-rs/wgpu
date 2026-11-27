@@ -1,0 +1,6 @@
+error: no definition in scope for identifier: `b`
+  ┌─ wgsl:2:13
+  │
+2 │     let a = b;
+  │             ^ unknown identifier
+

@@ -1,0 +1,8 @@
+error: struct member is too large
+  ┌─ wgsl:5:5
+  │
+5 │     arr: array<u32, 1 << 29>,
+  │     ^^^ this member exceeds the maximum size
+  │
+  = note: the maximum size is 2147483647 bytes
+

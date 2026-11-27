@@ -1,0 +1,2 @@
+error: Incompatible operands: LogicalOr(vec2<bool>, _)
+

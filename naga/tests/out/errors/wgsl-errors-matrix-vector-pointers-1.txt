@@ -1,0 +1,6 @@
+error: cannot take the address of a vector component
+  ┌─ wgsl:3:22
+  │
+3 │             let p = &v[0];
+  │                      ^^^^ invalid operand for address-of
+

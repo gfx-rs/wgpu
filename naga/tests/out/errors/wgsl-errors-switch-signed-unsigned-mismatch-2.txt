@@ -1,0 +1,6 @@
+error: invalid `switch` case selector value
+  ┌─ wgsl:3:14
+  │
+3 │         case 1u: {}
+  │              ^^ `switch` case selector must have the same type as the `switch` selector expression
+

@@ -1,0 +1,6 @@
+error: the type of `foo` is expected to be `Foo`, but got `Bar`
+  ┌─ wgsl:4:7
+  │
+4 │ const foo: Foo = Bar(1);
+  │       ^^^ definition of `foo`
+

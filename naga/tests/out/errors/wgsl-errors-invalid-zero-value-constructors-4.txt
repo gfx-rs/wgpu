@@ -1,0 +1,6 @@
+error: type `Unsized` is not constructible
+  ┌─ wgsl:6:29
+  │
+6 │     var not_okay: Unsized = Unsized();
+  │                             ^^^^^^^ type is not constructible
+

@@ -1,0 +1,8 @@
+error: attribute `@must_use` is only valid on function declarations
+  ┌─ wgsl:1:2
+  │
+1 │ @must_use
+  │  ^^^^^^^^
+  │
+  = note: place `@must_use` on a function declaration with a return type
+

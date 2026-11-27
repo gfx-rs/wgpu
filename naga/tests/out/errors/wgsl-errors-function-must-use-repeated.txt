@@ -1,0 +1,6 @@
+error: repeated attribute: `must_use`
+  ┌─ wgsl:2:2
+  │
+2 │ @must_use
+  │  ^^^^^^^^ repeated attribute
+

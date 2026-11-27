@@ -1,0 +1,6 @@
+error: unterminated block comment
+  ┌─ wgsl:1:1
+  │
+1 │ /* unterminated
+  │ ^^^^^^^^^^^^^^^ must be closed with `*/`
+

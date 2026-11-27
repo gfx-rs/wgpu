@@ -1,0 +1,2 @@
+error: Incompatible operands: LogicalAnd(vec2<bool>, _)
+

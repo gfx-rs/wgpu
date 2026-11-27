@@ -1,0 +1,6 @@
+error: must be a const-expression that resolves to a concrete integer scalar (`u32` or `i32`)
+  ┌─ wgsl:1:24
+  │
+1 │ alias Bad = array<f32, true>;
+  │                        ^^^^ must resolve to `u32` or `i32`
+

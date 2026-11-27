@@ -1,0 +1,6 @@
+error: expected `Bar`, found `Foo`
+  ┌─ wgsl:5:9
+  │
+5 │     bar(Foo(1));
+  │         ^^^^^^ this expression has type `Foo`
+

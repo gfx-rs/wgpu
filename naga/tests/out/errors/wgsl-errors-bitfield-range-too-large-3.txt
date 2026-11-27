@@ -1,0 +1,6 @@
+error: `offset` + `count` must be at most 32, the bit width of the operand of the insertBits built-in function, but 1 + 32 is greater
+  ┌─ wgsl:4:11
+  │
+4 │ const x = insertBits(0i, 0i, 1u, 32u);
+  │           ^^^^^^^^^^ see msg
+

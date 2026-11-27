@@ -1,0 +1,6 @@
+error: this operation is not supported in a const context
+  ┌─ wgsl:3:15
+  │
+3 │     const c = a;
+  │               ^ operation not supported here
+

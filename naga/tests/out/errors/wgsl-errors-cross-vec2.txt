@@ -1,0 +1,12 @@
+error: wrong type passed as argument #1 to `cross`
+  ┌─ wgsl:2:12
+  │
+2 │     return cross(vec2(0., 1.), vec2(0., 1.));
+  │            ^^^^^ ^^^^^^^^^^^^ argument #1 has type `vec2<{AbstractFloat}>`
+  │
+  = note: `cross` accepts the following types for argument #1:
+  = note: allowed type: vec3<{AbstractFloat}>
+  = note: allowed type: vec3<f32>
+  = note: allowed type: vec3<f16>
+  = note: allowed type: vec3<f64>
+

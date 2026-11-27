@@ -1,0 +1,8 @@
+error: redefinition of `a`
+  ┌─ wgsl:1:14
+  │
+1 │         fn x(a: f32) {
+  │              ^ previous definition of `a`
+2 │             let a = 0.0;
+  │                 ^ redefinition of `a`
+

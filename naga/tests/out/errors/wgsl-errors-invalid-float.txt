@@ -1,0 +1,6 @@
+error: expected identifier, found ";"
+  ┌─ wgsl:1:24
+  │
+1 │ const scale: f32 = 1.1.;
+  │                        ^ expected identifier
+
