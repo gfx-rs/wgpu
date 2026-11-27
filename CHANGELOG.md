@@ -442,6 +442,11 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 - Fix `Device::on_uncaptured_error` never firing in browsers that do not implement `GPUDevice.onuncapturederror`, such as Safari, by listening for the `uncapturederror` event instead of assigning to that attribute. By @zemse in [#10270](https://github.com/gfx-rs/wgpu/pull/10270).
 - Pass `RenderPassColorAttachment::depth_slice` to the browser, so a render pass into a 3D texture no longer fails validation with "depthSlice is required for a 3D attachment". By @jheising in [#10693](https://github.com/gfx-rs/wgpu/pull/10693).
 
+#### deno_webgpu
+
+- Fix panics when a device is lost: `mapAsync()` and `onSubmittedWorkDone()` unwrapped the result of polling the device, and the task that resolves `device.lost` unwrapped a resolver that the device's finalizer may already have removed. By @matthargett in [#11134](https://github.com/gfx-rs/wgpu/pull/11134).
+- Fix `device.lost` never resolving after `device.destroy()` when a queue submission was still in flight. `cts_runner` then exited with status 0 and without reporting any result, as it did for `webgpu:api,operation,uncapturederror:iff_uncaptured:*`. By @matthargett in [#11134](https://github.com/gfx-rs/wgpu/pull/11134).
+
 ### Performance
 
 - GLES: `Queue::submit` no longer resets GL state for command buffers that record no commands (e.g. the internal transit and pre-pass encoders), removing two full reset sequences (about 20 GL calls) per frame for a typical single-pass WebGL2 renderer. By @chinqan in [#10913](https://github.com/gfx-rs/wgpu/pull/10913).

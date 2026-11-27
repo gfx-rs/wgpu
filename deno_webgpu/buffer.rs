@@ -233,7 +233,9 @@ impl GPUBuffer {
 
     {
       let callback = Box::new(move |status| {
-        sender.send(status).unwrap();
+        // The receiver is gone if the mapping was already rejected because
+        // the device was lost; there is nobody left to tell.
+        let _ = sender.send(status);
       });
 
       self.wgpu_buffer.map_async(
@@ -270,10 +272,13 @@ impl GPUBuffer {
     let device_poll_fut = async move {
       while !*done.borrow() {
         {
+          // A failed poll means the device is gone (the driver reported
+          // a lost device or ran out of memory). Reject the mapping rather
+          // than aborting the process.
           self
             .wgpu_device
             .poll(wgpu_types::PollType::wait_indefinitely())
-            .unwrap();
+            .map_err(|e| BufferError::Aborted(e.to_string()))?;
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
       }

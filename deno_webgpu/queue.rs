@@ -78,7 +78,8 @@ impl GPUQueue {
     let (sender, receiver) = oneshot::channel::<()>();
 
     let callback = Box::new(move || {
-      sender.send(()).unwrap();
+      // The receiver is gone if the device was lost while waiting.
+      let _ = sender.send(());
     });
 
     self.wgpu_queue.on_submitted_work_done(callback);
@@ -88,10 +89,16 @@ impl GPUQueue {
     let device_poll_fut = async move {
       while !*done.borrow() {
         {
-          self
+          // A failed poll means the device is gone, so the submitted work
+          // will never complete. The specification resolves this promise
+          // for a lost device; do not abort the process.
+          if self
             .wgpu_device
             .poll(wgpu_types::PollType::wait_indefinitely())
-            .unwrap();
+            .is_err()
+          {
+            return Ok(());
+          }
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
       }
