@@ -30,9 +30,19 @@ use wgt::Limits;
 ///
 /// This is enough space for:
 ///
-/// - 65535 [`wgt::DrawIndirectArgs`] / [`MetadataEntry`]
+/// - 65535 [`wgt::DrawIndirectArgs`]
 /// - 52428 [`wgt::DrawIndexedIndirectArgs`]
 const BUFFER_SIZE: wgt::BufferSize = wgt::BufferSize::new(1_048_560).unwrap();
+
+/// Size of a metadata buffer.
+///
+/// Holds one [`MetadataEntry`] for each draw that fits in a destination buffer of
+/// [`BUFFER_SIZE`] at the smallest stride. This is the largest possible batch.
+const METADATA_BUFFER_SIZE: wgt::BufferSize = wgt::BufferSize::new(
+    BUFFER_SIZE.get() / size_of::<wgt::DrawIndirectArgs>() as u64
+        * size_of::<MetadataEntry>() as u64,
+)
+.unwrap();
 
 /// Holds all device-level resources that are needed to validate indirect draws.
 ///
@@ -81,7 +91,7 @@ impl Draw {
             device,
             true,
             false,
-            BUFFER_SIZE,
+            METADATA_BUFFER_SIZE,
             hal_label(
                 Some("(wgpu internal) Indirect draw validation metadata bind group layout"),
                 instance_flags,
@@ -223,6 +233,7 @@ impl Draw {
                 create_buffer_and_bind_group(
                     device,
                     usage,
+                    BUFFER_SIZE,
                     self.dst_bind_group_layout.as_ref(),
                     hal_label(Some("(wgpu internal) Indirect draw validation destination buffer"), instance_flags),
                     hal_label(Some("(wgpu internal) Indirect draw validation destination bind group layout"), instance_flags),
@@ -248,6 +259,7 @@ impl Draw {
                 create_buffer_and_bind_group(
                     device,
                     usage,
+                    METADATA_BUFFER_SIZE,
                     self.metadata_bind_group_layout.as_ref(),
                     hal_label(
                         Some("(wgpu internal) Indirect draw validation metadata buffer"),
@@ -749,13 +761,14 @@ struct BufferPoolEntry {
 fn create_buffer_and_bind_group(
     device: &dyn hal::DynDevice,
     usage: wgt::BufferUses,
+    size: wgt::BufferSize,
     bind_group_layout: &dyn hal::DynBindGroupLayout,
     buffer_label: Option<&'static str>,
     bind_group_label: Option<&'static str>,
 ) -> Result<BufferPoolEntry, hal::DeviceError> {
     let buffer_desc = hal::BufferDescriptor {
         label: buffer_label,
-        size: BUFFER_SIZE.get(),
+        size: size.get(),
         usage,
         memory_flags: hal::MemoryFlags::empty(),
     };
@@ -769,11 +782,7 @@ fn create_buffer_and_bind_group(
             count: 1,
         }],
         // SAFETY: We just created the buffer with this size.
-        buffers: &[hal::BufferBinding::new_unchecked(
-            buffer.as_ref(),
-            0,
-            BUFFER_SIZE,
-        )],
+        buffers: &[hal::BufferBinding::new_unchecked(buffer.as_ref(), 0, size)],
         samplers: &[],
         textures: &[],
         acceleration_structures: &[],
@@ -849,7 +858,7 @@ impl DrawResources {
             }
             Ok(())
         };
-        let entry_data = Self::get_subrange_impl(ensure_entry, current_entry, size)?;
+        let entry_data = Self::get_subrange_impl(ensure_entry, current_entry, size, BUFFER_SIZE)?;
         Ok((entry_data.index, entry_data.offset))
     }
 
@@ -867,7 +876,8 @@ impl DrawResources {
             }
             Ok(())
         };
-        let entry_data = Self::get_subrange_impl(ensure_entry, current_entry, size)?;
+        let entry_data =
+            Self::get_subrange_impl(ensure_entry, current_entry, size, METADATA_BUFFER_SIZE)?;
         Ok((entry_data.index, entry_data.offset))
     }
 
@@ -875,9 +885,10 @@ impl DrawResources {
         ensure_entry: impl FnOnce(usize) -> Result<(), hal::DeviceError>,
         current_entry: &mut Option<CurrentEntry>,
         size: u64,
+        buffer_size: wgt::BufferSize,
     ) -> Result<CurrentEntry, DeviceError> {
         let index = if let Some(current_entry) = current_entry.as_mut() {
-            if current_entry.offset + size <= BUFFER_SIZE.get() {
+            if current_entry.offset + size <= buffer_size.get() {
                 let entry_data = current_entry.clone();
                 current_entry.offset += size;
                 return Ok(entry_data);
@@ -908,6 +919,7 @@ struct MetadataEntry {
     dst_offset: u32,
     vertex_or_index_limit: u32,
     instance_limit: u32,
+    flags: u32,
 }
 
 impl MetadataEntry {
@@ -923,10 +935,6 @@ impl MetadataEntry {
         let src_offset = u64_offset_to_u32_offset(src_offset);
         let src_offset = src_offset / 4; // translate byte offset to offset in u32's
 
-        // `src_offset` needs at most 30 bits,
-        // pack `indexed` in bit 31 of `src_offset`
-        let src_offset = src_offset | ((indexed as u32) << 31);
-
         // max value for limits since first_X and X_count indirect draw arguments are u32
         let max_limit = U32_MAX_AS_U64 + U32_MAX_AS_U64; // 1 11111111 11111111 11111111 11111110
 
@@ -941,17 +949,15 @@ impl MetadataEntry {
         let dst_offset = u64_offset_to_u32_offset(dst_offset);
         let dst_offset = dst_offset / 4; // translate byte offset to offset in u32's
 
-        // `dst_offset` needs at most 30 bits,
-        // pack `vertex_or_index_limit_bit_32` in bit 30 of `dst_offset` and
-        // pack `instance_limit_bit_32` in bit 31 of `dst_offset`
-        let dst_offset =
-            dst_offset | (vertex_or_index_limit_bit_32 << 30) | (instance_limit_bit_32 << 31);
+        let flags =
+            (indexed as u32) | (vertex_or_index_limit_bit_32 << 1) | (instance_limit_bit_32 << 2);
 
         Self {
             src_offset,
             dst_offset,
             vertex_or_index_limit,
             instance_limit,
+            flags,
         }
     }
 }
@@ -1067,6 +1073,21 @@ fn u64_offset_to_u32_offset(offset: u64) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn metadata_buffer_fits_largest_batch() {
+        use crate::command::{get_dst_stride_of_indirect_args, DrawCommandFamily};
+
+        for backend in wgt::Backend::ALL {
+            for family in [DrawCommandFamily::Draw, DrawCommandFamily::DrawIndexed] {
+                let max_entries =
+                    BUFFER_SIZE.get() / get_dst_stride_of_indirect_args(backend, family);
+                assert!(
+                    max_entries * size_of::<MetadataEntry>() as u64 <= METADATA_BUFFER_SIZE.get()
+                );
+            }
+        }
+    }
 
     #[test]
     fn calculate_src_offsets_test() {
