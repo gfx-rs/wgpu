@@ -114,7 +114,10 @@ mod native {
         surface.configure(&device, &config);
 
         let current = surface.get_current_texture();
-        let wgpu::CurrentSurfaceTexture::Success(frame) = current else {
+        // Suboptimal frames remain usable for this reconfiguration regression.
+        let (wgpu::CurrentSurfaceTexture::Success(frame)
+        | wgpu::CurrentSurfaceTexture::Suboptimal(frame)) = current
+        else {
             panic!("Unexpected get_current_texture result: {:?}", current);
         };
 
