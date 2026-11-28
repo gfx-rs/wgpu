@@ -330,6 +330,7 @@ By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 #### naga
 
 - Reject unsigned integer arguments to WGSL `sign()` during Naga validation instead of allowing them to reach and panic in the SPIR-V backend. By @notferdon in [#10451](https://github.com/gfx-rs/wgpu/pull/10451).
+- The SPIR-V front end now reads GLSL.std.450 `UMin`, `UMax`, `UClamp`, `SMin`, `SMax`, `SClamp`, `SAbs`, `SSign`, `FindUMsb` and `FindSMsb` with the opcode's signedness, casting operands and the result as needed. Previously, mixed signed and unsigned operands failed validation and `UMin` on signed operands lost its unsigned semantics. Naga's own SPIR-V writer emits such instructions for `BoundsCheckPolicy::Restrict`. By @edenreich in [#11157](https://github.com/gfx-rs/wgpu/pull/11157).
 - Declare `LocalInvocationIndex` only once in SPIR-V mesh shader entry points that don't take `local_invocation_index` as an argument. Previously these shaders were invalid SPIR-V. By @apollo-2006 in [#10497](https://github.com/gfx-rs/wgpu/pull/10497).
 - Fix panics when shader `var<immediate>` size is larger than 256 bytes. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
 - Fix a panic in the SPIR-V frontend when a subgroup collective operation (e.g. `OpGroupNonUniformUMin`) or `OpGroupNonUniformBallot` used an argument whose value needed to be spilled to a temporary variable, such as when the argument was computed inside a loop. By @nazar-pc in [#9957](https://github.com/gfx-rs/wgpu/issues/9957).
