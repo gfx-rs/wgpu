@@ -15,6 +15,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         EXTERNAL_TEXTURE_SAMPLE_TRANSFORM,
         EXTERNAL_TEXTURE_FROM_VIEW_ZERO_INIT_AFTER_DISCARD,
         EXTERNAL_TEXTURE_ZERO_INIT_AFTER_DISCARD,
+        EXTERNAL_TEXTURE_DEFAULT_PARAMS_LAZY_INIT,
     ]);
 }
 
@@ -1249,3 +1250,98 @@ static EXTERNAL_TEXTURE_ZERO_INIT_AFTER_DISCARD: GpuTestConfiguration = GpuTestC
         );
         assert_eq!(&loads, &[TRANSPARENT_BLACK_F32; 4]);
     });
+
+/// Tests that `default_external_texture_params_buffer` is not allocated eagerly
+/// at device creation, and initializes correctly on first `TextureView` ->
+/// `ExternalTexture` binding (including after a prior queue flush and under
+/// concurrent bind group creation).
+#[apply(gpu_test!)]
+static EXTERNAL_TEXTURE_DEFAULT_PARAMS_LAZY_INIT: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .test_features_limits()
+                .features(wgpu::Features::EXTERNAL_TEXTURE),
+        )
+        .run_async(|ctx| async move {
+            if let Some(report) = ctx.device.generate_allocator_report() {
+                assert!(
+                    !report
+                        .allocations
+                        .iter()
+                        .any(|a| a.name.contains("default external texture params")),
+                    "default external texture params buffer should not be allocated eagerly: {:?}",
+                    report.allocations
+                );
+                assert!(
+                    !report
+                        .allocations
+                        .iter()
+                        .any(|a| a.name.contains("Staging")),
+                    "no staging buffer should be allocated eagerly at device creation: {:?}",
+                    report.allocations
+                );
+            }
+
+            let view = create_texture_and_view(
+                &ctx,
+                wgpu::Extent3d {
+                    width: 2,
+                    height: 2,
+                    depth_or_array_layers: 1,
+                },
+                wgpu::TextureFormat::Rgba8Unorm,
+                Some(RGBA_TEXTURE_DATA.as_flattened()),
+            );
+
+            // Flush PendingWrites after the texture upload so
+            // `pending_writes.is_recording == false` when lazy initialization runs.
+            ctx.queue.submit([]);
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let bgl = ctx
+                    .device
+                    .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                        label: None,
+                        entries: &[wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::ExternalTexture,
+                            count: None,
+                        }],
+                    });
+                std::thread::scope(|s| {
+                    for _ in 0..4 {
+                        s.spawn(|| {
+                            let _bg = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                label: None,
+                                layout: &bgl,
+                                entries: &[wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(&view),
+                                }],
+                            });
+                        });
+                    }
+                });
+            }
+
+            let samples = get_samples(
+                &ctx,
+                &[[0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]],
+                wgpu::BindingResource::TextureView(&view),
+            );
+            assert_eq!(&samples, &[RED_F32, GREEN_F32, BLUE_F32, YELLOW_F32]);
+
+            if let Some(report) = ctx.device.generate_allocator_report() {
+                assert!(
+                    report
+                        .allocations
+                        .iter()
+                        .any(|a| a.name.contains("default external texture params")),
+                    "default external texture params buffer should exist after first TextureView -> ExternalTexture binding: {:?}",
+                    report.allocations
+                );
+            }
+        });
