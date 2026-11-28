@@ -61,6 +61,24 @@ impl Allocation {
     }
 }
 
+fn finish_resource_creation<R, A>(
+    allocation: A,
+    resource: Option<R>,
+    result: Result<(), crate::DeviceError>,
+    rollback: impl FnOnce(A) -> Result<(), crate::DeviceError>,
+) -> Result<(R, A), crate::DeviceError> {
+    let error = match (result, resource) {
+        (Ok(()), Some(resource)) => return Ok((resource, allocation)),
+        (Err(error), resource) => {
+            drop(resource);
+            error
+        }
+        (Ok(()), None) => crate::DeviceError::Unexpected,
+    };
+    rollback(allocation)?;
+    Err(error)
+}
+
 #[derive(Clone)]
 pub(crate) struct Allocator {
     inner: Arc<Mutex<gpu_allocator::d3d12::Allocator>>,
@@ -190,7 +208,13 @@ impl<'a> DeviceAllocationContext<'a> {
         };
 
         if let Some(label) = desc.label {
-            resource.set_name(label)?;
+            if let Err(error) = resource.set_name(label) {
+                drop(resource);
+                if let AllocationInner::Placed { inner } = allocation.inner {
+                    self.mem_allocator.inner.lock().free(inner)?;
+                }
+                return Err(error);
+            }
         }
 
         self.counters.buffer_memory.add(allocation.size() as isize);
@@ -214,7 +238,13 @@ impl<'a> DeviceAllocationContext<'a> {
         };
 
         if let Some(label) = desc.label {
-            resource.set_name(label)?;
+            if let Err(error) = resource.set_name(label) {
+                drop(resource);
+                if let AllocationInner::Placed { inner } = allocation.inner {
+                    self.mem_allocator.inner.lock().free(inner)?;
+                }
+                return Err(error);
+            }
         }
 
         self.counters.texture_memory.add(allocation.size() as isize);
@@ -238,7 +268,13 @@ impl<'a> DeviceAllocationContext<'a> {
         };
 
         if let Some(label) = desc.label {
-            resource.set_name(label)?;
+            if let Err(error) = resource.set_name(label) {
+                drop(resource);
+                if let AllocationInner::Placed { inner } = allocation.inner {
+                    self.mem_allocator.inner.lock().free(inner)?;
+                }
+                return Err(error);
+            }
         }
 
         self.counters
@@ -301,7 +337,7 @@ impl<'a> DeviceAllocationContext<'a> {
 
         let allocation = allocator.allocate(&allocation_desc)?;
         let mut resource = None;
-        unsafe {
+        let result = unsafe {
             self.raw.CreatePlacedResource(
                 allocation.heap(),
                 allocation.offset(),
@@ -311,12 +347,17 @@ impl<'a> DeviceAllocationContext<'a> {
                 &mut resource,
             )
         }
-        .into_device_result("Placed buffer creation")?;
+        .into_device_result("Placed buffer creation");
 
-        let resource = resource.ok_or(crate::DeviceError::Unexpected)?;
-        let wrapped_allocation = Allocation::placed(allocation, AllocationType::Buffer);
-
-        Ok((resource, wrapped_allocation))
+        finish_resource_creation(allocation, resource, result, |allocation| {
+            allocator.free(allocation).map_err(Into::into)
+        })
+        .map(|(resource, allocation)| {
+            (
+                resource,
+                Allocation::placed(allocation, AllocationType::Buffer),
+            )
+        })
     }
 
     fn create_placed_texture(
@@ -340,7 +381,7 @@ impl<'a> DeviceAllocationContext<'a> {
 
         let allocation = allocator.allocate(&allocation_desc)?;
         let mut resource = None;
-        unsafe {
+        let result = unsafe {
             self.raw.CreatePlacedResource(
                 allocation.heap(),
                 allocation.offset(),
@@ -350,12 +391,17 @@ impl<'a> DeviceAllocationContext<'a> {
                 &mut resource,
             )
         }
-        .into_device_result("Placed texture creation")?;
+        .into_device_result("Placed texture creation");
 
-        let resource = resource.ok_or(crate::DeviceError::Unexpected)?;
-        let wrapped_allocation = Allocation::placed(allocation, AllocationType::Texture);
-
-        Ok((resource, wrapped_allocation))
+        finish_resource_creation(allocation, resource, result, |allocation| {
+            allocator.free(allocation).map_err(Into::into)
+        })
+        .map(|(resource, allocation)| {
+            (
+                resource,
+                Allocation::placed(allocation, AllocationType::Texture),
+            )
+        })
     }
 
     fn create_placed_acceleration_structure(
@@ -379,7 +425,7 @@ impl<'a> DeviceAllocationContext<'a> {
 
         let allocation = allocator.allocate(&allocation_desc)?;
         let mut resource = None;
-        unsafe {
+        let result = unsafe {
             self.raw.CreatePlacedResource(
                 allocation.heap(),
                 allocation.offset(),
@@ -389,13 +435,17 @@ impl<'a> DeviceAllocationContext<'a> {
                 &mut resource,
             )
         }
-        .into_device_result("Placed acceleration structure creation")?;
+        .into_device_result("Placed acceleration structure creation");
 
-        let resource = resource.ok_or(crate::DeviceError::Unexpected)?;
-        let wrapped_allocation =
-            Allocation::placed(allocation, AllocationType::AccelerationStructure);
-
-        Ok((resource, wrapped_allocation))
+        finish_resource_creation(allocation, resource, result, |allocation| {
+            allocator.free(allocation).map_err(Into::into)
+        })
+        .map(|(resource, allocation)| {
+            (
+                resource,
+                Allocation::placed(allocation, AllocationType::AccelerationStructure),
+            )
+        })
     }
 
     /////////////////////////////////
@@ -599,5 +649,52 @@ impl<'a> DeviceAllocationContext<'a> {
         }
 
         Ok(allocation_info)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::finish_resource_creation;
+    use core::cell::Cell;
+
+    struct Resource<'a>(&'a Cell<bool>);
+    impl Drop for Resource<'_> {
+        fn drop(&mut self) {
+            self.0.set(true);
+        }
+    }
+
+    #[test]
+    fn creation_failure_drops_resource_before_returning_allocation() {
+        let dropped = Cell::new(false);
+        let rolled_back = Cell::new(false);
+        let result = finish_resource_creation(
+            42,
+            Some(Resource(&dropped)),
+            Err(crate::DeviceError::OutOfMemory),
+            |allocation| {
+                assert!(dropped.get());
+                assert_eq!(allocation, 42);
+                rolled_back.set(true);
+                Ok(())
+            },
+        );
+        assert!(matches!(result, Err(crate::DeviceError::OutOfMemory)));
+        assert!(rolled_back.get());
+    }
+
+    #[test]
+    fn null_resource_rolls_back_and_success_keeps_the_allocation() {
+        let rolled_back = Cell::new(false);
+        let result = finish_resource_creation(42, None::<()>, Ok(()), |_| {
+            rolled_back.set(true);
+            Ok(())
+        });
+        assert!(matches!(result, Err(crate::DeviceError::Unexpected)));
+        assert!(rolled_back.get());
+        let result = finish_resource_creation(42, Some(17), Ok(()), |_| {
+            panic!("success must not roll back")
+        });
+        assert!(matches!(result, Ok((17, 42))));
     }
 }
