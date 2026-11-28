@@ -503,11 +503,16 @@ impl AllocationSizes {
 
     /// Sizes for the transient pool. Minimum block sizes are reduced because
     /// gpu-allocator never frees the last block of a memory type.
-    #[allow(dead_code, reason = "only the vulkan backend has a transient pool")]
+    #[cfg_attr(not(any(dx12, vulkan)), expect(dead_code))]
     pub(crate) fn transient(self) -> Self {
+        const MB: u64 = 1024 * 1024;
         Self {
-            min_device_memblock_size: self.min_device_memblock_size / 4,
-            min_host_memblock_size: self.min_host_memblock_size / 4,
+            min_device_memblock_size: (self.min_device_memblock_size / 4)
+                .next_multiple_of(4 * MB)
+                .max(4 * MB),
+            min_host_memblock_size: (self.min_host_memblock_size / 4)
+                .next_multiple_of(4 * MB)
+                .max(4 * MB),
             ..self
         }
     }
@@ -3336,4 +3341,35 @@ pub struct PipelineGroupData<'a, B: DynBuffer + ?Sized> {
     pub offset: wgt::BufferAddress,
     pub stride: u64,
     pub count: u64,
+}
+
+#[cfg(all(test, any(dx12, vulkan)))]
+mod allocation_sizes_tests {
+    use super::AllocationSizes;
+
+    const MB: u64 = 1024 * 1024;
+
+    #[test]
+    fn transient_sizes_quarter_and_clamp_to_minimum() {
+        let perf = AllocationSizes::from_memory_hints(&wgt::MemoryHints::Performance).transient();
+        assert_eq!(perf.min_device_memblock_size, 32 * MB);
+        assert_eq!(perf.max_device_memblock_size, 256 * MB);
+        assert_eq!(perf.min_host_memblock_size, 16 * MB);
+        assert_eq!(perf.max_host_memblock_size, 128 * MB);
+
+        let mem = AllocationSizes::from_memory_hints(&wgt::MemoryHints::MemoryUsage).transient();
+        assert_eq!(mem.min_device_memblock_size, 4 * MB);
+        assert_eq!(mem.max_device_memblock_size, 64 * MB);
+        assert_eq!(mem.min_host_memblock_size, 4 * MB);
+        assert_eq!(mem.max_host_memblock_size, 32 * MB);
+
+        let manual = AllocationSizes::from_memory_hints(&wgt::MemoryHints::Manual {
+            suballocated_device_memory_block_size: (20 * MB)..(64 * MB),
+        })
+        .transient();
+        assert_eq!(manual.min_device_memblock_size, 8 * MB);
+        assert_eq!(manual.max_device_memblock_size, 64 * MB);
+        assert_eq!(manual.min_host_memblock_size, 4 * MB);
+        assert_eq!(manual.max_host_memblock_size, 32 * MB);
+    }
 }

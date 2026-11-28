@@ -14,8 +14,10 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 static TRANSIENT_BUFFERS_RELEASE_MEMORY_BLOCKS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            // Only the Vulkan backend has a separate transient memory pool.
-            .skip(FailureCase::backend(Backends::all() - Backends::VULKAN)),
+            // Only the Vulkan and DX12 backends have a separate transient memory pool.
+            .skip(FailureCase::backend(
+                Backends::all() - Backends::VULKAN - Backends::DX12,
+            )),
     )
     .run_async(|ctx| async move {
         match ctx.adapter_info.backend {
@@ -26,9 +28,15 @@ static TRANSIENT_BUFFERS_RELEASE_MEMORY_BLOCKS: GpuTestConfiguration = GpuTestCo
                 target_os = "freebsd",
                 target_os = "macos"
             ))]
-            wgpu::Backend::Vulkan => check_transient_buffers_release_memory_blocks(&ctx),
+            wgpu::Backend::Vulkan => {
+                check_transient_buffers_release_memory_blocks::<wgpu::hal::vulkan::Api>(&ctx)
+            }
+            #[cfg(windows)]
+            wgpu::Backend::Dx12 => {
+                check_transient_buffers_release_memory_blocks::<wgpu::hal::dx12::Api>(&ctx)
+            }
             other => unreachable!(
-                "test is configured to skip all backends except Vulkan, but ran on {other:?}"
+                "test is configured to skip all backends except Vulkan and DX12, but ran on {other:?}"
             ),
         }
     });
@@ -40,7 +48,9 @@ static TRANSIENT_BUFFERS_RELEASE_MEMORY_BLOCKS: GpuTestConfiguration = GpuTestCo
     target_os = "freebsd",
     target_os = "macos"
 ))]
-fn check_transient_buffers_release_memory_blocks(ctx: &wgpu_test::TestingContext) {
+fn check_transient_buffers_release_memory_blocks<A: wgpu::hal::Api>(
+    ctx: &wgpu_test::TestingContext,
+) {
     use wgpu::hal::{self, Device as _};
 
     const MB: u64 = 1024 * 1024;
@@ -54,8 +64,7 @@ fn check_transient_buffers_release_memory_blocks(ctx: &wgpu_test::TestingContext
 
     // SAFETY: the hal device is only used to create and destroy buffers that
     // are never handed to wgpu-core.
-    let hal_device =
-        unsafe { ctx.device.as_hal::<hal::vulkan::Api>() }.expect("adapter backend mismatch");
+    let hal_device = unsafe { ctx.device.as_hal::<A>() }.expect("adapter backend mismatch");
 
     let create = |label: &'static str, size: u64, memory_flags: hal::MemoryFlags| {
         let (buffer, _) = unsafe {
@@ -73,7 +82,7 @@ fn check_transient_buffers_release_memory_blocks(ctx: &wgpu_test::TestingContext
     let report = || {
         ctx.device
             .generate_allocator_report()
-            .expect("Vulkan backend should produce an allocator report")
+            .expect("Vulkan/DX12 backend should produce an allocator report")
     };
     let occupied_blocks = |report: &wgpu::AllocatorReport| {
         report
