@@ -117,7 +117,8 @@ static INT64_LITERALS: GpuTestConfiguration = GpuTestConfiguration::new()
             "#
             .into(),
         )
-        .output_type("array<vec2<u32>>".into());
+        .output_type("array<vec2<u32>>".into())
+        .enable("wgpu_int64");
         shader_input_output_test(ctx, InputStorageType::Storage, vec![test])
     });
 
@@ -147,6 +148,9 @@ fn create_int64_atomic_min_max_test() -> Vec<ShaderTest> {
     tests.push(test);
 
     tests
+        .into_iter()
+        .map(|test| test.enable("wgpu_int64"))
+        .collect()
 }
 
 #[apply(gpu_test!)]
@@ -202,6 +206,9 @@ fn create_int64_atomic_all_ops_test() -> Vec<ShaderTest> {
     tests.push(test);
 
     tests
+        .into_iter()
+        .map(|test| test.enable("wgpu_int64"))
+        .collect()
 }
 
 #[apply(gpu_test!)]

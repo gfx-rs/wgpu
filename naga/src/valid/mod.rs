@@ -248,6 +248,7 @@ impl Capabilities {
             Self::SHADER_FLOAT16 => Some(Ext::F16),
             Self::FLOAT64 => Some(Ext::WgpuF64),
             Self::SHADER_INT16 => Some(Ext::WgpuInt16),
+            Self::SHADER_INT64 => Some(Ext::WgpuInt64),
             Self::CLIP_DISTANCES => Some(Ext::ClipDistances),
             Self::MESH_SHADER => Some(Ext::WgpuMeshShader),
             Self::RAY_QUERY => Some(Ext::WgpuRayQuery),

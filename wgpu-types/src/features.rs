@@ -867,6 +867,8 @@ features! {
         const SHADER_EARLY_DEPTH_TEST = 1 << 36;
         /// Allows shaders to use i64 and u64.
         ///
+        /// Requires `enable wgpu_int64;` in WGSL shaders.
+        ///
         /// Supported platforms:
         /// - Vulkan
         /// - DX12 (DXC only)

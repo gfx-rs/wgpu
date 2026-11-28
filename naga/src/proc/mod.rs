@@ -1023,6 +1023,34 @@ impl crate::Module {
         })
     }
 
+    /// Returns `true` if any expression in the module is an [`I64`] or [`U64`]
+    /// literal.
+    ///
+    /// A literal does not add its type to [`Module::types`], so a module can
+    /// use 64-bit integers without having a 64-bit integer type.
+    ///
+    /// [`I64`]: crate::Literal::I64
+    /// [`U64`]: crate::Literal::U64
+    /// [`Module::types`]: crate::Module::types
+    pub fn uses_int64_literals(&self) -> bool {
+        let is_int64_literal = |expr: &crate::Expression| {
+            matches!(
+                *expr,
+                crate::Expression::Literal(crate::Literal::I64(_) | crate::Literal::U64(_))
+            )
+        };
+        let functions = self.functions.iter().map(|(_, f)| f);
+        let entry_points = self.entry_points.iter().map(|ep| &ep.function);
+        self.global_expressions
+            .iter()
+            .any(|(_, expr)| is_int64_literal(expr))
+            || functions.chain(entry_points).any(|func| {
+                func.expressions
+                    .iter()
+                    .any(|(_, expr)| is_int64_literal(expr))
+            })
+    }
+
     pub fn uses_ray_tracing(&self, ep_index: Option<usize>) -> RayTracingUses {
         let mut uses = RayTracingUses::default();
         // Whether this uses ray tracing (unknown whether the usage is pipelines or ray queries).

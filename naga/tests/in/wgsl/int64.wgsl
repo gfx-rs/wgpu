@@ -1,3 +1,5 @@
+enable wgpu_int64;
+
 var<private> private_variable: i64 = 1li;
 const constant_variable: u64 = 20lu;
 

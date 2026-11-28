@@ -22,6 +22,8 @@ pub(crate) struct EnableExtensions {
     wgpu_f64: bool,
     /// Whether `enable wgpu_int16;` was written earlier in the shader module.
     wgpu_int16: bool,
+    /// Whether `enable wgpu_int64;` was written earlier in the shader module.
+    wgpu_int64: bool,
     clip_distances: bool,
     wgpu_cooperative_matrix: bool,
     draw_index: bool,
@@ -41,6 +43,7 @@ impl EnableExtensions {
             wgpu_ray_tracing_invocation_reorder: false,
             f16: false,
             wgpu_int16: false,
+            wgpu_int64: false,
             dual_source_blending: false,
             clip_distances: false,
             wgpu_cooperative_matrix: false,
@@ -70,6 +73,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::DualSourceBlending => &mut self.dual_source_blending,
             ImplementedEnableExtension::F16 => &mut self.f16,
             ImplementedEnableExtension::WgpuInt16 => &mut self.wgpu_int16,
+            ImplementedEnableExtension::WgpuInt64 => &mut self.wgpu_int64,
             ImplementedEnableExtension::ClipDistances => &mut self.clip_distances,
             ImplementedEnableExtension::WgpuCooperativeMatrix => &mut self.wgpu_cooperative_matrix,
             ImplementedEnableExtension::DrawIndex => &mut self.draw_index,
@@ -98,6 +102,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::F16 => self.f16,
             ImplementedEnableExtension::WgpuF64 => self.wgpu_f64,
             ImplementedEnableExtension::WgpuInt16 => self.wgpu_int16,
+            ImplementedEnableExtension::WgpuInt64 => self.wgpu_int64,
             ImplementedEnableExtension::ClipDistances => self.clip_distances,
             ImplementedEnableExtension::WgpuCooperativeMatrix => self.wgpu_cooperative_matrix,
             ImplementedEnableExtension::DrawIndex => self.draw_index,
@@ -162,6 +167,7 @@ impl EnableExtension {
     const BINDING_ARRAY: &'static str = "wgpu_binding_array";
     const F64: &'static str = "wgpu_f64";
     const INT16: &'static str = "wgpu_int16";
+    const INT64: &'static str = "wgpu_int64";
     const DEBUG_PRINTF: &'static str = "wgpu_debug_printf";
 
     /// Convert from a sentinel word in WGSL into its associated [`EnableExtension`], if possible.
@@ -193,6 +199,7 @@ impl EnableExtension {
             Self::BINDING_ARRAY => Self::Implemented(ImplementedEnableExtension::WgpuBindingArray),
             Self::F64 => Self::Implemented(ImplementedEnableExtension::WgpuF64),
             Self::INT16 => Self::Implemented(ImplementedEnableExtension::WgpuInt16),
+            Self::INT64 => Self::Implemented(ImplementedEnableExtension::WgpuInt64),
             Self::DEBUG_PRINTF => Self::Implemented(ImplementedEnableExtension::WgpuDebugPrintf),
             _ => return Err(Box::new(Error::UnknownEnableExtension(span, word))),
         })
@@ -221,6 +228,7 @@ impl EnableExtension {
                 ImplementedEnableExtension::WgpuBindingArray => Self::BINDING_ARRAY,
                 ImplementedEnableExtension::WgpuF64 => Self::F64,
                 ImplementedEnableExtension::WgpuInt16 => Self::INT16,
+                ImplementedEnableExtension::WgpuInt64 => Self::INT64,
                 ImplementedEnableExtension::WgpuDebugPrintf => Self::DEBUG_PRINTF,
             },
             Self::Unimplemented(kind) => match kind {
@@ -283,6 +291,8 @@ pub enum ImplementedEnableExtension {
     WgpuF64,
     /// Enables `i16`/`u16` 16-bit integer support in WGSL, native only.
     WgpuInt16,
+    /// Enables `i64`/`u64` 64-bit integer support in WGSL, native only.
+    WgpuInt64,
     /// Enables the `wgpu_debug_printf` extension, allows using `debugPrintf`, native only.
     WgpuDebugPrintf,
 }
@@ -305,6 +315,7 @@ impl ImplementedEnableExtension {
         Self::WgpuBindingArray,
         Self::WgpuF64,
         Self::WgpuInt16,
+        Self::WgpuInt64,
         Self::WgpuDebugPrintf,
     ];
 
@@ -340,6 +351,7 @@ impl ImplementedEnableExtension {
                 .union(C::ACCELERATION_STRUCTURE_BINDING_ARRAY),
             Self::WgpuF64 => C::FLOAT64,
             Self::WgpuInt16 => C::SHADER_INT16,
+            Self::WgpuInt64 => C::SHADER_INT64,
             Self::WgpuDebugPrintf => C::DEBUG_PRINTF,
         }
     }

@@ -1,3 +1,5 @@
+enable wgpu_int64;
+
 struct Struct {
     atomic_scalar: atomic<u64>,
     atomic_arr: array<atomic<u64>, 2>,
