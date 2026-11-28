@@ -185,7 +185,10 @@ impl ContinueCtx {
     /// Resets internal state.
     ///
     /// Use this to reuse memory between writing sessions.
-    #[allow(dead_code, reason = "only used by some backends")]
+    #[cfg_attr(
+        not(hlsl_out),
+        expect(dead_code, reason = "only used by the HLSL backend")
+    )]
     pub fn clear(&mut self) {
         self.stack.clear();
     }

@@ -3304,7 +3304,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "arguments mirror the fields of `Expression::Math`"
+    )]
     fn write_math_expression(
         &mut self,
         module: &Module,
@@ -4975,7 +4978,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "arguments mirror the fields of `Expression::ImageLoad`"
+    )]
     fn write_image_load(
         &mut self,
         module: &&Module,

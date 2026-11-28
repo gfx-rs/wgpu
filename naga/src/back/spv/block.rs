@@ -3108,7 +3108,10 @@ impl BlockContext<'_> {
     }
 
     /// Build the instructions for matrix - matrix column operations
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "takes the result and operand IDs plus the matrix dimensions"
+    )]
     fn write_matrix_matrix_column_op(
         &mut self,
         block: &mut Block,
@@ -3211,7 +3214,10 @@ impl BlockContext<'_> {
     /// composite_id, index)` to an instruction that extracts the `index`th
     /// entry of the value with ID `composite_id` and assigns it to the slot
     /// with id `result_id` (which must have type `result_type_id`).
-    #[expect(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "takes the result and operand IDs plus the component extractor"
+    )]
     fn write_dot_product(
         &mut self,
         result_id: Word,

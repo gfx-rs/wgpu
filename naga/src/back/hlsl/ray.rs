@@ -242,7 +242,10 @@ impl<W: Write> super::Writer<'_, W> {
         Ok(())
     }
 
-    #[expect(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "arguments mirror the fields of `RayQueryFunction::Initialize`"
+    )]
     pub(super) fn write_initialize_function(
         &mut self,
         module: &crate::Module,

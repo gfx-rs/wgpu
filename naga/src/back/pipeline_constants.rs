@@ -20,8 +20,8 @@ use crate::{
     Span, Statement, TypeInner, WithSpan,
 };
 
-// Possibly unused if not compiled with no_std
-#[allow(unused_imports)]
+// Provides float methods such as `trunc` that are only inherent with `std`
+#[cfg(no_std)]
 use num_traits::float::FloatCore as _;
 
 #[derive(Error, Debug, Clone)]
