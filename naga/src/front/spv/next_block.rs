@@ -12,7 +12,73 @@ use crate::front::spv::{
 };
 use crate::Handle;
 
+/// The integer kind a GLSL.std.450 op reads its operands as, when the op fixes one.
+const fn glsl_int_kind(op: spirv::GlslStd450Op) -> Option<crate::ScalarKind> {
+    use spirv::GlslStd450Op as Glo;
+    match op {
+        Glo::UMin | Glo::UMax | Glo::UClamp | Glo::FindUMsb => Some(crate::ScalarKind::Uint),
+        Glo::SMin | Glo::SMax | Glo::SClamp | Glo::SAbs | Glo::SSign | Glo::FindSMsb => {
+            Some(crate::ScalarKind::Sint)
+        }
+        _ => None,
+    }
+}
+
 impl<I: Iterator<Item = u32>> Frontend<I> {
+    /// The scalar of `type_id` when it is an integer of a kind other than `kind`.
+    fn other_int_scalar(
+        &self,
+        ctx: &BlockContext,
+        type_id: spirv::Word,
+        kind: crate::ScalarKind,
+    ) -> Result<Option<crate::Scalar>, Error> {
+        let ty = self.lookup_type.lookup(type_id)?;
+        Ok(ctx.module.types[ty.handle].inner.scalar().filter(|scalar| {
+            scalar.kind != kind
+                && matches!(
+                    scalar.kind,
+                    crate::ScalarKind::Sint | crate::ScalarKind::Uint
+                )
+        }))
+    }
+
+    /// `expr` of type `type_id`, cast to `kind` when it is an integer of the other kind.
+    fn cast_int_operand(
+        &self,
+        ctx: &mut BlockContext,
+        expr: Handle<crate::Expression>,
+        type_id: spirv::Word,
+        kind: Option<crate::ScalarKind>,
+        span: crate::Span,
+    ) -> Result<Handle<crate::Expression>, Error> {
+        let Some(kind) = kind else { return Ok(expr) };
+        let Some(scalar) = self.other_int_scalar(ctx, type_id, kind)? else {
+            return Ok(expr);
+        };
+        let target = crate::Scalar { kind, ..scalar };
+        Ok(ctx
+            .expressions
+            .append(crate::Expression::As { expr, target }, span))
+    }
+
+    /// `expr` computed as `kind`, cast back to `type_id` when that is an integer of the other kind.
+    fn cast_int_result(
+        &self,
+        ctx: &mut BlockContext,
+        expr: Handle<crate::Expression>,
+        type_id: spirv::Word,
+        kind: Option<crate::ScalarKind>,
+        span: crate::Span,
+    ) -> Result<Handle<crate::Expression>, Error> {
+        let Some(kind) = kind else { return Ok(expr) };
+        let Some(target) = self.other_int_scalar(ctx, type_id, kind)? else {
+            return Ok(expr);
+        };
+        Ok(ctx
+            .expressions
+            .append(crate::Expression::As { expr, target }, span))
+    }
+
     /// Add the next SPIR-V block's contents to `block_ctx`.
     ///
     /// Except for the function's entry block, `block_id` should be the label of
@@ -1780,46 +1846,37 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                             }
                         };
 
+                        // GLSL.std.450's integer ops take their signedness from the opcode,
+                        // not the operand types, so cast operands and the result to match.
+                        let int_kind = glsl_int_kind(gl_op);
+
                         let arg_count = fun.argument_count();
                         inst.expect(base_wc + arg_count as u16)?;
-                        let arg = {
+                        let mut args = [None; 4];
+                        for slot in &mut args[..arg_count] {
                             let arg_id = self.next()?;
                             let lexp = self.lookup_expression.lookup(arg_id)?;
-                            get_expr_handle!(arg_id, lexp)
-                        };
-                        let arg1 = if arg_count > 1 {
-                            let arg_id = self.next()?;
-                            let lexp = self.lookup_expression.lookup(arg_id)?;
-                            Some(get_expr_handle!(arg_id, lexp))
-                        } else {
-                            None
-                        };
-                        let arg2 = if arg_count > 2 {
-                            let arg_id = self.next()?;
-                            let lexp = self.lookup_expression.lookup(arg_id)?;
-                            Some(get_expr_handle!(arg_id, lexp))
-                        } else {
-                            None
-                        };
-                        let arg3 = if arg_count > 3 {
-                            let arg_id = self.next()?;
-                            let lexp = self.lookup_expression.lookup(arg_id)?;
-                            Some(get_expr_handle!(arg_id, lexp))
-                        } else {
-                            None
-                        };
+                            let type_id = lexp.type_id;
+                            let handle = get_expr_handle!(arg_id, lexp);
+                            *slot =
+                                Some(self.cast_int_operand(ctx, handle, type_id, int_kind, span)?);
+                        }
+                        let [arg, arg1, arg2, arg3] = args;
 
                         let expr = crate::Expression::Math {
                             fun,
-                            arg,
+                            arg: arg.expect("every math function takes an argument"),
                             arg1,
                             arg2,
                             arg3,
                         };
+                        let handle = ctx.expressions.append(expr, span);
+                        let handle =
+                            self.cast_int_result(ctx, handle, result_type_id, int_kind, span)?;
                         self.lookup_expression.insert(
                             result_id,
                             LookupExpression {
-                                handle: ctx.expressions.append(expr, span),
+                                handle,
                                 type_id: result_type_id,
                                 block_id,
                             },
