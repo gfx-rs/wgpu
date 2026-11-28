@@ -865,6 +865,9 @@ fn create_64bit_struct_layout_tests(no_array_types: bool) -> Vec<ShaderTest> {
     }
 
     tests
+        .into_iter()
+        .map(|test| test.enable("wgpu_int64"))
+        .collect()
 }
 
 #[apply(gpu_test!)]

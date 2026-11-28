@@ -33,6 +33,7 @@ impl Number {
         match *self {
             Number::F16(_) => Some(ImplementedEnableExtension::F16),
             Number::F64(_) => Some(ImplementedEnableExtension::WgpuF64),
+            Number::I64(_) | Number::U64(_) => Some(ImplementedEnableExtension::WgpuInt64),
             _ => None,
         }
     }

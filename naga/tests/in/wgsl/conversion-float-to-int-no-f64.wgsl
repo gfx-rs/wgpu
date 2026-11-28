@@ -2,6 +2,7 @@
 // This means it can be used with the Metal backend.
 
 enable f16;
+enable wgpu_int64;
 
 const MIN_F16 = -65504h;
 const MAX_F16 = 65504h;

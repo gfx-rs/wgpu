@@ -1,3 +1,5 @@
+enable wgpu_int64;
+
 @group(0) @binding(0) var<storage, read_write> out_u64_: u64;
 @group(0) @binding(1) var<storage, read_write> out_i64_: i64;
 @group(0) @binding(2) var<storage, read_write> out_vec_u64_: vec2<u64>;

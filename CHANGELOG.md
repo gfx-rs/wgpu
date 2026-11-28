@@ -154,6 +154,15 @@ Nsight and Radeon GPU Profiler should work normally, and all graphics debuggers 
 
 By @cwfitzgerald in [#8388](https://github.com/gfx-rs/wgpu/pull/8388).
 
+#### `i64` and `u64` are now behind a WGSL `enable` extension
+
+WGSL shaders using `i64`, `u64` or the `li`/`lu` literal suffixes must now request them with `enable wgpu_int64;`. `Features::SHADER_INT64` is still required. By @joe-meyer in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
+
+```wgsl
+// WGSL shaders must now include this directive:
+enable wgpu_int64;
+```
+
 ### Added/New Features
 
 #### General

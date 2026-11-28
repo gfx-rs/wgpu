@@ -1,3 +1,5 @@
+enable wgpu_int64;
+
 const SIZE: u32 = 128u;
 
 @group(0) @binding(0)

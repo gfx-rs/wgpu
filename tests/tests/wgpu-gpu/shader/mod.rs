@@ -169,6 +169,11 @@ impl ShaderTest {
         self
     }
 
+    fn enable(mut self, extension: &str) -> Self {
+        self.header = format!("enable {extension};\n{}", self.header);
+        self
+    }
+
     fn output_type(mut self, output_type: String) -> Self {
         self.output_type = output_type;
 

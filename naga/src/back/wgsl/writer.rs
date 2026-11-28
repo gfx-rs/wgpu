@@ -290,6 +290,7 @@ impl<W: Write> Writer<W> {
             f16: bool,
             f64: bool,
             int16: bool,
+            int64: bool,
             dual_source_blending: bool,
             clip_distances: bool,
             mesh_shaders: bool,
@@ -362,11 +363,15 @@ impl<W: Write> Writer<W> {
                     needed.f16 |= scalar == crate::Scalar::F16;
                     needed.f64 |= scalar == crate::Scalar::F64;
                     needed.int16 |= scalar == crate::Scalar::I16 || scalar == crate::Scalar::U16;
+                    needed.int64 |= scalar == crate::Scalar::I64 || scalar == crate::Scalar::U64;
                 }
                 TypeInner::Struct { ref members, .. } => {
                     for binding in members.iter().filter_map(|m| m.binding.as_ref()) {
                         check_binding(binding, &mut needed);
                     }
+                }
+                TypeInner::Atomic(scalar) => {
+                    needed.int64 |= scalar == crate::Scalar::I64 || scalar == crate::Scalar::U64;
                 }
                 TypeInner::CooperativeMatrix { .. } => {
                     needed.cooperative_matrix = true;
@@ -434,6 +439,7 @@ impl<W: Write> Writer<W> {
         }
 
         needed.debug_printf = module.uses_debug_printf();
+        needed.int64 |= module.uses_int64_literals();
 
         // Write required declarations
         let mut any_written = false;
@@ -447,6 +453,10 @@ impl<W: Write> Writer<W> {
         }
         if needed.int16 {
             writeln!(self.out, "enable wgpu_int16;")?;
+            any_written = true;
+        }
+        if needed.int64 {
+            writeln!(self.out, "enable wgpu_int64;")?;
             any_written = true;
         }
         if needed.dual_source_blending {

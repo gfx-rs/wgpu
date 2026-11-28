@@ -1,3 +1,5 @@
+enable wgpu_int64;
+
 @group(0) @binding(0)
 var image: texture_storage_2d<r64uint,atomic>;
 

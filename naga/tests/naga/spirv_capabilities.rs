@@ -209,6 +209,7 @@ fn int64() {
     require(
         &[Ca::Int64],
         r#"
+            enable wgpu_int64;
             fn f(x: i64) -> i64 {
                 return x;
             }
@@ -217,6 +218,7 @@ fn int64() {
     require(
         &[Ca::Int64],
         r#"
+            enable wgpu_int64;
             fn f(x: u64) -> u64 {
                 return x;
             }

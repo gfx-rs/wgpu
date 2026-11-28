@@ -1,3 +1,5 @@
+enable wgpu_int64;
+
 struct UniformCompatible {
     val_u32_: u32,
     val_i32_: i32,

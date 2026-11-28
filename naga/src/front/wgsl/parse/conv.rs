@@ -585,6 +585,9 @@ pub fn map_predeclared_type(
         PredeclaredType::TypeInner(ref ty) if matches!(ty.scalar(), Some(s) if s == Sc::I16 || s == Sc::U16) => {
             Some(&[ImplementedEnableExtension::WgpuInt16])
         }
+        PredeclaredType::TypeInner(ref ty) if matches!(ty.scalar(), Some(s) if s == Sc::I64 || s == Sc::U64) => {
+            Some(&[ImplementedEnableExtension::WgpuInt64])
+        }
         PredeclaredType::RayDesc
         | PredeclaredType::RayIntersection
         | PredeclaredType::TypeGenerator(TypeGenerator::AccelerationStructure)

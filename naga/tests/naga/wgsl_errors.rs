@@ -1428,12 +1428,121 @@ fn no_validation_error(source: &str, caps: naga::valid::Capabilities) {
 }
 
 #[test]
-fn int64_capability() {
-    check_validation! {
-        "var input: u64;",
-        "var input: i64;":
+fn int64_capability_and_enable() {
+    // A zero value expression
+    check_extension_validation! {
+        Capabilities::SHADER_INT64,
+        r#"fn foo() {
+            let a = u64();
+        }
+        "#,
+        r#"error: the `wgpu_int64` enable extension is not enabled
+  ┌─ wgsl:2:21
+  │
+2 │             let a = u64();
+  │                     ^^^ the `wgpu_int64` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_int64;` at the top of the shader, before any other items.
+
+"#,
         Err(naga::valid::ValidationError::Type {
-            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability {flag: "SHADER_INT64",..}),
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability { flag: "SHADER_INT64", .. }),
+            ..
+        })
+    }
+
+    // Literals (via constructor)
+    check_extension_validation! {
+        Capabilities::SHADER_INT64,
+        r#"fn foo() {
+            let a = u64(1);
+        }
+        "#,
+        r#"error: the `wgpu_int64` enable extension is not enabled
+  ┌─ wgsl:2:21
+  │
+2 │             let a = u64(1);
+  │                     ^^^ the `wgpu_int64` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_int64;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::Expression {
+                source: naga::valid::ExpressionError::Literal(
+                    naga::valid::LiteralError::Width(
+                        naga::valid::WidthError::MissingCapability { flag: "SHADER_INT64", .. }
+                    )
+                ),
+                ..
+            },
+            ..
+        })
+    }
+
+    // `u64`-typed declarations
+    check_extension_validation! {
+        Capabilities::SHADER_INT64,
+        "var input: u64;",
+        r#"error: the `wgpu_int64` enable extension is not enabled
+  ┌─ wgsl:1:12
+  │
+1 │ var input: u64;
+  │            ^^^ the `wgpu_int64` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_int64;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability { flag: "SHADER_INT64", .. }),
+            ..
+        })
+    }
+
+    // `i64`-typed declarations
+    check_extension_validation! {
+        Capabilities::SHADER_INT64,
+        "var input: i64;",
+        r#"error: the `wgpu_int64` enable extension is not enabled
+  ┌─ wgsl:1:12
+  │
+1 │ var input: i64;
+  │            ^^^ the `wgpu_int64` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_int64;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability { flag: "SHADER_INT64", .. }),
+            ..
+        })
+    }
+
+    // Literals with an `li` or `lu` suffix
+    check_extension_validation! {
+        Capabilities::SHADER_INT64,
+        r#"fn foo() {
+            let a = 1lu;
+        }
+        "#,
+        r#"error: the `wgpu_int64` enable extension is not enabled
+  ┌─ wgsl:2:21
+  │
+2 │             let a = 1lu;
+  │                     ^^^ the `wgpu_int64` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_int64;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::Expression {
+                source: naga::valid::ExpressionError::Literal(
+                    naga::valid::LiteralError::Width(
+                        naga::valid::WidthError::MissingCapability { flag: "SHADER_INT64", .. }
+                    )
+                ),
+                ..
+            },
             ..
         })
     }
@@ -1803,7 +1912,7 @@ fn invalid_arrays() {
     }
 
     check_validation! {
-        "var<uniform> input: array<u64, 2>;",
+        "enable wgpu_int64; var<uniform> input: array<u64, 2>;",
         "var<uniform> input: array<vec2<u32>, 2>;":
         Err(naga::valid::ValidationError::GlobalVariable {
             source: naga::valid::GlobalVariableError::Alignment(naga::AddressSpace::Uniform,_,_),
@@ -6367,17 +6476,17 @@ fn bitwise_shift_errors() {
     // Const evaluation of `i64` and `u64` is not implemented, https://github.com/gfx-rs/wgpu/issues/8972
 
     // 64-bit runtime by const < bitwidth
-    check_success("fn foo() { var x: u64; var n = x << 63; }");
-    check_success("fn foo() { var x: i64; var n = x << 63; }");
-    check_success("fn foo() { var x: u64; var n = x >> 63; }");
-    check_success("fn foo() { var x: i64; var n = x >> 63; }");
+    check_success("enable wgpu_int64; fn foo() { var x: u64; var n = x << 63; }");
+    check_success("enable wgpu_int64; fn foo() { var x: i64; var n = x << 63; }");
+    check_success("enable wgpu_int64; fn foo() { var x: u64; var n = x >> 63; }");
+    check_success("enable wgpu_int64; fn foo() { var x: i64; var n = x >> 63; }");
 
     // 64-bit runtime by const >= bitwidth
     check_validation! {
-        "fn foo() { var x: u64; var n = x << 64; }",
-        "fn foo() { var x: i64; var n = x << 64; }",
-        "fn foo() { var x: u64; var n = x >> 64; }",
-        "fn foo() { var x: i64; var n = x >> 64; }":
+        "enable wgpu_int64; fn foo() { var x: u64; var n = x << 64; }",
+        "enable wgpu_int64; fn foo() { var x: i64; var n = x << 64; }",
+        "enable wgpu_int64; fn foo() { var x: u64; var n = x >> 64; }",
+        "enable wgpu_int64; fn foo() { var x: i64; var n = x >> 64; }":
         Err(naga::valid::ValidationError::Function {
             source: naga::valid::FunctionError::Expression {
                 source: naga::valid::ExpressionError::ShiftAmountTooLarge { .. },
