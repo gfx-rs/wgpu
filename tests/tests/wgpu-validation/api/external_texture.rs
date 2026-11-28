@@ -565,6 +565,55 @@ fn external_texture_binding_texture_view() {
     );
 }
 
+/// Ensures binding a [`TextureView`] to a [`BindingType::ExternalTexture`] slot
+/// does not panic when the default queue has already been dropped before the
+/// lazy default external texture params buffer is initialized.
+#[test]
+fn external_texture_binding_texture_view_after_queue_drop() {
+    let (device, queue) = wgpu::Device::noop(&DeviceDescriptor {
+        required_features: Features::EXTERNAL_TEXTURE,
+        ..Default::default()
+    });
+    drop(queue);
+
+    let bgl = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+        label: None,
+        entries: &[BindGroupLayoutEntry {
+            binding: 0,
+            visibility: ShaderStages::FRAGMENT,
+            ty: BindingType::ExternalTexture,
+            count: None,
+        }],
+    });
+    let texture = device.create_texture(&TextureDescriptor {
+        label: None,
+        size: Extent3d {
+            width: 4,
+            height: 4,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format: TextureFormat::Rgba8Unorm,
+        usage: TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+        texture_binding_view_dimension: None,
+    });
+    let view = texture.create_view(&TextureViewDescriptor::default());
+
+    valid(&device, || {
+        device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &bgl,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::TextureView(&view),
+            }],
+        })
+    });
+}
+
 /// Ensures that submitting a command buffer referencing an external texture, any of
 /// whose plane textures have already been destroyed, results in an error.
 #[test]
